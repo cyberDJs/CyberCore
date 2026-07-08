@@ -1,0 +1,17 @@
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+*.sql
+*.dump
+*.bak
+.DS_Store
+node_modules/
+__pycache__/
+.terraform/
+*.tfstate
+*.tfstate.*
