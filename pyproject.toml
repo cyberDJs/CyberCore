@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cybercore"
+version = "0.1.0.dev0"
+description = "AI-first infrastructure control plane for the CyberDJS ecosystem"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary - license decision pending" }
+authors = [
+  { name = "CyberDJS" }
+]
+keywords = ["infrastructure", "devops", "automation", "observability", "security"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Environment :: Console",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Typing :: Typed"
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3",
+  "ruff>=0.9",
+  "mypy>=1.14"
+]
+
+[project.scripts]
+cybercore = "cybercore.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["cybercore"]
