@@ -18,10 +18,3 @@ class InterServerClient:
     """
 
     def __init__(
-        self,
-        *,
-        api_key: str,
-        base_url: str,
-        timeout_seconds: float = 20.0,
-        transport: httpx.BaseTransport | None = None,
-    ) ->
