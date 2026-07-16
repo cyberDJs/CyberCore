@@ -12,8 +12,15 @@ license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "CyberDJS" }]
 dependencies = []
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
 [project.scripts]
 cybercore = "cybercore.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cybercore
+packages = ["src/cybercore"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
