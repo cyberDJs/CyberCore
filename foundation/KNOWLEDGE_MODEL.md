@@ -4,48 +4,22 @@ CyberCore treats operational knowledge as a first-class asset.
 
 ## Knowledge Block
 
-A Knowledge Block (KB) captures:
+A Knowledge Block (`KB-XXXX`) captures:
 
 - the problem or question,
 - observations and evidence,
 - interpretation,
 - confidence and assumptions,
 - decisions and consequences,
-- links to related Work Blocks, ADRs, incidents, assets, and services.
+- links to related Work Blocks, ADRs, incidents, assets, and services,
+- later feedback that confirms, refines, or invalidates the original conclusion.
 
-A Knowledge Block may exist without implementation.
+A Knowledge Block may exist without implementation. One Knowledge Block may justify zero, one, or many Work Blocks.
 
 ## Work Block
 
-A Work Block (WB) captures:
+A Work Block (`WB-XXXX`) captures:
 
 - the implementation goal,
 - scope and exclusions,
 - dependencies,
-- files and systems affected,
-- verification,
-- rollout and rollback,
-- result and lessons learned.
-
-A Work Block must reference the knowledge or decision that justifies it.
-
-## Provenance
-
-Knowledge must retain:
-
-- source,
-- collection time,
-- author or agent,
-- environment,
-- freshness,
-- confidence.
-
-Generated knowledge must be distinguishable from human-authored conclusions.
-
-## Lifecycle
-
-```text
-Observation -> Evidence -> Knowledge Block -> Decision -> Work Block -> Verification -> Outcome -> Knowledge update
-```
-
-Knowledge is never considered final merely because implementation succeeded. Operational outcomes may confirm, refine, or invalidate it.
