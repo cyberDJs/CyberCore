@@ -1,0 +1,17 @@
+{
+  "title": "CXP Artifact Specification v1",
+  "description": "Defines the immutable CyberCore artifact contract.",
+  "tags": [
+    "artifact",
+    "cxp",
+    "specification"
+  ],
+  "estimated_apply_seconds": 1,
+  "rollback_supported": true,
+  "requires_restart": false,
+  "affected_components": [
+    "publisher",
+    "runtime",
+    "registry"
+  ]
+}

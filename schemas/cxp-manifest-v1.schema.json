@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cybercore.dev/schemas/cxp-manifest-v1.schema.json",
+  "title": "CyberCore CXP Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "artifact_id",
+    "version",
+    "created_at",
+    "publisher",
+    "payload",
+    "compatibility",
+    "risk"
+  ],
+  "properties": {
+    "schema": {
+      "const": "cxp/v1"
+    },
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^WB-[0-9]{4}-[a-z0-9][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "publisher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "media_type",
+        "compression",
+        "digest"
+      ],
+      "properties": {
+        "file": {
+          "const": "payload.tar.zst"
+        },
+        "media_type": {
+          "const": "application/vnd.cybercore.payload+tar"
+        },
+        "compression": {
+          "enum": [
+            "zstd",
+            "none"
+          ]
+        },
+        "digest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "algorithm",
+            "value"
+          ],
+          "properties": {
+            "algorithm": {
+              "const": "sha256"
+            },
+            "value": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime"
+      ],
+      "properties": {
+        "runtime": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "risk": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ]
+    }
+  }
+}
