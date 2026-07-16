@@ -10,10 +10,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "CyberDJS" }]
-dependencies = []
+dependencies = ["zstandard>=0.23"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "jsonschema>=4.23"]
 
 [project.scripts]
 cybercore = "cybercore.cli:main"
