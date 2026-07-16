@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.1.0-alpha.1 — 2026-07-16
+
+First public development checkpoint for the CyberCore foundation, runtime, and artifact system.
+
+### Added
+
+- CyberCore Identity v1.0, Governance, Manifesto, Glossary, and Design System foundation.
+- Foundation engineering model, terminology, decision model, and knowledge model.
+- `ARCHITECTURE.md` as the conceptual system map.
+- Public Framework + Private Overlay strategy.
+- Runtime Alpha with the unified `cybercore` CLI.
+- `doctor`, `status`, and `sync` commands.
+- Controlled Work Block `verify` and `apply` commands.
+- Explicit approval gate, `--dry-run`, branch and clean-working-tree safety checks.
+- Lifecycle events and optional `before_apply`, `after_apply`, and `rollback` hooks.
+- CXP/1 artifact specification, JSON Schemas, examples, and ADR-0004.
+- Deterministic `cybercore build` publisher.
+- Canonical JSON, deterministic tar construction, Zstandard payload compression, and SHA-256 artifact identity.
+- Baseline tests for runtime, transport, verification, apply, and reproducible artifact builds.
+
+### Security boundaries
+
+- SHA-256 currently proves artifact integrity, not publisher trust.
+- Ed25519 publisher signing is deferred to a subsequent alpha increment.
+- Age/X25519 end-to-end encryption is deferred to a subsequent alpha increment.
+- Secrets and production-derived data remain outside the public framework.
+
+### Known limitations
+
+- CXP artifacts can be built but are not yet consumed directly by Runtime.
+- Registry publication and discovery are not implemented.
+- Git commit, push, pull-request creation, and merge orchestration remain manual.
+- The InterServer provider implementation remains in a separate draft branch pending alignment with Runtime.
+
 ## 2026-07-16
 
 ### Added
