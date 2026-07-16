@@ -1,171 +1,150 @@
 # CyberCore
 
-**AI-first infrastructure control plane for CyberDJS.**
+> **Infrastructure Context & Intelligence Platform**  
+> Technical descriptor: **AI-first Infrastructure Control Plane**
 
-CyberCore is the operational brain of the Eimy Herrer / CyberDJS ecosystem: a modular platform for infrastructure inventory, documentation, monitoring, security, deployment workflows, incident response and future self-healing automation.
+CyberCore reduces uncertainty by turning operational reality into reusable knowledge, safer decisions, and controlled automation.
 
-The first provider target is **InterServer**: shared hosting, VPS, DirectAdmin, mail, DNS, WordPress, Nextcloud and selected Softaculous applications.
+It begins as the control plane for the Eimy Herrer / CyberDJS infrastructure ecosystem. The first deployment target is **InterServer**: shared hosting, VPS, DirectAdmin, mail, DNS, WordPress, Nextcloud, and selected applications.
 
----
+## Why CyberCore exists
 
-## Mission
+Infrastructure usually fails long before the outage: ownership becomes unclear, decisions lose context, documentation drifts, and automation grows faster than understanding.
 
-Build a reproducible, secure, low-cost and open-source-ready platform for operating creative digital infrastructure.
+CyberCore is designed to answer:
 
-CyberCore should help answer questions like:
+- What exists?
+- Why is it there?
+- What changed?
+- What evidence supports the current state?
+- What is risky, obsolete, or unnecessarily expensive?
+- What can be changed safely?
+- What should remain under explicit human control?
 
-- What services do we run?
-- Where are they hosted?
-- What changed recently?
-- What is exposed to the internet?
-- What needs an update?
-- What is broken?
-- What can be automated safely?
-- What can be removed?
-- What costs money and why?
+> Technology serves people. Never the other way around.
 
----
+## Core philosophy
 
-## Product vision
+CyberCore exists to reduce uncertainty by turning operational knowledge into reusable intelligence.
 
-CyberCore starts as an internal CyberDJS operations platform, but the architecture is designed so reusable framework logic can later be open-sourced.
-
-```text
-CyberCore
-├── Core
-├── Providers
-│   ├── InterServer
-│   ├── DirectAdmin
-│   ├── GitHub
-│   ├── Docker
-│   ├── SSH
-│   └── Future providers
-├── Inventory
-├── Documentation
-├── Knowledge Graph
-├── AI Operations
-├── Deployment
-├── Monitoring
-├── Security
-└── UI / CLI / TUI / MCP
-```
-
----
-
-## Current scope
+Its decision model is:
 
 ```text
-InterServer
-├── Shared hosting
-│   ├── eimyherrer.com
-│   ├── mail
-│   ├── WordPress
-│   ├── Nextcloud
-│   └── Softaculous apps on subdomains
-└── VPS
-    ├── DirectAdmin
-    ├── system services
-    └── future observability / automation stack
+Reality -> Evidence -> Knowledge -> Confidence -> Decision -> Automation
 ```
 
----
+Its operating principles are:
 
-## Working tracks
+1. Know what exists.
+2. Understand why it is there.
+3. Keep only what creates value.
+4. Automate only what is understood.
+5. Complexity is guilty until proven useful.
 
-CyberCore is managed in three parallel tracks:
+## Architectural layers
 
-| Track | Purpose |
+```text
+Foundation
+    ↓
+Knowledge and context
+    ↓
+Specifications
+    ↓
+Engineering and Work Blocks
+    ↓
+Runtime
+    ↓
+Providers
+    ↓
+Infrastructure operations
+    ↓
+New evidence and outcomes
+```
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the complete system map.
+
+## Public Framework + Private Overlay
+
+The public repository contains reusable framework code, specifications, schemas, tests, sanitized examples, and documentation.
+
+Private overlays contain credentials, production-derived inventory, private topology, client data, and environment-specific configuration.
+
+Private information must never be required for the public framework to remain understandable and testable.
+
+## Engineering model
+
+Critical changes follow:
+
+```text
+Observation
+  -> Evidence
+  -> Knowledge Block
+  -> Decision
+  -> Specification
+  -> Work Block
+  -> Verification
+  -> Human approval
+  -> Apply
+  -> Outcome
+```
+
+Key record types:
+
+| Prefix | Purpose |
 |---|---|
-| Delivery | Fix and improve real production services: Nextcloud, WordPress, mail, deployment, VPS. |
-| Platform | Build reusable CyberCore capabilities: SDK, inventory, provider framework, docs generation. |
-| Research | Explore AI, MCP, knowledge graphs and future-facing automation safely. |
-
-Default capacity model: **70% Delivery / 20% Platform / 10% Research**.
-
----
-
-## Operating principles
-
-1. **Everything as Code** — infrastructure knowledge, docs, decisions and workflows live in Git.
-2. **API before SSH** — prefer provider APIs for discovery and automation.
-3. **Human-approved automation** — destructive actions require explicit approval.
-4. **No secrets in Git** — credentials and private data never enter the repository.
-5. **Low-cost by default** — every recurring cost must justify itself.
-6. **Open-source ready** — separate reusable framework logic from private environment data.
-7. **Documentation is a product** — docs must be useful, current and structured.
-8. **Security by default** — design for least privilege, auditability and rollback.
-9. **Remove before adding** — complexity is guilty until proven useful.
-10. **AI assists, humans own** — AI can propose, explain and verify; humans remain accountable.
-
----
-
-## Methodology
-
-All work should be tracked as one of:
-
-| Prefix | Meaning |
-|---|---|
-| ADR | Architecture Decision Record |
-| EPIC | Large initiative |
-| SPR | Sprint |
-| TASK | Concrete task |
-| BUG | Defect |
-| SEC | Security item |
-| RFC | Proposal for discussion |
-| OPS | Operational task |
-
-Structured contribution rules are defined in [`CONTRIBUTING.md`](CONTRIBUTING.md).
-
----
-
-## Immediate priorities
-
-1. Revoke and rotate exposed InterServer secrets.
-2. Build InterServer Provider v0.1.
-3. Create machine-readable infrastructure inventory.
-4. Generate sanitized documentation from inventory.
-5. Audit and update Nextcloud using backup-first best practices.
-6. Replace FTP-first deployment with a controlled Git-based workflow.
-
----
+| `ADR` | Architecture Decision Record |
+| `RFC` | Proposal requiring discussion |
+| `CXP` | CyberCore Exchange Protocol specification |
+| `KB` | Knowledge Block: evidence, context, and decision rationale |
+| `WB` | Work Block: implementation, verification, rollout, and rollback |
+| `EPIC` | Large capability or program increment |
 
 ## Repository map
 
 ```text
-README.md                     Project overview
-roadmap.md                    Sprint and milestone tracking
-VISION.md                     Long-term product vision
-SECURITY.md                   Security rules and incident notes
-CONTRIBUTING.md               Collaboration and request format rules
-CHANGELOG.md                  Notable changes
-LICENSE.md                    License decision placeholder
-
-docs/
-  architecture/               Architecture context and diagrams
-  adr/                        Architecture Decision Records
-  runbooks/                   Operational procedures
-  meetings/                   Kickoffs and meeting notes
-  manual-actions.md           Human-only action checklist
-  risk-register.md            Known risks and mitigations
-
-automation/
-  scripts/                    Bootstrap and operational scripts
-  ansible/                    Future configuration management
-  docker/                     Future Compose/container assets
-  terraform/                  Future infrastructure experiments
-
-monitoring/                   Observability plans and configs
-security/                     Hardening and audit notes
-knowledge/                    Knowledge graph and generated docs
-agents/                       AI-assisted operations agents
+foundation/              Stable principles and engineering models
+docs/specifications/     Technical contracts, including CXP
+engineering/work-blocks/ Traceable implementation units
+knowledge/               Evidence, inventory, context, and generated knowledge
+src/                     CyberCore implementation
+providers/               Infrastructure adapters
+runtime/                 Runtime and Exchange implementation assets
+automation/              Supporting operational automation
+monitoring/              Observability definitions and configuration
+security/                Security guidance and hardening material
 ```
 
----
+## Current milestone
 
-## Status
+**Foundation and Exchange Runtime Design Freeze**
 
-Project bootstrap started on **2026-07-08**.
+The active design package defines:
 
-Current phase: **Sprint 0 / Foundation Bootstrap**.
+- Foundation documents and terminology;
+- the conceptual architecture;
+- CXP v1 package, runtime, publisher, and Git-integration contracts;
+- WB-0006 decisions and state machine;
+- explicit human approval before mutation;
+- GitHub `main` as the stable source of truth.
 
-See [`roadmap.md`](roadmap.md) for sprint tracking and [`docs/manual-actions.md`](docs/manual-actions.md) for manual next steps.
+Runtime implementation resumes after the design-freeze pull request is reviewed and merged.
+
+## Initial operational priorities
+
+1. Maintain secrets hygiene and rotate exposed credentials.
+2. Implement the CyberCore Runtime according to CXP v1.
+3. Complete the Provider Framework and InterServer provider.
+4. Produce sanitized infrastructure inventory and topology.
+5. Stabilize and update Nextcloud using backup-first verification.
+6. Replace FTP-first deployment with a controlled Git-based workflow.
+
+## Status and navigation
+
+- [`roadmap.md`](roadmap.md) — delivery plan and current work
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — conceptual architecture
+- [`foundation/FOUNDATIONS.md`](foundation/FOUNDATIONS.md) — stable project foundations
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution and collaboration rules
+- [`SECURITY.md`](SECURITY.md) — security policy
+- [`CHANGELOG.md`](CHANGELOG.md) — notable changes
+
+CyberCore is pre-release software. Contracts are being stabilized before production-changing automation is enabled.

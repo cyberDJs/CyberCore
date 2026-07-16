@@ -2,239 +2,192 @@
 
 Project: **CyberDJS / CyberCore**  
 Started: **2026-07-08**  
-Mode: living roadmap, updated continuously.
+Updated: **2026-07-16**  
+Mode: living roadmap; GitHub `main` is the stable source of truth.
 
----
+## Strategic outcome
 
-## Strategic targets
+Build an open, low-cost **Infrastructure Context & Intelligence Platform** that can:
 
-- Fully automated InterServer infrastructure management.
-- Self-healing hosting with human-approved remediation first.
-- Monitoring and observability.
-- Security hardening.
-- Asset management.
-- Knowledge base and knowledge graph.
-- Cost optimization.
-- Open-source-ready framework.
-
----
+- discover and explain infrastructure;
+- preserve evidence, decisions, and operational context;
+- verify and apply controlled changes;
+- support monitoring, security, incident response, and cost optimization;
+- evolve toward human-approved self-healing.
 
 ## Capacity baseline
 
 - Jan: 4 MD/month.
 - Eimy: 4 MD/month.
 - Total: 8 MD/month.
-- Budget: <= 1000 CZK/month unless a higher cost has measurable return.
-
-Default allocation:
+- Recurring budget: <= 1000 CZK/month unless measurable value justifies more.
 
 | Track | Allocation | Purpose |
 |---|---:|---|
-| Delivery | 70% | Keep real production services healthy: Nextcloud, WordPress, mail, VPS, deployment. |
-| Platform | 20% | Build CyberCore reusable platform capabilities. |
-| Research | 10% | Explore AI, MCP, knowledge graphs and future-facing automation safely. |
-
----
+| Delivery | 70% | Keep production services healthy. |
+| Platform | 20% | Build reusable CyberCore capabilities. |
+| Research | 10% | Explore AI, knowledge graphs, and future automation safely. |
 
 ## Project language
 
 | Prefix | Meaning |
 |---|---|
-| ADR | Architecture Decision Record |
-| EPIC | Large initiative |
-| SPR | Sprint |
-| TASK | Concrete task |
+| EPIC | Large capability or program increment |
+| RFC | Proposal requiring discussion |
+| ADR | Accepted architecture decision |
+| KB | Knowledge Block: evidence and decision context |
+| WB | Work Block: implementation and verification |
 | BUG | Defect |
 | SEC | Security item |
-| RFC | Proposal for discussion |
 | OPS | Operational task |
 
----
+## Program sequence
 
-## Active epics
+### EPIC-000 — Foundation
 
-### EPIC-001 — Provider Framework
+**Status:** Completing in PR #6  
+**Goal:** Freeze identity, governance, architecture, engineering method, terminology, decision model, and knowledge model.
 
-**Status:** Approved  
-**Track:** Platform  
-**Goal:** Build a reusable provider framework where InterServer is Provider #1, not a hardcoded exception.
+Delivered:
+
+- Identity v1.0.
+- Governance, manifesto, glossary, and design-system foundation.
+- Public Framework + Private Overlay.
+- Foundation layer.
+- `ARCHITECTURE.md`.
+- CXP v1 design contracts.
+- WB-0006 Exchange Runtime Design Freeze.
+
+Exit criteria:
+
+- [x] Foundation documents complete.
+- [x] CXP package, runtime, publisher, and Git integration specified.
+- [x] README and changelog aligned.
+- [ ] PR #6 merged to `main`.
+- [ ] Local `main` synchronized after merge.
+
+### EPIC-001 — Runtime
+
+**Status:** Next  
+**Goal:** Implement the minimal safe CyberCore runtime according to CXP v1.
 
 Planned capabilities:
 
-- Provider interface.
-- InterServer provider.
-- DirectAdmin provider.
-- GitHub provider.
-- SSH provider for diagnostics.
-- Inventory export.
-- Health metadata.
-- Documentation generation hooks.
+- unified `cybercore` CLI;
+- `doctor`, `status`, `sync`, `verify`, `apply`;
+- repository identity validation;
+- transport adapter boundary;
+- deterministic state machine;
+- explicit human approval gate;
+- structured result and failure reporting;
+- rollback contract where supported.
 
-### EPIC-002 — Knowledge Engine
+First milestone:
 
-**Status:** Approved  
-**Track:** Platform / Research  
-**Goal:** Convert infrastructure inventory into structured knowledge: docs, graphs, runbooks and AI context.
+- first end-to-end Work Block:
+  `publish -> transport -> verify -> READY -> apply -> test -> commit -> push -> PR`.
 
-### EPIC-003 — Deployment Engine
+### EPIC-002 — Provider Framework
 
-**Status:** Approved  
-**Track:** Delivery / Platform  
-**Goal:** Replace FTP-first deployment with controlled Git-based deployment, verification and rollback.
+**Status:** Draft implementation exists in PR #5; review after Runtime baseline  
+**Goal:** Provide normalized adapters without leaking vendor-specific behavior into the core.
+
+Initial providers:
+
+- InterServer API;
+- DirectAdmin;
+- read-only SSH diagnostics;
+- GitHub.
+
+### EPIC-003 — Infrastructure Inventory and Knowledge
+
+**Status:** Planned  
+**Goal:** Convert infrastructure observations into machine-readable inventory and reusable knowledge.
+
+Initial scope:
+
+- domain and DNS;
+- mailboxes, aliases, and routing;
+- shared hosting and Softaculous applications;
+- VPS operating system, services, ports, firewall, and storage;
+- WordPress and Nextcloud topology;
+- provenance, confidence, and risk metadata.
 
 ### EPIC-004 — Nextcloud Reliability
 
-**Status:** Approved  
-**Track:** Delivery  
-**Goal:** Update and stabilize Nextcloud using backup-first, audit-first best practices.
+**Status:** Planned; original operational priority  
+**Goal:** Upgrade and stabilize Nextcloud using backup-first, audit-first practices.
 
-### EPIC-005 — Security and Secrets Hygiene
+Includes:
 
-**Status:** Approved  
-**Track:** Delivery / Security  
-**Goal:** Establish safe handling of API keys, 2FA, SSH keys, tokens and private infrastructure data.
+- PHP compatibility;
+- database and application upgrade path;
+- Redis/APCu configuration;
+- cron and background jobs;
+- HSTS and reverse-proxy headers;
+- storage paths and permissions;
+- security and performance warnings;
+- tested rollback.
 
----
+### EPIC-005 — Deployment Baseline
 
-## Sprint 0 — Foundation Bootstrap
+**Status:** Planned  
+**Goal:** Replace FTP-first changes with controlled Git-based deployment.
 
-**Timestamp:** 2026-07-08 12:40 CEST  
-**Updated:** 2026-07-08 17:35 CEST  
-**Status:** In progress  
-**Owner:** Jan + Eimy + AI project team  
-**Scope:** Repository, initial documentation, secrets hygiene, first inventory, methodology.
+Includes:
 
-### Goals
+- staging-lite strategy;
+- backup-before-change;
+- deployment verification;
+- release notes;
+- rollback procedure;
+- low-risk pilot.
 
-- [x] Create GitHub repository: `cyberDJs/CyberCore`
-- [x] Confirm repository access exists
-- [x] Create initial project files
-- [x] Create manual actions list
-- [x] Define source-of-truth structure
-- [x] Add structured contribution request policy
-- [x] Add project tracks: Delivery / Platform / Research
-- [x] Confirm InterServer API is reachable
-- [x] Download InterServer OpenAPI specification locally
-- [ ] Revoke exposed InterServer API key
-- [ ] Rotate exposed InterServer 2FA/TOTP secret
-- [ ] Create new InterServer API key and store it outside chat/Git
-- [ ] Prepare first sanitized infrastructure snapshot
-- [ ] Decide production/development separation strategy
+### EPIC-006 — Monitoring, Security, and Backups
 
-### Notes
+**Status:** Planned  
+**Goal:** Establish measurable operational health.
 
-The current production web is also used as development. This is accepted temporarily due to cost/time limits, but the roadmap must move toward separation using the lowest-cost viable model.
+Includes:
 
-A sensitive InterServer API response was pasted into chat during API smoke testing. Treat exposed API key history and 2FA seed as compromised and rotate.
+- uptime, SSL, mail, disk, WordPress, and Nextcloud checks;
+- RPO, RTO, retention, and restore tests;
+- SSH and DirectAdmin hardening;
+- SPF, DKIM, and DMARC;
+- dependency and plugin audit;
+- secrets policy and rotation workflow.
 
----
+### EPIC-007 — Intelligence and Controlled Self-Healing
 
-## Sprint 1 — Inventory and Architecture
+**Status:** Planned  
+**Goal:** Turn observations and knowledge into explainable recommendations and safe remediation.
 
-**Target window:** July 2026  
-**Status:** Planned
+Includes:
 
-### Goals
+- knowledge graph;
+- drift and risk analysis;
+- incident-response drafts;
+- cost optimization;
+- monthly health reports;
+- non-destructive remediation recommendations;
+- approved remediation playbooks.
 
-- [ ] Implement InterServer Provider v0.1
-- [ ] Export InterServer service inventory
-- [ ] Export DirectAdmin account inventory
-- [ ] Map DNS records for `eimyherrer.com`
-- [ ] Map mailboxes, aliases and routing
-- [ ] Map WordPress installation
-- [ ] Map Nextcloud installation
-- [ ] Map Softaculous apps and classify: keep / evaluate / remove
-- [ ] Map VPS OS, services, ports, firewall and storage
-- [ ] Create first architecture diagram
-- [ ] Update risk register from real inventory
+## Immediate security actions
 
-### Deliverables
+These remain operational blockers and must not disappear inside platform work:
 
-- `cybercore inventory interserver`
-- sanitized inventory JSON
-- generated inventory Markdown
-- initial Mermaid architecture diagram
+- [ ] Revoke the exposed InterServer API key.
+- [ ] Rotate the exposed InterServer 2FA/TOTP secret.
+- [ ] Store replacement secrets outside chat and Git.
+- [ ] Produce the first sanitized infrastructure snapshot.
+- [ ] Record the production/development separation strategy.
 
----
+## Working rule
 
-## Sprint 2 — Deployment Baseline
+No new implementation epic starts before its required foundation or specification change is merged into `main`.
 
-**Target window:** August 2026  
-**Status:** Planned
+Critical flow:
 
-### Goals
-
-- [ ] Move away from FTP-first deployment
-- [ ] Select deployment model: Git pull, GitHub Actions, rsync, or hybrid
-- [ ] Define staging-lite strategy
-- [ ] Define backup-before-deploy procedure
-- [ ] Create rollback procedure
-- [ ] Create release notes template
-- [ ] Pilot deployment workflow on low-risk target
-
----
-
-## Sprint 3 — Monitoring and Backups
-
-**Target window:** September 2026  
-**Status:** Planned
-
-### Goals
-
-- [ ] Define uptime checks
-- [ ] Define SSL expiration checks
-- [ ] Define mail health checks
-- [ ] Define disk/storage checks
-- [ ] Define WordPress/Nextcloud checks
-- [ ] Define backup policy: RPO, RTO, retention
-- [ ] Run first restore test
-
----
-
-## Sprint 4 — Security Hardening
-
-**Target window:** October 2026  
-**Status:** Planned
-
-### Goals
-
-- [ ] Secrets policy
-- [ ] SSH baseline
-- [ ] DirectAdmin hardening review
-- [ ] WordPress hardening review
-- [ ] Nextcloud hardening review
-- [ ] Mail hardening: SPF, DKIM, DMARC
-- [ ] Dependency and plugin audit
-- [ ] Public/private repository split strategy
-
----
-
-## Sprint 5 — AI Documentation and Knowledge Graph
-
-**Target window:** November 2026  
-**Status:** Planned
-
-### Goals
-
-- [ ] Build machine-readable inventory
-- [ ] Generate documentation from inventory
-- [ ] Create knowledge graph model
-- [ ] Create AI chat interface over project docs
-- [ ] Add architecture decision records
-- [ ] Add monthly AI-generated infrastructure report draft
-
----
-
-## Sprint 6 — Controlled Self-Healing
-
-**Target window:** December 2026  
-**Status:** Planned
-
-### Goals
-
-- [ ] Define safe remediation playbooks
-- [ ] Add incident response templates
-- [ ] Add cost optimization review
-- [ ] Add monthly platform health report
-- [ ] Prepare open-source sanitization strategy
-- [ ] Implement first non-destructive self-healing recommendation workflow
+```text
+Reality -> Evidence -> Knowledge -> Confidence -> Decision
+        -> Specification -> Implementation -> Verification -> Merge
