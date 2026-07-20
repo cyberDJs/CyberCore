@@ -56,7 +56,16 @@ class ValidationReport:
 class KnowledgeValidator:
     """Deterministic validator for the file-backed CyberCore knowledge layer."""
 
-    ENTITY_SECTIONS = ("assets", "services", "domains", "projects", "providers", "users", "agents")
+    ENTITY_SECTIONS = (
+        "assets",
+        "services",
+        "domains",
+        "repositories",
+        "projects",
+        "providers",
+        "users",
+        "agents",
+    )
     RECORD_SECTIONS = ("evidence", "claims", "relationships", "decision_candidates")
     SECRET_MARKERS = ("password", "passwd", "private_key", "api_key", "access_token", "secret_value")
 
