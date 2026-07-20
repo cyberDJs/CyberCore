@@ -9,6 +9,7 @@ from cybercore.artifact import ArtifactBuildError
 from cybercore.commands.apply import run_apply
 from cybercore.commands.build import run_build
 from cybercore.commands.doctor import run_doctor
+from cybercore.commands.plan import plan_lines, run_plan
 from cybercore.commands.status import status_lines
 from cybercore.commands.sync import run_sync
 from cybercore.commands.validate import markdown_report, run_validate
@@ -25,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="Verify local runtime dependencies")
     sub.add_parser("status", help="Show runtime and Exchange state")
     sub.add_parser("sync", help="Synchronize Exchange and list READY Work Blocks")
+    sub.add_parser("plan", help="Generate prioritized actions from registry findings")
     validate_parser = sub.add_parser("validate", help="Validate registry and knowledge records")
     validate_parser.add_argument("--markdown", action="store_true", help="Render a Markdown validation report")
     verify_parser = sub.add_parser("verify", help="Verify a CXP Work Block package")
@@ -76,6 +78,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"READY={len(ready)}")
                 for item in ready:
                     print(item)
+            return 0
+        if args.command == "plan":
+            actions = run_plan(paths.repo)
+            if args.as_json:
+                print(json.dumps({"planned": [action.as_dict() for action in actions]}, indent=2))
+            else:
+                print("\n".join(plan_lines(actions)))
             return 0
         if args.command == "validate":
             report = run_validate(paths.repo)
