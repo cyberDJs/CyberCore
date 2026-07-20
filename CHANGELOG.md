@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.1.0 — 2026-07-20
+
+Foundation release for the public CyberCore framework.
+
+### Added
+
+- Foundation Release v0.1 release notes.
+- Release branding assets, including the CyberCore logo, icon mark, and social preview SVGs.
+- WB-0012 release evidence for the public foundation release.
+
+### Changed
+
+- Promoted package metadata and runtime compatibility from `0.1.0a1` to `0.1.0`.
+- Updated README, architecture, roadmap, and public-readiness documentation for the foundation release state.
+- Finalized the public license as Apache-2.0.
+
+### Security boundaries
+
+- No provider credentials, production inventory, customer data, runtime state, local virtual environments, or caches are part of the tracked public release.
+- Production-changing automation remains gated by explicit human approval.
+
+### Known limitations
+
+- Provider implementations are not included in v0.1.0.
+- CXP artifacts can be built and verified, but Runtime does not yet consume them from a registry.
+- Cryptographic publisher signing and encrypted transport remain future work.
+
 ## v0.1.0-alpha.1 — 2026-07-16
 
 First public development checkpoint for the CyberCore foundation, runtime, and artifact system.

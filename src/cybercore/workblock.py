@@ -99,9 +99,9 @@ def verify_workblock(path: Path) -> VerificationReport:
     manifest = WorkBlockManifest.load(package / "manifest.json")
     verified: list[str] = []
 
-    checksum_lines = (package / "checksums.sha256").read_text(
-        encoding="utf-8"
-    ).splitlines()
+    checksum_lines = (
+        (package / "checksums.sha256").read_text(encoding="utf-8").splitlines()
+    )
 
     if not checksum_lines:
         raise WorkBlockError("checksums.sha256 is empty")
@@ -112,9 +112,7 @@ def verify_workblock(path: Path) -> VerificationReport:
 
         parts = line.split(maxsplit=1)
         if len(parts) != 2:
-            raise WorkBlockError(
-                f"invalid checksum line {line_number}: {line!r}"
-            )
+            raise WorkBlockError(f"invalid checksum line {line_number}: {line!r}")
 
         expected, raw_path = parts
         raw_path = raw_path.lstrip("* ")

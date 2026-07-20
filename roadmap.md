@@ -2,7 +2,7 @@
 
 Project: **CyberDJS / CyberCore**  
 Started: **2026-07-08**  
-Updated: **2026-07-16**  
+Updated: **2026-07-20**
 Mode: living roadmap; GitHub `main` is the stable source of truth.
 
 ## Strategic outcome
@@ -45,7 +45,7 @@ Build an open, low-cost **Infrastructure Context & Intelligence Platform** that 
 
 ### EPIC-000 — Foundation
 
-**Status:** Completing in PR #6  
+**Status:** Complete in v0.1.0 foundation release
 **Goal:** Freeze identity, governance, architecture, engineering method, terminology, decision model, and knowledge model.
 
 Delivered:
@@ -63,12 +63,13 @@ Exit criteria:
 - [x] Foundation documents complete.
 - [x] CXP package, runtime, publisher, and Git integration specified.
 - [x] README and changelog aligned.
-- [ ] PR #6 merged to `main`.
-- [ ] Local `main` synchronized after merge.
+- [x] Runtime alpha promoted to foundation baseline.
+- [x] Public-release license and readiness gate completed.
+- [x] Release branding assets added.
 
 ### EPIC-001 — Runtime
 
-**Status:** Next  
+**Status:** Foundation baseline shipped; next iteration planned
 **Goal:** Implement the minimal safe CyberCore runtime according to CXP v1.
 
 Planned capabilities:

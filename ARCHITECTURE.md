@@ -188,4 +188,6 @@ InterServer
 
 ## Current stage
 
-The current architectural milestone is **Foundation and Exchange Runtime Design Freeze**. Runtime implementation resumes only after the CXP v1 contracts are approved and merged.
+The current architectural milestone is **Foundation Release v0.1**.
+
+The foundation release freezes the project identity, public/private boundary, CXP v1 contracts, initial CLI/runtime surface, and deterministic artifact publisher. Future releases extend provider integrations, cryptographic trust, registry discovery, and GitHub write automation through new specifications and Work Blocks.

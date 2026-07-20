@@ -12,6 +12,11 @@ id_ed25519
 .DS_Store
 node_modules/
 __pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+dist/
 .terraform/
 *.tfstate
 *.tfstate.*

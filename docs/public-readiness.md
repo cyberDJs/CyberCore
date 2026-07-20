@@ -2,6 +2,8 @@
 
 Status: Accepted
 
+Release baseline: **v0.1.0 foundation release**
+
 ## Model
 
 > Public Framework + Private Overlay
@@ -35,13 +37,23 @@ CyberCore is vendor-adaptable rather than artificially vendor-independent.
 
 Provider-specific capabilities belong in adapters. Shared concepts belong in Core.
 
-## License direction
+## License
 
-Apache License 2.0 is the current recommendation because it supports broad adoption, commercial use and includes an explicit patent grant. Final licensing is confirmed before public release.
+CyberCore v0.1.0 is released under the Apache License 2.0.
+
+Apache License 2.0 supports broad adoption, commercial use, and includes an explicit patent grant.
 
 ## Data rule
 
 > No production-derived knowledge is committed to the public repository.
+
+## v0.1.0 public release gate
+
+- [x] Public Framework + Private Overlay boundary documented.
+- [x] License finalized.
+- [x] No secrets, credentials, or production-derived inventory required by the public framework.
+- [x] Runtime state, caches, local virtual environments, and private overlays remain outside Git.
+- [x] Release notes and changelog identify known limitations before publication.
 
 ## Product ambition
 

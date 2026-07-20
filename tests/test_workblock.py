@@ -42,9 +42,7 @@ def write_package(root: Path) -> Path:
         "actions/apply.sh",
     ):
         data = (package / relative).read_bytes()
-        entries.append(
-            f"{hashlib.sha256(data).hexdigest()}  {relative}"
-        )
+        entries.append(f"{hashlib.sha256(data).hexdigest()}  {relative}")
 
     (package / "checksums.sha256").write_text(
         "\n".join(entries) + "\n",

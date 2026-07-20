@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 256" role="img" aria-labelledby="title desc">
+  <title id="title">CyberCore logo</title>
+  <desc id="desc">CyberCore wordmark with a geometric infrastructure control-plane mark.</desc>
+  <defs>
+    <linearGradient id="mark-gradient" x1="40" y1="38" x2="216" y2="220" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#16f2d2"/>
+      <stop offset="0.52" stop-color="#5f7cff"/>
+      <stop offset="1" stop-color="#ff4fd8"/>
+    </linearGradient>
+  </defs>
+  <rect width="980" height="256" rx="24" fill="#07111f"/>
+  <g transform="translate(36 28)">
+    <path d="M100 0 188 50v100l-88 50-88-50V50z" fill="#0e1b2e" stroke="#25395f" stroke-width="8"/>
+    <path d="M100 22 168 61v78l-68 39-68-39V61z" fill="none" stroke="url(#mark-gradient)" stroke-width="8" stroke-linejoin="round"/>
+    <circle cx="100" cy="100" r="34" fill="#101f34" stroke="#16f2d2" stroke-width="8"/>
+    <path d="M100 48v52l45 26M55 126l45-26" fill="none" stroke="#d7f8ff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="100" cy="48" r="12" fill="#16f2d2"/>
+    <circle cx="55" cy="126" r="12" fill="#ff4fd8"/>
+    <circle cx="145" cy="126" r="12" fill="#5f7cff"/>
+    <circle cx="100" cy="100" r="12" fill="#f7fbff"/>
+  </g>
+  <g transform="translate(280 76)">
+    <text x="0" y="58" fill="#f7fbff" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="70" font-weight="800">CyberCore</text>
+    <text x="4" y="104" fill="#93a9c9" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="25" font-weight="500">Infrastructure Context &amp; Intelligence Platform</text>
+  </g>
+  <path d="M806 62h92M806 194h92M852 62v132" stroke="#25395f" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="806" cy="62" r="8" fill="#16f2d2"/>
+  <circle cx="898" cy="62" r="8" fill="#5f7cff"/>
+  <circle cx="806" cy="194" r="8" fill="#ff4fd8"/>
+  <circle cx="898" cy="194" r="8" fill="#16f2d2"/>
+</svg>

@@ -59,8 +59,7 @@ def create_package(root: Path) -> Path:
         encoding="utf-8",
     )
     (package / "actions/apply.sh").write_text(
-        '#!/usr/bin/env bash\n'
-        'printf "applied\\n" > "$CYBERCORE_REPO/applied.txt"\n',
+        '#!/usr/bin/env bash\nprintf "applied\\n" > "$CYBERCORE_REPO/applied.txt"\n',
         encoding="utf-8",
     )
 
@@ -71,9 +70,7 @@ def create_package(root: Path) -> Path:
         "actions/verify.sh",
         "actions/apply.sh",
     ):
-        digest = hashlib.sha256(
-            (package / relative).read_bytes()
-        ).hexdigest()
+        digest = hashlib.sha256((package / relative).read_bytes()).hexdigest()
         entries.append(f"{digest}  {relative}")
 
     (package / "checksums.sha256").write_text(
@@ -115,6 +112,4 @@ def test_apply_executes_action(tmp_path: Path) -> None:
     result = run_apply(report, paths, dry_run=False)
 
     assert result.returncode == 0
-    assert (repo / "applied.txt").read_text(
-        encoding="utf-8"
-    ) == "applied\n"
+    assert (repo / "applied.txt").read_text(encoding="utf-8") == "applied\n"

@@ -1,6 +1,12 @@
 <div align="center">
 
+![CyberCore logo](assets/brand/cybercore-logo.svg)
+
+> **Infrastructure Context & Intelligence Platform**  
+> Technical descriptor: **AI-first Infrastructure Control Plane**
+=======
 # CYBERCORE
+
 
 ### Infrastructure Context & Intelligence Platform
 
@@ -257,6 +263,21 @@ security/                Security guidance and hardening material
 
 ## Public framework and private overlay
 
+**Foundation Release v0.1**
+
+The v0.1 foundation release establishes:
+
+- Foundation documents and terminology;
+- the conceptual architecture;
+- CXP v1 package, runtime, publisher, and Git-integration contracts;
+- an initial Python CLI/runtime;
+- deterministic CXP artifact publishing;
+- release branding assets;
+- explicit human approval before mutation;
+- GitHub `main` as the stable source of truth.
+
+Provider integrations, signing, encryption, registry publication, and GitHub write automation remain outside this release.
+=======
 The public repository contains reusable architecture, framework code, schemas, sanitized examples, tests, and documentation.
 
 Private overlays contain:
@@ -283,6 +304,7 @@ The current milestone establishes:
 - human approval before mutation
 - public repository structure
 - foundation for provider and runtime development
+
 
 ## Initial operational priorities
 
@@ -315,7 +337,11 @@ It is **not yet positioned as production-ready autonomous infrastructure managem
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution rules
 - [`SECURITY.md`](SECURITY.md) — security policy
 - [`CHANGELOG.md`](CHANGELOG.md) — notable changes
+- [`docs/releases/v0.1.0.md`](docs/releases/v0.1.0.md) — foundation release notes
+ release/foundation-v0.1
 
+CyberCore v0.1 is a foundation release. Production-changing automation remains behind explicit human approval and future provider work.
+=======
 ## Vision
 
 CyberCore aims to become a reference architecture for autonomous management of complex digital systems.
@@ -359,3 +385,4 @@ Before contributing, read [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md
 **Built from evidence. Governed by humans. Designed to learn.**
 
 </div>
+ main

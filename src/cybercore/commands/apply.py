@@ -100,9 +100,7 @@ def run_apply(
                 f"before_apply exit={before_code}",
             )
         )
-        raise RuntimeError(
-            f"before_apply hook failed with code {before_code}"
-        )
+        raise RuntimeError(f"before_apply hook failed with code {before_code}")
 
     apply_code = _run_optional_hook(
         report,
@@ -134,9 +132,7 @@ def run_apply(
                 )
             )
 
-        raise RuntimeError(
-            f"Work Block apply action failed with code {apply_code}"
-        )
+        raise RuntimeError(f"Work Block apply action failed with code {apply_code}")
 
     after_code = _run_optional_hook(report, "after_apply", paths)
     if after_code != 0:
@@ -147,9 +143,7 @@ def run_apply(
                 f"after_apply exit={after_code}",
             )
         )
-        raise RuntimeError(
-            f"after_apply hook failed with code {after_code}"
-        )
+        raise RuntimeError(f"after_apply hook failed with code {after_code}")
 
     emit(EventRecord(RuntimeEvent.APPLY_OK, workblock_id))
     return ApplyResult(
