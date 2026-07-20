@@ -9,6 +9,7 @@ from cybercore.policy import PolicyDecision
 
 SEVERITY_POINTS = {
     "info": 5,
+    "medium": 20,
     "warning": 20,
     "high": 35,
     "critical": 50,
