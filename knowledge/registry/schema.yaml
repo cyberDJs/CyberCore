@@ -1,0 +1,96 @@
+schema_version: "0.1.0"
+kind: CyberCoreRegistrySchema
+
+metadata:
+  purpose: "Machine-readable inventory and relationship model for CyberCore-managed infrastructure."
+  classification: "public-sanitized"
+  secrets_policy: "Never store credentials, tokens, private keys, recovery codes, or secret values. Store references only."
+
+required_entity_fields:
+  - id
+  - kind
+  - name
+  - status
+  - owner
+  - classification
+  - evidence
+  - last_reviewed
+
+entity_kinds:
+  asset:
+    description: "Physical, virtual, hosted, or cloud resource."
+    examples: [vps, shared-hosting, router, workstation, raspberry-pi]
+  service:
+    description: "Software or managed capability running on or provided by an asset."
+    examples: [nextcloud, mail, dns, redis, directadmin]
+  domain:
+    description: "Registered domain or operational hostname."
+  repository:
+    description: "Source repository used by the ecosystem."
+  integration:
+    description: "External system connection or API relationship."
+  agent:
+    description: "AI or automation agent with a defined responsibility."
+  person:
+    description: "Human owner, operator, approver, or stakeholder."
+  project:
+    description: "Product, service, or bounded initiative."
+
+status_values:
+  - planned
+  - active
+  - degraded
+  - blocked
+  - maintenance
+  - retired
+  - unknown
+
+classification_values:
+  - public
+  - public-sanitized
+  - internal
+  - confidential
+  - secret-reference
+
+relationship_types:
+  - runs_on
+  - hosted_by
+  - depends_on
+  - exposes
+  - manages
+  - monitors
+  - backs_up
+  - documents
+  - deploys
+  - owned_by
+  - related_to
+
+record_template:
+  id: "ASSET-000"
+  kind: "asset"
+  subtype: "vps"
+  name: "Example asset"
+  status: "unknown"
+  owner: "CyberCore"
+  classification: "public-sanitized"
+  description: "Sanitized description."
+  provider: null
+  environment: null
+  location: null
+  endpoints: []
+  services: []
+  relationships: []
+  monitoring:
+    status: "unknown"
+    reference: null
+  backup:
+    status: "unknown"
+    reference: null
+  secrets:
+    references: []
+  evidence:
+    - type: "conversation"
+      reference: "project-context"
+      confidence: "medium"
+  last_reviewed: null
+  notes: []

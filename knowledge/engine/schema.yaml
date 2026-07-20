@@ -1,0 +1,90 @@
+version: 0.1.0
+record_types:
+  evidence:
+    required:
+      - id
+      - source_type
+      - source_ref
+      - observed_at
+      - classification
+      - summary
+      - freshness
+    properties:
+      id: {type: string, pattern: '^EVD-[0-9]{4,}$'}
+      source_type:
+        type: string
+        enum: [human_observation, config_extract, provider_portal, command_output, monitoring, github, asana, document]
+      source_ref: {type: string}
+      observed_at: {type: datetime}
+      classification:
+        type: string
+        enum: [public, internal, confidential, secret_reference]
+      summary: {type: string}
+      freshness:
+        type: object
+        required: [review_after]
+        properties:
+          review_after: {type: date}
+          expires_after: {type: date, nullable: true}
+
+  claim:
+    required:
+      - id
+      - subject_ref
+      - predicate
+      - value
+      - evidence_refs
+      - confidence
+      - status
+      - review_after
+    properties:
+      id: {type: string, pattern: '^CLM-[0-9]{4,}$'}
+      subject_ref: {type: string}
+      predicate: {type: string}
+      value: {}
+      evidence_refs:
+        type: array
+        min_items: 1
+        items: {type: string, pattern: '^EVD-[0-9]{4,}$'}
+      confidence: {type: number, minimum: 0.0, maximum: 1.0}
+      status:
+        type: string
+        enum: [proposed, verified, contradicted, stale, rejected]
+      review_after: {type: date}
+      contradicts:
+        type: array
+        items: {type: string, pattern: '^CLM-[0-9]{4,}$'}
+
+  relationship:
+    required: [id, from_ref, type, to_ref, claim_ref]
+    properties:
+      id: {type: string, pattern: '^REL-[0-9]{4,}$'}
+      from_ref: {type: string}
+      type:
+        type: string
+        enum: [runs_on, depends_on, served_by, owned_by, documented_by, tracked_by, supersedes]
+      to_ref: {type: string}
+      claim_ref: {type: string, pattern: '^CLM-[0-9]{4,}$'}
+
+  decision_candidate:
+    required:
+      - id
+      - problem
+      - options
+      - recommended_option
+      - supporting_claims
+      - risk
+      - requires_human_approval
+    properties:
+      id: {type: string, pattern: '^DEC-CAND-[0-9]{4,}$'}
+      problem: {type: string}
+      options: {type: array, min_items: 2}
+      recommended_option: {type: string}
+      supporting_claims:
+        type: array
+        min_items: 1
+        items: {type: string, pattern: '^CLM-[0-9]{4,}$'}
+      risk:
+        type: string
+        enum: [low, medium, high, critical]
+      requires_human_approval: {const: true}

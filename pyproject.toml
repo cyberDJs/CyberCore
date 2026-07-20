@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "CyberDJS" }]
-dependencies = ["zstandard>=0.23"]
+dependencies = ["zstandard>=0.23", "PyYAML>=6.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "jsonschema>=4.23"]

@@ -1,0 +1,186 @@
+registry_version: "0.1.0"
+updated_at: "2026-07-20"
+classification: "public-sanitized"
+owner: "CyberCore"
+
+assets:
+  - id: "ASSET-ISH-001"
+    kind: "asset"
+    subtype: "shared-hosting"
+    name: "InterServer shared hosting"
+    status: "active"
+    owner: "CyberCore"
+    provider: "InterServer"
+    classification: "public-sanitized"
+    description: "Shared hosting package serving the Eimy Herrer / CyberDJS ecosystem."
+    services:
+      - "SERVICE-WEB-001"
+      - "SERVICE-MAIL-001"
+      - "SERVICE-NC-001"
+    evidence:
+      - type: "project-context"
+        reference: "CyberCore project instructions"
+        confidence: "high"
+    last_reviewed: "2026-07-20"
+
+  - id: "ASSET-IVPS-001"
+    kind: "asset"
+    subtype: "vps"
+    name: "InterServer Slice VPS"
+    status: "active"
+    owner: "CyberCore"
+    provider: "InterServer"
+    classification: "public-sanitized"
+    description: "Single VPS slice managed as part of the CyberCore infrastructure estate."
+    services: []
+    monitoring:
+      status: "unknown"
+      reference: null
+    backup:
+      status: "unknown"
+      reference: null
+    evidence:
+      - type: "project-context"
+        reference: "CyberCore project instructions"
+        confidence: "high"
+    last_reviewed: "2026-07-20"
+
+services:
+  - id: "SERVICE-WEB-001"
+    kind: "service"
+    subtype: "website"
+    name: "eimyherrer.com website"
+    status: "active"
+    owner: "CyberCore"
+    classification: "public-sanitized"
+    relationships:
+      - type: "hosted_by"
+        target: "ASSET-ISH-001"
+    endpoints:
+      - "https://eimyherrer.com"
+    evidence:
+      - type: "project-context"
+        reference: "CyberCore project instructions"
+        confidence: "high"
+    last_reviewed: "2026-07-20"
+
+  - id: "SERVICE-MAIL-001"
+    kind: "service"
+    subtype: "mail"
+    name: "Eimy Herrer mail service"
+    status: "active"
+    owner: "CyberCore"
+    classification: "public-sanitized"
+    relationships:
+      - type: "hosted_by"
+        target: "ASSET-ISH-001"
+    endpoints: []
+    evidence:
+      - type: "project-context"
+        reference: "CyberCore project instructions"
+        confidence: "high"
+    last_reviewed: "2026-07-20"
+
+  - id: "SERVICE-NC-001"
+    kind: "service"
+    subtype: "nextcloud"
+    name: "Eimy Herrer Nextcloud"
+    status: "degraded"
+    owner: "CyberCore"
+    classification: "public-sanitized"
+    relationships:
+      - type: "hosted_by"
+        target: "ASSET-ISH-001"
+      - type: "exposes"
+        target: "DOMAIN-CLOUD-001"
+    endpoints:
+      - "https://cloud.eimyherrer.com"
+    notes:
+      - "Recent maintenance involved PHP compatibility, Redis over Unix socket, cron, timeout, and HSTS checks."
+      - "Exact production paths and configuration values belong in the private overlay."
+    evidence:
+      - type: "conversation"
+        reference: "Nextcloud configuration and repair session, 2026-07-08"
+        confidence: "high"
+    last_reviewed: "2026-07-20"
+
+domains:
+  - id: "DOMAIN-ROOT-001"
+    kind: "domain"
+    subtype: "registered-domain"
+    name: "eimyherrer.com"
+    status: "active"
+    owner: "CyberCore"
+    classification: "public"
+    relationships:
+      - type: "hosted_by"
+        target: "ASSET-ISH-001"
+    evidence:
+      - type: "project-context"
+        reference: "CyberCore project instructions"
+        confidence: "high"
+    last_reviewed: "2026-07-20"
+
+  - id: "DOMAIN-CLOUD-001"
+    kind: "domain"
+    subtype: "hostname"
+    name: "cloud.eimyherrer.com"
+    status: "active"
+    owner: "CyberCore"
+    classification: "public"
+    relationships:
+      - type: "exposes"
+        target: "SERVICE-NC-001"
+    evidence:
+      - type: "conversation"
+        reference: "Nextcloud configuration and repair session, 2026-07-08"
+        confidence: "high"
+    last_reviewed: "2026-07-20"
+
+repositories:
+  - id: "REPO-CC-001"
+    kind: "repository"
+    subtype: "github"
+    name: "cyberDJs/CyberCore"
+    status: "active"
+    owner: "CyberCore"
+    classification: "internal"
+    endpoints:
+      - "https://github.com/cyberDJs/CyberCore"
+    relationships:
+      - type: "documents"
+        target: "PROJECT-CC-001"
+    evidence:
+      - type: "github"
+        reference: "cyberDJs/CyberCore"
+        confidence: "high"
+    last_reviewed: "2026-07-20"
+
+projects:
+  - id: "PROJECT-CC-001"
+    kind: "project"
+    subtype: "platform"
+    name: "CyberCore"
+    status: "active"
+    owner: "CyberCore"
+    classification: "public-sanitized"
+    description: "AI-first infrastructure control plane for the Eimy Herrer / CyberDJS ecosystem."
+    evidence:
+      - type: "github"
+        reference: "README.md"
+        confidence: "high"
+    last_reviewed: "2026-07-20"
+
+unknowns:
+  - id: "UNKNOWN-001"
+    question: "What services currently run on ASSET-IVPS-001?"
+    priority: "high"
+  - id: "UNKNOWN-002"
+    question: "What backup coverage and restore evidence exists for each production service?"
+    priority: "high"
+  - id: "UNKNOWN-003"
+    question: "What monitoring is active for hosting, VPS, mail, domains, SSL, and Nextcloud?"
+    priority: "high"
+  - id: "UNKNOWN-004"
+    question: "Which domains, subdomains, mailboxes, databases, cron jobs, and certificates are currently active?"
+    priority: "high"
