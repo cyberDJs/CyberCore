@@ -16,6 +16,4 @@
 
 ## What is CyberCore?
 
-CyberCore is an **open architecture and reference implementation for evidence-driven infrastructure intelligence**.
-
-It models operational reality as a living system of **entities, relationships, events, evidence, decisions, actions, and memory**. Instead of automating first and explaining later, CyberCore builds an explicit world
+CyberCore is an **open architecture and reference implementation for evidence-driven
