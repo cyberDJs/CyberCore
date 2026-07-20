@@ -15,10 +15,10 @@ def _finding(identifier: str, detector: str, severity: str, subject: str) -> Dis
     )
 
 
-def test_policy_engine_matches_deterministic_rules() -> None:
+def test_policy_engine_matches_discovery_contract() -> None:
     findings = (
-        _finding("DISC-1", "backup", "high", "SERVICE-1"),
-        _finding("DISC-2", "monitoring", "warning", "SERVICE-1"),
+        _finding("DISC-1", "backup-coverage", "high", "SERVICE-1"),
+        _finding("DISC-2", "monitoring-coverage", "medium", "SERVICE-1"),
     )
 
     decisions = PolicyEngine().evaluate(findings)
@@ -32,9 +32,9 @@ def test_policy_engine_matches_deterministic_rules() -> None:
 
 def test_risk_engine_groups_subjects_and_caps_score() -> None:
     findings = (
-        _finding("DISC-1", "backup", "high", "SERVICE-1"),
-        _finding("DISC-2", "monitoring", "warning", "SERVICE-1"),
-        _finding("DISC-3", "unknown", "warning", "ASSET-1"),
+        _finding("DISC-1", "backup-coverage", "high", "SERVICE-1"),
+        _finding("DISC-2", "monitoring-coverage", "medium", "SERVICE-1"),
+        _finding("DISC-3", "registry-unknown", "medium", "ASSET-1"),
     )
     decisions = PolicyEngine().evaluate(findings)
 
