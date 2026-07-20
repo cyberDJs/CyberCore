@@ -21,4 +21,10 @@ class ExchangeTransport:
         staged = self.paths.exchange_home / "staged"
         if not staged.is_dir():
             return ()
-        return tuple(sorted(marker.parent for marker in staged.glob("WB-*/.ready") if marker.is_file()))
+        return tuple(
+            sorted(
+                marker.parent
+                for marker in staged.glob("WB-*/.ready")
+                if marker.is_file()
+            )
+        )

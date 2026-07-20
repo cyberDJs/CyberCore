@@ -1,6 +1,6 @@
 # Contributing
 
-This repository currently operates as a private project workspace.
+This repository operates as a public framework with private overlays for environment-specific data.
 
 ## Rules
 

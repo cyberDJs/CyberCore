@@ -92,7 +92,7 @@ Example:
     }
   },
   "compatibility": {
-    "runtime": ">=0.1.0a1,<0.2.0"
+    "runtime": ">=0.1.0,<0.2.0"
   },
   "risk": "low"
 }

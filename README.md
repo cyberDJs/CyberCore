@@ -1,5 +1,7 @@
 # CyberCore
 
+![CyberCore logo](assets/brand/cybercore-logo.svg)
+
 > **Infrastructure Context & Intelligence Platform**  
 > Technical descriptor: **AI-first Infrastructure Control Plane**
 
@@ -116,18 +118,20 @@ security/                Security guidance and hardening material
 
 ## Current milestone
 
-**Foundation and Exchange Runtime Design Freeze**
+**Foundation Release v0.1**
 
-The active design package defines:
+The v0.1 foundation release establishes:
 
 - Foundation documents and terminology;
 - the conceptual architecture;
 - CXP v1 package, runtime, publisher, and Git-integration contracts;
-- WB-0006 decisions and state machine;
+- an initial Python CLI/runtime;
+- deterministic CXP artifact publishing;
+- release branding assets;
 - explicit human approval before mutation;
 - GitHub `main` as the stable source of truth.
 
-Runtime implementation resumes after the design-freeze pull request is reviewed and merged.
+Provider integrations, signing, encryption, registry publication, and GitHub write automation remain outside this release.
 
 ## Initial operational priorities
 
@@ -146,5 +150,6 @@ Runtime implementation resumes after the design-freeze pull request is reviewed 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution and collaboration rules
 - [`SECURITY.md`](SECURITY.md) — security policy
 - [`CHANGELOG.md`](CHANGELOG.md) — notable changes
+- [`docs/releases/v0.1.0.md`](docs/releases/v0.1.0.md) — foundation release notes
 
-CyberCore is pre-release software. Contracts are being stabilized before production-changing automation is enabled.
+CyberCore v0.1 is a foundation release. Production-changing automation remains behind explicit human approval and future provider work.
