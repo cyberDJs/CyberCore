@@ -1,0 +1,43 @@
+name: Knowledge validation
+
+on:
+  pull_request:
+    paths:
+      - "knowledge/**"
+      - "src/cybercore/knowledge.py"
+      - "src/cybercore/commands/validate.py"
+      - "src/cybercore/cli.py"
+      - "tests/test_knowledge_validator.py"
+      - "pyproject.toml"
+      - ".github/workflows/knowledge-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "knowledge/**"
+      - "src/cybercore/knowledge.py"
+      - "src/cybercore/commands/validate.py"
+      - "src/cybercore/cli.py"
+      - "tests/test_knowledge_validator.py"
+      - "pyproject.toml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install package and tests
+        run: python -m pip install -e '.[dev]'
+      - name: Run test suite
+        run: pytest -q
+      - name: Validate knowledge layer
+        run: cybercore --repo . validate --markdown | tee knowledge-validation.md
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: knowledge-validation-report
+          path: knowledge-validation.md
