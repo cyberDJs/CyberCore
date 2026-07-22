@@ -1,0 +1,16 @@
+version: 1
+
+identity:
+  name: CyberCore
+  architecture: reference-architecture-v2
+  maturity: alpha
+
+mission: >-
+  Build an evidence-driven control plane for infrastructure, knowledge,
+  decisions, and controlled mutation.
+
+vision: Every decision is traceable to evidence.
+
+canonical_sources:
+  architecture: docs/architecture/reference-architecture-v2.md
+  genome: docs/audits/cybercore-gen

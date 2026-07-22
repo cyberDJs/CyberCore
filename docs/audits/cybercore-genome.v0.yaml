@@ -1,0 +1,332 @@
+genome:
+  id: cybercore-genome-v0
+  status: draft
+  generated_at: 2026-07-22T16:00:00+02:00
+  purpose: >-
+    Machine-readable map of CyberCore capabilities, ownership boundaries,
+    implementation locations, dependencies, risks, and sources of truth.
+
+project:
+  name: CyberCore
+  repository: cyberDJs/CyberCore
+  stable_branch: main
+  governance:
+    human_approval_required_before_mutation: true
+    secrets_in_public_repository: forbidden
+    public_private_overlay_boundary: required
+    github_actions_required: false
+
+canonical_sources:
+  architecture:
+    primary: docs/architecture/
+    competing_or_legacy:
+      - ARCHITECTURE.md
+      - foundation/FOUNDATIONS.md
+      - README.md
+  decisions:
+    primary: docs/adr/
+    supplemental:
+      - DECISIONS.md
+      - engineering/work-blocks/*/decisions.md
+  roadmap:
+    primary: roadmap.md
+  project_state:
+    primary: PROJECT_STATE.md
+  worklog:
+    primary: WORKLOG.md
+  audit:
+    primary: docs/audits/2026-07-system-coherence-audit.md
+
+branches:
+  main:
+    role: stable_incomplete_baseline
+    status: active
+  feat/interactive-demo-framework:
+    pull_request: 18
+    status: mergeable
+    relation_to_main:
+      ahead_by: 14
+      behind_by: 0
+    disposition: merge_after_audit_compatibility_check
+  feat/structured-registry-v0:
+    pull_request: 13
+    status: diverged_not_mergeable
+    relation_to_main:
+      ahead_by: 34
+      behind_by: 7
+    disposition: preserve_and_reintegrate_selectively
+  feat/interserver-provider-v0.1:
+    pull_request: 5
+    status: stale_open_draft
+    disposition: audit_for_salvage_or_supersession
+
+capabilities:
+  - id: runtime.foundation
+    name: Foundation Runtime
+    layer: runtime
+    status: implemented
+    canonical_branch: main
+    implementation:
+      - src/cybercore/runtime.py
+      - src/cybercore/cli.py
+      - src/cybercore/commands/doctor.py
+      - src/cybercore/commands/status.py
+      - src/cybercore/commands/sync.py
+    tests:
+      - tests/test_runtime.py
+      - tests/test_cli.py
+      - tests/test_transport.py
+    depends_on: []
+    risks:
+      - shared_cli_surface_modified_by_multiple_long_lived_branches
+
+  - id: cxp.artifact
+    name: CXP Artifact Model and Builder
+    layer: transport
+    status: implemented
+    canonical_branch: main
+    implementation:
+      - src/cybercore/artifact.py
+      - src/cybercore/commands/build.py
+      - docs/specifications/cxp-0001-package-format.md
+      - docs/specifications/cxp-0002-runtime.md
+      - docs/specifications/cxp-0003-publisher.md
+      - docs/specifications/cxp-0004-git-integration.md
+      - docs/specifications/cxp-v1.md
+    tests:
+      - tests/test_artifact.py
+      - tests/test_workblock.py
+    depends_on:
+      - runtime.foundation
+    risks:
+      - specification_overlap_requires_canonical_index
+
+  - id: mutation.verify_apply
+    name: Controlled Verify and Apply
+    layer: mutation
+    status: implemented
+    canonical_branch: main
+    implementation:
+      - src/cybercore/commands/verify.py
+      - src/cybercore/commands/apply.py
+      - src/cybercore/workblock.py
+    tests:
+      - tests/test_apply.py
+      - tests/test_workblock.py
+    depends_on:
+      - runtime.foundation
+      - cxp.artifact
+    invariants:
+      - explicit_human_approval_before_non_dry_run_mutation
+    risks:
+      - future_provider_mutations_must_not_bypass_gate
+
+  - id: knowledge.registry
+    name: Structured Infrastructure Registry
+    layer: knowledge
+    status: implemented_unmerged
+    canonical_branch: feat/structured-registry-v0
+    implementation:
+      - knowledge/registry/schema.yaml
+      - knowledge/registry/inventory.yaml
+      - src/cybercore/registry.py
+      - src/cybercore/registry_graph.py
+    tests:
+      - tests/test_registry.py
+      - tests/test_registry_graph.py
+    depends_on:
+      - runtime.foundation
+    risks:
+      - branch_divergence
+      - production_fact_freshness
+      - public_private_boundary_errors
+
+  - id: knowledge.evidence
+    name: Evidence and Claim Model
+    layer: domain
+    status: implemented_unmerged
+    canonical_branch: feat/structured-registry-v0
+    implementation:
+      - src/cybercore/evidence.py
+      - knowledge/engine/schema.yaml
+      - knowledge/engine/KNOWLEDGE_ENGINE.md
+    tests:
+      - tests/test_knowledge_validator.py
+    depends_on:
+      - knowledge.registry
+    risks:
+      - terminology_overlap_between_observation_evidence_claim_and_finding
+
+  - id: knowledge.validator
+    name: Deterministic Knowledge Validator
+    layer: knowledge
+    status: implemented_unmerged
+    canonical_branch: feat/structured-registry-v0
+    implementation:
+      - src/cybercore/knowledge.py
+      - src/cybercore/commands/validate.py
+    tests:
+      - tests/test_knowledge_validator.py
+    depends_on:
+      - knowledge.registry
+      - knowledge.evidence
+    risks:
+      - cli_merge_conflict_with_pr18
+      - github_actions_workflow_not_required_and_currently_problematic
+
+  - id: decision.policy_risk_planner
+    name: Policy, Risk and Decision Planning
+    layer: decision
+    status: implemented_unmerged
+    canonical_branch: feat/structured-registry-v0
+    implementation:
+      - src/cybercore/policy.py
+      - src/cybercore/risk.py
+      - src/cybercore/planner.py
+      - src/cybercore/commands/plan.py
+    tests:
+      - tests/test_policy_risk.py
+      - tests/test_planner.py
+    depends_on:
+      - knowledge.validator
+    risks:
+      - decision_candidate_contract_not_yet_canonicalized
+      - sequencing_with_mutation_engine_not_formally_defined
+
+  - id: provider.framework
+    name: Provider Framework
+    layer: provider
+    status: stale_unmerged
+    canonical_branch: feat/interserver-provider-v0.1
+    implementation:
+      - provider_abstractions_to_be_audited
+    depends_on:
+      - runtime.foundation
+    intended_dependencies:
+      - knowledge.evidence
+    risks:
+      - old_provider_model_may_predate_evidence_first_architecture
+      - possible_duplicate_configuration_and_http_client_abstractions
+
+  - id: presentation.demo
+    name: Interactive Demo Framework
+    layer: presentation
+    status: implemented_verified_unmerged
+    canonical_branch: feat/interactive-demo-framework
+    implementation:
+      - src/cybercore/presentation.py
+      - src/cybercore/demo.py
+      - demos/uc_001_reality_to_evidence.py
+      - scripts/record-demo.sh
+    tests:
+      - local_manual_verification
+    depends_on:
+      - runtime.foundation
+    risks:
+      - duplicate_demo_implementations
+      - no_dedicated_automated_cli_tests_for_demo_command
+
+  - id: presentation.learn
+    name: Interactive Learning Flow
+    layer: presentation
+    status: implemented_verified_unmerged
+    canonical_branch: feat/interactive-demo-framework
+    implementation:
+      - src/cybercore/learn.py
+      - src/cybercore/presentation.py
+    tests:
+      - local_manual_verification
+    depends_on:
+      - presentation.demo
+    risks:
+      - educational_content_can_drift_from_canonical_domain_model
+
+  - id: project.memory
+    name: Persistent Project Memory
+    layer: governance
+    status: partial
+    canonical_branch: feat/interactive-demo-framework
+    implementation:
+      - PROJECT_STATE.md
+      - WORKLOG.md
+      - docs/audits/2026-07-system-coherence-audit.md
+      - docs/audits/cybercore-genome.v0.yaml
+    planned:
+      - DECISIONS.md
+      - NEXT.md
+      - cybercore checkpoint
+    depends_on:
+      - runtime.foundation
+    risks:
+      - manual_updates_can_become_stale
+      - no_enforced_checkpoint_policy
+
+critical_relationships:
+  - from: provider.framework
+    to: knowledge.evidence
+    type: should_produce
+    status: proposed
+  - from: knowledge.evidence
+    to: knowledge.validator
+    type: validated_by
+    status: implemented_unmerged
+  - from: knowledge.validator
+    to: decision.policy_risk_planner
+    type: informs
+    status: implemented_unmerged
+  - from: decision.policy_risk_planner
+    to: mutation.verify_apply
+    type: must_gate
+    status: incomplete
+  - from: presentation.demo
+    to: knowledge.evidence
+    type: explains
+    status: conceptual
+  - from: project.memory
+    to: all_capabilities
+    type: documents_and_tracks
+    status: partial
+
+root_causes:
+  - id: rc.long_lived_branches
+    severity: critical
+    description: Major capabilities evolved on long-lived branches without regular reintegration.
+  - id: rc.shared_integration_surfaces
+    severity: high
+    description: Multiple branches independently modify cli.py and pyproject.toml.
+  - id: rc.unclear_kernel
+    severity: high
+    description: Runtime, CXP, Knowledge, Provider and Demo were not explicitly classified as kernel versus modules.
+  - id: rc.multiple_sources_of_truth
+    severity: high
+    description: Architecture and project state are duplicated across root docs, foundation docs, ADRs, specifications and work blocks.
+  - id: rc.chat_as_coordination_layer
+    severity: high
+    description: Significant decisions depended on transient chat context rather than mandatory repository checkpoints.
+  - id: rc.unclosed_superseded_work
+    severity: medium
+    description: Old PRs and issues remain open without disposition, creating ambiguity.
+
+consolidation_sequence:
+  - step: 1
+    action: complete_architecture_and_capability_audit
+  - step: 2
+    action: merge_low_risk_pr18_after_compatibility_confirmation
+  - step: 3
+    action: create_clean_integration_branch_from_updated_main
+  - step: 4
+    action: selectively_port_pr13_by_domain_slice_with_tests
+  - step: 5
+    action: audit_and_salvage_pr5_provider_contract
+  - step: 6
+    action: define_canonical_dependency_direction
+  - step: 7
+    action: implement_checkpoint_generation_and_staleness_checks
+
+open_questions:
+  - What is the formal CyberCore kernel?
+  - Is CXP a transport subsystem or the central runtime contract?
+  - Does the registry contain entities directly, or only claims about entities?
+  - Is a decision candidate part of the Knowledge domain or Mutation domain?
+  - Should providers depend only on Evidence contracts and never on Knowledge internals?
+  - Which architecture document supersedes ARCHITECTURE.md and FOUNDATIONS.md?
