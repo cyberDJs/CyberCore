@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/finding",
+  "title": "CyberCore Finding",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "finding" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["finding_type", "severity", "knowledge_state_id", "subject_ids", "claim_ids", "evidence_ids", "explanation", "status"],
+          "properties": {
+            "finding_type": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "severity": { "enum": ["informational", "low", "medium", "high", "critical"] },
+            "knowledge_state_id": { "type": "string", "minLength": 3, "maxLength": 512 },
+            "subject_ids": { "type": "array", "items": { "type": "string" }, "minItems": 1, "uniqueItems": true },
+            "claim_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "evidence_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "explanation": { "type": "string", "minLength": 1, "maxLength": 10000 },
+            "status": { "enum": ["open", "acknowledged", "suppressed", "resolved", "obsolete"] },
+            "detected_at": { "type": "string", "format": "date-time" }
+          }
+        }
+      }
+    }
+  ]
+}
