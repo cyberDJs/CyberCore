@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/common-record",
+  "title": "CyberCore Common Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "type",
+    "schema_version",
+    "created_at",
+    "created_by",
+    "classification",
+    "attributes",
+    "relationships"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9._-]*$"
+    },
+    "schema_version": {
+      "const": "ccl/1.0"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "classification": {
+      "enum": [
+        "public",
+        "internal",
+        "confidential",
+        "restricted"
+      ]
+    },
+    "correlation_id": {
+      "type": ["string", "null"],
+      "maxLength": 512
+    },
+    "causation_id": {
+      "type": ["string", "null"],
+      "maxLength": 512
+    },
+    "tenant_id": {
+      "type": ["string", "null"],
+      "maxLength": 256
+    },
+    "attributes": {
+      "type": "object"
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relationshipReference"
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)+$"
+      },
+      "additionalProperties": {
+        "type": "object"
+      },
+      "default": {}
+    }
+  },
+  "$defs": {
+    "recordId": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9:._/-]*$"
+    },
+    "relationshipReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "target_id"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9._-]*$"
+        },
+        "target_id": {
+          "$ref": "#/$defs/recordId"
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {
+          "enum": ["unknown", "verified", "failed"]
+        },
+        "algorithm": {
+          "type": ["string", "null"],
+          "maxLength": 64
+        },
+        "digest": {
+          "type": ["string", "null"],
+          "maxLength": 512
+        }
+      }
+    }
+  }
+}
