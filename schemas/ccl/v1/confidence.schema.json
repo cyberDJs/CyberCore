@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/confidence",
+  "title": "CyberCore Confidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["level", "rationale"],
+  "properties": {
+    "score": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "level": {
+      "enum": ["unknown", "low", "medium", "high", "verified"]
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "method": {
+      "type": ["string", "null"],
+      "maxLength": 256
+    }
+  }
+}
