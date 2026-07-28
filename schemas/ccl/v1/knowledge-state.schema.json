@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/knowledge-state",
+  "title": "CyberCore Knowledge State Record",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "knowledge_state" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["generated_at", "evidence_set", "rule_set_version", "entity_ids", "claim_ids", "relationship_ids", "contradiction_ids", "unknowns"],
+          "properties": {
+            "generated_at": { "type": "string", "format": "date-time" },
+            "evidence_set": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 512 } },
+            "rule_set_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "entity_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 512 } },
+            "claim_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 512 } },
+            "relationship_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 512 } },
+            "contradiction_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 512 } },
+            "unknowns": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["subject_id", "predicate", "reason"],
+                "properties": {
+                  "subject_id": { "type": "string", "minLength": 3, "maxLength": 512 },
+                  "predicate": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$" },
+                  "reason": { "type": "string", "minLength": 1, "maxLength": 4000 }
+                }
+              }
+            },
+            "freshness_summary": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "fresh": { "type": "integer", "minimum": 0 },
+                "stale": { "type": "integer", "minimum": 0 },
+                "expired": { "type": "integer", "minimum": 0 },
+                "unknown": { "type": "integer", "minimum": 0 }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
