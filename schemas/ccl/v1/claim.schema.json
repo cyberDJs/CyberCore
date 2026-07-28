@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/claim",
+  "title": "CyberCore Claim Record",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "claim" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["subject_id", "predicate", "value", "evidence_ids", "confidence", "status"],
+          "properties": {
+            "subject_id": { "type": "string", "minLength": 3, "maxLength": 512 },
+            "predicate": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$" },
+            "value": {},
+            "scope": { "type": ["string", "null"], "maxLength": 512 },
+            "evidence_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 512 } },
+            "confidence": { "$ref": "confidence.schema.json" },
+            "valid_from": { "type": ["string", "null"], "format": "date-time" },
+            "valid_until": { "type": ["string", "null"], "format": "date-time" },
+            "status": { "enum": ["supported", "contested", "rejected", "unknown", "stale"] }
+          }
+        }
+      }
+    }
+  ]
+}
