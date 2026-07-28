@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/decision-candidate",
+  "title": "CyberCore Decision Candidate",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "decision_candidate" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["intent_id", "finding_ids", "policy_evaluation_ids", "evidence_ids", "alternatives", "recommended_option", "risk", "rationale", "status"],
+          "properties": {
+            "intent_id": { "type": "string", "minLength": 3, "maxLength": 512 },
+            "finding_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "policy_evaluation_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "evidence_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "alternatives": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["id", "description"],
+                "properties": {
+                  "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+                  "description": { "type": "string", "minLength": 1, "maxLength": 10000 },
+                  "pros": { "type": "array", "items": { "type": "string" } },
+                  "cons": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            },
+            "recommended_option": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "risk": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["likelihood", "impact", "level", "rationale"],
+              "properties": {
+                "likelihood": { "enum": ["rare", "unlikely", "possible", "likely", "almost_certain"] },
+                "impact": { "enum": ["negligible", "minor", "moderate", "major", "severe"] },
+                "level": { "enum": ["low", "medium", "high", "critical"] },
+                "rationale": { "type": "string", "minLength": 1, "maxLength": 10000 }
+              }
+            },
+            "rationale": { "type": "string", "minLength": 1, "maxLength": 10000 },
+            "assumptions": { "type": "array", "items": { "type": "string" } },
+            "unknowns": { "type": "array", "items": { "type": "string" } },
+            "status": { "enum": ["proposed", "rejected", "selected", "expired", "superseded"] }
+          }
+        }
+      }
+    }
+  ]
+}
