@@ -39,7 +39,7 @@ def _git(repo: Path, *args: str) -> str:
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip()
         raise CheckpointError(f"git {' '.join(args)} failed: {detail}")
-    return completed.stdout.strip()
+    return completed.stdout.rstrip("\r\n")
 
 
 def collect_checkpoint(repo: Path, *, now: datetime | None = None) -> RepositoryCheckpoint:
