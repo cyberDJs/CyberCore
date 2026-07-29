@@ -103,22 +103,22 @@ Scope:
 - Branch: `feat/verification-evidence`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: 43 passed
+- Tests: 46 passed
 - Pull request: not created
 
 ## Next action
 
-Re-run verification evidence and prepare PR #21
+Prepare PR #21
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-29T20:55:18.888287Z`
-- Branch: `feat/checkpoint-persistence`
-- Commit: `81afdbe2ec202fba270ee28a49dacb13ca876040`
-- Commit subject: docs(project): align checkpoint persistence state
+- Generated: `2026-07-29T21:49:59.921455Z`
+- Branch: `feat/verification-evidence`
+- Commit: `82feab5229e9ca9a9d058b6867d049c1c8c76326`
+- Commit subject: fix(checkpoint): preserve human text after legacy blocks
 - Working tree: **clean**
-- Test evidence: `23 passed in 7.15s`
+- Test evidence: `46 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

@@ -42,3 +42,12 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `23 passed in 7.15s`
 - Next action: Prepare PR #20
+
+## Checkpoint 2026-07-29T21:49:59.921455Z
+
+- Branch: `feat/verification-evidence`
+- Commit: `82feab5229e9ca9a9d058b6867d049c1c8c76326`
+- Commit subject: fix(checkpoint): preserve human text after legacy blocks
+- Working tree: **clean**
+- Test evidence: `46 passed`
+- Next action: Prepare PR #21
