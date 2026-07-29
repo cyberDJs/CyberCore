@@ -153,24 +153,31 @@ def _remove_legacy_checkpoint_blocks(current: str) -> str:
     return "".join(kept)
 
 
-def _replace_managed_block(
-    current: str,
-    block: str,
-    *,
-    identity: str,
-) -> str:
+def _managed_block_for_identity(current: str, *, identity: str) -> str | None:
     complete_block = re.compile(
         re.escape(PROJECT_STATE_START) + r".*?" + re.escape(PROJECT_STATE_END),
         re.DOTALL,
     )
     marker = _project_state_marker(identity)
-    preserved = next(
+    return next(
         (
             match.group(0)
             for match in complete_block.finditer(current)
             if marker in match.group(0)
         ),
         None,
+    )
+
+
+def _replace_managed_block(
+    current: str,
+    block: str,
+    *,
+    preserved: str | None = None,
+) -> str:
+    complete_block = re.compile(
+        re.escape(PROJECT_STATE_START) + r".*?" + re.escape(PROJECT_STATE_END),
+        re.DOTALL,
     )
     cleaned = complete_block.sub("", current)
     orphan_marker = re.compile(
@@ -322,6 +329,8 @@ def plan_memory_update(
         else "# CyberCore Worklog\n"
     )
     milestone, artifact = _kernel_current_values(repo)
+    identity = _checkpoint_identity(checkpoint, test_result)
+    preserved = _managed_block_for_identity(current_state, identity=identity)
     synchronized = _synchronize_state_fields(
         current_state,
         checkpoint,
@@ -330,12 +339,11 @@ def plan_memory_update(
         test_result=test_result,
         next_action=next_action,
     )
-    identity = _checkpoint_identity(checkpoint, test_result)
     block = _checkpoint_block(checkpoint, test_result, identity=identity)
     state_content = _replace_managed_block(
         synchronized,
         block,
-        identity=identity,
+        preserved=preserved,
     )
     entry = _worklog_entry(
         checkpoint,
