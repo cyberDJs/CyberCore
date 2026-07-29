@@ -84,6 +84,7 @@ class CCLValidator:
             resource = Resource.from_contents(schema)
             if "$id" in schema:
                 resources.append((schema["$id"], resource))
+            resources.append((filename, resource))
             resources.append((f"{base_uri}{filename}", resource))
         self._registry = Registry().with_resources(resources)
 
