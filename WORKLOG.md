@@ -51,3 +51,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `46 passed`
 - Next action: Prepare PR #21
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:f2e9c5eb99c292370057345207732f89d944dd2321593ba948f441e481567ccb -->
+## Checkpoint 2026-07-29T22:48:27.668847Z
+
+- Branch: `feat/idempotent-canonical-memory`
+- Commit: `7d174275317df9c2b202d18f40154121cc9e4f54`
+- Commit subject: docs(project): align WB-0018 canonical state
+- Working tree: **clean**
+- Test evidence: `52 passed`
+- Next action: Prepare PR #22

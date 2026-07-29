@@ -131,14 +131,15 @@ Scope:
 Prepare PR #22
 
 <!-- CYBERCORE:CHECKPOINT:START -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:f2e9c5eb99c292370057345207732f89d944dd2321593ba948f441e481567ccb -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-29T21:49:59.921455Z`
-- Branch: `feat/verification-evidence`
-- Commit: `82feab5229e9ca9a9d058b6867d049c1c8c76326`
-- Commit subject: fix(checkpoint): preserve human text after legacy blocks
+- Generated: `2026-07-29T22:48:27.668847Z`
+- Branch: `feat/idempotent-canonical-memory`
+- Commit: `7d174275317df9c2b202d18f40154121cc9e4f54`
+- Commit subject: docs(project): align WB-0018 canonical state
 - Working tree: **clean**
-- Test evidence: `46 passed`
+- Test evidence: `52 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->
