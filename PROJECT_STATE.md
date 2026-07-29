@@ -1,13 +1,13 @@
 # CyberCore Project State
 
-_Last updated: 2026-07-30 00:39 CEST_
+_Last updated: 2026-07-30 01:01 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/idempotent-canonical-memory`
-- Active work block: `WB-0018 Idempotent Canonical Memory`
+- Active branch: `feat/post-merge-state-transition`
+- Active work block: `WB-0019 Post-Merge State Transition`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -99,36 +99,58 @@ Verification:
 
 - `pytest -q`: **46 passed**.
 
+### PR #22 — Idempotent canonical memory
+
+Merged into `main` as:
+
+```text
+1e174e9180e64c3bfc5c70fa52d5c7e399ead9eb
+```
+
+Delivered:
+
+- stable checkpoint identity independent of generation time,
+- duplicate-safe `WORKLOG.md` checkpoint persistence,
+- convergent repeated preview and write operations,
+- staged canonical-memory writes,
+- rollback after partial filesystem mutation,
+- temporary-file cleanup and fault-injection coverage.
+
+Verification:
+
+- `pytest -q`: **52 passed**.
+
 ## Current milestone
 
-Idempotent Canonical Memory v0.1.
+Post-Merge State Transition v0.1.
 
 ## Active objective
 
-Make canonical project-memory updates convergent, duplicate-safe, and resilient to partial filesystem failures.
+Create a controlled transition that closes a merged work block, verifies its merge state, records completion, and activates exactly one successor artifact.
 
 Scope:
 
-1. derive a stable checkpoint identity independent of generation time;
-2. prevent duplicate checkpoint entries in `WORKLOG.md`;
-3. preserve an existing managed checkpoint for the same identity;
-4. make repeated preview and write operations converge to identical content;
-5. stage both canonical-memory files before replacement;
-6. roll back prior replacements when a later filesystem mutation fails;
-7. verify idempotency, cleanup, rollback, and human-content preservation with regression tests.
+1. define an explicit post-merge state transition command;
+2. verify the pull request is merged and its merge commit exists on `main`;
+3. update the completed-artifact ledger and verification baseline;
+4. activate exactly one successor artifact;
+5. reject dirty, stale, mismatched, or unverified repository state;
+6. provide preview before explicit write;
+7. preserve human-controlled content and governance boundaries;
+8. add transition, rejection, and idempotency regression tests.
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/idempotent-canonical-memory`
+- Branch: `feat/post-merge-state-transition`
 - Project Kernel: present
-- Runtime implementation: implemented
-- Tests: 52 passed
+- Runtime implementation: planned
+- Tests: 52 passed baseline
 - Pull request: not created
 
 ## Next action
 
-Prepare PR #22
+Define the post-merge transition contract and tests.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:f2e9c5eb99c292370057345207732f89d944dd2321593ba948f441e481567ccb -->
