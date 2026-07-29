@@ -54,6 +54,15 @@ def _replace_managed_block(current: str, block: str) -> str:
         rf"(?m)^[ \t]*(?:{re.escape(PROJECT_STATE_START)}|{re.escape(PROJECT_STATE_END)})[ \t]*\n?"
     )
     cleaned = orphan_marker.sub("", cleaned)
+
+    # Older checkpoint persistence versions could leave the rendered checkpoint
+    # body behind after malformed markers were removed. It is generated content,
+    # not human-controlled project state, so remove every unmarked legacy block.
+    legacy_block = re.compile(
+        r"(?ms)^## Automated repository checkpoint\n.*?"
+        rf"(?=^## |^{re.escape(PROJECT_STATE_START)}|\Z)"
+    )
+    cleaned = legacy_block.sub("", cleaned)
     return cleaned.rstrip() + "\n\n" + block + "\n"
 
 
