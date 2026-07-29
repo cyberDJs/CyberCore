@@ -12,6 +12,7 @@ from cybercore.checkpoint import RepositoryCheckpoint
 
 PROJECT_STATE_START = "<!-- CYBERCORE:CHECKPOINT:START -->"
 PROJECT_STATE_END = "<!-- CYBERCORE:CHECKPOINT:END -->"
+PROJECT_STATE_CHECKPOINT_PREFIX = "CYBERCORE:PROJECT-STATE-CHECKPOINT:"
 WORKLOG_CHECKPOINT_PREFIX = "CYBERCORE:WORKLOG-CHECKPOINT:"
 
 
@@ -88,12 +89,22 @@ def _stage_bytes(target: Path, content: bytes, *, suffix: str) -> Path:
     return staged
 
 
-def _checkpoint_block(checkpoint: RepositoryCheckpoint, test_result: str | None) -> str:
+def _project_state_marker(identity: str) -> str:
+    return f"<!-- {PROJECT_STATE_CHECKPOINT_PREFIX}{identity} -->"
+
+
+def _checkpoint_block(
+    checkpoint: RepositoryCheckpoint,
+    test_result: str | None,
+    *,
+    identity: str,
+) -> str:
     test_line = test_result or "not supplied"
     cleanliness = "dirty" if checkpoint.dirty else "clean"
     return "\n".join(
         [
             PROJECT_STATE_START,
+            _project_state_marker(identity),
             "## Automated repository checkpoint",
             "",
             f"- Generated: `{checkpoint.generated_at}`",
@@ -142,10 +153,24 @@ def _remove_legacy_checkpoint_blocks(current: str) -> str:
     return "".join(kept)
 
 
-def _replace_managed_block(current: str, block: str) -> str:
+def _replace_managed_block(
+    current: str,
+    block: str,
+    *,
+    identity: str,
+) -> str:
     complete_block = re.compile(
         re.escape(PROJECT_STATE_START) + r".*?" + re.escape(PROJECT_STATE_END),
         re.DOTALL,
+    )
+    marker = _project_state_marker(identity)
+    preserved = next(
+        (
+            match.group(0)
+            for match in complete_block.finditer(current)
+            if marker in match.group(0)
+        ),
+        None,
     )
     cleaned = complete_block.sub("", current)
     orphan_marker = re.compile(
@@ -153,7 +178,7 @@ def _replace_managed_block(current: str, block: str) -> str:
     )
     cleaned = orphan_marker.sub("", cleaned)
     cleaned = _remove_legacy_checkpoint_blocks(cleaned)
-    return cleaned.rstrip() + "\n\n" + block + "\n"
+    return cleaned.rstrip() + "\n\n" + (preserved or block) + "\n"
 
 
 def _kernel_current_values(repo: Path) -> tuple[str | None, str | None]:
@@ -305,9 +330,13 @@ def plan_memory_update(
         test_result=test_result,
         next_action=next_action,
     )
-    block = _checkpoint_block(checkpoint, test_result)
-    state_content = _replace_managed_block(synchronized, block)
     identity = _checkpoint_identity(checkpoint, test_result)
+    block = _checkpoint_block(checkpoint, test_result, identity=identity)
+    state_content = _replace_managed_block(
+        synchronized,
+        block,
+        identity=identity,
+    )
     entry = _worklog_entry(
         checkpoint,
         test_result,
