@@ -57,7 +57,9 @@ class VerificationEvidence:
         if not evidence.command:
             raise VerificationEvidenceError("Verification evidence command is empty")
         if evidence.duration < 0:
-            raise VerificationEvidenceError("Verification evidence duration must be non-negative")
+            raise VerificationEvidenceError(
+                "Verification evidence duration must be non-negative"
+            )
         if not evidence.summary:
             raise VerificationEvidenceError("Verification evidence summary is empty")
         if not evidence.repository:
@@ -99,3 +101,8 @@ class VerificationEvidence:
 
     def checkpoint_summary(self) -> str:
         return f"{self.summary} via `{self.command}` in {self.duration:.2f}s"
+
+
+def load_verification_evidence(path: Path) -> VerificationEvidence:
+    """Load and validate the structure of a verification evidence JSON file."""
+    return VerificationEvidence.from_file(path)
