@@ -1,13 +1,13 @@
 # CyberCore Project State
 
-_Last updated: 2026-07-29 23:38 CEST_
+_Last updated: 2026-07-30 00:39 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/verification-evidence`
-- Active work block: `WB-0017 Verification Evidence Automation`
+- Active branch: `feat/idempotent-canonical-memory`
+- Active work block: `WB-0018 Idempotent Canonical Memory`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -78,37 +78,57 @@ Verification:
 
 - `pytest -q`: **23 passed in 5.90s**.
 
+### PR #21 — Verification evidence automation
+
+Merged into `main` as:
+
+```text
+d21e3bc3875bf298939585958c90167fa36dd76c
+```
+
+Delivered:
+
+- structured repository- and commit-bound verification evidence,
+- shell-free verification command execution,
+- evidence validation during canonical checkpoint persistence,
+- rejection of failed, stale, malformed, or mismatched evidence,
+- generated-evidence exclusion from version control,
+- managed checkpoint marker normalization while preserving human content.
+
+Verification:
+
+- `pytest -q`: **46 passed**.
+
 ## Current milestone
 
-Verification Evidence Automation v0.1.
+Idempotent Canonical Memory v0.1.
 
 ## Active objective
 
-Create verifiable, repository-bound test evidence and consume it safely during canonical checkpoint persistence.
+Make canonical project-memory updates convergent, duplicate-safe, and resilient to partial filesystem failures.
 
 Scope:
 
-1. define a structured verification evidence record;
-2. bind evidence to the exact repository and commit;
-3. reject failed, malformed, stale, or mismatched evidence;
-4. generate evidence by executing a command without a shell;
-5. consume evidence through `cybercore checkpoint --memory --evidence`;
-6. preserve manual `--test-result` only as an explicit fallback;
-7. keep generated evidence outside version control;
-8. normalize malformed managed checkpoint markers.
+1. derive a stable checkpoint identity independent of generation time;
+2. prevent duplicate checkpoint entries in `WORKLOG.md`;
+3. preserve an existing managed checkpoint for the same identity;
+4. make repeated preview and write operations converge to identical content;
+5. stage both canonical-memory files before replacement;
+6. roll back prior replacements when a later filesystem mutation fails;
+7. verify idempotency, cleanup, rollback, and human-content preservation with regression tests.
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/verification-evidence`
+- Branch: `feat/idempotent-canonical-memory`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: 46 passed
+- Tests: 52 passed
 - Pull request: not created
 
 ## Next action
 
-Prepare PR #21
+Prepare PR #22
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 ## Automated repository checkpoint
