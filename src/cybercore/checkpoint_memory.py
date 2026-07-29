@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 from cybercore.checkpoint import RepositoryCheckpoint
 
@@ -51,6 +52,82 @@ def _replace_managed_block(current: str, block: str) -> str:
     return current[:start].rstrip() + "\n\n" + block + "\n" + current[end:].lstrip("\n")
 
 
+def _kernel_current_values(repo: Path) -> tuple[str | None, str | None]:
+    kernel = repo / ".cybercore" / "project.yaml"
+    if not kernel.is_file():
+        return None, None
+
+    milestone: str | None = None
+    artifact: str | None = None
+    in_current = False
+    for raw_line in kernel.read_text(encoding="utf-8").splitlines():
+        if raw_line == "current:":
+            in_current = True
+            continue
+        if in_current and raw_line and not raw_line.startswith("  "):
+            break
+        if not in_current:
+            continue
+        stripped = raw_line.strip()
+        if stripped.startswith("milestone:"):
+            milestone = stripped.split(":", 1)[1].strip()
+        elif stripped.startswith("active_artifact:"):
+            artifact = stripped.split(":", 1)[1].strip()
+    return milestone, artifact
+
+
+def _synchronize_state_fields(
+    current: str,
+    checkpoint: RepositoryCheckpoint,
+    *,
+    milestone: str | None,
+    artifact: str | None,
+    test_result: str | None,
+    next_action: str | None,
+) -> str:
+    updated = re.sub(
+        r"(?m)^- Active branch: `[^`]*`$",
+        f"- Active branch: `{checkpoint.branch}`",
+        current,
+    )
+    if artifact:
+        label = artifact
+        if milestone:
+            name = re.sub(r"\s+v\d+(?:\.\d+)*$", "", milestone).strip()
+            label = f"{artifact} {name}"
+        updated = re.sub(
+            r"(?m)^- Active work block: `[^`]*`$",
+            f"- Active work block: `{label}`",
+            updated,
+        )
+    if milestone:
+        updated = re.sub(
+            r"(?ms)(^## Current milestone\n\n).*?(?=\n## |\Z)",
+            rf"\1{milestone}.\n",
+            updated,
+        )
+    status_lines = [
+        "- Work block: active",
+        f"- Branch: `{checkpoint.branch}`",
+        "- Project Kernel: present" if checkpoint.project_kernel_present else "- Project Kernel: missing",
+        "- Runtime implementation: implemented",
+        f"- Tests: {test_result or 'not supplied'}",
+        "- Pull request: not created",
+    ]
+    updated = re.sub(
+        r"(?ms)(^## Current status\n\n).*?(?=\n## |\Z)",
+        "\\1" + "\n".join(status_lines) + "\n",
+        updated,
+    )
+    if next_action:
+        updated = re.sub(
+            r"(?ms)(^## Next action\n\n).*?(?=\n## |\Z)",
+            rf"\1{next_action}\n",
+            updated,
+        )
+    return updated
+
+
 def _worklog_entry(
     checkpoint: RepositoryCheckpoint,
     test_result: str | None,
@@ -88,8 +165,17 @@ def plan_memory_update(
         if worklog_path.is_file()
         else "# CyberCore Worklog\n"
     )
+    milestone, artifact = _kernel_current_values(repo)
+    synchronized = _synchronize_state_fields(
+        current_state,
+        checkpoint,
+        milestone=milestone,
+        artifact=artifact,
+        test_result=test_result,
+        next_action=next_action,
+    )
     block = _checkpoint_block(checkpoint, test_result)
-    state_content = _replace_managed_block(current_state, block)
+    state_content = _replace_managed_block(synchronized, block)
     entry = _worklog_entry(checkpoint, test_result, next_action)
     worklog_content = current_worklog.rstrip() + "\n\n" + entry
 
