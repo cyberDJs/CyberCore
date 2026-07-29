@@ -20,3 +20,7 @@ dist/
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# Runtime-generated verification evidence
+.cybercore/evidence/*
+!.cybercore/evidence/.gitkeep

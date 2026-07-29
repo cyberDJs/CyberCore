@@ -44,12 +44,51 @@ def _checkpoint_block(checkpoint: RepositoryCheckpoint, test_result: str | None)
     )
 
 
+def _remove_legacy_checkpoint_blocks(current: str) -> str:
+    """Remove legacy generated checkpoint fields without consuming human prose."""
+    generated_prefixes = (
+        "- Generated:",
+        "- Branch:",
+        "- Commit:",
+        "- Commit subject:",
+        "- Working tree:",
+        "- Test evidence:",
+        "- Project Kernel:",
+        "- Project State:",
+    )
+    lines = current.splitlines(keepends=True)
+    kept: list[str] = []
+    index = 0
+
+    while index < len(lines):
+        if lines[index].strip() != "## Automated repository checkpoint":
+            kept.append(lines[index])
+            index += 1
+            continue
+
+        index += 1
+        while index < len(lines):
+            stripped = lines[index].strip()
+            if not stripped or stripped.startswith(generated_prefixes):
+                index += 1
+                continue
+            break
+
+    return "".join(kept)
+
+
 def _replace_managed_block(current: str, block: str) -> str:
-    if PROJECT_STATE_START not in current or PROJECT_STATE_END not in current:
-        return current.rstrip() + "\n\n" + block + "\n"
-    start = current.index(PROJECT_STATE_START)
-    end = current.index(PROJECT_STATE_END, start) + len(PROJECT_STATE_END)
-    return current[:start].rstrip() + "\n\n" + block + "\n" + current[end:].lstrip("\n")
+    complete_block = re.compile(
+        re.escape(PROJECT_STATE_START) + r".*?" + re.escape(PROJECT_STATE_END),
+        re.DOTALL,
+    )
+    cleaned = complete_block.sub("", current)
+    orphan_marker = re.compile(
+        rf"(?m)^[ \t]*(?:{re.escape(PROJECT_STATE_START)}|{re.escape(PROJECT_STATE_END)})[ \t]*\n?"
+    )
+    cleaned = orphan_marker.sub("", cleaned)
+    cleaned = _remove_legacy_checkpoint_blocks(cleaned)
+    return cleaned.rstrip() + "\n\n" + block + "\n"
 
 
 def _kernel_current_values(repo: Path) -> tuple[str | None, str | None]:

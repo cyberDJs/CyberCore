@@ -1,13 +1,13 @@
 # CyberCore Project State
 
-_Last updated: 2026-07-29 22:49 CEST_
+_Last updated: 2026-07-29 23:38 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/checkpoint-persistence`
-- Active work block: `WB-0016 Checkpoint Persistence`
+- Active branch: `feat/verification-evidence`
+- Active work block: `WB-0017 Verification Evidence Automation`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -58,45 +58,67 @@ Verification:
 - checkpoint reported clean working tree,
 - Project Kernel and Project State reported present.
 
+### PR #20 — Controlled checkpoint persistence
+
+Squash-merged into `main` as:
+
+```text
+de4f8f211ef1bf88db65b00ffb5ee577e9c20a86
+```
+
+Delivered:
+
+- project-memory preview and explicit write mode,
+- managed `PROJECT_STATE.md` synchronization,
+- structured `WORKLOG.md` checkpoints,
+- preservation of human-controlled governance content,
+- validation of incompatible checkpoint options.
+
+Verification:
+
+- `pytest -q`: **23 passed in 5.90s**.
+
 ## Current milestone
 
-Checkpoint Persistence v0.1.
+Verification Evidence Automation v0.1.
 
 ## Active objective
 
-Extend `cybercore checkpoint` with controlled persistence of verified repository evidence into canonical project memory.
+Create verifiable, repository-bound test evidence and consume it safely during canonical checkpoint persistence.
 
 Scope:
 
-1. preview changes before writing;
-2. update only explicitly managed project-state fields;
-3. preserve governance and human-controlled content;
-4. append structured entries to `WORKLOG.md`;
-5. require explicit `--write` for filesystem mutation;
-6. prevent duplicate managed checkpoint blocks.
+1. define a structured verification evidence record;
+2. bind evidence to the exact repository and commit;
+3. reject failed, malformed, stale, or mismatched evidence;
+4. generate evidence by executing a command without a shell;
+5. consume evidence through `cybercore checkpoint --memory --evidence`;
+6. preserve manual `--test-result` only as an explicit fallback;
+7. keep generated evidence outside version control;
+8. normalize malformed managed checkpoint markers.
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/checkpoint-persistence`
+- Branch: `feat/verification-evidence`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: 23 passed in 7.15s
+- Tests: 46 passed
 - Pull request: not created
 
 ## Next action
 
-Prepare PR #20
+Prepare PR #21
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-29T20:55:18.888287Z`
-- Branch: `feat/checkpoint-persistence`
-- Commit: `81afdbe2ec202fba270ee28a49dacb13ca876040`
-- Commit subject: docs(project): align checkpoint persistence state
+- Generated: `2026-07-29T21:49:59.921455Z`
+- Branch: `feat/verification-evidence`
+- Commit: `82feab5229e9ca9a9d058b6867d049c1c8c76326`
+- Commit subject: fix(checkpoint): preserve human text after legacy blocks
 - Working tree: **clean**
-- Test evidence: `23 passed in 7.15s`
+- Test evidence: `46 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

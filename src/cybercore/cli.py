@@ -8,10 +8,12 @@ import sys
 from cybercore.artifact import ArtifactBuildError
 from cybercore.ccl import CCLValidationError, CCLValidator
 from cybercore.checkpoint import CheckpointError, collect_checkpoint, render_checkpoint
+from cybercore.checkpoint_evidence import resolve_test_result
 from cybercore.checkpoint_memory import plan_memory_update, render_memory_preview
 from cybercore.commands.apply import run_apply
 from cybercore.commands.build import run_build
 from cybercore.commands.doctor import run_doctor
+from cybercore.commands.evidence import run_evidence_command
 from cybercore.commands.status import status_lines
 from cybercore.commands.sync import run_sync
 from cybercore.commands.verify import run_verify
@@ -53,11 +55,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     checkpoint_parser.add_argument(
         "--test-result",
-        help="Verified test evidence, for example '18 passed in 3.23s'",
+        help="Manual verified test evidence, for example '18 passed in 3.23s'",
+    )
+    checkpoint_parser.add_argument(
+        "--evidence",
+        type=Path,
+        help="Structured verification evidence JSON; requires --memory",
     )
     checkpoint_parser.add_argument(
         "--next-action",
         help="Next planned action to append to WORKLOG.md",
+    )
+
+    evidence_parser = sub.add_parser(
+        "evidence", help="Create and inspect verification evidence"
+    )
+    evidence_sub = evidence_parser.add_subparsers(
+        dest="evidence_command", required=True
+    )
+    evidence_run = evidence_sub.add_parser(
+        "run", help="Run a command and write commit-bound verification evidence"
+    )
+    evidence_run.add_argument("--summary", required=True)
+    evidence_run.add_argument("--output", type=Path, required=True)
+    evidence_run.add_argument(
+        "verification_command",
+        nargs=argparse.REMAINDER,
+        help="Command to run, normally after --",
     )
 
     verify_parser = sub.add_parser("verify", help="Verify a CXP Work Block package")
@@ -161,18 +185,46 @@ def main(argv: list[str] | None = None) -> int:
 
         paths = RuntimePaths.discover(args.repo)
 
+        if args.command == "evidence":
+            if args.evidence_command == "run":
+                evidence = run_evidence_command(
+                    paths.repo,
+                    args.verification_command,
+                    summary=args.summary,
+                    output=args.output,
+                )
+                output = args.output.expanduser()
+                if not output.is_absolute():
+                    output = paths.repo / output
+                print(f"EVIDENCE {output}")
+                print(f"SUMMARY {evidence.summary}")
+                return evidence.exit_code
+
         if args.command == "checkpoint":
             if args.write and not args.memory:
                 raise ValueError("--write requires --memory")
             if args.memory and args.output:
                 raise ValueError("--output cannot be combined with --memory")
+            if args.evidence and not args.memory:
+                raise ValueError("--evidence requires --memory")
 
             checkpoint = collect_checkpoint(paths.repo)
+            evidence_path = args.evidence
+            if evidence_path is not None:
+                evidence_path = evidence_path.expanduser()
+                if not evidence_path.is_absolute():
+                    evidence_path = paths.repo / evidence_path
+            test_result, _evidence = resolve_test_result(
+                checkpoint,
+                evidence_path=evidence_path,
+                test_result=args.test_result,
+            )
+
             if args.memory:
                 plan = plan_memory_update(
                     paths.repo,
                     checkpoint,
-                    test_result=args.test_result,
+                    test_result=test_result,
                     next_action=args.next_action,
                 )
                 if args.write:

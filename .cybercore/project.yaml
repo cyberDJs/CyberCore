@@ -22,9 +22,9 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Checkpoint Persistence v0.1
-  active_artifact: WB-0016
-  branch: feat/checkpoint-persistence
+  milestone: Verification Evidence Automation v0.1
+  active_artifact: WB-0017
+  branch: feat/verification-evidence
   pull_request: null
 
 status:
@@ -33,22 +33,27 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 18_passed
+  tests: 23_passed
   ci: local_verification
   checkpoint_runtime: verified
-  checkpoint_persistence: planned
+  checkpoint_persistence: verified
+  verification_evidence: planned
 
 completed:
   - artifact: WB-0015
     pull_request: 19
     merge_commit: 4ef4bbf
     verification: 18_passed
+  - artifact: WB-0016
+    pull_request: 20
+    merge_commit: de4f8f211ef1bf88db65b00ffb5ee577e9c20a86
+    verification: 23_passed
 
 next:
-  - add deterministic PROJECT_STATE.md rendering
-  - append structured WORKLOG.md checkpoints
-  - require preview or dry-run before canonical writes
-  - preserve human-controlled governance fields
+  - define a structured verification evidence record
+  - capture command, exit code, duration and summary
+  - load verified evidence into checkpoint memory
+  - reject failed or repository-mismatched evidence
   - add tests and local verification
 
 rules:
