@@ -8,6 +8,7 @@ import sys
 from cybercore.artifact import ArtifactBuildError
 from cybercore.ccl import CCLValidationError, CCLValidator
 from cybercore.checkpoint import CheckpointError, collect_checkpoint, render_checkpoint
+from cybercore.checkpoint_memory import plan_memory_update, render_memory_preview
 from cybercore.commands.apply import run_apply
 from cybercore.commands.build import run_build
 from cybercore.commands.doctor import run_doctor
@@ -33,12 +34,30 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("sync", help="Synchronize Exchange and list READY Work Blocks")
 
     checkpoint_parser = sub.add_parser(
-        "checkpoint", help="Collect a read-only repository checkpoint"
+        "checkpoint", help="Collect a repository checkpoint"
     )
     checkpoint_parser.add_argument(
         "--output",
         type=Path,
         help="Write rendered checkpoint to this file instead of stdout",
+    )
+    checkpoint_parser.add_argument(
+        "--memory",
+        action="store_true",
+        help="Preview canonical PROJECT_STATE.md and WORKLOG.md updates",
+    )
+    checkpoint_parser.add_argument(
+        "--write",
+        action="store_true",
+        help="Write canonical memory updates; requires --memory",
+    )
+    checkpoint_parser.add_argument(
+        "--test-result",
+        help="Verified test evidence, for example '18 passed in 3.23s'",
+    )
+    checkpoint_parser.add_argument(
+        "--next-action",
+        help="Next planned action to append to WORKLOG.md",
     )
 
     verify_parser = sub.add_parser("verify", help="Verify a CXP Work Block package")
@@ -143,7 +162,26 @@ def main(argv: list[str] | None = None) -> int:
         paths = RuntimePaths.discover(args.repo)
 
         if args.command == "checkpoint":
+            if args.write and not args.memory:
+                raise ValueError("--write requires --memory")
+            if args.memory and args.output:
+                raise ValueError("--output cannot be combined with --memory")
+
             checkpoint = collect_checkpoint(paths.repo)
+            if args.memory:
+                plan = plan_memory_update(
+                    paths.repo,
+                    checkpoint,
+                    test_result=args.test_result,
+                    next_action=args.next_action,
+                )
+                if args.write:
+                    plan.write()
+                    print("CHECKPOINT MEMORY WRITTEN")
+                else:
+                    print(render_memory_preview(plan), end="")
+                return 0
+
             if args.as_json:
                 rendered = json.dumps(checkpoint.as_dict(), indent=2)
             else:
@@ -251,6 +289,7 @@ def main(argv: list[str] | None = None) -> int:
         ArtifactBuildError,
         CCLValidationError,
         CheckpointError,
+        FileNotFoundError,
         RuntimeError,
         ValueError,
         WorkBlockError,

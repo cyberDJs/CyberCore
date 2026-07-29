@@ -33,3 +33,12 @@ Local verification on macOS with Python `3.14.6`:
 ### Outcome
 
 PR #18 is technically verified. Next work should focus on persistent project memory automation as a separate work block.
+
+## Checkpoint 2026-07-29T20:55:18.888287Z
+
+- Branch: `feat/checkpoint-persistence`
+- Commit: `81afdbe2ec202fba270ee28a49dacb13ca876040`
+- Commit subject: docs(project): align checkpoint persistence state
+- Working tree: **clean**
+- Test evidence: `23 passed in 7.15s`
+- Next action: Prepare PR #20
