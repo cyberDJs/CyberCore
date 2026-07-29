@@ -8,6 +8,7 @@ import sys
 from cybercore.artifact import ArtifactBuildError
 from cybercore.ccl import CCLValidationError, CCLValidator
 from cybercore.checkpoint import CheckpointError, collect_checkpoint, render_checkpoint
+from cybercore.checkpoint_evidence import resolve_test_result
 from cybercore.checkpoint_memory import plan_memory_update, render_memory_preview
 from cybercore.commands.apply import run_apply
 from cybercore.commands.build import run_build
@@ -53,7 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     checkpoint_parser.add_argument(
         "--test-result",
-        help="Verified test evidence, for example '18 passed in 3.23s'",
+        help="Manual verified test evidence, for example '18 passed in 3.23s'",
+    )
+    checkpoint_parser.add_argument(
+        "--evidence",
+        type=Path,
+        help="Structured verification evidence JSON; requires --memory",
     )
     checkpoint_parser.add_argument(
         "--next-action",
@@ -166,13 +172,26 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("--write requires --memory")
             if args.memory and args.output:
                 raise ValueError("--output cannot be combined with --memory")
+            if args.evidence and not args.memory:
+                raise ValueError("--evidence requires --memory")
 
             checkpoint = collect_checkpoint(paths.repo)
+            evidence_path = args.evidence
+            if evidence_path is not None:
+                evidence_path = evidence_path.expanduser()
+                if not evidence_path.is_absolute():
+                    evidence_path = paths.repo / evidence_path
+            test_result, _evidence = resolve_test_result(
+                checkpoint,
+                evidence_path=evidence_path,
+                test_result=args.test_result,
+            )
+
             if args.memory:
                 plan = plan_memory_update(
                     paths.repo,
                     checkpoint,
-                    test_result=args.test_result,
+                    test_result=test_result,
                     next_action=args.next_action,
                 )
                 if args.write:
