@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import os
 from pathlib import Path
 import re
+import tempfile
 
 from cybercore.checkpoint import RepositoryCheckpoint
 
 
 PROJECT_STATE_START = "<!-- CYBERCORE:CHECKPOINT:START -->"
 PROJECT_STATE_END = "<!-- CYBERCORE:CHECKPOINT:END -->"
+PROJECT_STATE_CHECKPOINT_PREFIX = "CYBERCORE:PROJECT-STATE-CHECKPOINT:"
+WORKLOG_CHECKPOINT_PREFIX = "CYBERCORE:WORKLOG-CHECKPOINT:"
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,16 +24,87 @@ class MemoryUpdatePlan:
     worklog_content: str
 
     def write(self) -> None:
-        self.project_state_path.write_text(self.project_state_content, encoding="utf-8")
-        self.worklog_path.write_text(self.worklog_content, encoding="utf-8")
+        targets = (
+            (self.project_state_path, self.project_state_content),
+            (self.worklog_path, self.worklog_content),
+        )
+        staged_updates: dict[Path, Path] = {}
+        staged_rollbacks: dict[Path, Path | None] = {}
+        replaced: list[Path] = []
+
+        try:
+            for target, content in targets:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                staged_updates[target] = _stage_bytes(
+                    target,
+                    content.encode("utf-8"),
+                    suffix=".new",
+                )
+                staged_rollbacks[target] = (
+                    _stage_bytes(target, target.read_bytes(), suffix=".rollback")
+                    if target.exists()
+                    else None
+                )
+
+            for target, _content in targets:
+                os.replace(staged_updates[target], target)
+                replaced.append(target)
+        except Exception:
+            rollback_error: Exception | None = None
+            for target in reversed(replaced):
+                rollback = staged_rollbacks[target]
+                try:
+                    if rollback is None:
+                        target.unlink(missing_ok=True)
+                    else:
+                        os.replace(rollback, target)
+                except Exception as exc:  # pragma: no cover - catastrophic filesystem failure
+                    rollback_error = rollback_error or exc
+            if rollback_error is not None:
+                raise RuntimeError(
+                    "Canonical memory write failed and rollback was incomplete"
+                ) from rollback_error
+            raise
+        finally:
+            for staged in (*staged_updates.values(), *staged_rollbacks.values()):
+                if staged is not None:
+                    staged.unlink(missing_ok=True)
 
 
-def _checkpoint_block(checkpoint: RepositoryCheckpoint, test_result: str | None) -> str:
+def _stage_bytes(target: Path, content: bytes, *, suffix: str) -> Path:
+    descriptor, raw_path = tempfile.mkstemp(
+        prefix=f".{target.name}.cybercore-memory-",
+        suffix=suffix,
+        dir=target.parent,
+    )
+    staged = Path(raw_path)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        staged.unlink(missing_ok=True)
+        raise
+    return staged
+
+
+def _project_state_marker(identity: str) -> str:
+    return f"<!-- {PROJECT_STATE_CHECKPOINT_PREFIX}{identity} -->"
+
+
+def _checkpoint_block(
+    checkpoint: RepositoryCheckpoint,
+    test_result: str | None,
+    *,
+    identity: str,
+) -> str:
     test_line = test_result or "not supplied"
     cleanliness = "dirty" if checkpoint.dirty else "clean"
     return "\n".join(
         [
             PROJECT_STATE_START,
+            _project_state_marker(identity),
             "## Automated repository checkpoint",
             "",
             f"- Generated: `{checkpoint.generated_at}`",
@@ -77,7 +153,28 @@ def _remove_legacy_checkpoint_blocks(current: str) -> str:
     return "".join(kept)
 
 
-def _replace_managed_block(current: str, block: str) -> str:
+def _managed_block_for_identity(current: str, *, identity: str) -> str | None:
+    complete_block = re.compile(
+        re.escape(PROJECT_STATE_START) + r".*?" + re.escape(PROJECT_STATE_END),
+        re.DOTALL,
+    )
+    marker = _project_state_marker(identity)
+    return next(
+        (
+            match.group(0)
+            for match in complete_block.finditer(current)
+            if marker in match.group(0)
+        ),
+        None,
+    )
+
+
+def _replace_managed_block(
+    current: str,
+    block: str,
+    *,
+    preserved: str | None = None,
+) -> str:
     complete_block = re.compile(
         re.escape(PROJECT_STATE_START) + r".*?" + re.escape(PROJECT_STATE_END),
         re.DOTALL,
@@ -88,7 +185,7 @@ def _replace_managed_block(current: str, block: str) -> str:
     )
     cleaned = orphan_marker.sub("", cleaned)
     cleaned = _remove_legacy_checkpoint_blocks(cleaned)
-    return cleaned.rstrip() + "\n\n" + block + "\n"
+    return cleaned.rstrip() + "\n\n" + (preserved or block) + "\n"
 
 
 def _kernel_current_values(repo: Path) -> tuple[str | None, str | None]:
@@ -167,12 +264,33 @@ def _synchronize_state_fields(
     return updated
 
 
+def _checkpoint_identity(
+    checkpoint: RepositoryCheckpoint,
+    test_result: str | None,
+) -> str:
+    canonical = "\0".join(
+        [
+            str(Path(checkpoint.repository).resolve()),
+            checkpoint.commit,
+            test_result or "not supplied",
+        ]
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _worklog_marker(identity: str) -> str:
+    return f"<!-- {WORKLOG_CHECKPOINT_PREFIX}{identity} -->"
+
+
 def _worklog_entry(
     checkpoint: RepositoryCheckpoint,
     test_result: str | None,
     next_action: str | None,
+    *,
+    identity: str,
 ) -> str:
     lines = [
+        _worklog_marker(identity),
         f"## Checkpoint {checkpoint.generated_at}",
         "",
         f"- Branch: `{checkpoint.branch}`",
@@ -184,6 +302,12 @@ def _worklog_entry(
     if next_action:
         lines.append(f"- Next action: {next_action}")
     return "\n".join(lines) + "\n"
+
+
+def _append_worklog_entry(current: str, entry: str, *, identity: str) -> str:
+    if _worklog_marker(identity) in current:
+        return current
+    return current.rstrip() + "\n\n" + entry
 
 
 def plan_memory_update(
@@ -205,6 +329,8 @@ def plan_memory_update(
         else "# CyberCore Worklog\n"
     )
     milestone, artifact = _kernel_current_values(repo)
+    identity = _checkpoint_identity(checkpoint, test_result)
+    preserved = _managed_block_for_identity(current_state, identity=identity)
     synchronized = _synchronize_state_fields(
         current_state,
         checkpoint,
@@ -213,10 +339,23 @@ def plan_memory_update(
         test_result=test_result,
         next_action=next_action,
     )
-    block = _checkpoint_block(checkpoint, test_result)
-    state_content = _replace_managed_block(synchronized, block)
-    entry = _worklog_entry(checkpoint, test_result, next_action)
-    worklog_content = current_worklog.rstrip() + "\n\n" + entry
+    block = _checkpoint_block(checkpoint, test_result, identity=identity)
+    state_content = _replace_managed_block(
+        synchronized,
+        block,
+        preserved=preserved,
+    )
+    entry = _worklog_entry(
+        checkpoint,
+        test_result,
+        next_action,
+        identity=identity,
+    )
+    worklog_content = _append_worklog_entry(
+        current_worklog,
+        entry,
+        identity=identity,
+    )
 
     return MemoryUpdatePlan(
         project_state_path=project_state_path,

@@ -22,9 +22,9 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Verification Evidence Automation v0.1
-  active_artifact: WB-0017
-  branch: feat/verification-evidence
+  milestone: Idempotent Canonical Memory v0.1
+  active_artifact: WB-0018
+  branch: feat/idempotent-canonical-memory
   pull_request: null
 
 status:
@@ -33,11 +33,12 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 23_passed
+  tests: 46_passed
   ci: local_verification
   checkpoint_runtime: verified
   checkpoint_persistence: verified
-  verification_evidence: planned
+  verification_evidence: verified
+  idempotent_canonical_memory: planned
 
 completed:
   - artifact: WB-0015
@@ -48,13 +49,19 @@ completed:
     pull_request: 20
     merge_commit: de4f8f211ef1bf88db65b00ffb5ee577e9c20a86
     verification: 23_passed
+  - artifact: WB-0017
+    pull_request: 21
+    merge_commit: d21e3bc3875bf298939585958c90167fa36dd76c
+    verification: 46_passed
 
 next:
-  - define a structured verification evidence record
-  - capture command, exit code, duration and summary
-  - load verified evidence into checkpoint memory
-  - reject failed or repository-mismatched evidence
-  - add tests and local verification
+  - define a stable checkpoint identity independent of generation timestamp
+  - prevent duplicate WORKLOG.md entries for the same repository state
+  - make repeated preview and write operations converge to identical canonical content
+  - stage both canonical memory files before replacement
+  - prevent partial canonical-memory updates when one filesystem operation fails
+  - preserve human-controlled content and existing governance boundaries
+  - add fault-injection, idempotency, and local verification tests
 
 rules:
   state_first: true
