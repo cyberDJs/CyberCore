@@ -44,6 +44,39 @@ def _checkpoint_block(checkpoint: RepositoryCheckpoint, test_result: str | None)
     )
 
 
+def _remove_legacy_checkpoint_blocks(current: str) -> str:
+    """Remove legacy generated checkpoint fields without consuming human prose."""
+    generated_prefixes = (
+        "- Generated:",
+        "- Branch:",
+        "- Commit:",
+        "- Commit subject:",
+        "- Working tree:",
+        "- Test evidence:",
+        "- Project Kernel:",
+        "- Project State:",
+    )
+    lines = current.splitlines(keepends=True)
+    kept: list[str] = []
+    index = 0
+
+    while index < len(lines):
+        if lines[index].strip() != "## Automated repository checkpoint":
+            kept.append(lines[index])
+            index += 1
+            continue
+
+        index += 1
+        while index < len(lines):
+            stripped = lines[index].strip()
+            if not stripped or stripped.startswith(generated_prefixes):
+                index += 1
+                continue
+            break
+
+    return "".join(kept)
+
+
 def _replace_managed_block(current: str, block: str) -> str:
     complete_block = re.compile(
         re.escape(PROJECT_STATE_START) + r".*?" + re.escape(PROJECT_STATE_END),
@@ -54,15 +87,7 @@ def _replace_managed_block(current: str, block: str) -> str:
         rf"(?m)^[ \t]*(?:{re.escape(PROJECT_STATE_START)}|{re.escape(PROJECT_STATE_END)})[ \t]*\n?"
     )
     cleaned = orphan_marker.sub("", cleaned)
-
-    # Older checkpoint persistence versions could leave the rendered checkpoint
-    # body behind after malformed markers were removed. It is generated content,
-    # not human-controlled project state, so remove every unmarked legacy block.
-    legacy_block = re.compile(
-        r"(?ms)^## Automated repository checkpoint\n.*?"
-        rf"(?=^## |^{re.escape(PROJECT_STATE_START)}|\Z)"
-    )
-    cleaned = legacy_block.sub("", cleaned)
+    cleaned = _remove_legacy_checkpoint_blocks(cleaned)
     return cleaned.rstrip() + "\n\n" + block + "\n"
 
 
