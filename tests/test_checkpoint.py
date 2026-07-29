@@ -101,6 +101,61 @@ def test_memory_plan_preserves_human_content_and_previews(tmp_path: Path) -> Non
     assert (repo / "PROJECT_STATE.md").read_text(encoding="utf-8") == "# State\n\nHuman section.\n"
 
 
+def test_memory_plan_synchronizes_canonical_fields(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    (repo / "PROJECT_STATE.md").write_text(
+        """# CyberCore Project State
+
+## Source of truth
+
+- Active branch: `old-branch`
+- Active work block: `WB-OLD Old Work`
+- Governance rule: no mutation without approval
+
+## Current milestone
+
+Old Milestone.
+
+## Current status
+
+- Work block: stale
+- Branch: stale
+
+## Next action
+
+Old action.
+""",
+        encoding="utf-8",
+    )
+    (repo / ".cybercore" / "project.yaml").write_text(
+        """version: 1
+current:
+  milestone: Checkpoint Persistence v0.1
+  active_artifact: WB-0016
+  branch: feat/checkpoint-persistence
+""",
+        encoding="utf-8",
+    )
+    checkpoint = collect_checkpoint(repo)
+
+    plan = plan_memory_update(
+        repo,
+        checkpoint,
+        test_result="23 passed",
+        next_action="Open PR for WB-0016",
+    )
+
+    state = plan.project_state_content
+    assert f"- Active branch: `{checkpoint.branch}`" in state
+    assert "- Active work block: `WB-0016 Checkpoint Persistence`" in state
+    assert "Checkpoint Persistence v0.1." in state
+    assert "- Runtime implementation: implemented" in state
+    assert "- Tests: 23 passed" in state
+    assert "Open PR for WB-0016" in state
+    assert "Governance rule: no mutation without approval" in state
+    assert "old-branch" not in state
+
+
 def test_memory_plan_write_updates_both_files(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     checkpoint = collect_checkpoint(repo)
