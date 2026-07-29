@@ -45,11 +45,16 @@ def _checkpoint_block(checkpoint: RepositoryCheckpoint, test_result: str | None)
 
 
 def _replace_managed_block(current: str, block: str) -> str:
-    if PROJECT_STATE_START not in current or PROJECT_STATE_END not in current:
-        return current.rstrip() + "\n\n" + block + "\n"
-    start = current.index(PROJECT_STATE_START)
-    end = current.index(PROJECT_STATE_END, start) + len(PROJECT_STATE_END)
-    return current[:start].rstrip() + "\n\n" + block + "\n" + current[end:].lstrip("\n")
+    complete_block = re.compile(
+        re.escape(PROJECT_STATE_START) + r".*?" + re.escape(PROJECT_STATE_END),
+        re.DOTALL,
+    )
+    cleaned = complete_block.sub("", current)
+    orphan_marker = re.compile(
+        rf"(?m)^[ \t]*(?:{re.escape(PROJECT_STATE_START)}|{re.escape(PROJECT_STATE_END)})[ \t]*\n?"
+    )
+    cleaned = orphan_marker.sub("", cleaned)
+    return cleaned.rstrip() + "\n\n" + block + "\n"
 
 
 def _kernel_current_values(repo: Path) -> tuple[str | None, str | None]:
