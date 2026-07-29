@@ -1,57 +1,69 @@
 # CyberCore Project State
 
-_Last updated: 2026-07-22 15:55 CEST_
+_Last updated: 2026-07-29 20:53 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/interactive-demo-framework`
-- Pull request: `#18 feat: introduce interactive demo and learning framework`
+- Active branch: `feat/project-checkpoint-runtime`
+- Active work block: `WB-0015 Project Checkpoint Runtime`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
-## Current milestone
+## Completed checkpoint
 
-Interactive Demo Framework (`WB-0013`) and introductory learning flow.
+PR #18 was squash-merged into `main` as:
 
-## Implemented
+```text
+df222d59635398d325d467110a7139210fe46396
+```
 
-- Shared Rich-based terminal presentation layer
-- `cybercore demo` with deterministic `uc-001` scenario
-- `cybercore learn` with introductory Evidence First lesson
-- Demo recording helper for asciinema
-- README merge-artifact cleanup
-- Restored complete CLI after accidental truncation
-- Added `rich` runtime dependency
+Delivered:
+
+- interactive demo and learning framework,
+- architecture audit and reference architecture v2,
+- CyberCore Genome v0,
+- CCL-0001 through CCL-0005,
+- JSON Schemas for the canonical lifecycle,
+- CCL runtime validator and CLI,
+- validation fixtures and tests.
 
 ## Verification evidence
 
-Verified locally on macOS with Python `3.14.6`:
+Verified locally on macOS with Python 3.14:
 
-- Editable installation completed successfully
-- `cybercore --help` exposes all expected commands
-- `pytest -v`: **10 passed**
-- `cybercore demo --delay 0`: passed
-- `cybercore learn --non-interactive`: passed
-- `cybercore doctor`: passed with one non-blocking Exchange Agent warning
-- `python -m compileall -q src demos`: passed
-- Working tree was clean at verification time
+- editable installation completed successfully,
+- `pytest -q`: **14 passed in 1.05s**,
+- tested feature commit: `f83285474afe323eee6fd12296957283238258df`,
+- merged main commit: `df222d59635398d325d467110a7139210fe46396`.
 
-## Current non-blocking warning
+## Current milestone
 
-`cybercore-exchange-agent` is not present at:
+Project Checkpoint Runtime v0.1.
 
-```text
-~/.local/bin/cybercore-exchange-agent
-```
+## Active objective
 
-This does not block the interactive demo framework.
+Implement `cybercore checkpoint` as a deterministic repository-state collector that can update canonical project-memory artifacts from verified evidence.
 
-## Current decision
+Initial scope:
 
-PR #18 is technically verified and can proceed toward review and merge after the project-memory checkpoint files are committed.
+1. collect branch, commit and working-tree state;
+2. accept or collect test-verification evidence;
+3. render `PROJECT_STATE.md` deterministically;
+4. append a structured `WORKLOG.md` checkpoint;
+5. support preview/dry-run before writing;
+6. preserve human-controlled decisions and governance fields.
 
-## Next planned work block
+## Current status
 
-Create an independent `cybercore checkpoint` capability that can collect repository state, tests, commits, decisions, and next actions into the canonical project-memory files.
+- Work block: active
+- Branch: created
+- Project Kernel: updated
+- Runtime implementation: not started
+- Tests: not started
+- Pull request: not created
+
+## Next action
+
+Implement the checkpoint data model and read-only collector before adding file mutation.
