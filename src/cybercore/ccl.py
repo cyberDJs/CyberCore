@@ -77,11 +77,14 @@ class CCLValidator:
         if not schema_root.is_dir():
             raise CCLValidationError(f"CCL schema directory not found: {schema_root}")
         self._schemas = self._load_schemas()
-        resources = [
-            (schema["$id"], Resource.from_contents(schema))
-            for schema in self._schemas.values()
-            if "$id" in schema
-        ]
+
+        resources: list[tuple[str, Resource[Any]]] = []
+        base_uri = "cybercore://schemas/ccl/v1/"
+        for filename, schema in self._schemas.items():
+            resource = Resource.from_contents(schema)
+            if "$id" in schema:
+                resources.append((schema["$id"], resource))
+            resources.append((f"{base_uri}{filename}", resource))
         self._registry = Registry().with_resources(resources)
 
     @classmethod
@@ -112,12 +115,17 @@ class CCLValidator:
             raise CCLValidationError(f"Unsupported CCL record type: {record_type!r}")
         schema = self._schemas.get(filename)
         if schema is None:
-            raise CCLValidationError(f"Schema is missing for CCL type {record_type!r}: {filename}")
+            raise CCLValidationError(
+                f"Schema is missing for CCL type {record_type!r}: {filename}"
+            )
 
         validator_class = validator_for(schema)
         validator_class.check_schema(schema)
         validator = validator_class(schema, registry=self._registry)
-        errors = [self._schema_issue(error) for error in sorted(validator.iter_errors(record), key=str)]
+        errors = [
+            self._schema_issue(error)
+            for error in sorted(validator.iter_errors(record), key=str)
+        ]
         if not errors:
             errors.extend(self._semantic_issues(record))
 
@@ -144,7 +152,11 @@ class CCLValidator:
         if record_type == "evidence":
             observed_at = attributes.get("observed_at")
             recorded_at = attributes.get("recorded_at")
-            if observed_at and recorded_at and _parse_time(recorded_at) < _parse_time(observed_at):
+            if (
+                observed_at
+                and recorded_at
+                and _parse_time(recorded_at) < _parse_time(observed_at)
+            ):
                 issues.append(
                     ValidationIssue(
                         code="semantic_time_order",
@@ -156,7 +168,11 @@ class CCLValidator:
         if record_type == "verification":
             started_at = attributes.get("apply_started_at")
             observed_at = attributes.get("observed_at")
-            if started_at and observed_at and _parse_time(observed_at) < _parse_time(started_at):
+            if (
+                started_at
+                and observed_at
+                and _parse_time(observed_at) < _parse_time(started_at)
+            ):
                 issues.append(
                     ValidationIssue(
                         code="semantic_verification_time",
