@@ -13,6 +13,7 @@ from cybercore.checkpoint_memory import plan_memory_update, render_memory_previe
 from cybercore.commands.apply import run_apply
 from cybercore.commands.build import run_build
 from cybercore.commands.doctor import run_doctor
+from cybercore.commands.evidence import run_evidence_command
 from cybercore.commands.status import status_lines
 from cybercore.commands.sync import run_sync
 from cybercore.commands.verify import run_verify
@@ -64,6 +65,23 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint_parser.add_argument(
         "--next-action",
         help="Next planned action to append to WORKLOG.md",
+    )
+
+    evidence_parser = sub.add_parser(
+        "evidence", help="Create and inspect verification evidence"
+    )
+    evidence_sub = evidence_parser.add_subparsers(
+        dest="evidence_command", required=True
+    )
+    evidence_run = evidence_sub.add_parser(
+        "run", help="Run a command and write commit-bound verification evidence"
+    )
+    evidence_run.add_argument("--summary", required=True)
+    evidence_run.add_argument("--output", type=Path, required=True)
+    evidence_run.add_argument(
+        "verification_command",
+        nargs=argparse.REMAINDER,
+        help="Command to run, normally after --",
     )
 
     verify_parser = sub.add_parser("verify", help="Verify a CXP Work Block package")
@@ -166,6 +184,21 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result.valid else 1
 
         paths = RuntimePaths.discover(args.repo)
+
+        if args.command == "evidence":
+            if args.evidence_command == "run":
+                evidence = run_evidence_command(
+                    paths.repo,
+                    args.verification_command,
+                    summary=args.summary,
+                    output=args.output,
+                )
+                output = args.output.expanduser()
+                if not output.is_absolute():
+                    output = paths.repo / output
+                print(f"EVIDENCE {output}")
+                print(f"SUMMARY {evidence.summary}")
+                return evidence.exit_code
 
         if args.command == "checkpoint":
             if args.write and not args.memory:
