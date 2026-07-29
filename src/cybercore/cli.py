@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 from cybercore.artifact import ArtifactBuildError
+from cybercore.ccl import CCLValidationError, CCLValidator
 from cybercore.commands.apply import run_apply
 from cybercore.commands.build import run_build
 from cybercore.commands.doctor import run_doctor
@@ -80,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     learn_parser.add_argument("--no-color", action="store_true")
 
+    ccl_parser = sub.add_parser("ccl", help="Work with CyberCore Canonical Language")
+    ccl_sub = ccl_parser.add_subparsers(dest="ccl_command", required=True)
+    ccl_validate = ccl_sub.add_parser("validate", help="Validate a canonical record")
+    ccl_validate.add_argument("path", type=Path)
+
     return parser
 
 
@@ -108,6 +114,21 @@ def main(argv: list[str] | None = None) -> int:
                 interactive=not args.non_interactive,
                 no_color=args.no_color,
             )
+
+        if args.command == "ccl":
+            repo = Path(args.repo or ".").resolve()
+            validator = CCLValidator.from_repo(repo)
+            result = validator.validate_file(args.path)
+            payload = result.as_dict()
+            if args.as_json:
+                print(json.dumps(payload, indent=2))
+            elif result.valid:
+                print(f"VALID {result.record_id} schema={result.schema_id}")
+            else:
+                print(f"INVALID {result.record_id} schema={result.schema_id}")
+                for issue in result.errors:
+                    print(f"ERROR {issue.code} {issue.path}: {issue.message}")
+            return 0 if result.valid else 1
 
         paths = RuntimePaths.discover(args.repo)
 
@@ -199,7 +220,13 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"BUILT {result.artifact_path}")
                 print(f"DIGEST sha256:{result.artifact_digest}")
             return 0
-    except (ArtifactBuildError, RuntimeError, ValueError, WorkBlockError) as exc:
+    except (
+        ArtifactBuildError,
+        CCLValidationError,
+        RuntimeError,
+        ValueError,
+        WorkBlockError,
+    ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
