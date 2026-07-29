@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/observation",
+  "title": "CyberCore Observation Record",
+  "allOf": [
+    {
+      "$ref": "common-record.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "observation"
+        },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_id",
+            "observed_at",
+            "payload_type",
+            "payload",
+            "collection_method",
+            "status"
+          ],
+          "properties": {
+            "source_id": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512
+            },
+            "observed_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "payload_type": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "payload": {},
+            "collection_method": {
+              "enum": [
+                "api",
+                "command",
+                "file",
+                "event",
+                "sensor",
+                "manual",
+                "derived"
+              ]
+            },
+            "status": {
+              "enum": [
+                "collected",
+                "validated",
+                "rejected",
+                "transformed_to_evidence"
+              ]
+            },
+            "integrity": {
+              "$ref": "common-record.schema.json#/$defs/integrity"
+            },
+            "rejection_reasons": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "default": []
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "rejected"
+                  }
+                },
+                "required": ["status"]
+              },
+              "then": {
+                "required": ["rejection_reasons"],
+                "properties": {
+                  "rejection_reasons": {
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

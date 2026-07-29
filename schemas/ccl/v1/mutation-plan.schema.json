@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/mutation-plan",
+  "title": "CyberCore Mutation Plan",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "mutation_plan" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["decision_id", "revision", "steps", "preconditions", "expected_changes", "verification_requirements", "risk", "status"],
+          "properties": {
+            "decision_id": { "type": "string" },
+            "revision": { "type": "integer", "minimum": 1 },
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["step_id", "order", "capability_id", "action", "status"],
+                "properties": {
+                  "step_id": { "type": "string" },
+                  "order": { "type": "integer", "minimum": 1 },
+                  "capability_id": { "type": "string" },
+                  "provider_id": { "type": ["string", "null"] },
+                  "action": { "type": "object" },
+                  "status": { "enum": ["pending", "ready", "blocked", "completed", "failed", "skipped"] }
+                }
+              }
+            },
+            "preconditions": { "type": "array", "items": { "type": "object" } },
+            "expected_changes": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+            "verification_requirements": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+            "rollback_metadata": { "type": ["object", "null"] },
+            "risk": { "type": "object" },
+            "status": { "enum": ["draft", "verified", "approval_required", "approved", "applying", "completed", "failed", "superseded"] }
+          }
+        }
+      }
+    }
+  ]
+}

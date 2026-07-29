@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/entity",
+  "title": "CyberCore Entity Record",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "entity" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["entity_type", "display_name", "identity_keys", "lifecycle_state"],
+          "properties": {
+            "entity_type": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$" },
+            "display_name": { "type": "string", "minLength": 1, "maxLength": 512 },
+            "identity_keys": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["namespace", "value"],
+                "properties": {
+                  "namespace": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$" },
+                  "value": { "type": "string", "minLength": 1, "maxLength": 1024 },
+                  "confidence": { "$ref": "confidence.schema.json" }
+                }
+              }
+            },
+            "aliases": { "type": "array", "items": { "type": "string", "maxLength": 512 }, "default": [] },
+            "lifecycle_state": { "enum": ["unknown", "discovered", "active", "degraded", "retired", "deleted"] }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/contradiction",
+  "title": "CyberCore Contradiction Record",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "contradiction" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["subject_id", "predicate", "claim_ids", "status", "explanation"],
+          "properties": {
+            "subject_id": { "type": "string", "minLength": 3, "maxLength": 512 },
+            "predicate": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$" },
+            "claim_ids": { "type": "array", "minItems": 2, "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 512 } },
+            "status": { "enum": ["open", "investigated", "resolved", "accepted_ambiguity"] },
+            "explanation": { "type": "string", "minLength": 1, "maxLength": 8000 },
+            "resulting_claim_id": { "type": ["string", "null"], "maxLength": 512 }
+          }
+        }
+      }
+    }
+  ]
+}

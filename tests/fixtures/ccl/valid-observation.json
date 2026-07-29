@@ -1,0 +1,19 @@
+{
+  "id": "cybercore:observation:test-001",
+  "type": "observation",
+  "schema_version": "ccl/1.0",
+  "created_at": "2026-07-29T16:00:00Z",
+  "created_by": "test-suite",
+  "classification": "internal",
+  "attributes": {
+    "source_id": "cybercore:source:test-api",
+    "observed_at": "2026-07-29T15:59:00Z",
+    "payload_type": "application/json",
+    "payload": {
+      "status": "online"
+    },
+    "collection_method": "api",
+    "status": "validated"
+  },
+  "relationships": []
+}

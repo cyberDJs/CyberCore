@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/evidence",
+  "title": "CyberCore Evidence Record",
+  "allOf": [
+    {
+      "$ref": "common-record.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "evidence"
+        },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "observation_id",
+            "source_id",
+            "observed_at",
+            "recorded_at",
+            "freshness",
+            "integrity",
+            "content_reference",
+            "status"
+          ],
+          "properties": {
+            "observation_id": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512
+            },
+            "source_id": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 512
+            },
+            "observed_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "recorded_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "freshness": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["state"],
+              "properties": {
+                "state": {
+                  "enum": ["active", "stale", "expired", "unknown"]
+                },
+                "valid_until": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                },
+                "evaluated_at": {
+                  "type": ["string", "null"],
+                  "format": "date-time"
+                }
+              }
+            },
+            "integrity": {
+              "$ref": "common-record.schema.json#/$defs/integrity"
+            },
+            "content_reference": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "value"],
+              "properties": {
+                "kind": {
+                  "enum": ["inline", "blob", "file", "uri", "redacted"]
+                },
+                "value": {}
+              }
+            },
+            "status": {
+              "enum": [
+                "active",
+                "stale",
+                "expired",
+                "superseded",
+                "invalidated"
+              ]
+            },
+            "supersedes_evidence_id": {
+              "type": ["string", "null"],
+              "maxLength": 512
+            },
+            "invalidation_reason": {
+              "type": ["string", "null"],
+              "maxLength": 2048
+            },
+            "transformation": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["method", "transformer_version"],
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "transformer_version": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "sanitized": {
+                  "type": "boolean",
+                  "default": false
+                }
+              }
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "superseded"
+                  }
+                },
+                "required": ["status"]
+              },
+              "then": {
+                "required": ["supersedes_evidence_id"]
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "invalidated"
+                  }
+                },
+                "required": ["status"]
+              },
+              "then": {
+                "required": ["invalidation_reason"]
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

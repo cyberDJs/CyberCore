@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/approval",
+  "title": "CyberCore Approval",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "approval" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["plan_id", "plan_revision", "approved_by", "approved_at", "scope", "status"],
+          "properties": {
+            "plan_id": { "type": "string" },
+            "plan_revision": { "type": "integer", "minimum": 1 },
+            "approved_by": { "type": "string", "minLength": 1 },
+            "approved_at": { "type": "string", "format": "date-time" },
+            "scope": { "type": "object" },
+            "conditions": { "type": "array", "items": { "type": "object" } },
+            "expires_at": { "type": ["string", "null"], "format": "date-time" },
+            "revoked_at": { "type": ["string", "null"], "format": "date-time" },
+            "status": { "enum": ["active", "expired", "revoked", "consumed"] }
+          }
+        }
+      }
+    }
+  ]
+}

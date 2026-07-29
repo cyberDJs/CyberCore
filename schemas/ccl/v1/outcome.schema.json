@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/outcome",
+  "title": "CyberCore Outcome",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "outcome" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["intent_id", "decision_id", "plan_id", "apply_result_id", "verification_id", "status", "explanation"],
+          "properties": {
+            "intent_id": { "type": "string" },
+            "decision_id": { "type": "string" },
+            "plan_id": { "type": "string" },
+            "apply_result_id": { "type": "string" },
+            "verification_id": { "type": "string" },
+            "status": { "enum": ["satisfied", "partially_satisfied", "not_satisfied", "unknown", "rolled_back"] },
+            "explanation": { "type": "string", "minLength": 1 },
+            "completed_at": { "type": "string", "format": "date-time" },
+            "remaining_gaps": { "type": "array", "items": { "type": "object" } }
+          }
+        }
+      }
+    }
+  ]
+}

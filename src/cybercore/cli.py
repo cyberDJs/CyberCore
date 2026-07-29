@@ -6,12 +6,15 @@ from pathlib import Path
 import sys
 
 from cybercore.artifact import ArtifactBuildError
+from cybercore.ccl import CCLValidationError, CCLValidator
 from cybercore.commands.apply import run_apply
 from cybercore.commands.build import run_build
 from cybercore.commands.doctor import run_doctor
 from cybercore.commands.status import status_lines
 from cybercore.commands.sync import run_sync
 from cybercore.commands.verify import run_verify
+from cybercore.demo import run_demo
+from cybercore.learn import run_lesson
 from cybercore.runtime import RuntimePaths
 from cybercore.workblock import WorkBlockError
 
@@ -23,17 +26,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repo", help="CyberCore repository path")
     parser.add_argument("--json", action="store_true", dest="as_json")
     sub = parser.add_subparsers(dest="command", required=True)
+
     sub.add_parser("doctor", help="Verify local runtime dependencies")
     sub.add_parser("status", help="Show runtime and Exchange state")
     sub.add_parser("sync", help="Synchronize Exchange and list READY Work Blocks")
+
     verify_parser = sub.add_parser("verify", help="Verify a CXP Work Block package")
     verify_parser.add_argument("path", type=Path)
+
     apply_parser = sub.add_parser(
         "apply", help="Verify and apply a CXP Work Block package"
     )
     apply_parser.add_argument("path", type=Path)
     apply_parser.add_argument("--dry-run", action="store_true")
     apply_parser.add_argument("--yes", action="store_true")
+
     build_cmd = sub.add_parser("build", help="Build a deterministic CXP artifact")
     build_cmd.add_argument("source", type=Path)
     build_cmd.add_argument("--output", type=Path, required=True)
@@ -50,6 +57,35 @@ def build_parser() -> argparse.ArgumentParser:
     build_cmd.add_argument("--title", required=True)
     build_cmd.add_argument("--description", default="")
     build_cmd.add_argument("--created-at")
+
+    demo_parser = sub.add_parser(
+        "demo", help="Run a deterministic, read-only CyberCore demonstration"
+    )
+    demo_parser.add_argument("--scenario", default="uc-001", choices=("uc-001",))
+    demo_parser.add_argument(
+        "--delay",
+        type=float,
+        default=0.15,
+        help="Delay between presentation steps in seconds",
+    )
+    demo_parser.add_argument("--no-color", action="store_true")
+
+    learn_parser = sub.add_parser(
+        "learn", help="Run an interactive CyberCore learning lesson"
+    )
+    learn_parser.add_argument("--lesson", default="evidence", choices=("evidence",))
+    learn_parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="Run the lesson without waiting for keyboard input",
+    )
+    learn_parser.add_argument("--no-color", action="store_true")
+
+    ccl_parser = sub.add_parser("ccl", help="Work with CyberCore Canonical Language")
+    ccl_sub = ccl_parser.add_subparsers(dest="ccl_command", required=True)
+    ccl_validate = ccl_sub.add_parser("validate", help="Validate a canonical record")
+    ccl_validate.add_argument("path", type=Path)
+
     return parser
 
 
@@ -61,8 +97,41 @@ def _confirm(identifier: str, risk: str) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    paths = RuntimePaths.discover(args.repo)
+
     try:
+        if args.command == "demo":
+            if args.delay < 0:
+                raise ValueError("Demo delay must be zero or greater")
+            return run_demo(
+                scenario=args.scenario,
+                delay=args.delay,
+                no_color=args.no_color,
+            )
+
+        if args.command == "learn":
+            return run_lesson(
+                lesson=args.lesson,
+                interactive=not args.non_interactive,
+                no_color=args.no_color,
+            )
+
+        if args.command == "ccl":
+            repo = Path(args.repo or ".").resolve()
+            validator = CCLValidator.from_repo(repo)
+            result = validator.validate_file(args.path)
+            payload = result.as_dict()
+            if args.as_json:
+                print(json.dumps(payload, indent=2))
+            elif result.valid:
+                print(f"VALID {result.record_id} schema={result.schema_id}")
+            else:
+                print(f"INVALID {result.record_id} schema={result.schema_id}")
+                for issue in result.errors:
+                    print(f"ERROR {issue.code} {issue.path}: {issue.message}")
+            return 0 if result.valid else 1
+
+        paths = RuntimePaths.discover(args.repo)
+
         if args.command == "doctor":
             results = run_doctor(paths)
             if args.as_json:
@@ -79,10 +148,12 @@ def main(argv: list[str] | None = None) -> int:
                 for result in results:
                     print(f"{result.state.upper():5} {result.name}: {result.detail}")
             return 0 if all(r.successful for r in results) else 1
+
         if args.command == "status":
             lines = status_lines(paths)
             print(json.dumps(lines, indent=2) if args.as_json else "\n".join(lines))
             return 0
+
         if args.command == "sync":
             ready = run_sync(paths)
             if args.as_json:
@@ -92,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
                 for item in ready:
                     print(item)
             return 0
+
         if args.command == "verify":
             report = run_verify(args.path)
             payload = {
@@ -106,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
                 else f"VERIFIED {payload['id']} files={payload['verified_files']} risk={payload['risk']}"
             )
             return 0
+
         if args.command == "apply":
             report = run_verify(args.path)
             if (
@@ -120,6 +193,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"{'DRY-RUN' if result.dry_run else 'APPLIED'} {result.report.manifest.identifier}"
             )
             return 0
+
         if args.command == "build":
             result = run_build(
                 args.source,
@@ -146,9 +220,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"BUILT {result.artifact_path}")
                 print(f"DIGEST sha256:{result.artifact_digest}")
             return 0
-    except (ArtifactBuildError, RuntimeError, WorkBlockError) as exc:
+    except (
+        ArtifactBuildError,
+        CCLValidationError,
+        RuntimeError,
+        ValueError,
+        WorkBlockError,
+    ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+
     return 2
 
 

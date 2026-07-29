@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/intent",
+  "title": "CyberCore Intent",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "intent" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requested_outcome", "mode", "scope", "constraints", "requester", "status"],
+          "properties": {
+            "requested_outcome": { "type": "string", "minLength": 1, "maxLength": 10000 },
+            "mode": { "enum": ["observe", "explain", "assess", "recommend", "change"] },
+            "scope": { "type": "object" },
+            "constraints": { "type": "object" },
+            "requester": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "status": { "enum": ["draft", "submitted", "evaluating", "satisfied", "cancelled", "expired"] },
+            "requested_at": { "type": "string", "format": "date-time" },
+            "expires_at": { "type": ["string", "null"], "format": "date-time" }
+          }
+        }
+      }
+    }
+  ]
+}

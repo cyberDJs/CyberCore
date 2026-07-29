@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/policy",
+  "title": "CyberCore Policy",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "policy" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["policy_id", "version", "scope", "rule", "enforcement"],
+          "properties": {
+            "policy_id": { "type": "string", "minLength": 3, "maxLength": 512 },
+            "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+            "scope": { "type": "object" },
+            "rule": { "type": "object" },
+            "enforcement": { "enum": ["informational", "advisory", "required", "blocking"] },
+            "description": { "type": "string", "maxLength": 10000 },
+            "enabled": { "type": "boolean", "default": true }
+          }
+        }
+      }
+    }
+  ]
+}

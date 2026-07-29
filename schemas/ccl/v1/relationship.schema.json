@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cybercore://schemas/ccl/v1/relationship",
+  "title": "CyberCore Relationship Record",
+  "allOf": [
+    { "$ref": "common-record.schema.json" },
+    {
+      "type": "object",
+      "properties": {
+        "type": { "const": "relationship" },
+        "attributes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relationship_type", "from_id", "to_id", "evidence_ids", "confidence"],
+          "properties": {
+            "relationship_type": { "type": "string", "pattern": "^[a-z][a-z0-9._-]*$" },
+            "from_id": { "type": "string", "minLength": 3, "maxLength": 512 },
+            "to_id": { "type": "string", "minLength": 3, "maxLength": 512 },
+            "evidence_ids": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 512 } },
+            "confidence": { "$ref": "confidence.schema.json" },
+            "valid_from": { "type": ["string", "null"], "format": "date-time" },
+            "valid_until": { "type": ["string", "null"], "format": "date-time" }
+          }
+        }
+      }
+    }
+  ]
+}

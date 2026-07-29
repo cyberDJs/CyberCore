@@ -1,0 +1,30 @@
+{
+  "id": "cybercore:evidence:test-001",
+  "type": "evidence",
+  "schema_version": "ccl/1.0",
+  "created_at": "2026-07-29T16:00:00Z",
+  "created_by": "test-suite",
+  "classification": "internal",
+  "attributes": {
+    "observation_id": "cybercore:observation:test-001",
+    "source_id": "cybercore:source:test-api",
+    "observed_at": "2026-07-29T16:00:00Z",
+    "recorded_at": "2026-07-29T15:59:00Z",
+    "freshness": {
+      "state": "active"
+    },
+    "integrity": {
+      "status": "verified",
+      "algorithm": "sha256",
+      "digest": "test-digest"
+    },
+    "content_reference": {
+      "kind": "inline",
+      "value": {
+        "status": "online"
+      }
+    },
+    "status": "active"
+  },
+  "relationships": []
+}

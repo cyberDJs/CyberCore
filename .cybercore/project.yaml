@@ -1,0 +1,48 @@
+version: 1
+
+identity:
+  name: CyberCore
+  architecture: reference-architecture-v2
+  maturity: alpha
+
+mission: >-
+  Build an evidence-driven control plane for infrastructure, knowledge,
+  decisions, and controlled mutation.
+
+vision: Every decision is traceable to evidence.
+
+canonical_sources:
+  architecture: docs/architecture/reference-architecture-v2.md
+  genome: docs/audits/cybercore-genome.v0.yaml
+  language:
+    - knowledge/ccl/CCL-0001-core-vocabulary.md
+    - knowledge/ccl/CCL-0002-record-schemas-and-validation-contracts.md
+    - knowledge/ccl/CCL-0003-entity-claim-and-graph-semantics.md
+    - knowledge/ccl/CCL-0004-finding-policy-intent-and-decision.md
+    - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
+
+current:
+  milestone: CCL reference implementation v0.1
+  active_artifact: CCL-RUNTIME-0001
+  branch: feat/interactive-demo-framework
+  pull_request: 18
+
+status:
+  ccl_specification: complete_draft
+  json_schemas: complete_draft
+  validator: implemented
+  cli_validation: implemented
+  fixtures: implemented
+  tests: implemented_unverified
+  ci: not_detected
+
+next:
+  - verify validator and full test suite in an environment with dependencies
+  - fix any schema or runtime defects
+  - update PR 18 and merge after successful verification
+
+rules:
+  state_first: true
+  no_knowledge_regression: true
+  repository_is_truth: true
+  one_active_artifact: true
