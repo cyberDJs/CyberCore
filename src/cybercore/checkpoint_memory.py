@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 import re
 
@@ -9,6 +10,7 @@ from cybercore.checkpoint import RepositoryCheckpoint
 
 PROJECT_STATE_START = "<!-- CYBERCORE:CHECKPOINT:START -->"
 PROJECT_STATE_END = "<!-- CYBERCORE:CHECKPOINT:END -->"
+WORKLOG_CHECKPOINT_PREFIX = "CYBERCORE:WORKLOG-CHECKPOINT:"
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,12 +169,33 @@ def _synchronize_state_fields(
     return updated
 
 
+def _checkpoint_identity(
+    checkpoint: RepositoryCheckpoint,
+    test_result: str | None,
+) -> str:
+    canonical = "\0".join(
+        [
+            str(Path(checkpoint.repository).resolve()),
+            checkpoint.commit,
+            test_result or "not supplied",
+        ]
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _worklog_marker(identity: str) -> str:
+    return f"<!-- {WORKLOG_CHECKPOINT_PREFIX}{identity} -->"
+
+
 def _worklog_entry(
     checkpoint: RepositoryCheckpoint,
     test_result: str | None,
     next_action: str | None,
+    *,
+    identity: str,
 ) -> str:
     lines = [
+        _worklog_marker(identity),
         f"## Checkpoint {checkpoint.generated_at}",
         "",
         f"- Branch: `{checkpoint.branch}`",
@@ -184,6 +207,12 @@ def _worklog_entry(
     if next_action:
         lines.append(f"- Next action: {next_action}")
     return "\n".join(lines) + "\n"
+
+
+def _append_worklog_entry(current: str, entry: str, *, identity: str) -> str:
+    if _worklog_marker(identity) in current:
+        return current
+    return current.rstrip() + "\n\n" + entry
 
 
 def plan_memory_update(
@@ -215,8 +244,18 @@ def plan_memory_update(
     )
     block = _checkpoint_block(checkpoint, test_result)
     state_content = _replace_managed_block(synchronized, block)
-    entry = _worklog_entry(checkpoint, test_result, next_action)
-    worklog_content = current_worklog.rstrip() + "\n\n" + entry
+    identity = _checkpoint_identity(checkpoint, test_result)
+    entry = _worklog_entry(
+        checkpoint,
+        test_result,
+        next_action,
+        identity=identity,
+    )
+    worklog_content = _append_worklog_entry(
+        current_worklog,
+        entry,
+        identity=identity,
+    )
 
     return MemoryUpdatePlan(
         project_state_path=project_state_path,
