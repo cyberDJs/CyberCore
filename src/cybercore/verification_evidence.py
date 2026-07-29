@@ -85,19 +85,11 @@ class VerificationEvidence:
         return cls.from_dict(payload)
 
     def validate_for(self, checkpoint: RepositoryCheckpoint) -> None:
-        if self.exit_code != 0:
-            raise VerificationEvidenceError(
-                f"Verification command failed with exit code {self.exit_code}"
-            )
-        evidence_repo = str(Path(self.repository).expanduser().resolve())
-        if evidence_repo != checkpoint.repository:
-            raise VerificationEvidenceError(
-                "Verification evidence repository does not match checkpoint repository"
-            )
-        if self.commit != checkpoint.commit:
-            raise VerificationEvidenceError(
-                "Verification evidence commit does not match checkpoint commit"
-            )
+        validate_verification_evidence(
+            self,
+            repository=Path(checkpoint.repository),
+            commit=checkpoint.commit,
+        )
 
     def checkpoint_summary(self) -> str:
         return f"{self.summary} via `{self.command}` in {self.duration:.2f}s"
@@ -106,3 +98,28 @@ class VerificationEvidence:
 def load_verification_evidence(path: Path) -> VerificationEvidence:
     """Load and validate the structure of a verification evidence JSON file."""
     return VerificationEvidence.from_file(path)
+
+
+def validate_verification_evidence(
+    evidence: VerificationEvidence,
+    *,
+    repository: Path,
+    commit: str,
+) -> None:
+    """Validate successful evidence against one repository and exact commit."""
+    if evidence.exit_code != 0:
+        raise VerificationEvidenceError(
+            f"Verification command failed with exit code {evidence.exit_code}"
+        )
+
+    evidence_repo = Path(evidence.repository).expanduser().resolve()
+    expected_repo = repository.expanduser().resolve()
+    if evidence_repo != expected_repo:
+        raise VerificationEvidenceError(
+            "Verification evidence repository does not match checkpoint repository"
+        )
+
+    if evidence.commit != commit:
+        raise VerificationEvidenceError(
+            "Verification evidence commit does not match checkpoint commit"
+        )
