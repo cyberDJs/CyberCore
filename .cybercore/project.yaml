@@ -22,24 +22,26 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: CCL reference implementation v0.1
-  active_artifact: CCL-RUNTIME-0001
-  branch: feat/interactive-demo-framework
-  pull_request: 18
+  milestone: Project Checkpoint Runtime v0.1
+  active_artifact: WB-0015
+  branch: feat/project-checkpoint-runtime
+  pull_request: null
 
 status:
   ccl_specification: complete_draft
   json_schemas: complete_draft
-  validator: implemented
-  cli_validation: implemented
-  fixtures: implemented
-  tests: implemented_unverified
-  ci: not_detected
+  validator: verified
+  cli_validation: verified
+  fixtures: verified
+  tests: 14_passed
+  ci: local_verification
+  checkpoint_runtime: planned
 
 next:
-  - verify validator and full test suite in an environment with dependencies
-  - fix any schema or runtime defects
-  - update PR 18 and merge after successful verification
+  - implement repository state collector
+  - add cybercore checkpoint CLI command
+  - update PROJECT_STATE.md and WORKLOG.md deterministically
+  - add tests and local verification
 
 rules:
   state_first: true

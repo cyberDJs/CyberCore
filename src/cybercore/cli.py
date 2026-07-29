@@ -7,6 +7,7 @@ import sys
 
 from cybercore.artifact import ArtifactBuildError
 from cybercore.ccl import CCLValidationError, CCLValidator
+from cybercore.checkpoint import CheckpointError, collect_checkpoint, render_checkpoint
 from cybercore.commands.apply import run_apply
 from cybercore.commands.build import run_build
 from cybercore.commands.doctor import run_doctor
@@ -30,6 +31,15 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="Verify local runtime dependencies")
     sub.add_parser("status", help="Show runtime and Exchange state")
     sub.add_parser("sync", help="Synchronize Exchange and list READY Work Blocks")
+
+    checkpoint_parser = sub.add_parser(
+        "checkpoint", help="Collect a read-only repository checkpoint"
+    )
+    checkpoint_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Write rendered checkpoint to this file instead of stdout",
+    )
 
     verify_parser = sub.add_parser("verify", help="Verify a CXP Work Block package")
     verify_parser.add_argument("path", type=Path)
@@ -132,6 +142,23 @@ def main(argv: list[str] | None = None) -> int:
 
         paths = RuntimePaths.discover(args.repo)
 
+        if args.command == "checkpoint":
+            checkpoint = collect_checkpoint(paths.repo)
+            if args.as_json:
+                rendered = json.dumps(checkpoint.as_dict(), indent=2)
+            else:
+                rendered = render_checkpoint(checkpoint)
+            if args.output:
+                output = args.output.expanduser()
+                if not output.is_absolute():
+                    output = paths.repo / output
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(rendered + ("\n" if args.as_json else ""), encoding="utf-8")
+                print(f"CHECKPOINT {output}")
+            else:
+                print(rendered, end="" if rendered.endswith("\n") else "\n")
+            return 0
+
         if args.command == "doctor":
             results = run_doctor(paths)
             if args.as_json:
@@ -223,6 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     except (
         ArtifactBuildError,
         CCLValidationError,
+        CheckpointError,
         RuntimeError,
         ValueError,
         WorkBlockError,
