@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import os
 from pathlib import Path
 import re
+import tempfile
 
 from cybercore.checkpoint import RepositoryCheckpoint
 
@@ -21,8 +23,69 @@ class MemoryUpdatePlan:
     worklog_content: str
 
     def write(self) -> None:
-        self.project_state_path.write_text(self.project_state_content, encoding="utf-8")
-        self.worklog_path.write_text(self.worklog_content, encoding="utf-8")
+        targets = (
+            (self.project_state_path, self.project_state_content),
+            (self.worklog_path, self.worklog_content),
+        )
+        staged_updates: dict[Path, Path] = {}
+        staged_rollbacks: dict[Path, Path | None] = {}
+        replaced: list[Path] = []
+
+        try:
+            for target, content in targets:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                staged_updates[target] = _stage_bytes(
+                    target,
+                    content.encode("utf-8"),
+                    suffix=".new",
+                )
+                staged_rollbacks[target] = (
+                    _stage_bytes(target, target.read_bytes(), suffix=".rollback")
+                    if target.exists()
+                    else None
+                )
+
+            for target, _content in targets:
+                os.replace(staged_updates[target], target)
+                replaced.append(target)
+        except Exception:
+            rollback_error: Exception | None = None
+            for target in reversed(replaced):
+                rollback = staged_rollbacks[target]
+                try:
+                    if rollback is None:
+                        target.unlink(missing_ok=True)
+                    else:
+                        os.replace(rollback, target)
+                except Exception as exc:  # pragma: no cover - catastrophic filesystem failure
+                    rollback_error = rollback_error or exc
+            if rollback_error is not None:
+                raise RuntimeError(
+                    "Canonical memory write failed and rollback was incomplete"
+                ) from rollback_error
+            raise
+        finally:
+            for staged in (*staged_updates.values(), *staged_rollbacks.values()):
+                if staged is not None:
+                    staged.unlink(missing_ok=True)
+
+
+def _stage_bytes(target: Path, content: bytes, *, suffix: str) -> Path:
+    descriptor, raw_path = tempfile.mkstemp(
+        prefix=f".{target.name}.cybercore-memory-",
+        suffix=suffix,
+        dir=target.parent,
+    )
+    staged = Path(raw_path)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        staged.unlink(missing_ok=True)
+        raise
+    return staged
 
 
 def _checkpoint_block(checkpoint: RepositoryCheckpoint, test_result: str | None) -> str:
