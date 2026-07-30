@@ -7,7 +7,7 @@ _Last updated: 2026-07-30 01:01 CEST_
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
 - Active branch: `feat/context-disclosure-policy`
-- Active work block: `WB-0024 Operation Context Disclosure Policy v0.1`
+- Active work block: `WB-0024 Operation Context Disclosure Policy`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -214,7 +214,7 @@ Scope:
 - Work block: active
 - Branch: `feat/context-disclosure-policy`
 - Project Kernel: present
-- Runtime implementation: planned
+- Runtime implementation: implemented
 - Tests: 109 passed
 - Pull request: not created
 
@@ -222,17 +222,16 @@ Scope:
 
 Define the Operation Context Disclosure Policy contract.
 
-
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:ea971e23b56216f3331cdd63ac7875f09ed048ef980fa36e24f28c4a7f3504f7 -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:ef06edd8722f5a167644d6c0eb284d33d958307d838002368c414b533a4c6b6b -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T07:12:08.651626Z`
-- Branch: `feat/repository-identity-policy`
-- Commit: `9c850b6b22e99e28dbc6d761a7b8c675164e3c59`
-- Commit subject: test(policy): cover workflow identity enforcement
+- Generated: `2026-07-30T11:17:14.969374Z`
+- Branch: `feat/context-disclosure-policy`
+- Commit: `5defceda6da8c2385ec2546906c4ca128b062d3c`
+- Commit subject: docs(project): activate WB-0024 disclosure policy
 - Working tree: **clean**
-- Test evidence: `98 passed`
+- Test evidence: `109 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

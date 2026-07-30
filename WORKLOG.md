@@ -101,3 +101,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `98 passed`
 - Next action: Prepare WB-0022 pull request
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:ef06edd8722f5a167644d6c0eb284d33d958307d838002368c414b533a4c6b6b -->
+## Checkpoint 2026-07-30T11:17:14.969374Z
+
+- Branch: `feat/context-disclosure-policy`
+- Commit: `5defceda6da8c2385ec2546906c4ca128b062d3c`
+- Commit subject: docs(project): activate WB-0024 disclosure policy
+- Working tree: **clean**
+- Test evidence: `109 passed`
+- Next action: Define the Operation Context Disclosure Policy contract.
