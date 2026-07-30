@@ -19,6 +19,11 @@ from cybercore.commands.sync import run_sync
 from cybercore.commands.verify import run_verify
 from cybercore.demo import run_demo
 from cybercore.learn import run_lesson
+from cybercore.post_merge import (
+    PostMergeTransitionError,
+    plan_post_merge_transition,
+    render_post_merge_preview,
+)
 from cybercore.runtime import RuntimePaths
 from cybercore.workblock import WorkBlockError
 
@@ -82,6 +87,21 @@ def build_parser() -> argparse.ArgumentParser:
         "verification_command",
         nargs=argparse.REMAINDER,
         help="Command to run, normally after --",
+    )
+
+    post_merge_parser = sub.add_parser(
+        "post-merge",
+        help="Verify and preview a merged pull-request state transition",
+    )
+    post_merge_parser.add_argument("pull_request", type=int)
+    post_merge_parser.add_argument(
+        "--stable-branch",
+        default="main",
+        help="Expected pull-request base and local stable branch",
+    )
+    post_merge_parser.add_argument(
+        "--expected-head-sha",
+        help="Reject the transition unless the merged PR head matches this SHA",
     )
 
     verify_parser = sub.add_parser("verify", help="Verify a CXP Work Block package")
@@ -184,6 +204,35 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result.valid else 1
 
         paths = RuntimePaths.discover(args.repo)
+
+        if args.command == "post-merge":
+            preview = plan_post_merge_transition(
+                paths.repo,
+                args.pull_request,
+                stable_branch=args.stable_branch,
+                expected_head_sha=args.expected_head_sha,
+            )
+            if args.as_json:
+                pull_request = preview.pull_request
+                print(
+                    json.dumps(
+                        {
+                            "repository": pull_request.repository,
+                            "pull_request": pull_request.number,
+                            "title": pull_request.title,
+                            "base_branch": pull_request.base_branch,
+                            "head_branch": pull_request.head_branch,
+                            "head_sha": pull_request.head_sha,
+                            "merge_commit": pull_request.merge_commit,
+                            "stable_commit": preview.main_commit,
+                            "mutation": "none",
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                print(render_post_merge_preview(preview), end="")
+            return 0
 
         if args.command == "evidence":
             if args.evidence_command == "run":
@@ -342,6 +391,7 @@ def main(argv: list[str] | None = None) -> int:
         CCLValidationError,
         CheckpointError,
         FileNotFoundError,
+        PostMergeTransitionError,
         RuntimeError,
         ValueError,
         WorkBlockError,
