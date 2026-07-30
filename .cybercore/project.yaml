@@ -60,7 +60,7 @@ completed:
     verification: 46_passed
   - artifact: WB-0018
     pull_request: 22
-    merge_commit: 1e174275317df9c2b202d18f40154121cc9e4f54
+    merge_commit: 1e174e9180e64c3bfc5c70fa52d5c7e399ead9eb
     verification: 52_passed
 
   - artifact: WB-0019
