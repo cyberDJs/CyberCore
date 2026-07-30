@@ -5,7 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 import re
 from typing import Final, Mapping
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote_plus, urlsplit, urlunsplit
 
 
 class DisclosureClass(StrEnum):
@@ -76,6 +76,11 @@ DISCLOSURE_FIELDS: Final[tuple[DisclosureField, ...]] = (
         "Commit identity is operational metadata and evidence binding.",
     ),
     DisclosureField(
+        "commit_subject",
+        DisclosureClass.OPERATIONAL,
+        "Commit subject is operational metadata and may include local context.",
+    ),
+    DisclosureField(
         "checks",
         DisclosureClass.OPERATIONAL,
         "Policy check names and outcomes are operational diagnostics.",
@@ -102,15 +107,33 @@ _FIELD_INDEX: Final[dict[str, DisclosureField]] = {
 }
 _REDACTED: Final[str] = "[REDACTED]"
 _REDACTED_PATH: Final[str] = "[REDACTED_PATH]"
-_POSIX_PATH = re.compile(r"(?<![\w.:@-])/(?:[^\s;,)`'\"]+/)*[^\s;,)`'\"]+")
-_WINDOWS_DRIVE_PATH = re.compile(r"(?<![\w.-])[A-Za-z]:\\(?:[^\s;,)`'\"]+\\?)*")
-_UNC_PATH = re.compile(r"\\\\[^\s\\;,)`'\"]+\\[^\s;,)`'\"]+")
+_PATH_CHARS = r"[^\r\n;,`'\"\)\]\}<]+"
+_POSIX_PATH = re.compile(rf"(?<![\w.:@-])/{_PATH_CHARS}")
+_WINDOWS_DRIVE_PATH = re.compile(rf"(?<![\w.-])[A-Za-z]:\\{_PATH_CHARS}")
+_UNC_PATH = re.compile(rf"\\\\{_PATH_CHARS}")
 _URL = re.compile(r"\b(?:https?|ssh|git|file)://[^\s`'\")]+")
 _SCP_LIKE_GIT = re.compile(
     r"(?<![\w.-])(?P<user>[^@\s:/]+)@(?P<host>[^:\s/]+):(?P<path>[^\s`'\")]+)"
 )
 _SECRET_OPTION = re.compile(
     r"(?i)(token|password|passwd|secret|credential|api[-_]?key|access[-_]?key)"
+)
+_SECRET_PARAMETER_NAMES: Final[set[str]] = {
+    "token",
+    "access_token",
+    "refresh_token",
+    "password",
+    "passwd",
+    "secret",
+    "credential",
+    "api_key",
+    "access_key",
+}
+_URL_PARAMETER = re.compile(r"(?P<prefix>^|[&;])(?P<key>[^=&;#]+)=(?P<value>[^&;#]*)")
+_SECRET_ASSIGNMENT = re.compile(
+    r"(?i)(?P<prefix>\b(?:token|access_token|refresh_token|password|passwd|"
+    r"secret|credential|api[-_]?key|access[-_]?key)\b\s*[:=]\s*)"
+    r"(?P<quote>[\"']?)(?P<value>[^\s,;`\"')\]}<]+)(?P=quote)"
 )
 
 
@@ -127,18 +150,41 @@ def disclosure_class(name: str) -> DisclosureClass:
     return disclosure_field(name).classification
 
 
+def _is_secret_parameter_name(value: str) -> bool:
+    normalized = unquote_plus(value).lower().replace("-", "_")
+    return normalized in _SECRET_PARAMETER_NAMES
+
+
+def _redact_url_component_secrets(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        if not _is_secret_parameter_name(match.group("key")):
+            return match.group(0)
+        return f"{match.group('prefix')}{match.group('key')}={_REDACTED}"
+
+    return _URL_PARAMETER.sub(replace, value)
+
+
 def _redact_url_credentials(value: str) -> str:
     parsed = urlsplit(value)
     if parsed.scheme == "file":
         return f"file://{_REDACTED_PATH}"
     if not parsed.scheme or not parsed.netloc:
         return value
-    if "@" not in parsed.netloc:
-        return value
-    host = parsed.hostname or ""
-    if parsed.port is not None:
-        host = f"{host}:{parsed.port}"
-    return urlunsplit((parsed.scheme, host, parsed.path, parsed.query, parsed.fragment))
+    netloc = parsed.netloc
+    if "@" in parsed.netloc:
+        host = parsed.hostname or ""
+        if parsed.port is not None:
+            host = f"{host}:{parsed.port}"
+        netloc = host
+    return urlunsplit(
+        (
+            parsed.scheme,
+            netloc,
+            parsed.path,
+            _redact_url_component_secrets(parsed.query),
+            _redact_url_component_secrets(parsed.fragment),
+        )
+    )
 
 
 def _redact_scp_like_git_credentials(value: str) -> str:
@@ -151,6 +197,14 @@ def _redact_scp_like_git_credentials(value: str) -> str:
         return f"{host}:{path}"
 
     return _SCP_LIKE_GIT.sub(replace, value)
+
+
+def _redact_secret_assignments(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        quote = match.group("quote")
+        return f"{match.group('prefix')}{quote}{_REDACTED}{quote}"
+
+    return _SECRET_ASSIGNMENT.sub(replace, value)
 
 
 def sanitize_disclosure_text(
@@ -169,6 +223,7 @@ def sanitize_disclosure_text(
 
     text = _URL.sub(protect_url, text)
     text = _redact_scp_like_git_credentials(text)
+    text = _redact_secret_assignments(text)
     if selected_mode is not DisclosureMode.FULL:
         text = _UNC_PATH.sub(_REDACTED_PATH, text)
         text = _WINDOWS_DRIVE_PATH.sub(_REDACTED_PATH, text)

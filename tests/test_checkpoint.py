@@ -7,7 +7,13 @@ import subprocess
 
 import pytest
 
-from cybercore.checkpoint import CheckpointError, collect_checkpoint, render_checkpoint
+from cybercore.checkpoint import (
+    CheckpointError,
+    RepositoryCheckpoint,
+    collect_checkpoint,
+    disclosed_checkpoint_payload,
+    render_checkpoint,
+)
 from cybercore.checkpoint_memory import (
     PROJECT_STATE_START,
     plan_memory_update,
@@ -197,6 +203,82 @@ def test_checkpoint_cli_rejects_redact_and_full_together(tmp_path: Path) -> None
         main(["--repo", str(repo), "checkpoint", "--redact", "--full"])
 
     assert exc_info.value.code == 2
+
+
+def test_checkpoint_commit_subject_is_sanitized_in_text_and_json() -> None:
+    checkpoint = RepositoryCheckpoint(
+        generated_at="2026-07-30T10:00:00Z",
+        repository="/Users/John Doe/Private Repo",
+        branch="feat/context-disclosure-policy",
+        commit="abc123",
+        commit_subject=(
+            "Fix /Users/John Doe/Private Repo from "
+            "https://user:password@example.test/repo?token=tokensecret123"
+        ),
+        dirty=False,
+        changed_paths=(),
+        project_state_present=True,
+        project_kernel_present=True,
+    )
+
+    rendered = render_checkpoint(checkpoint)
+    payload = disclosed_checkpoint_payload(checkpoint)
+
+    assert "Commit subject:" in rendered
+    assert payload["commit_subject"] in rendered
+    assert "Doe/Private Repo" not in rendered
+    assert "Doe/Private Repo" not in json.dumps(payload)
+    assert "user:password" not in rendered
+    assert "user:password" not in json.dumps(payload)
+    assert "tokensecret123" not in rendered
+    assert "tokensecret123" not in json.dumps(payload)
+
+
+def test_checkpoint_commit_subject_redacted_mode_hides_operational_metadata() -> None:
+    checkpoint = RepositoryCheckpoint(
+        generated_at="2026-07-30T10:00:00Z",
+        repository="/Users/John Doe/Private Repo",
+        branch="feat/context-disclosure-policy",
+        commit="abc123",
+        commit_subject="Fix /Users/John Doe/Private Repo",
+        dirty=False,
+        changed_paths=(),
+        project_state_present=True,
+        project_kernel_present=True,
+    )
+
+    rendered = render_checkpoint(checkpoint, disclosure_mode="redacted")
+    payload = disclosed_checkpoint_payload(checkpoint, disclosure_mode="redacted")
+
+    assert "Commit subject: [REDACTED]" in rendered
+    assert payload["commit_subject"] == "[REDACTED]"
+
+
+def test_checkpoint_commit_subject_full_mode_keeps_paths_not_credentials() -> None:
+    checkpoint = RepositoryCheckpoint(
+        generated_at="2026-07-30T10:00:00Z",
+        repository="/Users/John Doe/Private Repo",
+        branch="feat/context-disclosure-policy",
+        commit="abc123",
+        commit_subject=(
+            "Fix /Users/John Doe/Private Repo from "
+            "https://user:password@example.test/repo?api_key=secret"
+        ),
+        dirty=False,
+        changed_paths=(),
+        project_state_present=True,
+        project_kernel_present=True,
+    )
+
+    rendered = render_checkpoint(checkpoint, disclosure_mode="full")
+    payload = disclosed_checkpoint_payload(checkpoint, disclosure_mode="full")
+
+    assert "/Users/John Doe/Private Repo" in rendered
+    assert "/Users/John Doe/Private Repo" in payload["commit_subject"]
+    assert "user:password" not in rendered
+    assert "user:password" not in json.dumps(payload)
+    assert "secret" not in rendered
+    assert "secret" not in json.dumps(payload)
 
 
 def test_collect_checkpoint_rejects_non_repository(tmp_path: Path) -> None:

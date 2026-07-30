@@ -39,6 +39,7 @@ def test_disclosure_contract_covers_all_context_fields() -> None:
         "risk",
         "branch",
         "commit",
+        "commit_subject",
         "dirty",
         "project_kernel_present",
         "project_state_present",
@@ -203,6 +204,80 @@ def test_sanitizer_full_mode_keeps_local_paths_but_not_credentials() -> None:
         credential_url,
         mode=DisclosureMode.FULL,
     )
+
+
+@pytest.mark.parametrize(
+    "value,leaked,preserved",
+    [
+        (
+            "https://example.test/repo?token=abc123",
+            "abc123",
+            "https://example.test/repo?token=[REDACTED]",
+        ),
+        (
+            "https://example.test/repo?access_token=abc123&ref=main",
+            "abc123",
+            "ref=main",
+        ),
+        (
+            "ssh://host/repo?password=secret",
+            "secret",
+            "password=[REDACTED]",
+        ),
+        (
+            "https://example.test/repo#api_key=secret",
+            "secret",
+            "#api_key=[REDACTED]",
+        ),
+        (
+            "https://example.test/repo?api-key=s%65cret&branch=main",
+            "s%65cret",
+            "branch=main",
+        ),
+        (
+            "https://example.test/repo?access-key=abc123",
+            "abc123",
+            "access-key=[REDACTED]",
+        ),
+        (
+            "https://example.test/repo?refresh_token=abc123",
+            "abc123",
+            "refresh_token=[REDACTED]",
+        ),
+        (
+            "https://example.test/repo?passwd=abc123&credential=secret",
+            "abc123",
+            "credential=[REDACTED]",
+        ),
+    ],
+)
+def test_sanitizer_redacts_url_secret_query_and_fragment_values(
+    value: str,
+    leaked: str,
+    preserved: str,
+) -> None:
+    for mode in DisclosureMode:
+        sanitized = sanitize_disclosure_text(value, mode=mode)
+
+        assert leaked not in sanitized
+        assert preserved in sanitized
+
+
+@pytest.mark.parametrize(
+    "value,leaked",
+    [
+        ("/Users/John Doe/Private Repo", "Doe/Private Repo"),
+        ('"/System/Volumes/Data/Users/John Doe/repo"', "Doe/repo"),
+        ("C:\\Users\\John Doe\\Private Repo", "Doe\\Private Repo"),
+        ('"\\\\server\\customer data\\repo"', "customer data\\repo"),
+    ],
+)
+def test_sanitizer_redacts_local_paths_containing_spaces(value: str, leaked: str) -> None:
+    for mode in (DisclosureMode.STANDARD, DisclosureMode.REDACTED):
+        sanitized = sanitize_disclosure_text(value, mode=mode)
+
+        assert leaked not in sanitized
+        assert "[REDACTED_PATH]" in sanitized
 
 
 def test_command_argument_sanitizer_redacts_secret_like_values() -> None:
