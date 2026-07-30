@@ -7,7 +7,7 @@ _Last updated: 2026-07-30 01:01 CEST_
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
 - Active branch: `feat/repository-identity-diagnostics`
-- Active work block: `WB-0021 Repository Identity Diagnostics v0.1`
+- Active work block: `WB-0021 Repository Identity Diagnostics`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -172,25 +172,24 @@ Scope:
 - Work block: active
 - Branch: `feat/repository-identity-diagnostics`
 - Project Kernel: present
-- Runtime implementation: planned
-- Tests: 78 passed
+- Runtime implementation: implemented
+- Tests: 86 passed
 - Pull request: not created
 
 ## Next action
 
-Define the structured repository identity diagnostic contract.
-
+Prepare WB-0021 pull request
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:9276592d0fa4dabfc1283b8d49de1b9877155cc0fc28b7f8a67183483d8bdaf8 -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:82313961d6580f4149a6f724b72db06c7b1824b775e166dfa7fa838d36c81e1d -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T05:15:03.966351Z`
-- Branch: `feat/remote-aware-repository-identity`
-- Commit: `3a2daae9382ec56f5953ca79bfd1e9dd3cee4fe6`
-- Commit subject: test(memory): cover remote identity and marker migration
+- Generated: `2026-07-30T06:09:08.276960Z`
+- Branch: `feat/repository-identity-diagnostics`
+- Commit: `8e070d97a3a2fe21fd80bff5d2a201aab7d4867e`
+- Commit subject: fix(identity): normalize host in safe origin output
 - Working tree: **clean**
-- Test evidence: `78 passed`
+- Test evidence: `86 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->
