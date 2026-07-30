@@ -11,7 +11,7 @@ from cybercore.repository_identity_policy import (
 
 
 class TrustedOperationContextError(RuntimeError):
-    """Raised when a trusted operation context cannot be collected."""
+    """Raised when a trusted operation context cannot be collected or enforced."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,6 +144,34 @@ def collect_trusted_operation_context(
         project_state_present=state_present,
         trusted=trusted,
         checks=tuple(checks),
+    )
+
+
+def enforce_trusted_operation_context(
+    repo: Path,
+    *,
+    operation: str,
+    risk: str,
+    expected_branch: str | None = None,
+    expected_commit: str | None = None,
+    require_clean: bool = False,
+) -> TrustedOperationContext:
+    """Collect a context and reject the operation when any required check fails."""
+    context = collect_trusted_operation_context(
+        repo,
+        operation=operation,
+        risk=risk,
+        expected_branch=expected_branch,
+        expected_commit=expected_commit,
+        require_clean=require_clean,
+    )
+    if context.trusted:
+        return context
+    failures = "; ".join(
+        f"{check.name}: {check.detail}" for check in context.checks if not check.passed
+    )
+    raise TrustedOperationContextError(
+        f"Trusted operation context rejected {operation}: {failures}"
     )
 
 
