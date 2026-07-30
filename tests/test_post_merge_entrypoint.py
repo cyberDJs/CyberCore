@@ -44,6 +44,16 @@ def _transition_args() -> list[str]:
         "feat/post-merge-state-transition",
         "--next-action",
         "Implement transition runtime",
+        "--completed-status",
+        "idempotent_canonical_memory",
+        "--next-status",
+        "post_merge_state_transition",
+        "--next-objective",
+        "Create a controlled post-merge transition.",
+        "--next-scope",
+        "verify merged pull requests",
+        "--next-task",
+        "implement transition preview",
     ]
 
 
@@ -79,11 +89,11 @@ def test_post_merge_state_defaults_to_preview(monkeypatch, tmp_path: Path, capsy
     assert capsys.readouterr().out == "REMOTE PREVIEW\nSTATE PREVIEW\n"
 
 
-def test_post_merge_write_requires_explicit_complete_transition(monkeypatch, capsys) -> None:
+def test_post_merge_write_requires_explicit_complete_transition(capsys) -> None:
     result = entrypoint.main(["post-merge", "22", "--write"])
 
     assert result == 2
-    assert "--write requires all canonical state transition arguments" in capsys.readouterr().err
+    assert "complete successor work block contract" in capsys.readouterr().err
 
 
 def test_post_merge_write_applies_verified_plan(monkeypatch, tmp_path: Path, capsys) -> None:
