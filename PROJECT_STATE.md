@@ -6,8 +6,8 @@ _Last updated: 2026-07-30 01:01 CEST_
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/trusted-operation-context`
-- Active work block: `WB-0023 Trusted Operation Context v0.1`
+- Active branch: `feat/context-disclosure-policy`
+- Active work block: `WB-0024 Operation Context Disclosure Policy v0.1`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -176,37 +176,51 @@ Verification:
 
 - `pytest -q`: **98 passed**.
 
+### PR #27 — feat: add trusted operation context
+
+Merged into `main` as:
+
+```text
+03a04c5ad73489775552df34e21baa559f2a41da
+```
+
+Completed artifact: `WB-0023`.
+
+Verification:
+
+- `pytest -q`: **109 passed**.
+
 ## Current milestone
 
-Trusted Operation Context v0.1.
+Operation Context Disclosure Policy v0.1.
 
 ## Active objective
 
-Create a unified verifiable safety context for identity-sensitive and mutating CyberCore operations.
+Define and enforce safe disclosure rules for Trusted Operation Context across terminal, JSON, logs and evidence.
 
 Scope:
 
-1. verify canonical repository identity;
-2. collect current branch, commit and working-tree state;
-3. verify Project Kernel and Project State presence;
-4. support expected branch and commit constraints;
-5. classify operation type and risk level;
-6. produce structured text and JSON context results;
-7. integrate the context into checkpoint, evidence, post-merge and apply workflows;
-8. add clean, dirty, detached, mismatched and legacy regression tests;
+1. classify context fields as public, operational or sensitive;
+2. define safe default text and JSON disclosure contracts;
+3. add explicit redacted and full disclosure modes;
+4. preserve boolean values and stable machine-readable structure;
+5. protect repository paths, remote URLs and secret-like values;
+6. review and resolve the CodeQL clear-text logging finding;
+7. integrate disclosure policy into context CLI and protected workflows;
+8. add redaction, compatibility and regression tests;
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/trusted-operation-context`
+- Branch: `feat/context-disclosure-policy`
 - Project Kernel: present
 - Runtime implementation: planned
-- Tests: 98 passed
+- Tests: 109 passed
 - Pull request: not created
 
 ## Next action
 
-Define the Trusted Operation Context contract.
+Define the Operation Context Disclosure Policy contract.
 
 
 <!-- CYBERCORE:CHECKPOINT:START -->

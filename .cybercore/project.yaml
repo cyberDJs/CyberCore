@@ -23,9 +23,9 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Trusted Operation Context v0.1
-  active_artifact: WB-0023
-  branch: feat/trusted-operation-context
+  milestone: Operation Context Disclosure Policy v0.1
+  active_artifact: WB-0024
+  branch: feat/context-disclosure-policy
   pull_request: null
 
 status:
@@ -34,7 +34,7 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 98_passed
+  tests: 109_passed
   ci: local_verification
   checkpoint_runtime: verified
   checkpoint_persistence: verified
@@ -44,7 +44,8 @@ status:
   remote_aware_repository_identity: verified
   repository_identity_diagnostics: verified
   repository_identity_policy: verified
-  trusted_operation_context: planned
+  trusted_operation_context: verified
+  operation_context_disclosure_policy: planned
 
 completed:
   - artifact: WB-0015
@@ -84,12 +85,17 @@ completed:
     merge_commit: e674edc707a17ab8eb9ba1af9d40ae7a80657334
     verification: 98_passed
 
+  - artifact: WB-0023
+    pull_request: 27
+    merge_commit: 03a04c5ad73489775552df34e21baa559f2a41da
+    verification: 109_passed
+
 next:
-  - define the trusted operation context contract
-  - implement repository and project-state context collection
-  - implement policy evaluation and failure rendering
-  - integrate the context into existing protected workflows
-  - add branch, commit, dirty-tree and identity regression tests
+  - define the disclosure classification contract
+  - implement safe context serializers and renderers
+  - add CLI disclosure-mode controls
+  - integrate disclosure policy into logging and evidence paths
+  - add security and compatibility regression tests
 
 rules:
   state_first: true
