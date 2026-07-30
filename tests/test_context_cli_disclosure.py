@@ -39,14 +39,6 @@ def _repo(tmp_path: Path) -> Path:
     return repo
 
 
-def _json_context(repo: Path, *context_args: str) -> tuple[int, dict[str, object]]:
-    exit_code = main(["--repo", str(repo), "--json", "context", *context_args])
-    return exit_code, json.loads(_CAPTURE.readouterr().out)
-
-
-_CAPTURE = None
-
-
 def test_context_cli_defaults_to_standard_json_disclosure(
     tmp_path: Path, capsys
 ) -> None:
