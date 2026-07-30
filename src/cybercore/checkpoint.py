@@ -6,6 +6,10 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
+from cybercore.repository_identity_policy import (
+    enforce_configured_repository_identity_policy,
+)
+
 
 class CheckpointError(RuntimeError):
     """Raised when repository checkpoint data cannot be collected."""
@@ -46,6 +50,8 @@ def collect_checkpoint(repo: Path, *, now: datetime | None = None) -> Repository
     repo = repo.expanduser().resolve()
     if not (repo / ".git").exists():
         raise CheckpointError(f"Not a Git repository: {repo}")
+
+    enforce_configured_repository_identity_policy(repo, operation="Checkpoint collection")
 
     branch = _git(repo, "branch", "--show-current") or "detached"
     commit = _git(repo, "rev-parse", "HEAD")
