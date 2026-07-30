@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
+import re
 import subprocess
 
 from cybercore.repository_identity_policy import (
@@ -56,6 +57,15 @@ def _git(repo: Path, *args: str) -> str:
     return completed.stdout.rstrip("\r\n")
 
 
+def _canonical_identity_configured(repo: Path) -> bool:
+    project = repo / ".cybercore" / "project.yaml"
+    try:
+        content = project.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return False
+    return re.search(r"(?m)^\s{2}repository:\s*git:", content) is not None
+
+
 def collect_trusted_operation_context(
     repo: Path,
     *,
@@ -77,31 +87,45 @@ def collect_trusted_operation_context(
     dirty = bool(_git(resolved, "status", "--porcelain=v1"))
     kernel_present = (resolved / ".cybercore" / "project.yaml").is_file()
     state_present = (resolved / "PROJECT_STATE.md").is_file()
+    canonical = _canonical_identity_configured(resolved)
 
     checks: list[ContextCheck] = [
         ContextCheck("git_repository", True, "Git repository detected."),
         ContextCheck(
             "project_kernel",
-            kernel_present,
-            "Project Kernel is present." if kernel_present else "Project Kernel is missing.",
+            kernel_present or not canonical,
+            "Project Kernel is present."
+            if kernel_present
+            else "Project Kernel is optional for a legacy project without canonical identity.",
         ),
         ContextCheck(
             "project_state",
-            state_present,
-            "Project State is present." if state_present else "Project State is missing.",
+            state_present or not canonical,
+            "Project State is present."
+            if state_present
+            else "Project State is optional for a legacy project without canonical identity.",
         ),
     ]
 
-    try:
-        identity = evaluate_repository_identity_policy(resolved)
-    except RepositoryIdentityPolicyError as exc:
-        checks.append(ContextCheck("repository_identity", False, str(exc)))
+    if canonical:
+        try:
+            identity = evaluate_repository_identity_policy(resolved)
+        except RepositoryIdentityPolicyError as exc:
+            checks.append(ContextCheck("repository_identity", False, str(exc)))
+        else:
+            checks.append(
+                ContextCheck(
+                    "repository_identity",
+                    identity.compliant,
+                    identity.message,
+                )
+            )
     else:
         checks.append(
             ContextCheck(
                 "repository_identity",
-                identity.compliant,
-                identity.message,
+                True,
+                "Canonical repository identity is not configured; legacy compatibility applies.",
             )
         )
 
