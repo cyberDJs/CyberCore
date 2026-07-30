@@ -22,11 +22,13 @@ from cybercore.post_merge_state import (
 )
 from cybercore.repository_identity import (
     RepositoryIdentityError,
+    disclosed_repository_identity_payload,
     render_repository_identity,
     resolve_repository_identity,
 )
 from cybercore.repository_identity_policy import (
     RepositoryIdentityPolicyError,
+    disclosed_repository_identity_policy_payload,
     evaluate_repository_identity_policy,
     render_repository_identity_policy,
 )
@@ -88,6 +90,17 @@ def _identity_parser() -> argparse.ArgumentParser:
         "--strict",
         action="store_true",
         help="Reject deterministic path fallback when origin is unavailable or invalid",
+    )
+    disclosure = identity.add_mutually_exclusive_group()
+    disclosure.add_argument(
+        "--redact",
+        action="store_true",
+        help="Redact operational and sensitive identity fields",
+    )
+    disclosure.add_argument(
+        "--full",
+        action="store_true",
+        help="Include sensitive identity fields; credentials remain omitted",
     )
     identity_sub = identity.add_subparsers(dest="identity_command")
     verify = identity_sub.add_parser(
@@ -228,6 +241,7 @@ def _run_post_merge(argv: list[str]) -> int:
 def _run_identity(argv: list[str]) -> int:
     args = _identity_parser().parse_args(argv)
     paths = RuntimePaths.discover(args.repo)
+    mode = _identity_disclosure_mode(args)
 
     if args.identity_command == "verify":
         result = evaluate_repository_identity_policy(
@@ -235,20 +249,44 @@ def _run_identity(argv: list[str]) -> int:
             advisory=args.advisory,
         )
         if args.as_json:
-            print(json.dumps(result.as_dict(), indent=2))
+            print(
+                json.dumps(
+                    disclosed_repository_identity_policy_payload(
+                        result,
+                        disclosure_mode=mode,
+                    ),
+                    indent=2,
+                )
+            )
         else:
-            print(render_repository_identity_policy(result), end="")
+            print(render_repository_identity_policy(result, disclosure_mode=mode), end="")
         return 0 if result.compliant or args.advisory else 1
 
     diagnostic = resolve_repository_identity(paths.repo, strict=args.strict)
     if args.as_json:
-        print(json.dumps(diagnostic.as_dict(), indent=2))
+        print(
+            json.dumps(
+                disclosed_repository_identity_payload(
+                    diagnostic,
+                    disclosure_mode=mode,
+                ),
+                indent=2,
+            )
+        )
     else:
-        print(render_repository_identity(diagnostic), end="")
+        print(render_repository_identity(diagnostic, disclosure_mode=mode), end="")
     return 0
 
 
 def _context_disclosure_mode(args: argparse.Namespace) -> DisclosureMode:
+    if args.redact:
+        return DisclosureMode.REDACTED
+    if args.full:
+        return DisclosureMode.FULL
+    return DisclosureMode.STANDARD
+
+
+def _identity_disclosure_mode(args: argparse.Namespace) -> DisclosureMode:
     if args.redact:
         return DisclosureMode.REDACTED
     if args.full:

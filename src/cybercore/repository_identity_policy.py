@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 import re
 
+from cybercore.operation_context_disclosure import DisclosureMode, sanitize_disclosure_text
 from cybercore.repository_identity import RepositoryIdentityDiagnostic, resolve_repository_identity
 
 
@@ -125,17 +126,62 @@ def enforce_configured_repository_identity_policy(
     return result
 
 
-def render_repository_identity_policy(result: RepositoryIdentityPolicyResult) -> str:
-    origin = result.origin or "not configured"
+def disclosed_repository_identity_policy_payload(
+    result: RepositoryIdentityPolicyResult,
+    *,
+    disclosure_mode: DisclosureMode | str = DisclosureMode.STANDARD,
+) -> dict[str, str | bool | None]:
+    mode = DisclosureMode(disclosure_mode)
+    actual = result.actual_identity
+    if result.source == "path_fallback":
+        actual = (
+            sanitize_disclosure_text(actual, mode=mode)
+            if mode is DisclosureMode.FULL
+            else "path:[REDACTED]"
+        )
+    else:
+        actual = sanitize_disclosure_text(actual, mode=mode)
+
+    origin = (
+        None if result.origin is None else sanitize_disclosure_text(result.origin, mode=mode)
+    )
+    if mode is DisclosureMode.REDACTED:
+        actual = "[REDACTED]"
+        origin = "[REDACTED]" if origin is not None else None
+
+    return {
+        "status": result.status,
+        "compliant": result.compliant,
+        "expected_identity": sanitize_disclosure_text(
+            result.expected_identity,
+            mode=mode,
+        ),
+        "actual_identity": actual,
+        "source": result.source,
+        "origin": origin,
+        "message": sanitize_disclosure_text(result.message, mode=mode),
+    }
+
+
+def render_repository_identity_policy(
+    result: RepositoryIdentityPolicyResult,
+    *,
+    disclosure_mode: DisclosureMode | str = DisclosureMode.STANDARD,
+) -> str:
+    disclosed = disclosed_repository_identity_policy_payload(
+        result,
+        disclosure_mode=disclosure_mode,
+    )
+    origin = disclosed["origin"] or "not configured"
     return "\n".join(
         [
             "REPOSITORY IDENTITY POLICY",
-            f"Status: {result.status}",
-            f"Compliant: {'yes' if result.compliant else 'no'}",
-            f"Expected: {result.expected_identity}",
-            f"Actual: {result.actual_identity}",
-            f"Source: {result.source}",
+            f"Status: {disclosed['status']}",
+            f"Compliant: {'yes' if disclosed['compliant'] else 'no'}",
+            f"Expected: {disclosed['expected_identity']}",
+            f"Actual: {disclosed['actual_identity']}",
+            f"Source: {disclosed['source']}",
             f"Origin: {origin}",
-            f"Message: {result.message}",
+            f"Message: {disclosed['message']}",
         ]
     ) + "\n"
