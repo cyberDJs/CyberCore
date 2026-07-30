@@ -25,6 +25,11 @@ from cybercore.repository_identity_policy import (
     render_repository_identity_policy,
 )
 from cybercore.runtime import RuntimePaths
+from cybercore.trusted_operation_context import (
+    TrustedOperationContextError,
+    collect_trusted_operation_context,
+    render_trusted_operation_context,
+)
 
 
 def _post_merge_parser() -> argparse.ArgumentParser:
@@ -89,6 +94,30 @@ def _identity_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Report policy mismatch as a warning instead of a failing exit status",
     )
+    return parser
+
+
+def _context_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="cybercore",
+        description="CyberCore Foundation Runtime",
+    )
+    parser.add_argument("--repo", help="CyberCore repository path")
+    parser.add_argument("--json", action="store_true", dest="as_json")
+    sub = parser.add_subparsers(dest="command", required=True)
+    context = sub.add_parser(
+        "context",
+        help="Collect a trusted operation context",
+    )
+    context.add_argument("--operation", default="inspect")
+    context.add_argument(
+        "--risk",
+        choices=("low", "medium", "high", "critical"),
+        default="low",
+    )
+    context.add_argument("--expected-branch")
+    context.add_argument("--expected-commit")
+    context.add_argument("--require-clean", action="store_true")
     return parser
 
 
@@ -203,19 +232,41 @@ def _run_identity(argv: list[str]) -> int:
     return 0
 
 
+def _run_context(argv: list[str]) -> int:
+    args = _context_parser().parse_args(argv)
+    paths = RuntimePaths.discover(args.repo)
+    context = collect_trusted_operation_context(
+        paths.repo,
+        operation=args.operation,
+        risk=args.risk,
+        expected_branch=args.expected_branch,
+        expected_commit=args.expected_commit,
+        require_clean=args.require_clean,
+    )
+    if args.as_json:
+        print(json.dumps(context.as_dict(), indent=2))
+    else:
+        print(render_trusted_operation_context(context), end="")
+    return 0 if context.trusted else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if "post-merge" not in arguments and "identity" not in arguments:
+    routed_commands = {"post-merge", "identity", "context"}
+    if not any(command in arguments for command in routed_commands):
         return cli.main(arguments)
     try:
         if "identity" in arguments:
             return _run_identity(arguments)
+        if "context" in arguments:
+            return _run_context(arguments)
         return _run_post_merge(arguments)
     except (
         FileNotFoundError,
         PostMergeTransitionError,
         RepositoryIdentityError,
         RepositoryIdentityPolicyError,
+        TrustedOperationContextError,
         RuntimeError,
         ValueError,
     ) as exc:
