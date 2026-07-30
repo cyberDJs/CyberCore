@@ -6,8 +6,8 @@ _Last updated: 2026-07-30 01:01 CEST_
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/repository-identity-policy`
-- Active work block: `WB-0022 Repository Identity Policy Enforcement`
+- Active branch: `feat/trusted-operation-context`
+- Active work block: `WB-0023 Trusted Operation Context v0.1`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -162,37 +162,52 @@ Verification:
 
 - `pytest -q`: **86 passed**.
 
+### PR #26 — feat: enforce canonical repository identity policy
+
+Merged into `main` as:
+
+```text
+e674edc707a17ab8eb9ba1af9d40ae7a80657334
+```
+
+Completed artifact: `WB-0022`.
+
+Verification:
+
+- `pytest -q`: **98 passed**.
+
 ## Current milestone
 
-Repository Identity Policy Enforcement v0.1.
+Trusted Operation Context v0.1.
 
 ## Active objective
 
-Enforce canonical repository identity as a verifiable safety policy for identity-sensitive CyberCore operations.
+Create a unified verifiable safety context for identity-sensitive and mutating CyberCore operations.
 
 Scope:
 
-1. add a cybercore identity verify command;
-2. define expected canonical repository identity in project state;
-3. detect clones connected to an unexpected repository or fork;
-4. reject path fallback for identity-sensitive operations;
-5. integrate identity policy checks into checkpoint, evidence and post-merge workflows;
-6. distinguish advisory warnings from hard policy failures;
-7. preserve read-only identity diagnostics without mutation;
-8. add correct remote, changed origin, fork and missing remote regression tests;
+1. verify canonical repository identity;
+2. collect current branch, commit and working-tree state;
+3. verify Project Kernel and Project State presence;
+4. support expected branch and commit constraints;
+5. classify operation type and risk level;
+6. produce structured text and JSON context results;
+7. integrate the context into checkpoint, evidence, post-merge and apply workflows;
+8. add clean, dirty, detached, mismatched and legacy regression tests;
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/repository-identity-policy`
+- Branch: `feat/trusted-operation-context`
 - Project Kernel: present
-- Runtime implementation: implemented
+- Runtime implementation: planned
 - Tests: 98 passed
 - Pull request: not created
 
 ## Next action
 
-Prepare WB-0022 pull request
+Define the Trusted Operation Context contract.
+
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:ea971e23b56216f3331cdd63ac7875f09ed048ef980fa36e24f28c4a7f3504f7 -->
