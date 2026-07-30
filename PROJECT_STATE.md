@@ -6,8 +6,8 @@ _Last updated: 2026-07-30 01:01 CEST_
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/remote-aware-repository-identity`
-- Active work block: `WB-0020 Remote-Aware Repository Identity`
+- Active branch: `feat/repository-identity-diagnostics`
+- Active work block: `WB-0021 Repository Identity Diagnostics v0.1`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -134,36 +134,52 @@ Verification:
 
 - `pytest -q`: **66 passed**.
 
+### PR #24 — feat: add remote-aware repository identity
+
+Merged into `main` as:
+
+```text
+5ac0db5278acc57710f4987ba34e605cdaaf2ec3
+```
+
+Completed artifact: `WB-0020`.
+
+Verification:
+
+- `pytest -q`: **78 passed**.
+
 ## Current milestone
 
-Remote-Aware Repository Identity v0.1.
+Repository Identity Diagnostics v0.1.
 
 ## Active objective
 
-Make repository and checkpoint identity stable across clone paths by deriving it from a normalized Git remote when available.
+Expose repository identity resolution as an explicit, inspectable and safe operator-facing diagnostic contract.
 
 Scope:
 
-1. normalize supported HTTPS, SSH and SCP-style Git remote URLs;
-2. derive canonical repository identity from the origin remote;
-3. preserve a deterministic fallback for repositories without a usable remote;
-4. make checkpoint identity identical across separate clone locations;
-5. handle missing, changed and unsupported origin remotes safely;
-6. preserve compatibility with existing path-bound checkpoint markers;
-7. add normalization, migration and multi-clone regression tests;
+1. add a cybercore identity command;
+2. support human-readable and JSON output;
+3. report the configured origin, normalized identity and selected identity source;
+4. distinguish remote identity from deterministic path fallback;
+5. diagnose missing, invalid and unsupported origin configuration;
+6. provide a strict mode that rejects fallback identity;
+7. redact credentials and sensitive remote URL components;
+8. add CLI, security and fallback regression tests;
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/remote-aware-repository-identity`
+- Branch: `feat/repository-identity-diagnostics`
 - Project Kernel: present
-- Runtime implementation: implemented
+- Runtime implementation: planned
 - Tests: 78 passed
 - Pull request: not created
 
 ## Next action
 
-Prepare WB-0020 pull request
+Define the structured repository identity diagnostic contract.
+
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:9276592d0fa4dabfc1283b8d49de1b9877155cc0fc28b7f8a67183483d8bdaf8 -->
