@@ -227,23 +227,23 @@ Scope:
 - Branch: `feat/security-verification-pipeline`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: 201 passed
+- Tests: 214 passed
 - Pull request: not created
 
 ## Next action
 
-Define the CI matrix and implement the first GitHub Actions verification workflow.
+Open a draft PR and observe the first GitHub Actions CI run.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:b53aa6e7859062c86482a19b2bf7288c333218fb22d955d25bdeff937619965a -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:e3315217405865351d116ddbdc2d9a5a4f01e903893de145aefbd8875bd7e12e -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T20:32:49.897252Z`
+- Generated: `2026-07-30T21:03:52.696599Z`
 - Branch: `feat/security-verification-pipeline`
-- Commit: `27304c5190d13530a9e5fb06322bcbf37e91e75a`
-- Commit subject: docs(project): activate WB-0025 security verification pipeline
+- Commit: `a5c080f6b990b65bb54b0006cefa9a8701df8540`
+- Commit subject: docs(project): mark WB-0025 CI foundation implemented
 - Working tree: **clean**
-- Test evidence: `201 passed`
+- Test evidence: `214 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

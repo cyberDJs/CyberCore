@@ -131,3 +131,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `201 passed`
 - Next action: Define the CI matrix and implement the first GitHub Actions verification workflow.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:e3315217405865351d116ddbdc2d9a5a4f01e903893de145aefbd8875bd7e12e -->
+## Checkpoint 2026-07-30T21:03:52.696599Z
+
+- Branch: `feat/security-verification-pipeline`
+- Commit: `a5c080f6b990b65bb54b0006cefa9a8701df8540`
+- Commit subject: docs(project): mark WB-0025 CI foundation implemented
+- Working tree: **clean**
+- Test evidence: `214 passed`
+- Next action: Open a draft PR and observe the first GitHub Actions CI run.
