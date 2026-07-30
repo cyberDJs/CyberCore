@@ -16,6 +16,7 @@ from cybercore.checkpoint import (
 )
 from cybercore.checkpoint_memory import (
     PROJECT_STATE_START,
+    WORKLOG_CHECKPOINT_PREFIX,
     plan_memory_update,
     render_memory_preview,
 )
@@ -306,6 +307,138 @@ def test_memory_plan_preserves_human_content_and_previews(tmp_path: Path) -> Non
     assert "18 passed in 3.23s" in preview
     assert "Next action: Open PR" in preview
     assert (repo / "PROJECT_STATE.md").read_text(encoding="utf-8") == "# State\n\nHuman section.\n"
+
+
+def test_memory_project_state_checkpoint_subject_is_sanitized(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = RepositoryCheckpoint(
+        generated_at="2026-07-30T10:00:00Z",
+        repository=str(repo),
+        branch="feat/context-disclosure-policy",
+        commit="abc123",
+        commit_subject=(
+            "Fix /Users/Jan Koci/private-repo from "
+            "https://user:password@example.test/repo?debug=true"
+        ),
+        dirty=False,
+        changed_paths=(),
+        project_state_present=True,
+        project_kernel_present=True,
+    )
+
+    plan = plan_memory_update(repo, checkpoint, test_result="81 passed")
+
+    assert "Fix " in plan.project_state_content
+    assert "/Users/Jan Koci/private-repo" not in plan.project_state_content
+    assert "user:password" not in plan.project_state_content
+
+
+def test_memory_worklog_checkpoint_subject_is_sanitized(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = RepositoryCheckpoint(
+        generated_at="2026-07-30T10:00:00Z",
+        repository=str(repo),
+        branch="feat/context-disclosure-policy",
+        commit="abc123",
+        commit_subject=(
+            "Fix /Users/Jan/private-repo from "
+            "https://example.test/repo?token=tokensecret123&view=summary"
+        ),
+        dirty=False,
+        changed_paths=(),
+        project_state_present=True,
+        project_kernel_present=True,
+    )
+
+    plan = plan_memory_update(repo, checkpoint, test_result="81 passed")
+
+    assert WORKLOG_CHECKPOINT_PREFIX in plan.worklog_content
+    assert "/Users/Jan/private-repo" not in plan.worklog_content
+    assert "tokensecret123" not in plan.worklog_content
+    assert "https://example.test/repo" not in plan.worklog_content
+
+
+def test_memory_preview_contains_sanitized_checkpoint_subject(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = RepositoryCheckpoint(
+        generated_at="2026-07-30T10:00:00Z",
+        repository=str(repo),
+        branch="feat/context-disclosure-policy",
+        commit="abc123",
+        commit_subject=(
+            "Fix /Users/Jan/private-repo password=plainsecret "
+            "https://user:password@example.test/repo#access_token=tokensecret123"
+        ),
+        dirty=False,
+        changed_paths=(),
+        project_state_present=True,
+        project_kernel_present=True,
+    )
+
+    plan = plan_memory_update(repo, checkpoint, test_result="81 passed")
+    preview = render_memory_preview(plan)
+
+    assert plan.project_state_content in preview
+    assert plan.worklog_content in preview
+    assert "/Users/Jan/private-repo" not in preview
+    assert "plainsecret" not in preview
+    assert "user:password" not in preview
+    assert "tokensecret123" not in preview
+
+
+def test_memory_plan_write_persists_sanitized_checkpoint_subject(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = RepositoryCheckpoint(
+        generated_at="2026-07-30T10:00:00Z",
+        repository=str(repo),
+        branch="feat/context-disclosure-policy",
+        commit="abc123",
+        commit_subject=(
+            "Fix /Users/Jan/private-repo token=plainsecret "
+            "https://example.test/repo?api_key=querysecret"
+        ),
+        dirty=False,
+        changed_paths=(),
+        project_state_present=True,
+        project_kernel_present=True,
+    )
+
+    plan = plan_memory_update(repo, checkpoint, test_result="81 passed")
+    plan.write()
+    persisted = (
+        (repo / "PROJECT_STATE.md").read_text(encoding="utf-8")
+        + (repo / "WORKLOG.md").read_text(encoding="utf-8")
+    )
+
+    assert "/Users/Jan/private-repo" not in persisted
+    assert "plainsecret" not in persisted
+    assert "querysecret" not in persisted
+
+
+def test_memory_plan_keeps_normal_commit_subject_unchanged(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = RepositoryCheckpoint(
+        generated_at="2026-07-30T10:00:00Z",
+        repository=str(repo),
+        branch="feat/context-disclosure-policy",
+        commit="abc123",
+        commit_subject="fix(disclosure): sanitize checkpoint memory persistence",
+        dirty=False,
+        changed_paths=(),
+        project_state_present=True,
+        project_kernel_present=True,
+    )
+
+    plan = plan_memory_update(repo, checkpoint, test_result="81 passed")
+
+    assert (
+        "Commit subject: fix(disclosure): sanitize checkpoint memory persistence"
+        in plan.project_state_content
+    )
+    assert (
+        "Commit subject: fix(disclosure): sanitize checkpoint memory persistence"
+        in plan.worklog_content
+    )
 
 
 def test_memory_plan_synchronizes_canonical_fields(tmp_path: Path) -> None:
