@@ -25,15 +25,12 @@ class RepositoryIdentityPolicyResult:
         return asdict(self)
 
 
-def expected_repository_identity(repo: Path) -> str:
-    """Read the canonical repository identity from .cybercore/project.yaml."""
+def _configured_repository_identity(repo: Path) -> str | None:
     project = repo.expanduser().resolve() / ".cybercore" / "project.yaml"
     try:
         content = project.read_text(encoding="utf-8")
-    except FileNotFoundError as exc:
-        raise RepositoryIdentityPolicyError(
-            f"Canonical project state is missing: {project}"
-        ) from exc
+    except FileNotFoundError:
+        return None
 
     in_identity = False
     for line in content.splitlines():
@@ -52,10 +49,23 @@ def expected_repository_identity(repo: Path) -> str:
                     "Canonical repository identity must use the normalized git: form"
                 )
             return value
+    return None
 
-    raise RepositoryIdentityPolicyError(
-        "Canonical repository identity is not configured at identity.repository"
-    )
+
+def expected_repository_identity(repo: Path) -> str:
+    """Read the canonical repository identity from .cybercore/project.yaml."""
+    resolved = repo.expanduser().resolve()
+    project = resolved / ".cybercore" / "project.yaml"
+    expected = _configured_repository_identity(resolved)
+    if expected is None:
+        if not project.exists():
+            raise RepositoryIdentityPolicyError(
+                f"Canonical project state is missing: {project}"
+            )
+        raise RepositoryIdentityPolicyError(
+            "Canonical repository identity is not configured at identity.repository"
+        )
+    return expected
 
 
 def evaluate_repository_identity_policy(
@@ -91,6 +101,28 @@ def evaluate_repository_identity_policy(
         origin=diagnostic.origin,
         message=message,
     )
+
+
+def enforce_configured_repository_identity_policy(
+    repo: Path,
+    *,
+    operation: str,
+) -> RepositoryIdentityPolicyResult | None:
+    """Enforce identity when a canonical policy is configured.
+
+    Repositories without identity.repository retain backward-compatible behavior.
+    Once configured, identity-sensitive operations fail closed on fallback or mismatch.
+    """
+    resolved = repo.expanduser().resolve()
+    if _configured_repository_identity(resolved) is None:
+        return None
+    result = evaluate_repository_identity_policy(resolved)
+    if not result.compliant:
+        raise RepositoryIdentityPolicyError(
+            f"{operation} rejected by repository identity policy: {result.message} "
+            f"Expected {result.expected_identity}, got {result.actual_identity}."
+        )
+    return result
 
 
 def render_repository_identity_policy(result: RepositoryIdentityPolicyResult) -> str:
