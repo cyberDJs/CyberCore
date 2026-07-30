@@ -6,6 +6,11 @@ import re
 import subprocess
 from urllib.parse import urlsplit, urlunsplit
 
+from cybercore.operation_context_disclosure import (
+    DisclosureMode,
+    sanitize_disclosure_text,
+)
+
 
 class RepositoryIdentityError(ValueError):
     """Raised when repository identity cannot satisfy the requested contract."""
@@ -71,19 +76,26 @@ def redact_git_remote(remote: str) -> str:
     if "://" not in value:
         scp_match = re.fullmatch(r"(?:[^@/:\s]+@)?([^:/\s]+):(.+)", value)
         if scp_match:
-            return f"{scp_match.group(1).lower()}:{scp_match.group(2)}"
-        return value
+            safe = f"{scp_match.group(1).lower()}:{scp_match.group(2)}"
+            return sanitize_disclosure_text(safe, mode=DisclosureMode.FULL)
+        return sanitize_disclosure_text(value, mode=DisclosureMode.FULL)
 
-    parsed = urlsplit(value)
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return sanitize_disclosure_text(value, mode=DisclosureMode.FULL)
+    if parsed.scheme == "file":
+        return sanitize_disclosure_text(value, mode=DisclosureMode.FULL)
     if parsed.hostname is None:
-        return value
+        return sanitize_disclosure_text(value, mode=DisclosureMode.FULL)
     host = parsed.hostname.lower()
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"
     authority = host
     if parsed.port is not None:
         authority = f"{authority}:{parsed.port}"
-    return urlunsplit((parsed.scheme, authority, parsed.path, parsed.query, parsed.fragment))
+    safe = urlunsplit((parsed.scheme, authority, parsed.path, parsed.query, parsed.fragment))
+    return sanitize_disclosure_text(safe, mode=DisclosureMode.FULL)
 
 
 def _origin_url(repo: Path) -> str | None:
@@ -142,15 +154,63 @@ def repository_identity(repo: Path) -> str:
     return resolve_repository_identity(repo).identity
 
 
-def render_repository_identity(diagnostic: RepositoryIdentityDiagnostic) -> str:
-    origin = diagnostic.origin or "not configured"
+def render_repository_identity(
+    diagnostic: RepositoryIdentityDiagnostic,
+    *,
+    disclosure_mode: DisclosureMode | str = DisclosureMode.STANDARD,
+) -> str:
+    disclosed = disclosed_repository_identity_payload(
+        diagnostic,
+        disclosure_mode=disclosure_mode,
+    )
+    origin = disclosed["origin"] or "not configured"
     return "\n".join(
         [
             "REPOSITORY IDENTITY",
-            f"Repository: {diagnostic.repository}",
-            f"Identity: {diagnostic.identity}",
-            f"Source: {diagnostic.source}",
+            f"Repository: {disclosed['repository']}",
+            f"Identity: {disclosed['identity']}",
+            f"Source: {disclosed['source']}",
             f"Origin: {origin}",
-            f"Diagnostic: {diagnostic.diagnostic}",
+            f"Diagnostic: {disclosed['diagnostic']}",
         ]
     ) + "\n"
+
+
+def disclosed_repository_identity_payload(
+    diagnostic: RepositoryIdentityDiagnostic,
+    *,
+    disclosure_mode: DisclosureMode | str = DisclosureMode.STANDARD,
+) -> dict[str, str | None]:
+    """Return a policy-filtered identity diagnostic payload for external output."""
+    mode = DisclosureMode(disclosure_mode)
+    repository = (
+        sanitize_disclosure_text(diagnostic.repository, mode=mode)
+        if mode is DisclosureMode.FULL
+        else "[REDACTED]"
+    )
+    identity = diagnostic.identity
+    if diagnostic.source == "path_fallback":
+        identity = (
+            sanitize_disclosure_text(identity, mode=mode)
+            if mode is DisclosureMode.FULL
+            else "path:[REDACTED]"
+        )
+    else:
+        identity = sanitize_disclosure_text(identity, mode=mode)
+
+    origin = (
+        None
+        if diagnostic.origin is None
+        else sanitize_disclosure_text(diagnostic.origin, mode=mode)
+    )
+    if mode is DisclosureMode.REDACTED:
+        identity = "[REDACTED]"
+        origin = "[REDACTED]" if origin is not None else None
+
+    return {
+        "repository": repository,
+        "identity": identity,
+        "source": diagnostic.source,
+        "origin": origin,
+        "diagnostic": sanitize_disclosure_text(diagnostic.diagnostic, mode=mode),
+    }

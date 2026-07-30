@@ -130,3 +130,31 @@ def test_legacy_path_markers_are_migrated_without_duplicate_entries(tmp_path: Pa
     assert plan.project_state_content.count(PROJECT_STATE_CHECKPOINT_PREFIX) == 1
     assert plan.worklog_content.count(WORKLOG_CHECKPOINT_PREFIX) == 1
     assert plan.worklog_content.count("## Checkpoint") == 1
+
+
+def test_memory_module_checkpoint_subjects_are_sanitized(tmp_path: Path) -> None:
+    repo = _repo(tmp_path, "sanitized", "https://github.com/cyberDJs/CyberCore.git")
+    checkpoint = _checkpoint(repo)
+    checkpoint = RepositoryCheckpoint(
+        generated_at=checkpoint.generated_at,
+        repository=checkpoint.repository,
+        branch=checkpoint.branch,
+        commit=checkpoint.commit,
+        commit_subject=(
+            "Fix /Users/Jan/private-repo from "
+            "https://user:password@example.test/repo?token=tokensecret123"
+        ),
+        dirty=checkpoint.dirty,
+        changed_paths=checkpoint.changed_paths,
+        project_state_present=checkpoint.project_state_present,
+        project_kernel_present=checkpoint.project_kernel_present,
+    )
+
+    plan = plan_memory_update(repo, checkpoint, test_result="76 passed")
+
+    assert "/Users/Jan/private-repo" not in plan.project_state_content
+    assert "/Users/Jan/private-repo" not in plan.worklog_content
+    assert "user:password" not in plan.project_state_content
+    assert "user:password" not in plan.worklog_content
+    assert "tokensecret123" not in plan.project_state_content
+    assert "tokensecret123" not in plan.worklog_content

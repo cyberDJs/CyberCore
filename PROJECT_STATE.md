@@ -1,13 +1,13 @@
 # CyberCore Project State
 
-_Last updated: 2026-07-30 01:01 CEST_
+_Last updated: 2026-07-30 21:51 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/trusted-operation-context`
-- Active work block: `WB-0023 Trusted Operation Context v0.1`
+- Active branch: `feat/context-disclosure-policy`
+- Active work block: `WB-0024 Operation Context Disclosure Policy`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -176,49 +176,62 @@ Verification:
 
 - `pytest -q`: **98 passed**.
 
+### PR #27 — feat: add trusted operation context
+
+Merged into `main` as:
+
+```text
+03a04c5ad73489775552df34e21baa559f2a41da
+```
+
+Completed artifact: `WB-0023`.
+
+Verification:
+
+- `pytest -q`: **109 passed**.
+
 ## Current milestone
 
-Trusted Operation Context v0.1.
+Operation Context Disclosure Policy v0.1.
 
 ## Active objective
 
-Create a unified verifiable safety context for identity-sensitive and mutating CyberCore operations.
+Define and enforce safe disclosure rules for Trusted Operation Context across terminal, JSON, logs and evidence.
 
 Scope:
 
-1. verify canonical repository identity;
-2. collect current branch, commit and working-tree state;
-3. verify Project Kernel and Project State presence;
-4. support expected branch and commit constraints;
-5. classify operation type and risk level;
-6. produce structured text and JSON context results;
-7. integrate the context into checkpoint, evidence, post-merge and apply workflows;
-8. add clean, dirty, detached, mismatched and legacy regression tests;
+1. classify context fields as public, operational or sensitive;
+2. define safe default text and JSON disclosure contracts;
+3. add explicit redacted and full disclosure modes;
+4. preserve boolean values and stable machine-readable structure;
+5. protect repository paths, remote URLs and secret-like values;
+6. review and resolve the CodeQL clear-text logging finding;
+7. integrate disclosure policy into context CLI and protected workflows;
+8. add redaction, compatibility and regression tests;
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/trusted-operation-context`
+- Branch: `feat/context-disclosure-policy`
 - Project Kernel: present
-- Runtime implementation: planned
-- Tests: 98 passed
-- Pull request: not created
+- Runtime implementation: implemented
+- Tests: 201 passed
+- Pull request: #29 opened for review
 
 ## Next action
 
-Define the Trusted Operation Context contract.
-
+Review PR #29 and verify security checks before merge.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:ea971e23b56216f3331cdd63ac7875f09ed048ef980fa36e24f28c4a7f3504f7 -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:510ac86821dc43380543fa9e3947774f200e61e0fa65ed2a6ceac95a305d669e -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T07:12:08.651626Z`
-- Branch: `feat/repository-identity-policy`
-- Commit: `9c850b6b22e99e28dbc6d761a7b8c675164e3c59`
-- Commit subject: test(policy): cover workflow identity enforcement
+- Generated: `2026-07-30T19:51:00Z`
+- Branch: `feat/context-disclosure-policy`
+- Commit: `4ffa60b6727cd00797a210f191ec40ae7973f831`
+- Commit subject: fix(disclosure): sanitize checkpoint memory persistence
 - Working tree: **clean**
-- Test evidence: `98 passed`
+- Test evidence: `201 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

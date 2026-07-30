@@ -7,6 +7,7 @@ import subprocess
 from typing import Any, Callable
 from urllib.request import Request, urlopen
 
+from cybercore.operation_context_disclosure import sanitize_disclosure_text
 from cybercore.repository_identity_policy import RepositoryIdentityPolicyError
 from cybercore.trusted_operation_context import (
     TrustedOperationContextError,
@@ -44,7 +45,7 @@ def _run_git(repo: Path, *args: str) -> str:
     )
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip() or "git command failed"
-        raise PostMergeTransitionError(detail)
+        raise PostMergeTransitionError(sanitize_disclosure_text(detail))
     return completed.stdout.strip()
 
 
@@ -73,7 +74,9 @@ def _fetch_pull_request(
         with opener(request, timeout=15) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception as exc:
-        raise PostMergeTransitionError(f"Unable to read GitHub PR #{number}: {exc}") from exc
+        raise PostMergeTransitionError(
+            sanitize_disclosure_text(f"Unable to read GitHub PR #{number}: {exc}")
+        ) from exc
     if not isinstance(payload, dict):
         raise PostMergeTransitionError("GitHub returned an invalid pull-request payload")
     return payload

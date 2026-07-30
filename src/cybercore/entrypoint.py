@@ -5,6 +5,12 @@ import json
 import sys
 
 from cybercore import cli
+from cybercore.operation_context_disclosure import (
+    DisclosureMode,
+    disclose_context_payload,
+    render_disclosed_context,
+    sanitize_disclosure_text,
+)
 from cybercore.post_merge import (
     PostMergeTransitionError,
     plan_post_merge_transition,
@@ -16,11 +22,13 @@ from cybercore.post_merge_state import (
 )
 from cybercore.repository_identity import (
     RepositoryIdentityError,
+    disclosed_repository_identity_payload,
     render_repository_identity,
     resolve_repository_identity,
 )
 from cybercore.repository_identity_policy import (
     RepositoryIdentityPolicyError,
+    disclosed_repository_identity_policy_payload,
     evaluate_repository_identity_policy,
     render_repository_identity_policy,
 )
@@ -28,7 +36,6 @@ from cybercore.runtime import RuntimePaths
 from cybercore.trusted_operation_context import (
     TrustedOperationContextError,
     collect_trusted_operation_context,
-    render_trusted_operation_context,
 )
 
 
@@ -84,6 +91,17 @@ def _identity_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Reject deterministic path fallback when origin is unavailable or invalid",
     )
+    disclosure = identity.add_mutually_exclusive_group()
+    disclosure.add_argument(
+        "--redact",
+        action="store_true",
+        help="Redact operational and sensitive identity fields",
+    )
+    disclosure.add_argument(
+        "--full",
+        action="store_true",
+        help="Include sensitive identity fields; credentials remain omitted",
+    )
     identity_sub = identity.add_subparsers(dest="identity_command")
     verify = identity_sub.add_parser(
         "verify",
@@ -118,6 +136,17 @@ def _context_parser() -> argparse.ArgumentParser:
     context.add_argument("--expected-branch")
     context.add_argument("--expected-commit")
     context.add_argument("--require-clean", action="store_true")
+    disclosure = context.add_mutually_exclusive_group()
+    disclosure.add_argument(
+        "--redact",
+        action="store_true",
+        help="Redact operational and sensitive context fields",
+    )
+    disclosure.add_argument(
+        "--full",
+        action="store_true",
+        help="Include sensitive context fields; secret fields remain omitted",
+    )
     return parser
 
 
@@ -212,6 +241,7 @@ def _run_post_merge(argv: list[str]) -> int:
 def _run_identity(argv: list[str]) -> int:
     args = _identity_parser().parse_args(argv)
     paths = RuntimePaths.discover(args.repo)
+    mode = _identity_disclosure_mode(args)
 
     if args.identity_command == "verify":
         result = evaluate_repository_identity_policy(
@@ -219,17 +249,49 @@ def _run_identity(argv: list[str]) -> int:
             advisory=args.advisory,
         )
         if args.as_json:
-            print(json.dumps(result.as_dict(), indent=2))
+            print(
+                json.dumps(
+                    disclosed_repository_identity_policy_payload(
+                        result,
+                        disclosure_mode=mode,
+                    ),
+                    indent=2,
+                )
+            )
         else:
-            print(render_repository_identity_policy(result), end="")
+            print(render_repository_identity_policy(result, disclosure_mode=mode), end="")
         return 0 if result.compliant or args.advisory else 1
 
     diagnostic = resolve_repository_identity(paths.repo, strict=args.strict)
     if args.as_json:
-        print(json.dumps(diagnostic.as_dict(), indent=2))
+        print(
+            json.dumps(
+                disclosed_repository_identity_payload(
+                    diagnostic,
+                    disclosure_mode=mode,
+                ),
+                indent=2,
+            )
+        )
     else:
-        print(render_repository_identity(diagnostic), end="")
+        print(render_repository_identity(diagnostic, disclosure_mode=mode), end="")
     return 0
+
+
+def _context_disclosure_mode(args: argparse.Namespace) -> DisclosureMode:
+    if args.redact:
+        return DisclosureMode.REDACTED
+    if args.full:
+        return DisclosureMode.FULL
+    return DisclosureMode.STANDARD
+
+
+def _identity_disclosure_mode(args: argparse.Namespace) -> DisclosureMode:
+    if args.redact:
+        return DisclosureMode.REDACTED
+    if args.full:
+        return DisclosureMode.FULL
+    return DisclosureMode.STANDARD
 
 
 def _run_context(argv: list[str]) -> int:
@@ -243,10 +305,12 @@ def _run_context(argv: list[str]) -> int:
         expected_commit=args.expected_commit,
         require_clean=args.require_clean,
     )
+    mode = _context_disclosure_mode(args)
+    payload = context.as_dict()
     if args.as_json:
-        print(json.dumps(context.as_dict(), indent=2))
+        print(json.dumps(disclose_context_payload(payload, mode=mode), indent=2))
     else:
-        print(f"TRUSTED OPERATION CONTEXT: {'trusted' if context.trusted else 'untrusted'}")
+        print(render_disclosed_context(payload, mode=mode), end="")
     return 0 if context.trusted else 1
 
 
@@ -270,7 +334,7 @@ def main(argv: list[str] | None = None) -> int:
         RuntimeError,
         ValueError,
     ) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"ERROR: {sanitize_disclosure_text(exc)}", file=sys.stderr)
         return 2
 
 

@@ -64,7 +64,7 @@ def test_invalid_origin_reports_reason_without_leaking_value(tmp_path: Path) -> 
     result = resolve_repository_identity(repo)
 
     assert result.source == "path_fallback"
-    assert result.origin == "file:///tmp/private.git"
+    assert result.origin == "file://[REDACTED_PATH]"
     assert "Unsupported Git remote scheme" in result.diagnostic
 
 
@@ -91,9 +91,22 @@ def test_text_renderer_reports_contract_fields(tmp_path: Path) -> None:
     rendered = render_repository_identity(resolve_repository_identity(repo))
 
     assert "REPOSITORY IDENTITY" in rendered
+    assert str(repo.resolve()) not in rendered
     assert "Identity: git:github.com/cyberDJs/CyberCore" in rendered
     assert "Source: remote" in rendered
     assert "Origin: https://github.com/cyberDJs/CyberCore.git" in rendered
+
+
+def test_identity_default_text_redacts_path_fallback(tmp_path: Path, capsys) -> None:
+    repo = _repo(tmp_path)
+
+    exit_code = main(["--repo", str(repo), "identity"])
+    rendered = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "Repository: [REDACTED]" in rendered
+    assert "Identity: path:[REDACTED]" in rendered
+    assert str(repo.resolve()) not in rendered
 
 
 def test_identity_cli_supports_json(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -103,9 +116,66 @@ def test_identity_cli_supports_json(tmp_path: Path, capsys: pytest.CaptureFixtur
     payload = json.loads(capsys.readouterr().out)
 
     assert exit_code == 0
+    assert payload["repository"] == "[REDACTED]"
     assert payload["source"] == "remote"
     assert payload["identity"] == "git:github.com/cyberDJs/CyberCore"
     assert payload["origin"] == "https://github.com/cyberDJs/CyberCore.git"
+    assert "secret" not in json.dumps(payload)
+    assert str(repo.resolve()) not in json.dumps(payload)
+
+
+def test_identity_redacted_mode_hides_operational_identity(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repo = _repo(tmp_path, "https://github.com/cyberDJs/CyberCore.git")
+
+    exit_code = main(["--repo", str(repo), "--json", "identity", "--redact"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["repository"] == "[REDACTED]"
+    assert payload["identity"] == "[REDACTED]"
+    assert payload["origin"] == "[REDACTED]"
+
+
+def test_identity_full_mode_exposes_repository_path_explicitly(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repo = _repo(tmp_path)
+
+    exit_code = main(["--repo", str(repo), "--json", "identity", "--full"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["repository"] == str(repo.resolve())
+    assert payload["identity"] == f"path:{repo.resolve()}"
+
+
+def test_identity_default_json_redacts_path_fallback(tmp_path: Path, capsys) -> None:
+    repo = _repo(tmp_path)
+
+    exit_code = main(["--repo", str(repo), "--json", "identity"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["identity"] == "path:[REDACTED]"
+    assert str(repo.resolve()) not in json.dumps(payload)
+
+
+def test_identity_full_mode_never_emits_origin_credentials(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    repo = _repo(tmp_path, "ssh://operator:secret@github.com/cyberDJs/CyberCore.git")
+
+    exit_code = main(["--repo", str(repo), "--json", "identity", "--full"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["origin"] == "ssh://github.com/cyberDJs/CyberCore.git"
+    assert "operator" not in json.dumps(payload)
     assert "secret" not in json.dumps(payload)
 
 

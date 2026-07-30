@@ -8,6 +8,7 @@ import re
 import tempfile
 
 from cybercore.checkpoint import RepositoryCheckpoint
+from cybercore.operation_context_disclosure import sanitize_disclosure_text
 from cybercore.repository_identity import repository_identity
 
 
@@ -94,6 +95,21 @@ def _project_state_marker(identity: str) -> str:
     return f"<!-- {PROJECT_STATE_CHECKPOINT_PREFIX}{identity} -->"
 
 
+def _persisted_commit_subject(checkpoint: RepositoryCheckpoint) -> str:
+    return sanitize_disclosure_text(checkpoint.commit_subject)
+
+
+def _sanitize_generated_commit_subject_lines(content: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        return f"{match.group('prefix')}{sanitize_disclosure_text(match.group('subject'))}"
+
+    return re.sub(
+        r"(?m)^(?P<prefix>- Commit subject: )(?P<subject>.*)$",
+        replace,
+        content,
+    )
+
+
 def _checkpoint_block(
     checkpoint: RepositoryCheckpoint,
     test_result: str | None,
@@ -111,7 +127,7 @@ def _checkpoint_block(
             f"- Generated: `{checkpoint.generated_at}`",
             f"- Branch: `{checkpoint.branch}`",
             f"- Commit: `{checkpoint.commit}`",
-            f"- Commit subject: {checkpoint.commit_subject}",
+            f"- Commit subject: {_persisted_commit_subject(checkpoint)}",
             f"- Working tree: **{cleanliness}**",
             f"- Test evidence: `{test_line}`",
             f"- Project Kernel: {'present' if checkpoint.project_kernel_present else 'missing'}",
@@ -316,7 +332,7 @@ def _worklog_entry(
         "",
         f"- Branch: `{checkpoint.branch}`",
         f"- Commit: `{checkpoint.commit}`",
-        f"- Commit subject: {checkpoint.commit_subject}",
+        f"- Commit subject: {_persisted_commit_subject(checkpoint)}",
         f"- Working tree: **{'dirty' if checkpoint.dirty else 'clean'}**",
         f"- Test evidence: `{test_result or 'not supplied'}`",
     ]
@@ -327,8 +343,20 @@ def _worklog_entry(
 
 def _append_worklog_entry(current: str, entry: str, *, identity: str) -> str:
     if _worklog_marker(identity) in current:
-        return current
+        return _sanitize_worklog_checkpoint_entries(current)
     return current.rstrip() + "\n\n" + entry
+
+
+def _sanitize_worklog_checkpoint_entries(current: str) -> str:
+    marker = re.escape(WORKLOG_CHECKPOINT_PREFIX)
+    entry_pattern = re.compile(
+        rf"(?ms)^<!-- {marker}[0-9a-f]+ -->.*?(?=^<!-- {marker}[0-9a-f]+ -->|\Z)"
+    )
+
+    return entry_pattern.sub(
+        lambda match: _sanitize_generated_commit_subject_lines(match.group(0)),
+        current,
+    )
 
 
 def plan_memory_update(
@@ -364,12 +392,15 @@ def plan_memory_update(
                 legacy_block,
                 identity=identity,
             )
+    if preserved is not None:
+        preserved = _sanitize_generated_commit_subject_lines(preserved)
 
     if legacy_identity != identity:
         current_worklog = current_worklog.replace(
             _worklog_marker(legacy_identity),
             _worklog_marker(identity),
         )
+    current_worklog = _sanitize_worklog_checkpoint_entries(current_worklog)
 
     synchronized = _synchronize_state_fields(
         current_state,
