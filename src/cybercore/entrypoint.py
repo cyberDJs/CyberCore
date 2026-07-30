@@ -5,6 +5,11 @@ import json
 import sys
 
 from cybercore import cli
+from cybercore.operation_context_disclosure import (
+    DisclosureMode,
+    disclose_context_payload,
+    render_disclosed_context,
+)
 from cybercore.post_merge import (
     PostMergeTransitionError,
     plan_post_merge_transition,
@@ -28,7 +33,6 @@ from cybercore.runtime import RuntimePaths
 from cybercore.trusted_operation_context import (
     TrustedOperationContextError,
     collect_trusted_operation_context,
-    render_trusted_operation_context,
 )
 
 
@@ -118,6 +122,17 @@ def _context_parser() -> argparse.ArgumentParser:
     context.add_argument("--expected-branch")
     context.add_argument("--expected-commit")
     context.add_argument("--require-clean", action="store_true")
+    disclosure = context.add_mutually_exclusive_group()
+    disclosure.add_argument(
+        "--redact",
+        action="store_true",
+        help="Redact operational and sensitive context fields",
+    )
+    disclosure.add_argument(
+        "--full",
+        action="store_true",
+        help="Include sensitive context fields; secret fields remain omitted",
+    )
     return parser
 
 
@@ -232,6 +247,14 @@ def _run_identity(argv: list[str]) -> int:
     return 0
 
 
+def _context_disclosure_mode(args: argparse.Namespace) -> DisclosureMode:
+    if args.redact:
+        return DisclosureMode.REDACTED
+    if args.full:
+        return DisclosureMode.FULL
+    return DisclosureMode.STANDARD
+
+
 def _run_context(argv: list[str]) -> int:
     args = _context_parser().parse_args(argv)
     paths = RuntimePaths.discover(args.repo)
@@ -243,10 +266,12 @@ def _run_context(argv: list[str]) -> int:
         expected_commit=args.expected_commit,
         require_clean=args.require_clean,
     )
+    mode = _context_disclosure_mode(args)
+    payload = context.as_dict()
     if args.as_json:
-        print(json.dumps(context.as_dict(), indent=2))
+        print(json.dumps(disclose_context_payload(payload, mode=mode), indent=2))
     else:
-        print(f"TRUSTED OPERATION CONTEXT: {'trusted' if context.trusted else 'untrusted'}")
+        print(render_disclosed_context(payload, mode=mode), end="")
     return 0 if context.trusted else 1
 
 
