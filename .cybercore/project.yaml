@@ -26,7 +26,7 @@ current:
   milestone: Operation Context Disclosure Policy v0.1
   active_artifact: WB-0024
   branch: feat/context-disclosure-policy
-  pull_request: null
+  pull_request: 29
 
 status:
   ccl_specification: complete_draft
@@ -34,7 +34,7 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 109_passed
+  tests: 201_passed
   ci: local_verification
   checkpoint_runtime: verified
   checkpoint_persistence: verified
@@ -45,7 +45,7 @@ status:
   repository_identity_diagnostics: verified
   repository_identity_policy: verified
   trusted_operation_context: verified
-  operation_context_disclosure_policy: planned
+  operation_context_disclosure_policy: verified
 
 completed:
   - artifact: WB-0015
@@ -91,11 +91,10 @@ completed:
     verification: 109_passed
 
 next:
-  - define the disclosure classification contract
-  - implement safe context serializers and renderers
-  - add CLI disclosure-mode controls
-  - integrate disclosure policy into logging and evidence paths
-  - add security and compatibility regression tests
+  - review pull request 29
+  - verify security checks and CodeQL status
+  - confirm disclosure mode contracts and persistence boundaries
+  - merge only after review completion
 
 rules:
   state_first: true
