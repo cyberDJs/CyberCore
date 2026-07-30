@@ -24,6 +24,18 @@ every mode.
 Full mode can expose sensitive local paths for explicit operator diagnostics, but
 it does not expose credentials or secret fields.
 
+## Identity and evidence
+
+Repository identity diagnostics use the same standard, redacted, and full modes.
+Default identity output redacts local repository paths and path fallback
+identities. Credential-bearing origins are sanitized in every mode.
+
+Checkpoint output exposes `changed_path_count` by default. Changed path strings
+are sensitive and are emitted only in explicit full mode.
+
+Verification evidence persists a non-reversible repository binding instead of a
+local repository path. Persisted command metadata is sanitized before writing.
+
 ## Internal identity data
 
 Repository identity, checkpoint identity, evidence binding, and post-merge
