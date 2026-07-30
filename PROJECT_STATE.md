@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-07-30 01:01 CEST_
+_Last updated: 2026-07-30 21:51 CEST_
 
 ## Source of truth
 
@@ -215,23 +215,23 @@ Scope:
 - Branch: `feat/context-disclosure-policy`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: 109 passed
-- Pull request: not created
+- Tests: 201 passed
+- Pull request: #29 opened for review
 
 ## Next action
 
-Define the Operation Context Disclosure Policy contract.
+Review PR #29 and verify security checks before merge.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:ef06edd8722f5a167644d6c0eb284d33d958307d838002368c414b533a4c6b6b -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:510ac86821dc43380543fa9e3947774f200e61e0fa65ed2a6ceac95a305d669e -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T11:17:14.969374Z`
+- Generated: `2026-07-30T19:51:00Z`
 - Branch: `feat/context-disclosure-policy`
-- Commit: `5defceda6da8c2385ec2546906c4ca128b062d3c`
-- Commit subject: docs(project): activate WB-0024 disclosure policy
+- Commit: `4ffa60b6727cd00797a210f191ec40ae7973f831`
+- Commit subject: fix(disclosure): sanitize checkpoint memory persistence
 - Working tree: **clean**
-- Test evidence: `109 passed`
+- Test evidence: `201 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->
