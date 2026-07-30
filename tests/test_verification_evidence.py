@@ -73,6 +73,52 @@ def test_load_and_validate_successful_bound_evidence(tmp_path: Path) -> None:
     assert evidence.repository_binding == repository_evidence_binding(repo)
 
 
+def test_legacy_evidence_summary_is_sanitized_when_loaded(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    payload = _payload(repo, checkpoint.commit)
+    payload["summary"] = (
+        f"checked {repo.resolve()} with "
+        "https://user:password@example.test/repo?token=tokensecret123 "
+        "token=abc123"
+    )
+
+    evidence = VerificationEvidence.from_dict(payload)
+
+    assert str(repo.resolve()) not in evidence.summary
+    assert "user:password" not in evidence.summary
+    assert "tokensecret123" not in evidence.summary
+    assert "abc123" not in evidence.summary
+
+
+def test_legacy_evidence_checkpoint_summary_is_sanitized(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    payload = _payload(repo, checkpoint.commit)
+    payload["summary"] = (
+        f"checked {repo.resolve()} with "
+        "https://user:password@example.test/repo?api_key=tokensecret123"
+    )
+
+    summary = VerificationEvidence.from_dict(payload).checkpoint_summary()
+
+    assert str(repo.resolve()) not in summary
+    assert "user:password" not in summary
+    assert "tokensecret123" not in summary
+    assert "[REDACTED_PATH]" in summary
+
+
+def test_normal_evidence_summary_remains_unchanged(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    payload = _binding_payload(repo, checkpoint.commit)
+    payload["summary"] = "163 passed"
+
+    evidence = VerificationEvidence.from_dict(payload)
+
+    assert evidence.summary == "163 passed"
+
+
 def test_rejects_failed_verification_command(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     checkpoint = collect_checkpoint(repo)

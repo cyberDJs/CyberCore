@@ -78,6 +78,30 @@ def test_run_verification_sanitizes_persisted_command_metadata(tmp_path: Path) -
     assert str(repo.resolve()) not in rendered
 
 
+def test_run_verification_sanitizes_persisted_summary(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    output = repo / "evidence.json"
+
+    run_verification(
+        repo,
+        [sys.executable, "-c", "pass"],
+        summary=(
+            f"checked {repo.resolve()} with "
+            "https://user:password@example.test/repo?access_token=tokensecret123 "
+            "password=hunter2"
+        ),
+        output=output,
+    )
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    rendered = json.dumps(payload)
+    assert str(repo.resolve()) not in rendered
+    assert "user:password" not in rendered
+    assert "tokensecret123" not in rendered
+    assert "hunter2" not in rendered
+    assert "[REDACTED_PATH]" in payload["summary"]
+
+
 def test_run_verification_records_failed_exit_code(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     output = repo / "failed.json"

@@ -9,7 +9,10 @@ from time import monotonic
 from typing import Sequence
 
 from cybercore.checkpoint import collect_checkpoint
-from cybercore.operation_context_disclosure import sanitize_command_arguments
+from cybercore.operation_context_disclosure import (
+    sanitize_command_arguments,
+    sanitize_disclosure_text,
+)
 from cybercore.verification_evidence import (
     VerificationEvidence,
     repository_evidence_binding,
@@ -46,7 +49,7 @@ def run_verification(
         command=" ".join(sanitize_command_arguments(tuple(command))),
         exit_code=completed.returncode,
         duration=duration,
-        summary=summary.strip(),
+        summary=sanitize_disclosure_text(summary.strip()),
         repository_binding=repository_evidence_binding(repo),
         commit=checkpoint.commit,
         generated_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
