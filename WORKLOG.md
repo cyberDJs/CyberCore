@@ -81,3 +81,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `78 passed`
 - Next action: Prepare WB-0020 pull request
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:82313961d6580f4149a6f724b72db06c7b1824b775e166dfa7fa838d36c81e1d -->
+## Checkpoint 2026-07-30T06:09:08.276960Z
+
+- Branch: `feat/repository-identity-diagnostics`
+- Commit: `8e070d97a3a2fe21fd80bff5d2a201aab7d4867e`
+- Commit subject: fix(identity): normalize host in safe origin output
+- Working tree: **clean**
+- Test evidence: `86 passed`
+- Next action: Prepare WB-0021 pull request

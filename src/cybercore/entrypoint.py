@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 import sys
 
 from cybercore import cli
@@ -14,6 +13,11 @@ from cybercore.post_merge import (
 from cybercore.post_merge_state import (
     plan_post_merge_state_update,
     render_post_merge_state_preview,
+)
+from cybercore.repository_identity import (
+    RepositoryIdentityError,
+    render_repository_identity,
+    resolve_repository_identity,
 )
 from cybercore.runtime import RuntimePaths
 
@@ -49,6 +53,26 @@ def _post_merge_parser() -> argparse.ArgumentParser:
         "--write",
         action="store_true",
         help="Write the verified canonical state transition",
+    )
+    return parser
+
+
+def _identity_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="cybercore",
+        description="CyberCore Foundation Runtime",
+    )
+    parser.add_argument("--repo", help="CyberCore repository path")
+    parser.add_argument("--json", action="store_true", dest="as_json")
+    sub = parser.add_subparsers(dest="command", required=True)
+    identity = sub.add_parser(
+        "identity",
+        help="Inspect canonical repository identity resolution",
+    )
+    identity.add_argument(
+        "--strict",
+        action="store_true",
+        help="Reject deterministic path fallback when origin is unavailable or invalid",
     )
     return parser
 
@@ -141,13 +165,32 @@ def _run_post_merge(argv: list[str]) -> int:
     return 0
 
 
+def _run_identity(argv: list[str]) -> int:
+    args = _identity_parser().parse_args(argv)
+    paths = RuntimePaths.discover(args.repo)
+    diagnostic = resolve_repository_identity(paths.repo, strict=args.strict)
+    if args.as_json:
+        print(json.dumps(diagnostic.as_dict(), indent=2))
+    else:
+        print(render_repository_identity(diagnostic), end="")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if "post-merge" not in arguments:
+    if "post-merge" not in arguments and "identity" not in arguments:
         return cli.main(arguments)
     try:
+        if "identity" in arguments:
+            return _run_identity(arguments)
         return _run_post_merge(arguments)
-    except (FileNotFoundError, PostMergeTransitionError, RuntimeError, ValueError) as exc:
+    except (
+        FileNotFoundError,
+        PostMergeTransitionError,
+        RepositoryIdentityError,
+        RuntimeError,
+        ValueError,
+    ) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
