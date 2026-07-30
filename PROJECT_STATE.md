@@ -7,7 +7,7 @@ _Last updated: 2026-07-30 01:01 CEST_
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
 - Active branch: `feat/repository-identity-policy`
-- Active work block: `WB-0022 Repository Identity Policy Enforcement v0.1`
+- Active work block: `WB-0022 Repository Identity Policy Enforcement`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -186,25 +186,24 @@ Scope:
 - Work block: active
 - Branch: `feat/repository-identity-policy`
 - Project Kernel: present
-- Runtime implementation: planned
-- Tests: 86 passed
+- Runtime implementation: implemented
+- Tests: 98 passed
 - Pull request: not created
 
 ## Next action
 
-Define the canonical repository identity policy contract.
-
+Prepare WB-0022 pull request
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:82313961d6580f4149a6f724b72db06c7b1824b775e166dfa7fa838d36c81e1d -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:ea971e23b56216f3331cdd63ac7875f09ed048ef980fa36e24f28c4a7f3504f7 -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T06:09:08.276960Z`
-- Branch: `feat/repository-identity-diagnostics`
-- Commit: `8e070d97a3a2fe21fd80bff5d2a201aab7d4867e`
-- Commit subject: fix(identity): normalize host in safe origin output
+- Generated: `2026-07-30T07:12:08.651626Z`
+- Branch: `feat/repository-identity-policy`
+- Commit: `9c850b6b22e99e28dbc6d761a7b8c675164e3c59`
+- Commit subject: test(policy): cover workflow identity enforcement
 - Working tree: **clean**
-- Test evidence: `86 passed`
+- Test evidence: `98 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->
