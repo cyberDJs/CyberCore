@@ -6,7 +6,11 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
-from cybercore.trusted_operation_context import enforce_trusted_operation_context
+from cybercore.repository_identity_policy import RepositoryIdentityPolicyError
+from cybercore.trusted_operation_context import (
+    TrustedOperationContextError,
+    enforce_trusted_operation_context,
+)
 
 
 class CheckpointError(RuntimeError):
@@ -46,11 +50,19 @@ def _git(repo: Path, *args: str) -> str:
 
 def collect_checkpoint(repo: Path, *, now: datetime | None = None) -> RepositoryCheckpoint:
     repo = repo.expanduser().resolve()
-    context = enforce_trusted_operation_context(
-        repo,
-        operation="checkpoint",
-        risk="low",
-    )
+    try:
+        context = enforce_trusted_operation_context(
+            repo,
+            operation="checkpoint",
+            risk="low",
+        )
+    except TrustedOperationContextError as exc:
+        detail = str(exc)
+        if "repository_identity:" in detail:
+            raise RepositoryIdentityPolicyError(
+                f"Checkpoint collection rejected: {detail.split('repository_identity:', 1)[1].strip()}"
+            ) from exc
+        raise CheckpointError(detail) from exc
 
     subject = _git(repo, "log", "-1", "--pretty=%s")
     porcelain = _git(repo, "status", "--porcelain=v1")
