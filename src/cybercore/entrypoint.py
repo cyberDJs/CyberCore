@@ -244,9 +244,9 @@ def _run_context(argv: list[str]) -> int:
         require_clean=args.require_clean,
     )
     if args.as_json:
-        print(json.dumps({"trusted": context.trusted}, indent=2))
+        print(json.dumps({"trusted": "[REDACTED]"}, indent=2))
     else:
-        print(f"trusted={context.trusted}")
+        print("trusted=[REDACTED]")
     return 0 if context.trusted else 1
 
 
