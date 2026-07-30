@@ -74,6 +74,23 @@ def test_render_checkpoint_contains_core_state(tmp_path: Path) -> None:
     assert "Commit subject: initial checkpoint" in rendered
 
 
+def test_render_checkpoint_redacts_repository_by_default(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+
+    rendered = render_checkpoint(collect_checkpoint(repo))
+
+    assert "Repository: `[REDACTED]`" in rendered
+    assert str(repo.resolve()) not in rendered
+
+
+def test_render_checkpoint_full_mode_discloses_repository(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+
+    rendered = render_checkpoint(collect_checkpoint(repo), disclosure_mode="full")
+
+    assert f"Repository: `{repo.resolve()}`" in rendered
+
+
 def test_collect_checkpoint_rejects_non_repository(tmp_path: Path) -> None:
     with pytest.raises(CheckpointError, match="Not a Git repository"):
         collect_checkpoint(tmp_path)
