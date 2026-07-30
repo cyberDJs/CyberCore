@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 import logging
 
+from cybercore.operation_context_disclosure import sanitize_disclosure_text
+
 
 class RuntimeEvent(StrEnum):
     VERIFY_STARTED = "VERIFY_STARTED"
@@ -29,5 +31,5 @@ def emit(record: EventRecord) -> None:
         "%s workblock=%s detail=%s",
         record.event,
         record.workblock_id,
-        record.detail,
+        sanitize_disclosure_text(record.detail),
     )

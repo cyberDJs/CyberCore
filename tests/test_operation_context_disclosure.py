@@ -82,6 +82,33 @@ def test_standard_mode_preserves_types_and_redacts_sensitive_values() -> None:
     assert disclosed["repository"] == "[REDACTED]"
 
 
+def test_nested_check_details_are_sanitized_in_standard_mode() -> None:
+    payload = _payload()
+    payload["checks"] = [
+        {
+            "name": "repository_identity",
+            "passed": False,
+            "detail": (
+                "Mismatch at /Users/example/private/CyberCore from "
+                "https://token:secret@github.com/cyberDJs/CyberCore.git"
+            ),
+            "credentials": "nested-token",
+            "unknown": "/Users/example/private/unknown",
+        }
+    ]
+
+    disclosed = disclose_context_payload(payload)
+
+    checks = disclosed["checks"]
+    assert isinstance(checks, list)
+    assert checks[0]["name"] == "repository_identity"
+    assert checks[0]["passed"] is False
+    assert "/Users/example/private/CyberCore" not in checks[0]["detail"]
+    assert "token:secret" not in checks[0]["detail"]
+    assert "credentials" not in checks[0]
+    assert "unknown" not in checks[0]
+
+
 def test_secret_and_unknown_fields_are_omitted_in_every_mode() -> None:
     for mode in DisclosureMode:
         disclosed = disclose_context_payload(_payload(), mode=mode)
@@ -105,6 +132,27 @@ def test_full_mode_exposes_sensitive_values_but_not_secrets() -> None:
 
     assert disclosed["repository"] == "/Users/example/private/CyberCore"
     assert "credentials" not in disclosed
+
+
+def test_full_mode_exposes_nested_paths_but_never_url_credentials() -> None:
+    payload = _payload()
+    payload["checks"] = [
+        {
+            "name": "repository_identity",
+            "passed": False,
+            "detail": (
+                "Mismatch at /Users/example/private/CyberCore from "
+                "https://token:secret@github.com/cyberDJs/CyberCore.git"
+            ),
+        }
+    ]
+
+    disclosed = disclose_context_payload(payload, mode=DisclosureMode.FULL)
+    checks = disclosed["checks"]
+
+    assert isinstance(checks, list)
+    assert "/Users/example/private/CyberCore" in checks[0]["detail"]
+    assert "token:secret" not in checks[0]["detail"]
 
 
 def test_text_renderer_uses_the_same_disclosure_policy() -> None:

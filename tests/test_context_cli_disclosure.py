@@ -96,6 +96,17 @@ def test_context_cli_text_uses_the_same_disclosure_policy(
     assert str(repo.resolve()) not in output
 
 
+def test_context_cli_error_does_not_leak_local_path(
+    tmp_path: Path, capsys
+) -> None:
+    exit_code = main(["--repo", str(tmp_path), "context"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "Not a Git repository" in captured.err
+    assert str(tmp_path.resolve()) not in captured.err
+
+
 def test_context_cli_rejects_redact_and_full_together(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
 

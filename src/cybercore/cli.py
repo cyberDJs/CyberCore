@@ -7,7 +7,12 @@ import sys
 
 from cybercore.artifact import ArtifactBuildError
 from cybercore.ccl import CCLValidationError, CCLValidator
-from cybercore.checkpoint import CheckpointError, collect_checkpoint, render_checkpoint
+from cybercore.checkpoint import (
+    CheckpointError,
+    collect_checkpoint,
+    disclosed_checkpoint_payload,
+    render_checkpoint,
+)
 from cybercore.checkpoint_evidence import resolve_test_result
 from cybercore.checkpoint_memory import plan_memory_update, render_memory_preview
 from cybercore.commands.apply import run_apply
@@ -19,6 +24,11 @@ from cybercore.commands.sync import run_sync
 from cybercore.commands.verify import run_verify
 from cybercore.demo import run_demo
 from cybercore.learn import run_lesson
+from cybercore.operation_context_disclosure import (
+    DisclosureMode,
+    disclosure_display_path,
+    sanitize_disclosure_text,
+)
 from cybercore.post_merge import (
     PostMergeTransitionError,
     plan_post_merge_transition,
@@ -70,6 +80,17 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint_parser.add_argument(
         "--next-action",
         help="Next planned action to append to WORKLOG.md",
+    )
+    checkpoint_disclosure = checkpoint_parser.add_mutually_exclusive_group()
+    checkpoint_disclosure.add_argument(
+        "--redact",
+        action="store_true",
+        help="Redact operational and sensitive checkpoint fields",
+    )
+    checkpoint_disclosure.add_argument(
+        "--full",
+        action="store_true",
+        help="Include sensitive checkpoint fields in output",
     )
 
     evidence_parser = sub.add_parser(
@@ -168,6 +189,14 @@ def _confirm(identifier: str, risk: str) -> bool:
     )
 
 
+def _disclosure_mode(args: argparse.Namespace) -> DisclosureMode:
+    if getattr(args, "redact", False):
+        return DisclosureMode.REDACTED
+    if getattr(args, "full", False):
+        return DisclosureMode.FULL
+    return DisclosureMode.STANDARD
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -245,7 +274,10 @@ def main(argv: list[str] | None = None) -> int:
                 output = args.output.expanduser()
                 if not output.is_absolute():
                     output = paths.repo / output
-                print(f"EVIDENCE {output}")
+                print(
+                    "EVIDENCE "
+                    + disclosure_display_path(output, repo=paths.repo)
+                )
                 print(f"SUMMARY {evidence.summary}")
                 return evidence.exit_code
 
@@ -283,17 +315,34 @@ def main(argv: list[str] | None = None) -> int:
                     print(render_memory_preview(plan), end="")
                 return 0
 
+            disclosure_mode = _disclosure_mode(args)
             if args.as_json:
-                rendered = json.dumps(checkpoint.as_dict(), indent=2)
+                rendered = json.dumps(
+                    disclosed_checkpoint_payload(
+                        checkpoint,
+                        disclosure_mode=disclosure_mode,
+                    ),
+                    indent=2,
+                )
             else:
-                rendered = render_checkpoint(checkpoint)
+                rendered = render_checkpoint(
+                    checkpoint,
+                    disclosure_mode=disclosure_mode,
+                )
             if args.output:
                 output = args.output.expanduser()
                 if not output.is_absolute():
                     output = paths.repo / output
                 output.parent.mkdir(parents=True, exist_ok=True)
                 output.write_text(rendered + ("\n" if args.as_json else ""), encoding="utf-8")
-                print(f"CHECKPOINT {output}")
+                print(
+                    "CHECKPOINT "
+                    + disclosure_display_path(
+                        output,
+                        repo=paths.repo,
+                        mode=disclosure_mode,
+                    )
+                )
             else:
                 print(rendered, end="" if rendered.endswith("\n") else "\n")
             return 0
@@ -396,7 +445,7 @@ def main(argv: list[str] | None = None) -> int:
         ValueError,
         WorkBlockError,
     ) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"ERROR: {sanitize_disclosure_text(exc)}", file=sys.stderr)
         return 2
 
     return 2

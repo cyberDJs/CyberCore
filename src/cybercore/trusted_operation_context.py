@@ -5,6 +5,11 @@ from pathlib import Path
 import re
 import subprocess
 
+from cybercore.operation_context_disclosure import (
+    DisclosureMode,
+    render_disclosed_context,
+    sanitize_disclosure_text,
+)
 from cybercore.repository_identity_policy import (
     RepositoryIdentityPolicyError,
     evaluate_repository_identity_policy,
@@ -53,7 +58,7 @@ def _git(repo: Path, *args: str) -> str:
     )
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip() or "git command failed"
-        raise TrustedOperationContextError(detail)
+        raise TrustedOperationContextError(sanitize_disclosure_text(detail))
     return completed.stdout.rstrip("\r\n")
 
 
@@ -78,7 +83,9 @@ def collect_trusted_operation_context(
     """Collect and evaluate a read-only safety context for an operation."""
     resolved = repo.expanduser().resolve()
     if not (resolved / ".git").exists():
-        raise TrustedOperationContextError(f"Not a Git repository: {resolved}")
+        raise TrustedOperationContextError(
+            sanitize_disclosure_text(f"Not a Git repository: {resolved}")
+        )
     if risk not in {"low", "medium", "high", "critical"}:
         raise TrustedOperationContextError(f"Unsupported risk level: {risk}")
 
@@ -200,17 +207,4 @@ def enforce_trusted_operation_context(
 
 
 def render_trusted_operation_context(context: TrustedOperationContext) -> str:
-    lines = [
-        "TRUSTED OPERATION CONTEXT",
-        f"Status: {'trusted' if context.trusted else 'untrusted'}",
-        f"Operation: {context.operation}",
-        f"Risk: {context.risk}",
-        f"Repository: {context.repository}",
-        f"Branch: {context.branch}",
-        f"Commit: {context.commit}",
-        f"Working tree: {'dirty' if context.dirty else 'clean'}",
-        "Checks:",
-    ]
-    for check in context.checks:
-        lines.append(f"- {'PASS' if check.passed else 'FAIL'} {check.name}: {check.detail}")
-    return "\n".join(lines) + "\n"
+    return render_disclosed_context(context.as_dict(), mode=DisclosureMode.STANDARD)

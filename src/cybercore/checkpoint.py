@@ -9,6 +9,7 @@ from typing import Any
 from cybercore.operation_context_disclosure import (
     DisclosureMode,
     disclose_context_payload,
+    sanitize_disclosure_text,
 )
 from cybercore.repository_identity_policy import RepositoryIdentityPolicyError
 from cybercore.trusted_operation_context import (
@@ -48,7 +49,9 @@ def _git(repo: Path, *args: str) -> str:
     )
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip()
-        raise CheckpointError(f"git {' '.join(args)} failed: {detail}")
+        raise CheckpointError(
+            sanitize_disclosure_text(f"git {' '.join(args)} failed: {detail}")
+        )
     return completed.stdout.rstrip("\r\n")
 
 
@@ -93,16 +96,9 @@ def render_checkpoint(
     *,
     disclosure_mode: DisclosureMode | str = DisclosureMode.STANDARD,
 ) -> str:
-    disclosed_context = disclose_context_payload(
-        {
-            "repository": checkpoint.repository,
-            "branch": checkpoint.branch,
-            "commit": checkpoint.commit,
-            "dirty": checkpoint.dirty,
-            "project_state_present": checkpoint.project_state_present,
-            "project_kernel_present": checkpoint.project_kernel_present,
-        },
-        mode=disclosure_mode,
+    disclosed_context = disclosed_checkpoint_payload(
+        checkpoint,
+        disclosure_mode=disclosure_mode,
     )
     cleanliness = "dirty" if checkpoint.dirty else "clean"
     lines = [
@@ -121,3 +117,32 @@ def render_checkpoint(
         lines.extend(["", "## Changed paths", ""])
         lines.extend(f"- `{path}`" for path in checkpoint.changed_paths)
     return "\n".join(lines) + "\n"
+
+
+def disclosed_checkpoint_payload(
+    checkpoint: RepositoryCheckpoint,
+    *,
+    disclosure_mode: DisclosureMode | str = DisclosureMode.STANDARD,
+) -> dict[str, Any]:
+    disclosed_context = disclose_context_payload(
+        {
+            "repository": checkpoint.repository,
+            "branch": checkpoint.branch,
+            "commit": checkpoint.commit,
+            "dirty": checkpoint.dirty,
+            "project_state_present": checkpoint.project_state_present,
+            "project_kernel_present": checkpoint.project_kernel_present,
+        },
+        mode=disclosure_mode,
+    )
+    return {
+        "generated_at": checkpoint.generated_at,
+        "repository": disclosed_context["repository"],
+        "branch": disclosed_context["branch"],
+        "commit": disclosed_context["commit"],
+        "commit_subject": checkpoint.commit_subject,
+        "dirty": disclosed_context["dirty"],
+        "changed_paths": list(checkpoint.changed_paths),
+        "project_state_present": disclosed_context["project_state_present"],
+        "project_kernel_present": disclosed_context["project_kernel_present"],
+    }

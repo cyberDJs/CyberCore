@@ -25,7 +25,7 @@ def _repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_evidence_run_cli_writes_successful_evidence(tmp_path: Path) -> None:
+def test_evidence_run_cli_writes_successful_evidence(tmp_path: Path, capsys) -> None:
     repo = _repo(tmp_path)
     output = Path(".cybercore/evidence/success.json")
 
@@ -51,6 +51,9 @@ def test_evidence_run_cli_writes_successful_evidence(tmp_path: Path) -> None:
     assert payload["exit_code"] == 0
     assert payload["summary"] == "command passed"
     assert payload["repository"] == str(repo.resolve())
+    output_text = capsys.readouterr().out
+    assert "EVIDENCE .cybercore/evidence/success.json" in output_text
+    assert str(repo.resolve()) not in output_text
 
 
 def test_evidence_run_cli_returns_command_exit_code(tmp_path: Path) -> None:

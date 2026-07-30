@@ -9,6 +9,7 @@ from cybercore.operation_context_disclosure import (
     DisclosureMode,
     disclose_context_payload,
     render_disclosed_context,
+    sanitize_disclosure_text,
 )
 from cybercore.post_merge import (
     PostMergeTransitionError,
@@ -295,7 +296,7 @@ def main(argv: list[str] | None = None) -> int:
         RuntimeError,
         ValueError,
     ) as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
+        print(f"ERROR: {sanitize_disclosure_text(exc)}", file=sys.stderr)
         return 2
 
 
