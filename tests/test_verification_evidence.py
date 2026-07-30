@@ -11,6 +11,7 @@ from cybercore.checkpoint import collect_checkpoint
 from cybercore.verification_evidence import (
     VerificationEvidence,
     VerificationEvidenceError,
+    repository_evidence_binding,
 )
 
 
@@ -40,6 +41,13 @@ def _payload(repo: Path, commit: str) -> dict[str, object]:
     }
 
 
+def _binding_payload(repo: Path, commit: str) -> dict[str, object]:
+    payload = _payload(repo, commit)
+    payload.pop("repository")
+    payload["repository_binding"] = repository_evidence_binding(repo)
+    return payload
+
+
 def test_load_and_validate_successful_evidence(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     checkpoint = collect_checkpoint(
@@ -53,6 +61,16 @@ def test_load_and_validate_successful_evidence(tmp_path: Path) -> None:
 
     assert evidence.exit_code == 0
     assert evidence.checkpoint_summary() == "26 passed via `pytest -q` in 4.25s"
+
+
+def test_load_and_validate_successful_bound_evidence(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    evidence = VerificationEvidence.from_dict(_binding_payload(repo, checkpoint.commit))
+
+    evidence.validate_for(checkpoint)
+
+    assert evidence.repository_binding == repository_evidence_binding(repo)
 
 
 def test_rejects_failed_verification_command(tmp_path: Path) -> None:
@@ -71,6 +89,17 @@ def test_rejects_repository_mismatch(tmp_path: Path) -> None:
     checkpoint = collect_checkpoint(repo)
     payload = _payload(repo, checkpoint.commit)
     payload["repository"] = str(repo / "other")
+    evidence = VerificationEvidence.from_dict(payload)
+
+    with pytest.raises(VerificationEvidenceError, match="repository does not match"):
+        evidence.validate_for(checkpoint)
+
+
+def test_rejects_repository_binding_mismatch(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    payload = _binding_payload(repo, checkpoint.commit)
+    payload["repository_binding"] = repository_evidence_binding(repo / "other")
     evidence = VerificationEvidence.from_dict(payload)
 
     with pytest.raises(VerificationEvidenceError, match="repository does not match"):

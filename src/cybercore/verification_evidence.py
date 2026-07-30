@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,7 @@ class VerificationEvidence:
     exit_code: int
     duration: float
     summary: str
-    repository: str
+    repository_binding: str
     commit: str
     generated_at: str
 
@@ -29,10 +30,13 @@ class VerificationEvidence:
             "exit_code",
             "duration",
             "summary",
-            "repository",
             "commit",
             "generated_at",
         }
+        has_binding = "repository_binding" in payload
+        has_legacy_repository = "repository" in payload
+        if not has_binding and not has_legacy_repository:
+            required.add("repository_binding")
         missing = sorted(required - payload.keys())
         if missing:
             raise VerificationEvidenceError(
@@ -40,12 +44,17 @@ class VerificationEvidence:
             )
 
         try:
+            repository_binding = (
+                str(payload["repository_binding"]).strip()
+                if has_binding
+                else repository_evidence_binding(Path(str(payload["repository"]).strip()))
+            )
             evidence = cls(
                 command=str(payload["command"]).strip(),
                 exit_code=int(payload["exit_code"]),
                 duration=float(payload["duration"]),
                 summary=str(payload["summary"]).strip(),
-                repository=str(payload["repository"]).strip(),
+                repository_binding=repository_binding,
                 commit=str(payload["commit"]).strip(),
                 generated_at=str(payload["generated_at"]).strip(),
             )
@@ -62,8 +71,10 @@ class VerificationEvidence:
             )
         if not evidence.summary:
             raise VerificationEvidenceError("Verification evidence summary is empty")
-        if not evidence.repository:
-            raise VerificationEvidenceError("Verification evidence repository is empty")
+        if not evidence.repository_binding:
+            raise VerificationEvidenceError(
+                "Verification evidence repository binding is empty"
+            )
         if not evidence.commit:
             raise VerificationEvidenceError("Verification evidence commit is empty")
         if not evidence.generated_at:
@@ -100,6 +111,13 @@ def load_verification_evidence(path: Path) -> VerificationEvidence:
     return VerificationEvidence.from_file(path)
 
 
+def repository_evidence_binding(repository: Path) -> str:
+    """Return a non-reversible binding for local repository evidence."""
+    resolved = str(repository.expanduser().resolve())
+    digest = hashlib.sha256(resolved.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
 def validate_verification_evidence(
     evidence: VerificationEvidence,
     *,
@@ -112,9 +130,8 @@ def validate_verification_evidence(
             f"Verification command failed with exit code {evidence.exit_code}"
         )
 
-    evidence_repo = Path(evidence.repository).expanduser().resolve()
-    expected_repo = repository.expanduser().resolve()
-    if evidence_repo != expected_repo:
+    expected_binding = repository_evidence_binding(repository)
+    if evidence.repository_binding != expected_binding:
         raise VerificationEvidenceError(
             "Verification evidence repository does not match checkpoint repository"
         )

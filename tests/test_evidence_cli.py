@@ -50,7 +50,9 @@ def test_evidence_run_cli_writes_successful_evidence(tmp_path: Path, capsys) -> 
     payload = json.loads((repo / output).read_text(encoding="utf-8"))
     assert payload["exit_code"] == 0
     assert payload["summary"] == "command passed"
-    assert payload["repository"] == str(repo.resolve())
+    assert "repository" not in payload
+    assert "repository_binding" in payload
+    assert str(repo.resolve()) not in json.dumps(payload)
     output_text = capsys.readouterr().out
     assert "EVIDENCE .cybercore/evidence/success.json" in output_text
     assert str(repo.resolve()) not in output_text
