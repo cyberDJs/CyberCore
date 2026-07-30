@@ -177,19 +177,13 @@ def _managed_block_for_identity(current: str, *, identity: str) -> str | None:
     )
     marker = _project_state_marker(identity)
     return next(
-        (
-            match.group(0)
-            for match in complete_block.finditer(current)
-            if marker in match.group(0)
-        ),
+        (match.group(0) for match in complete_block.finditer(current) if marker in match.group(0)),
         None,
     )
 
 
 def _migrate_project_state_marker(block: str, *, identity: str) -> str:
-    marker_pattern = re.compile(
-        rf"<!-- {re.escape(PROJECT_STATE_CHECKPOINT_PREFIX)}[0-9a-f]+ -->"
-    )
+    marker_pattern = re.compile(rf"<!-- {re.escape(PROJECT_STATE_CHECKPOINT_PREFIX)}[0-9a-f]+ -->")
     return marker_pattern.sub(_project_state_marker(identity), block, count=1)
 
 
@@ -236,6 +230,13 @@ def _kernel_current_values(repo: Path) -> tuple[str | None, str | None]:
     return milestone, artifact
 
 
+def _runtime_implementation_status(current: str) -> str:
+    match = re.search(r"(?m)^- Runtime implementation: (?P<status>.+)$", current)
+    if match is None:
+        return "implemented"
+    return match.group("status").strip()
+
+
 def _synchronize_state_fields(
     current: str,
     checkpoint: RepositoryCheckpoint,
@@ -269,8 +270,10 @@ def _synchronize_state_fields(
     status_lines = [
         "- Work block: active",
         f"- Branch: `{checkpoint.branch}`",
-        "- Project Kernel: present" if checkpoint.project_kernel_present else "- Project Kernel: missing",
-        "- Runtime implementation: implemented",
+        "- Project Kernel: present"
+        if checkpoint.project_kernel_present
+        else "- Project Kernel: missing",
+        f"- Runtime implementation: {_runtime_implementation_status(current)}",
         f"- Tests: {test_result or 'not supplied'}",
         "- Pull request: not created",
     ]

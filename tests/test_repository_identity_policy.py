@@ -33,10 +33,7 @@ def _repo(tmp_path: Path, origin: str | None, expected: str = CANONICAL) -> Path
     _git(repo, "init")
     (repo / ".cybercore").mkdir()
     (repo / ".cybercore" / "project.yaml").write_text(
-        "version: 1\n\n"
-        "identity:\n"
-        "  name: CyberCore\n"
-        f"  repository: {expected}\n",
+        f"version: 1\n\nidentity:\n  name: CyberCore\n  repository: {expected}\n",
         encoding="utf-8",
     )
     if origin is not None:

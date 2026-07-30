@@ -36,8 +36,7 @@ def make_console(*, no_color: bool = False) -> Console:
 def banner(console: Console, subtitle: str) -> None:
     console.print(
         Panel.fit(
-            "[cc.title]CYBERCORE[/cc.title]\n"
-            f"[cc.subtitle]{subtitle}[/cc.subtitle]",
+            f"[cc.title]CYBERCORE[/cc.title]\n[cc.subtitle]{subtitle}[/cc.subtitle]",
             border_style="bright_cyan",
         )
     )

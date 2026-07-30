@@ -102,9 +102,7 @@ def test_checkpoint_identity_is_equal_across_clone_paths(tmp_path: Path) -> None
 def test_legacy_path_markers_are_migrated_without_duplicate_entries(tmp_path: Path) -> None:
     repo = _repo(tmp_path, "legacy", "https://github.com/cyberDJs/CyberCore.git")
     checkpoint = _checkpoint(repo)
-    legacy_canonical = "\0".join(
-        [str(repo.resolve()), checkpoint.commit, "76 passed"]
-    )
+    legacy_canonical = "\0".join([str(repo.resolve()), checkpoint.commit, "76 passed"])
     legacy_identity = hashlib.sha256(legacy_canonical.encode("utf-8")).hexdigest()
 
     (repo / "PROJECT_STATE.md").write_text(

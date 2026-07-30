@@ -49,9 +49,7 @@ def _git(repo: Path, *args: str) -> str:
     )
     if completed.returncode != 0:
         detail = completed.stderr.strip() or completed.stdout.strip()
-        raise CheckpointError(
-            sanitize_disclosure_text(f"git {' '.join(args)} failed: {detail}")
-        )
+        raise CheckpointError(sanitize_disclosure_text(f"git {' '.join(args)} failed: {detail}"))
     return completed.stdout.rstrip("\r\n")
 
 
@@ -73,9 +71,7 @@ def collect_checkpoint(repo: Path, *, now: datetime | None = None) -> Repository
 
     subject = _git(repo, "log", "-1", "--pretty=%s")
     porcelain = _git(repo, "status", "--porcelain=v1")
-    changed_paths = tuple(
-        line[3:] for line in porcelain.splitlines() if len(line) >= 4
-    )
+    changed_paths = tuple(line[3:] for line in porcelain.splitlines() if len(line) >= 4)
     generated = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
 
     return RepositoryCheckpoint(

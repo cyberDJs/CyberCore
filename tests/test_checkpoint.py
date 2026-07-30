@@ -20,6 +20,7 @@ from cybercore.checkpoint_memory import (
     plan_memory_update,
     render_memory_preview,
 )
+from cybercore.memory import plan_memory_update as legacy_plan_memory_update
 from cybercore.cli import main
 
 
@@ -405,10 +406,9 @@ def test_memory_plan_write_persists_sanitized_checkpoint_subject(tmp_path: Path)
 
     plan = plan_memory_update(repo, checkpoint, test_result="81 passed")
     plan.write()
-    persisted = (
-        (repo / "PROJECT_STATE.md").read_text(encoding="utf-8")
-        + (repo / "WORKLOG.md").read_text(encoding="utf-8")
-    )
+    persisted = (repo / "PROJECT_STATE.md").read_text(encoding="utf-8") + (
+        repo / "WORKLOG.md"
+    ).read_text(encoding="utf-8")
 
     assert "/Users/Jan/private-repo" not in persisted
     assert "plainsecret" not in persisted
@@ -494,6 +494,46 @@ current:
     assert "Open PR for WB-0016" in state
     assert "Governance rule: no mutation without approval" in state
     assert "old-branch" not in state
+
+
+@pytest.mark.parametrize("runtime_status", ["planned", "implemented", "verified"])
+@pytest.mark.parametrize("planner", [plan_memory_update, legacy_plan_memory_update])
+def test_memory_plan_preserves_runtime_implementation_lifecycle_status(
+    tmp_path: Path,
+    runtime_status: str,
+    planner,
+) -> None:
+    repo = _repo(tmp_path)
+    (repo / "PROJECT_STATE.md").write_text(
+        f"""# CyberCore Project State
+
+## Current milestone
+
+Old Milestone.
+
+## Current status
+
+- Work block: active
+- Branch: stale
+- Project Kernel: present
+- Runtime implementation: {runtime_status}
+- Tests: stale
+- Pull request: not created
+
+## Next action
+
+Old action.
+""",
+        encoding="utf-8",
+    )
+    checkpoint = collect_checkpoint(repo)
+
+    plan = planner(repo, checkpoint, test_result="201 passed", next_action="Open PR")
+
+    state = plan.project_state_content
+    assert f"- Runtime implementation: {runtime_status}" in state
+    if runtime_status == "planned":
+        assert "- Runtime implementation: implemented" not in state
 
 
 def test_memory_plan_write_updates_both_files(tmp_path: Path) -> None:

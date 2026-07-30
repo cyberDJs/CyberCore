@@ -22,9 +22,5 @@ class ExchangeTransport:
         if not staged.is_dir():
             return ()
         return tuple(
-            sorted(
-                marker.parent
-                for marker in staged.glob("WB-*/.ready")
-                if marker.is_file()
-            )
+            sorted(marker.parent for marker in staged.glob("WB-*/.ready") if marker.is_file())
         )

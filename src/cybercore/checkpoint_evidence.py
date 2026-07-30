@@ -21,9 +21,7 @@ def resolve_test_result(
     test_result: str | None = None,
 ) -> tuple[str | None, VerificationEvidence | None]:
     if evidence_path is not None and test_result is not None:
-        raise CheckpointEvidenceError(
-            "--evidence cannot be combined with --test-result"
-        )
+        raise CheckpointEvidenceError("--evidence cannot be combined with --test-result")
 
     if evidence_path is None:
         return test_result, None

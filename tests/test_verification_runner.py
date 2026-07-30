@@ -42,12 +42,15 @@ def test_run_verification_writes_success_evidence(tmp_path: Path) -> None:
     assert "repository" not in payload
     assert payload["repository_binding"] == repository_evidence_binding(repo)
     assert str(repo.resolve()) not in json.dumps(payload)
-    assert payload["commit"] == subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "HEAD"],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    assert (
+        payload["commit"]
+        == subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    )
 
 
 def test_run_verification_sanitizes_persisted_command_metadata(tmp_path: Path) -> None:

@@ -164,16 +164,19 @@ def render_repository_identity(
         disclosure_mode=disclosure_mode,
     )
     origin = disclosed["origin"] or "not configured"
-    return "\n".join(
-        [
-            "REPOSITORY IDENTITY",
-            f"Repository: {disclosed['repository']}",
-            f"Identity: {disclosed['identity']}",
-            f"Source: {disclosed['source']}",
-            f"Origin: {origin}",
-            f"Diagnostic: {disclosed['diagnostic']}",
-        ]
-    ) + "\n"
+    return (
+        "\n".join(
+            [
+                "REPOSITORY IDENTITY",
+                f"Repository: {disclosed['repository']}",
+                f"Identity: {disclosed['identity']}",
+                f"Source: {disclosed['source']}",
+                f"Origin: {origin}",
+                f"Diagnostic: {disclosed['diagnostic']}",
+            ]
+        )
+        + "\n"
+    )
 
 
 def disclosed_repository_identity_payload(

@@ -3,7 +3,9 @@ from __future__ import annotations
 from cybercore.presentation import banner, make_console, step
 
 
-def run_lesson(*, lesson: str = "evidence", interactive: bool = True, no_color: bool = False) -> int:
+def run_lesson(
+    *, lesson: str = "evidence", interactive: bool = True, no_color: bool = False
+) -> int:
     if lesson != "evidence":
         raise ValueError(f"Unknown lesson: {lesson}")
 
@@ -21,7 +23,6 @@ def run_lesson(*, lesson: str = "evidence", interactive: bool = True, no_color: 
             input("Press ENTER to continue...")
 
     console.print(
-        "\n[cc.ok]LESSON COMPLETE[/cc.ok] "
-        "CyberCore does not treat assumptions as evidence."
+        "\n[cc.ok]LESSON COMPLETE[/cc.ok] CyberCore does not treat assumptions as evidence."
     )
     return 0

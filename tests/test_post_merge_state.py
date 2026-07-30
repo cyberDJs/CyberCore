@@ -4,7 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from cybercore.post_merge import MergedPullRequest, PostMergeTransitionError, PostMergeTransitionPreview
+from cybercore.post_merge import (
+    MergedPullRequest,
+    PostMergeTransitionError,
+    PostMergeTransitionPreview,
+)
 from cybercore.post_merge_state import plan_post_merge_state_update
 
 
@@ -42,7 +46,8 @@ completed:
     verification: 46_passed
 next:
   - old task
-""" % active,
+"""
+        % active,
         encoding="utf-8",
     )
     (repo / "PROJECT_STATE.md").write_text(
@@ -96,7 +101,10 @@ def test_plan_updates_kernel_and_project_state(tmp_path: Path) -> None:
     assert "merge_commit: 1e174e9" in plan.kernel_content
     assert "verification: 52_passed" in plan.kernel_content
     assert "`WB-0019 Post-Merge State Transition v0.1`" in plan.project_state_content
-    assert "### PR #22 — feat: make canonical memory idempotent and rollback-safe" in plan.project_state_content
+    assert (
+        "### PR #22 — feat: make canonical memory idempotent and rollback-safe"
+        in plan.project_state_content
+    )
 
 
 def test_plan_rejects_active_artifact_mismatch(tmp_path: Path) -> None:

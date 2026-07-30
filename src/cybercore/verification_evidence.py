@@ -70,15 +70,11 @@ class VerificationEvidence:
         if not evidence.command:
             raise VerificationEvidenceError("Verification evidence command is empty")
         if evidence.duration < 0:
-            raise VerificationEvidenceError(
-                "Verification evidence duration must be non-negative"
-            )
+            raise VerificationEvidenceError("Verification evidence duration must be non-negative")
         if not evidence.summary:
             raise VerificationEvidenceError("Verification evidence summary is empty")
         if not evidence.repository_binding:
-            raise VerificationEvidenceError(
-                "Verification evidence repository binding is empty"
-            )
+            raise VerificationEvidenceError("Verification evidence repository binding is empty")
         if not evidence.commit:
             raise VerificationEvidenceError("Verification evidence commit is empty")
         if not evidence.generated_at:
@@ -92,9 +88,7 @@ class VerificationEvidence:
         except FileNotFoundError:
             raise VerificationEvidenceError(f"Verification evidence not found: {path}")
         except json.JSONDecodeError as exc:
-            raise VerificationEvidenceError(
-                f"Invalid verification evidence JSON: {exc}"
-            ) from exc
+            raise VerificationEvidenceError(f"Invalid verification evidence JSON: {exc}") from exc
         if not isinstance(payload, dict):
             raise VerificationEvidenceError("Verification evidence root must be an object")
         return cls.from_dict(payload)

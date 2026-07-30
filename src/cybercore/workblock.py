@@ -92,16 +92,12 @@ def verify_workblock(path: Path) -> VerificationReport:
 
     for candidate in package.rglob("*"):
         if candidate.is_symlink():
-            raise WorkBlockError(
-                f"symlinks are not allowed: {candidate.relative_to(package)}"
-            )
+            raise WorkBlockError(f"symlinks are not allowed: {candidate.relative_to(package)}")
 
     manifest = WorkBlockManifest.load(package / "manifest.json")
     verified: list[str] = []
 
-    checksum_lines = (
-        (package / "checksums.sha256").read_text(encoding="utf-8").splitlines()
-    )
+    checksum_lines = (package / "checksums.sha256").read_text(encoding="utf-8").splitlines()
 
     if not checksum_lines:
         raise WorkBlockError("checksums.sha256 is empty")
@@ -141,9 +137,7 @@ def verify_workblock(path: Path) -> VerificationReport:
     }
     missing = required_checksummed.difference(verified)
     if missing:
-        raise WorkBlockError(
-            "required files absent from checksums: " + ", ".join(sorted(missing))
-        )
+        raise WorkBlockError("required files absent from checksums: " + ", ".join(sorted(missing)))
 
     return VerificationReport(
         path=package,

@@ -39,9 +39,7 @@ from cybercore.workblock import WorkBlockError
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="cybercore", description="CyberCore Foundation Runtime"
-    )
+    parser = argparse.ArgumentParser(prog="cybercore", description="CyberCore Foundation Runtime")
     parser.add_argument("--repo", help="CyberCore repository path")
     parser.add_argument("--json", action="store_true", dest="as_json")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -50,9 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("status", help="Show runtime and Exchange state")
     sub.add_parser("sync", help="Synchronize Exchange and list READY Work Blocks")
 
-    checkpoint_parser = sub.add_parser(
-        "checkpoint", help="Collect a repository checkpoint"
-    )
+    checkpoint_parser = sub.add_parser("checkpoint", help="Collect a repository checkpoint")
     checkpoint_parser.add_argument(
         "--output",
         type=Path,
@@ -93,12 +89,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Include sensitive checkpoint fields in output",
     )
 
-    evidence_parser = sub.add_parser(
-        "evidence", help="Create and inspect verification evidence"
-    )
-    evidence_sub = evidence_parser.add_subparsers(
-        dest="evidence_command", required=True
-    )
+    evidence_parser = sub.add_parser("evidence", help="Create and inspect verification evidence")
+    evidence_sub = evidence_parser.add_subparsers(dest="evidence_command", required=True)
     evidence_run = evidence_sub.add_parser(
         "run", help="Run a command and write commit-bound verification evidence"
     )
@@ -128,9 +120,7 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser = sub.add_parser("verify", help="Verify a CXP Work Block package")
     verify_parser.add_argument("path", type=Path)
 
-    apply_parser = sub.add_parser(
-        "apply", help="Verify and apply a CXP Work Block package"
-    )
+    apply_parser = sub.add_parser("apply", help="Verify and apply a CXP Work Block package")
     apply_parser.add_argument("path", type=Path)
     apply_parser.add_argument("--dry-run", action="store_true")
     apply_parser.add_argument("--yes", action="store_true")
@@ -142,12 +132,8 @@ def build_parser() -> argparse.ArgumentParser:
     build_cmd.add_argument("--version", default="1.0.0")
     build_cmd.add_argument("--publisher-id", default="cyberdjs")
     build_cmd.add_argument("--publisher-name", default="CyberDJS")
-    build_cmd.add_argument(
-        "--runtime", dest="runtime_compatibility", default=">=0.1.0,<0.2.0"
-    )
-    build_cmd.add_argument(
-        "--risk", choices=("low", "medium", "high", "critical"), default="low"
-    )
+    build_cmd.add_argument("--runtime", dest="runtime_compatibility", default=">=0.1.0,<0.2.0")
+    build_cmd.add_argument("--risk", choices=("low", "medium", "high", "critical"), default="low")
     build_cmd.add_argument("--title", required=True)
     build_cmd.add_argument("--description", default="")
     build_cmd.add_argument("--created-at")
@@ -164,9 +150,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     demo_parser.add_argument("--no-color", action="store_true")
 
-    learn_parser = sub.add_parser(
-        "learn", help="Run an interactive CyberCore learning lesson"
-    )
+    learn_parser = sub.add_parser("learn", help="Run an interactive CyberCore learning lesson")
     learn_parser.add_argument("--lesson", default="evidence", choices=("evidence",))
     learn_parser.add_argument(
         "--non-interactive",
@@ -184,9 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _confirm(identifier: str, risk: str) -> bool:
-    return (
-        input(f"Apply {identifier} (risk={risk})? Type APPLY to continue: ") == "APPLY"
-    )
+    return input(f"Apply {identifier} (risk={risk})? Type APPLY to continue: ") == "APPLY"
 
 
 def _disclosure_mode(args: argparse.Namespace) -> DisclosureMode:
@@ -274,10 +256,7 @@ def main(argv: list[str] | None = None) -> int:
                 output = args.output.expanduser()
                 if not output.is_absolute():
                     output = paths.repo / output
-                print(
-                    "EVIDENCE "
-                    + disclosure_display_path(output, repo=paths.repo)
-                )
+                print("EVIDENCE " + disclosure_display_path(output, repo=paths.repo))
                 print(f"SUMMARY {evidence.summary}")
                 return evidence.exit_code
 
@@ -352,10 +331,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.as_json:
                 print(
                     json.dumps(
-                        [
-                            {"name": r.name, "state": r.state, "detail": r.detail}
-                            for r in results
-                        ],
+                        [{"name": r.name, "state": r.state, "detail": r.detail} for r in results],
                         indent=2,
                     )
                 )

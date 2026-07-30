@@ -25,9 +25,7 @@ def run_verify(path: Path) -> VerificationReport:
                 f"exit={process.returncode}",
             )
         )
-        raise RuntimeError(
-            f"Work Block verify action failed with code {process.returncode}"
-        )
+        raise RuntimeError(f"Work Block verify action failed with code {process.returncode}")
 
     emit(EventRecord(RuntimeEvent.VERIFY_OK, report.manifest.identifier))
     return report
