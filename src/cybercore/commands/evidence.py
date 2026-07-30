@@ -3,9 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
-from cybercore.repository_identity_policy import (
-    enforce_configured_repository_identity_policy,
-)
+from cybercore.trusted_operation_context import enforce_trusted_operation_context
 from cybercore.verification_evidence import VerificationEvidence
 from cybercore.verification_runner import run_verification
 
@@ -18,9 +16,11 @@ def run_evidence_command(
     output: Path,
 ) -> VerificationEvidence:
     """Run a verification command and persist commit-bound evidence."""
-    enforce_configured_repository_identity_policy(
+    enforce_trusted_operation_context(
         repo,
-        operation="Verification evidence generation",
+        operation="verification_evidence",
+        risk="medium",
+        require_clean=True,
     )
     normalized = list(command)
     if normalized and normalized[0] == "--":
