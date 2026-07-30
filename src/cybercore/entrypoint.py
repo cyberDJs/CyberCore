@@ -246,7 +246,7 @@ def _run_context(argv: list[str]) -> int:
     if args.as_json:
         print(json.dumps(context.as_dict(), indent=2))
     else:
-        print(render_trusted_operation_context(context), end="")
+        print(f"TRUSTED OPERATION CONTEXT: {'trusted' if context.trusted else 'untrusted'}")
     return 0 if context.trusted else 1
 
 
