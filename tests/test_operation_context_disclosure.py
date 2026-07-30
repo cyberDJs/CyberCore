@@ -249,6 +249,16 @@ def test_sanitizer_full_mode_keeps_local_paths_but_not_credentials() -> None:
             "abc123",
             "credential=[REDACTED]",
         ),
+        (
+            "https://example.test/#/callback?access_token=abc123&state=ready",
+            "abc123",
+            "#/callback?access_token=[REDACTED]&state=ready",
+        ),
+        (
+            "https://example.test/#route?api_key=secret&next=/ok",
+            "secret",
+            "#route?api_key=[REDACTED]&next=/ok",
+        ),
     ],
 )
 def test_sanitizer_redacts_url_secret_query_and_fragment_values(
@@ -278,6 +288,47 @@ def test_sanitizer_redacts_local_paths_containing_spaces(value: str, leaked: str
 
         assert leaked not in sanitized
         assert "[REDACTED_PATH]" in sanitized
+
+
+@pytest.mark.parametrize(
+    "value,leaked,preserved",
+    [
+        (
+            'password="hunter 2" before deploy',
+            "hunter 2",
+            'password="[REDACTED]" before deploy',
+        ),
+        (
+            "token='abc,def'; keep punctuation",
+            "abc,def",
+            "token='[REDACTED]'; keep punctuation",
+        ),
+        (
+            "secret=value! keep following prose",
+            "value!",
+            "secret=[REDACTED] keep following prose",
+        ),
+        (
+            'api_key: "value with spaces" and mode=dev',
+            "value with spaces",
+            'api_key: "[REDACTED]" and mode=dev',
+        ),
+        (
+            "access-key=abc.def,ghi trailing text",
+            "abc.def,ghi",
+            "access-key=[REDACTED] trailing text",
+        ),
+    ],
+)
+def test_sanitizer_redacts_secret_assignments_without_suffix_leaks(
+    value: str,
+    leaked: str,
+    preserved: str,
+) -> None:
+    sanitized = sanitize_disclosure_text(value)
+
+    assert leaked not in sanitized
+    assert preserved in sanitized
 
 
 def test_command_argument_sanitizer_redacts_secret_like_values() -> None:

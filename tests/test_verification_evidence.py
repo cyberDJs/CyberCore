@@ -108,6 +108,99 @@ def test_legacy_evidence_checkpoint_summary_is_sanitized(tmp_path: Path) -> None
     assert "[REDACTED_PATH]" in summary
 
 
+def test_legacy_evidence_command_redacts_token_pair(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    payload = _payload(repo, checkpoint.commit)
+    payload["command"] = "python -m pytest --token abc123 tests"
+
+    evidence = VerificationEvidence.from_dict(payload)
+
+    assert evidence.command == "python -m pytest --token [REDACTED] tests"
+    assert "abc123" not in evidence.command
+
+
+def test_legacy_evidence_command_redacts_quoted_password_with_spaces(
+    tmp_path: Path,
+) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    payload = _payload(repo, checkpoint.commit)
+    payload["command"] = 'deploy --password "hunter 2" --dry-run'
+
+    evidence = VerificationEvidence.from_dict(payload)
+
+    assert evidence.command == "deploy --password [REDACTED] --dry-run"
+    assert "hunter" not in evidence.command
+    assert "2" not in evidence.command
+
+
+def test_legacy_evidence_command_redacts_url_credentials_and_query_token(
+    tmp_path: Path,
+) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    payload = _payload(repo, checkpoint.commit)
+    payload["command"] = (
+        "curl https://user:password@example.test/repo?token=tokensecret123 "
+        "--api-key=secret"
+    )
+
+    evidence = VerificationEvidence.from_dict(payload)
+
+    assert "user:password" not in evidence.command
+    assert "tokensecret123" not in evidence.command
+    assert "secret" not in evidence.command
+    assert "https://example.test/repo?token=[REDACTED]" in evidence.command
+    assert "--api-key=[REDACTED]" in evidence.command
+
+
+def test_legacy_evidence_normal_pytest_command_remains_unchanged(
+    tmp_path: Path,
+) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    payload = _payload(repo, checkpoint.commit)
+
+    evidence = VerificationEvidence.from_dict(payload)
+
+    assert evidence.command == "pytest -q"
+
+
+def test_legacy_evidence_checkpoint_summary_never_emits_command_secrets(
+    tmp_path: Path,
+) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    payload = _payload(repo, checkpoint.commit)
+    payload["command"] = (
+        f"pytest {repo.resolve()} --token abc123 "
+        "https://user:password@example.test/repo?access_token=tokensecret123"
+    )
+
+    summary = VerificationEvidence.from_dict(payload).checkpoint_summary()
+
+    assert str(repo.resolve()) not in summary
+    assert "abc123" not in summary
+    assert "user:password" not in summary
+    assert "tokensecret123" not in summary
+    assert "[REDACTED_PATH]" in summary
+
+
+def test_legacy_evidence_invalid_shell_command_falls_back_safely(
+    tmp_path: Path,
+) -> None:
+    repo = _repo(tmp_path)
+    checkpoint = collect_checkpoint(repo)
+    payload = _payload(repo, checkpoint.commit)
+    payload["command"] = 'pytest --password "unterminated secret'
+
+    evidence = VerificationEvidence.from_dict(payload)
+
+    assert "unterminated secret" not in evidence.command
+    assert evidence.command == 'pytest --password "[REDACTED]"'
+
+
 def test_normal_evidence_summary_remains_unchanged(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     checkpoint = collect_checkpoint(repo)

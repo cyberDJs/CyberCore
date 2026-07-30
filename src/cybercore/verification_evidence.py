@@ -7,7 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from cybercore.checkpoint import RepositoryCheckpoint
-from cybercore.operation_context_disclosure import sanitize_disclosure_text
+from cybercore.operation_context_disclosure import (
+    sanitize_disclosure_text,
+    sanitize_legacy_command_string,
+)
 
 
 class VerificationEvidenceError(ValueError):
@@ -51,7 +54,7 @@ class VerificationEvidence:
                 else repository_evidence_binding(Path(str(payload["repository"]).strip()))
             )
             evidence = cls(
-                command=str(payload["command"]).strip(),
+                command=sanitize_legacy_command_string(str(payload["command"]).strip()),
                 exit_code=int(payload["exit_code"]),
                 duration=float(payload["duration"]),
                 summary=sanitize_disclosure_text(str(payload["summary"]).strip()),

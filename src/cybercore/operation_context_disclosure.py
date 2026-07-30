@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 import re
+import shlex
 from typing import Final, Mapping
 from urllib.parse import unquote_plus, urlsplit, urlunsplit
 
@@ -129,11 +130,28 @@ _SECRET_PARAMETER_NAMES: Final[set[str]] = {
     "api_key",
     "access_key",
 }
-_URL_PARAMETER = re.compile(r"(?P<prefix>^|[&;])(?P<key>[^=&;#]+)=(?P<value>[^&;#]*)")
+_URL_PARAMETER = re.compile(
+    r"(?P<prefix>^|[&;?])(?P<key>[^=&;#?]+)=(?P<value>[^&;#]*)"
+)
 _SECRET_ASSIGNMENT = re.compile(
     r"(?i)(?P<prefix>\b(?:token|access_token|refresh_token|password|passwd|"
     r"secret|credential|api[-_]?key|access[-_]?key)\b\s*[:=]\s*)"
-    r"(?P<quote>[\"']?)(?P<value>[^\s,;`\"')\]}<]+)(?P=quote)"
+    r"(?:"
+    r"(?P<double>\"[^\r\n\"]*\")|"
+    r"(?P<single>'[^\r\n']*')|"
+    r"(?P<unterminated>[\"'][^\r\n;&|]*)|"
+    r"(?P<unquoted>[^\s`\"')\]}<]+)"
+    r")"
+)
+_CLI_SECRET_PAIR = re.compile(
+    r"(?i)(?P<option>(?<!\S)--(?:token|password|passwd|secret|credential|"
+    r"api[-_]?key|access[-_]?key))\s+"
+    r"(?:"
+    r"(?P<double>\"[^\r\n\"]*\")|"
+    r"(?P<single>'[^\r\n']*')|"
+    r"(?P<unterminated>[\"'][^\r\n;&|]*)|"
+    r"(?P<unquoted>[^\s`\"')\]}<]+)"
+    r")"
 )
 
 
@@ -201,10 +219,25 @@ def _redact_scp_like_git_credentials(value: str) -> str:
 
 def _redact_secret_assignments(value: str) -> str:
     def replace(match: re.Match[str]) -> str:
-        quote = match.group("quote")
-        return f"{match.group('prefix')}{quote}{_REDACTED}{quote}"
+        assigned = match.group("double") or match.group("single")
+        if assigned is not None:
+            return f"{match.group('prefix')}{assigned[0]}{_REDACTED}{assigned[0]}"
+        return f"{match.group('prefix')}{_REDACTED}"
 
     return _SECRET_ASSIGNMENT.sub(replace, value)
+
+
+def _redact_cli_secret_pairs(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        assigned = match.group("double") or match.group("single")
+        if assigned is not None:
+            return f"{match.group('option')} {assigned[0]}{_REDACTED}{assigned[0]}"
+        if match.group("unterminated") is not None:
+            quote = match.group("unterminated")[0]
+            return f"{match.group('option')} {quote}{_REDACTED}{quote}"
+        return f"{match.group('option')} {_REDACTED}"
+
+    return _CLI_SECRET_PAIR.sub(replace, value)
 
 
 def sanitize_disclosure_text(
@@ -235,6 +268,8 @@ def sanitize_disclosure_text(
 
 def sanitize_command_argument(value: str) -> str:
     """Sanitize one persisted command argument."""
+    if "://" in value:
+        return sanitize_disclosure_text(value)
     if "=" in value:
         key, _separator, raw_value = value.partition("=")
         if _SECRET_OPTION.search(key):
@@ -260,6 +295,15 @@ def sanitize_command_arguments(arguments: list[str] | tuple[str, ...]) -> tuple[
         if "=" not in str(argument) and _SECRET_OPTION.fullmatch(option_name):
             redact_next = True
     return tuple(sanitized)
+
+
+def sanitize_legacy_command_string(value: str) -> str:
+    """Sanitize a legacy persisted shell command string."""
+    try:
+        arguments = shlex.split(value)
+    except ValueError:
+        return sanitize_disclosure_text(_redact_cli_secret_pairs(value))
+    return " ".join(sanitize_command_arguments(arguments))
 
 
 def disclosure_display_path(
