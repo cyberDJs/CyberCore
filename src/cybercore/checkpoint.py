@@ -6,6 +6,10 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
+from cybercore.operation_context_disclosure import (
+    DisclosureMode,
+    disclose_context_payload,
+)
 from cybercore.repository_identity_policy import RepositoryIdentityPolicyError
 from cybercore.trusted_operation_context import (
     TrustedOperationContextError,
@@ -84,15 +88,30 @@ def collect_checkpoint(repo: Path, *, now: datetime | None = None) -> Repository
     )
 
 
-def render_checkpoint(checkpoint: RepositoryCheckpoint) -> str:
+def render_checkpoint(
+    checkpoint: RepositoryCheckpoint,
+    *,
+    disclosure_mode: DisclosureMode | str = DisclosureMode.STANDARD,
+) -> str:
+    disclosed_context = disclose_context_payload(
+        {
+            "repository": checkpoint.repository,
+            "branch": checkpoint.branch,
+            "commit": checkpoint.commit,
+            "dirty": checkpoint.dirty,
+            "project_state_present": checkpoint.project_state_present,
+            "project_kernel_present": checkpoint.project_kernel_present,
+        },
+        mode=disclosure_mode,
+    )
     cleanliness = "dirty" if checkpoint.dirty else "clean"
     lines = [
         "# CyberCore Repository Checkpoint",
         "",
         f"- Generated: `{checkpoint.generated_at}`",
-        f"- Repository: `{checkpoint.repository}`",
-        f"- Branch: `{checkpoint.branch}`",
-        f"- Commit: `{checkpoint.commit}`",
+        f"- Repository: `{disclosed_context['repository']}`",
+        f"- Branch: `{disclosed_context['branch']}`",
+        f"- Commit: `{disclosed_context['commit']}`",
         f"- Commit subject: {checkpoint.commit_subject}",
         f"- Working tree: **{cleanliness}**",
         f"- Project Kernel: {'present' if checkpoint.project_kernel_present else 'missing'}",
