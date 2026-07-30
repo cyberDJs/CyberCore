@@ -61,3 +61,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `52 passed`
 - Next action: Prepare PR #22
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:442641789d2135153b0a26c2388703342ef740b05a71357b7751f50d8ac0890f -->
+## Checkpoint 2026-07-30T03:20:59.395931Z
+
+- Branch: `feat/post-merge-state-transition`
+- Commit: `39987cefa72fbf1cc7ac8035701a50c8a7187dd4`
+- Commit subject: test(cli): cover controlled post-merge write entrypoint
+- Working tree: **clean**
+- Test evidence: `66 passed`
+- Next action: Prepare PR #23

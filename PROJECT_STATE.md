@@ -144,24 +144,24 @@ Scope:
 - Work block: active
 - Branch: `feat/post-merge-state-transition`
 - Project Kernel: present
-- Runtime implementation: planned
-- Tests: 52 passed baseline
+- Runtime implementation: implemented
+- Tests: 66 passed
 - Pull request: not created
 
 ## Next action
 
-Define the post-merge transition contract and tests.
+Prepare PR #23
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:f2e9c5eb99c292370057345207732f89d944dd2321593ba948f441e481567ccb -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:442641789d2135153b0a26c2388703342ef740b05a71357b7751f50d8ac0890f -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-29T22:48:27.668847Z`
-- Branch: `feat/idempotent-canonical-memory`
-- Commit: `7d174275317df9c2b202d18f40154121cc9e4f54`
-- Commit subject: docs(project): align WB-0018 canonical state
+- Generated: `2026-07-30T03:20:59.395931Z`
+- Branch: `feat/post-merge-state-transition`
+- Commit: `39987cefa72fbf1cc7ac8035701a50c8a7187dd4`
+- Commit subject: test(cli): cover controlled post-merge write entrypoint
 - Working tree: **clean**
-- Test evidence: `52 passed`
+- Test evidence: `66 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->
