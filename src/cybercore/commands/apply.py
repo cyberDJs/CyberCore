@@ -7,6 +7,7 @@ import subprocess
 
 from cybercore.events import EventRecord, RuntimeEvent, emit
 from cybercore.runtime import RuntimePaths
+from cybercore.trusted_operation_context import enforce_trusted_operation_context
 from cybercore.workblock import VerificationReport, WorkBlockError
 
 
@@ -15,30 +16,6 @@ class ApplyResult:
     report: VerificationReport
     returncode: int
     dry_run: bool
-
-
-def _current_branch(repo: Path) -> str:
-    process = subprocess.run(
-        ["git", "-C", str(repo), "branch", "--show-current"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if process.returncode != 0:
-        raise WorkBlockError("unable to determine current Git branch")
-    return process.stdout.strip()
-
-
-def _working_tree_clean(repo: Path) -> bool:
-    process = subprocess.run(
-        ["git", "-C", str(repo), "status", "--porcelain"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if process.returncode != 0:
-        raise WorkBlockError("unable to inspect Git working tree")
-    return not process.stdout.strip()
 
 
 def _run_optional_hook(
@@ -73,17 +50,14 @@ def run_apply(
     *,
     dry_run: bool,
 ) -> ApplyResult:
-    if not (paths.repo / ".git").is_dir():
-        raise WorkBlockError(f"not a Git repository: {paths.repo}")
-    if not _working_tree_clean(paths.repo):
-        raise WorkBlockError("working tree must be clean before apply")
-
-    current_branch = _current_branch(paths.repo)
-    expected_branch = report.manifest.target_branch
-    if expected_branch and current_branch != expected_branch:
-        raise WorkBlockError(
-            f"expected branch {expected_branch!r}, got {current_branch!r}"
-        )
+    expected_branch = report.manifest.target_branch or None
+    enforce_trusted_operation_context(
+        paths.repo,
+        operation="apply",
+        risk="high" if dry_run else "critical",
+        expected_branch=expected_branch,
+        require_clean=True,
+    )
 
     if dry_run:
         return ApplyResult(report=report, returncode=0, dry_run=True)

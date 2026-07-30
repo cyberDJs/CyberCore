@@ -7,8 +7,10 @@ import subprocess
 from typing import Any, Callable
 from urllib.request import Request, urlopen
 
-from cybercore.repository_identity_policy import (
-    enforce_configured_repository_identity_policy,
+from cybercore.repository_identity_policy import RepositoryIdentityPolicyError
+from cybercore.trusted_operation_context import (
+    TrustedOperationContextError,
+    enforce_trusted_operation_context,
 )
 
 
@@ -93,16 +95,23 @@ def plan_post_merge_transition(
     opener: Callable[..., Any] = urlopen,
 ) -> PostMergeTransitionPreview:
     repo = repo.resolve()
-    if not (repo / ".git").exists():
-        raise PostMergeTransitionError(f"Not a Git repository: {repo}")
-
-    enforce_configured_repository_identity_policy(
-        repo,
-        operation="Post-merge transition",
-    )
-
-    if _run_git(repo, "status", "--porcelain"):
-        raise PostMergeTransitionError("Working tree must be clean")
+    try:
+        enforce_trusted_operation_context(
+            repo,
+            operation="post_merge_transition",
+            risk="high",
+            require_clean=True,
+        )
+    except TrustedOperationContextError as exc:
+        detail = str(exc)
+        if "repository_identity:" in detail:
+            raise RepositoryIdentityPolicyError(
+                "Post-merge transition rejected: "
+                + detail.split("repository_identity:", 1)[1].split(";", 1)[0].strip()
+            ) from exc
+        if "clean_working_tree:" in detail:
+            raise PostMergeTransitionError("Working tree must be clean") from exc
+        raise PostMergeTransitionError(detail) from exc
 
     repository = _repository_slug(repo)
     payload = _fetch_pull_request(repository, pull_request_number, opener=opener)

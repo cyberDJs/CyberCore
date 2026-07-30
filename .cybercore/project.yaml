@@ -23,9 +23,9 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Repository Identity Policy Enforcement v0.1
-  active_artifact: WB-0022
-  branch: feat/repository-identity-policy
+  milestone: Trusted Operation Context v0.1
+  active_artifact: WB-0023
+  branch: feat/trusted-operation-context
   pull_request: null
 
 status:
@@ -34,7 +34,7 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 86_passed
+  tests: 98_passed
   ci: local_verification
   checkpoint_runtime: verified
   checkpoint_persistence: verified
@@ -43,7 +43,8 @@ status:
   post_merge_state_transition: verified
   remote_aware_repository_identity: verified
   repository_identity_diagnostics: verified
-  repository_identity_policy: planned
+  repository_identity_policy: verified
+  trusted_operation_context: planned
 
 completed:
   - artifact: WB-0015
@@ -78,12 +79,17 @@ completed:
     merge_commit: 6c9a4cff56731e8e53bfb886fde6c61a2340a085
     verification: 86_passed
 
+  - artifact: WB-0022
+    pull_request: 26
+    merge_commit: e674edc707a17ab8eb9ba1af9d40ae7a80657334
+    verification: 98_passed
+
 next:
-  - define the repository identity policy contract
-  - add canonical identity configuration to project state
-  - implement identity verification and policy result rendering
-  - integrate enforcement into identity-sensitive workflows
-  - add mismatch, fallback and fork regression tests
+  - define the trusted operation context contract
+  - implement repository and project-state context collection
+  - implement policy evaluation and failure rendering
+  - integrate the context into existing protected workflows
+  - add branch, commit, dirty-tree and identity regression tests
 
 rules:
   state_first: true

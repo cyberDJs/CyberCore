@@ -6,8 +6,10 @@ from pathlib import Path
 import subprocess
 from typing import Any
 
-from cybercore.repository_identity_policy import (
-    enforce_configured_repository_identity_policy,
+from cybercore.repository_identity_policy import RepositoryIdentityPolicyError
+from cybercore.trusted_operation_context import (
+    TrustedOperationContextError,
+    enforce_trusted_operation_context,
 )
 
 
@@ -48,13 +50,20 @@ def _git(repo: Path, *args: str) -> str:
 
 def collect_checkpoint(repo: Path, *, now: datetime | None = None) -> RepositoryCheckpoint:
     repo = repo.expanduser().resolve()
-    if not (repo / ".git").exists():
-        raise CheckpointError(f"Not a Git repository: {repo}")
+    try:
+        context = enforce_trusted_operation_context(
+            repo,
+            operation="checkpoint",
+            risk="low",
+        )
+    except TrustedOperationContextError as exc:
+        detail = str(exc)
+        if "repository_identity:" in detail:
+            raise RepositoryIdentityPolicyError(
+                f"Checkpoint collection rejected: {detail.split('repository_identity:', 1)[1].strip()}"
+            ) from exc
+        raise CheckpointError(detail) from exc
 
-    enforce_configured_repository_identity_policy(repo, operation="Checkpoint collection")
-
-    branch = _git(repo, "branch", "--show-current") or "detached"
-    commit = _git(repo, "rev-parse", "HEAD")
     subject = _git(repo, "log", "-1", "--pretty=%s")
     porcelain = _git(repo, "status", "--porcelain=v1")
     changed_paths = tuple(
@@ -64,14 +73,14 @@ def collect_checkpoint(repo: Path, *, now: datetime | None = None) -> Repository
 
     return RepositoryCheckpoint(
         generated_at=generated.isoformat().replace("+00:00", "Z"),
-        repository=str(repo),
-        branch=branch,
-        commit=commit,
+        repository=context.repository,
+        branch=context.branch,
+        commit=context.commit,
         commit_subject=subject,
-        dirty=bool(changed_paths),
+        dirty=context.dirty,
         changed_paths=changed_paths,
-        project_state_present=(repo / "PROJECT_STATE.md").is_file(),
-        project_kernel_present=(repo / ".cybercore" / "project.yaml").is_file(),
+        project_state_present=context.project_state_present,
+        project_kernel_present=context.project_kernel_present,
     )
 
 
