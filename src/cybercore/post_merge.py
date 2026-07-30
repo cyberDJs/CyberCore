@@ -7,6 +7,10 @@ import subprocess
 from typing import Any, Callable
 from urllib.request import Request, urlopen
 
+from cybercore.repository_identity_policy import (
+    enforce_configured_repository_identity_policy,
+)
+
 
 class PostMergeTransitionError(RuntimeError):
     """Raised when a post-merge transition cannot be verified safely."""
@@ -91,6 +95,12 @@ def plan_post_merge_transition(
     repo = repo.resolve()
     if not (repo / ".git").exists():
         raise PostMergeTransitionError(f"Not a Git repository: {repo}")
+
+    enforce_configured_repository_identity_policy(
+        repo,
+        operation="Post-merge transition",
+    )
+
     if _run_git(repo, "status", "--porcelain"):
         raise PostMergeTransitionError("Working tree must be clean")
 

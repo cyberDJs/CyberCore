@@ -19,6 +19,11 @@ from cybercore.repository_identity import (
     render_repository_identity,
     resolve_repository_identity,
 )
+from cybercore.repository_identity_policy import (
+    RepositoryIdentityPolicyError,
+    evaluate_repository_identity_policy,
+    render_repository_identity_policy,
+)
 from cybercore.runtime import RuntimePaths
 
 
@@ -67,12 +72,22 @@ def _identity_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     identity = sub.add_parser(
         "identity",
-        help="Inspect canonical repository identity resolution",
+        help="Inspect and verify canonical repository identity",
     )
     identity.add_argument(
         "--strict",
         action="store_true",
         help="Reject deterministic path fallback when origin is unavailable or invalid",
+    )
+    identity_sub = identity.add_subparsers(dest="identity_command")
+    verify = identity_sub.add_parser(
+        "verify",
+        help="Verify resolved identity against canonical project policy",
+    )
+    verify.add_argument(
+        "--advisory",
+        action="store_true",
+        help="Report policy mismatch as a warning instead of a failing exit status",
     )
     return parser
 
@@ -168,6 +183,18 @@ def _run_post_merge(argv: list[str]) -> int:
 def _run_identity(argv: list[str]) -> int:
     args = _identity_parser().parse_args(argv)
     paths = RuntimePaths.discover(args.repo)
+
+    if args.identity_command == "verify":
+        result = evaluate_repository_identity_policy(
+            paths.repo,
+            advisory=args.advisory,
+        )
+        if args.as_json:
+            print(json.dumps(result.as_dict(), indent=2))
+        else:
+            print(render_repository_identity_policy(result), end="")
+        return 0 if result.compliant or args.advisory else 1
+
     diagnostic = resolve_repository_identity(paths.repo, strict=args.strict)
     if args.as_json:
         print(json.dumps(diagnostic.as_dict(), indent=2))
@@ -188,6 +215,7 @@ def main(argv: list[str] | None = None) -> int:
         FileNotFoundError,
         PostMergeTransitionError,
         RepositoryIdentityError,
+        RepositoryIdentityPolicyError,
         RuntimeError,
         ValueError,
     ) as exc:

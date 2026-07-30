@@ -91,3 +91,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `86 passed`
 - Next action: Prepare WB-0021 pull request
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:ea971e23b56216f3331cdd63ac7875f09ed048ef980fa36e24f28c4a7f3504f7 -->
+## Checkpoint 2026-07-30T07:12:08.651626Z
+
+- Branch: `feat/repository-identity-policy`
+- Commit: `9c850b6b22e99e28dbc6d761a7b8c675164e3c59`
+- Commit subject: test(policy): cover workflow identity enforcement
+- Working tree: **clean**
+- Test evidence: `98 passed`
+- Next action: Prepare WB-0022 pull request

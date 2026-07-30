@@ -6,8 +6,8 @@ _Last updated: 2026-07-30 01:01 CEST_
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/repository-identity-diagnostics`
-- Active work block: `WB-0021 Repository Identity Diagnostics`
+- Active branch: `feat/repository-identity-policy`
+- Active work block: `WB-0022 Repository Identity Policy Enforcement`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -148,48 +148,62 @@ Verification:
 
 - `pytest -q`: **78 passed**.
 
+### PR #25 — feat: add repository identity diagnostics
+
+Merged into `main` as:
+
+```text
+6c9a4cff56731e8e53bfb886fde6c61a2340a085
+```
+
+Completed artifact: `WB-0021`.
+
+Verification:
+
+- `pytest -q`: **86 passed**.
+
 ## Current milestone
 
-Repository Identity Diagnostics v0.1.
+Repository Identity Policy Enforcement v0.1.
 
 ## Active objective
 
-Expose repository identity resolution as an explicit, inspectable and safe operator-facing diagnostic contract.
+Enforce canonical repository identity as a verifiable safety policy for identity-sensitive CyberCore operations.
 
 Scope:
 
-1. add a cybercore identity command;
-2. support human-readable and JSON output;
-3. report the configured origin, normalized identity and selected identity source;
-4. distinguish remote identity from deterministic path fallback;
-5. diagnose missing, invalid and unsupported origin configuration;
-6. provide a strict mode that rejects fallback identity;
-7. redact credentials and sensitive remote URL components;
-8. add CLI, security and fallback regression tests;
+1. add a cybercore identity verify command;
+2. define expected canonical repository identity in project state;
+3. detect clones connected to an unexpected repository or fork;
+4. reject path fallback for identity-sensitive operations;
+5. integrate identity policy checks into checkpoint, evidence and post-merge workflows;
+6. distinguish advisory warnings from hard policy failures;
+7. preserve read-only identity diagnostics without mutation;
+8. add correct remote, changed origin, fork and missing remote regression tests;
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/repository-identity-diagnostics`
+- Branch: `feat/repository-identity-policy`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: 86 passed
+- Tests: 98 passed
 - Pull request: not created
 
 ## Next action
 
-Prepare WB-0021 pull request
+Prepare WB-0022 pull request
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:82313961d6580f4149a6f724b72db06c7b1824b775e166dfa7fa838d36c81e1d -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:ea971e23b56216f3331cdd63ac7875f09ed048ef980fa36e24f28c4a7f3504f7 -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T06:09:08.276960Z`
-- Branch: `feat/repository-identity-diagnostics`
-- Commit: `8e070d97a3a2fe21fd80bff5d2a201aab7d4867e`
-- Commit subject: fix(identity): normalize host in safe origin output
+- Generated: `2026-07-30T07:12:08.651626Z`
+- Branch: `feat/repository-identity-policy`
+- Commit: `9c850b6b22e99e28dbc6d761a7b8c675164e3c59`
+- Commit subject: test(policy): cover workflow identity enforcement
 - Working tree: **clean**
-- Test evidence: `86 passed`
+- Test evidence: `98 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->
