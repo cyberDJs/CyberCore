@@ -71,13 +71,13 @@ def redact_git_remote(remote: str) -> str:
     if "://" not in value:
         scp_match = re.fullmatch(r"(?:[^@/:\s]+@)?([^:/\s]+):(.+)", value)
         if scp_match:
-            return f"{scp_match.group(1)}:{scp_match.group(2)}"
+            return f"{scp_match.group(1).lower()}:{scp_match.group(2)}"
         return value
 
     parsed = urlsplit(value)
     if parsed.hostname is None:
         return value
-    host = parsed.hostname
+    host = parsed.hostname.lower()
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"
     authority = host
