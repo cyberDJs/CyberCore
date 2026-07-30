@@ -7,7 +7,7 @@ _Last updated: 2026-07-30 21:51 CEST_
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
 - Active branch: `feat/security-verification-pipeline`
-- Active work block: `WB-0025 Security Verification Pipeline v0.1`
+- Active work block: `WB-0025 Security Verification Pipeline`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -226,7 +226,7 @@ Scope:
 - Work block: active
 - Branch: `feat/security-verification-pipeline`
 - Project Kernel: present
-- Runtime implementation: planned
+- Runtime implementation: implemented
 - Tests: 201 passed
 - Pull request: not created
 
@@ -234,15 +234,14 @@ Scope:
 
 Define the CI matrix and implement the first GitHub Actions verification workflow.
 
-
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:510ac86821dc43380543fa9e3947774f200e61e0fa65ed2a6ceac95a305d669e -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:b53aa6e7859062c86482a19b2bf7288c333218fb22d955d25bdeff937619965a -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T19:51:00Z`
-- Branch: `feat/context-disclosure-policy`
-- Commit: `4ffa60b6727cd00797a210f191ec40ae7973f831`
-- Commit subject: fix(disclosure): sanitize checkpoint memory persistence
+- Generated: `2026-07-30T20:32:49.897252Z`
+- Branch: `feat/security-verification-pipeline`
+- Commit: `27304c5190d13530a9e5fb06322bcbf37e91e75a`
+- Commit subject: docs(project): activate WB-0025 security verification pipeline
 - Working tree: **clean**
 - Test evidence: `201 passed`
 - Project Kernel: present

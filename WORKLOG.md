@@ -121,3 +121,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `201 passed`
 - Next action: Review PR #29 and verify security checks before merge.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:b53aa6e7859062c86482a19b2bf7288c333218fb22d955d25bdeff937619965a -->
+## Checkpoint 2026-07-30T20:32:49.897252Z
+
+- Branch: `feat/security-verification-pipeline`
+- Commit: `27304c5190d13530a9e5fb06322bcbf37e91e75a`
+- Commit subject: docs(project): activate WB-0025 security verification pipeline
+- Working tree: **clean**
+- Test evidence: `201 passed`
+- Next action: Define the CI matrix and implement the first GitHub Actions verification workflow.
