@@ -102,10 +102,16 @@ _FIELD_INDEX: Final[dict[str, DisclosureField]] = {
 }
 _REDACTED: Final[str] = "[REDACTED]"
 _REDACTED_PATH: Final[str] = "[REDACTED_PATH]"
-_ABSOLUTE_PATH = re.compile(
-    r"(?<![\w.-])/(?:Users|home|private|tmp|var|Volumes)/[^\s;,)`'\"]+"
+_POSIX_PATH = re.compile(r"(?<![\w.:@-])/(?:[^\s;,)`'\"]+/)*[^\s;,)`'\"]+")
+_WINDOWS_DRIVE_PATH = re.compile(r"(?<![\w.-])[A-Za-z]:\\(?:[^\s;,)`'\"]+\\?)*")
+_UNC_PATH = re.compile(r"\\\\[^\s\\;,)`'\"]+\\[^\s;,)`'\"]+")
+_URL = re.compile(r"\b(?:https?|ssh|git|file)://[^\s`'\")]+")
+_SCP_LIKE_GIT = re.compile(
+    r"(?<![\w.-])(?P<user>[^@\s:/]+)@(?P<host>[^:\s/]+):(?P<path>[^\s`'\")]+)"
 )
-_URL = re.compile(r"\bhttps?://[^\s`'\")]+")
+_SECRET_OPTION = re.compile(
+    r"(?i)(token|password|passwd|secret|credential|api[-_]?key|access[-_]?key)"
+)
 
 
 def disclosure_field(name: str) -> DisclosureField:
@@ -123,12 +129,28 @@ def disclosure_class(name: str) -> DisclosureClass:
 
 def _redact_url_credentials(value: str) -> str:
     parsed = urlsplit(value)
-    if not parsed.scheme or not parsed.netloc or "@" not in parsed.netloc:
+    if parsed.scheme == "file":
+        return f"file://{_REDACTED_PATH}"
+    if not parsed.scheme or not parsed.netloc:
+        return value
+    if "@" not in parsed.netloc:
         return value
     host = parsed.hostname or ""
     if parsed.port is not None:
         host = f"{host}:{parsed.port}"
     return urlunsplit((parsed.scheme, host, parsed.path, parsed.query, parsed.fragment))
+
+
+def _redact_scp_like_git_credentials(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        user = match.group("user")
+        host = match.group("host")
+        path = match.group("path")
+        if user == "git":
+            return match.group(0)
+        return f"{host}:{path}"
+
+    return _SCP_LIKE_GIT.sub(replace, value)
 
 
 def sanitize_disclosure_text(
@@ -139,10 +161,50 @@ def sanitize_disclosure_text(
     """Return a terminal-safe diagnostic string for disclosure surfaces."""
     selected_mode = DisclosureMode(mode)
     text = str(value)
-    text = _URL.sub(lambda match: _redact_url_credentials(match.group(0)), text)
+    protected_urls: list[str] = []
+
+    def protect_url(match: re.Match[str]) -> str:
+        protected_urls.append(_redact_url_credentials(match.group(0)))
+        return f"__CYBERCORE_URL_{len(protected_urls) - 1}__"
+
+    text = _URL.sub(protect_url, text)
+    text = _redact_scp_like_git_credentials(text)
     if selected_mode is not DisclosureMode.FULL:
-        text = _ABSOLUTE_PATH.sub(_REDACTED_PATH, text)
+        text = _UNC_PATH.sub(_REDACTED_PATH, text)
+        text = _WINDOWS_DRIVE_PATH.sub(_REDACTED_PATH, text)
+        text = _POSIX_PATH.sub(_REDACTED_PATH, text)
+    for index, url in enumerate(protected_urls):
+        text = text.replace(f"__CYBERCORE_URL_{index}__", url)
     return text
+
+
+def sanitize_command_argument(value: str) -> str:
+    """Sanitize one persisted command argument."""
+    if "=" in value:
+        key, _separator, raw_value = value.partition("=")
+        if _SECRET_OPTION.search(key):
+            return f"{key}={_REDACTED}"
+        return f"{key}={sanitize_disclosure_text(raw_value)}"
+    if _SECRET_OPTION.fullmatch(value.lstrip("-")):
+        return value
+    return sanitize_disclosure_text(value)
+
+
+def sanitize_command_arguments(arguments: list[str] | tuple[str, ...]) -> tuple[str, ...]:
+    """Sanitize command argv for persisted evidence."""
+    sanitized: list[str] = []
+    redact_next = False
+    for argument in arguments:
+        if redact_next:
+            sanitized.append(_REDACTED)
+            redact_next = False
+            continue
+        sanitized_argument = sanitize_command_argument(str(argument))
+        sanitized.append(sanitized_argument)
+        option_name = str(argument).lstrip("-")
+        if "=" not in str(argument) and _SECRET_OPTION.fullmatch(option_name):
+            redact_next = True
+    return tuple(sanitized)
 
 
 def disclosure_display_path(

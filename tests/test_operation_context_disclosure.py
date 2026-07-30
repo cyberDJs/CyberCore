@@ -10,6 +10,8 @@ from cybercore.operation_context_disclosure import (
     disclosure_class,
     disclosure_field,
     render_disclosed_context,
+    sanitize_command_arguments,
+    sanitize_disclosure_text,
 )
 
 
@@ -167,3 +169,56 @@ def test_text_renderer_uses_the_same_disclosure_policy() -> None:
 def test_invalid_disclosure_mode_is_rejected() -> None:
     with pytest.raises(ValueError):
         disclose_context_payload(_payload(), mode="invalid")
+
+
+@pytest.mark.parametrize(
+    "value,leaked",
+    [
+        ("/arbitrary/project/repo", "/arbitrary/project/repo"),
+        ("/System/Volumes/Data/Users/jan/repo", "/System/Volumes/Data/Users/jan/repo"),
+        ("/Users/jan/repo", "/Users/jan/repo"),
+        ("/home/jan/repo", "/home/jan/repo"),
+        ("C:\\Users\\jan\\repo", "C:\\Users\\jan\\repo"),
+        ("\\\\server\\share\\repo", "\\\\server\\share\\repo"),
+        ("file:///Users/jan/repo", "/Users/jan/repo"),
+        ("https://token:secret@example.test/org/repo.git", "token:secret"),
+        ("http://token:secret@example.test/org/repo.git", "token:secret"),
+        ("ssh://user:password@example.test/org/repo.git", "user:password"),
+        ("git://token:secret@example.test/org/repo.git", "token:secret"),
+        ("token@github.com:org/repo.git", "token@"),
+    ],
+)
+def test_sanitizer_covers_path_and_git_url_forms(value: str, leaked: str) -> None:
+    sanitized = sanitize_disclosure_text(value)
+
+    assert leaked not in sanitized
+
+
+def test_sanitizer_full_mode_keeps_local_paths_but_not_credentials() -> None:
+    local_path = "/Users/jan/repo"
+    credential_url = "ssh://user:password@example.test/org/repo.git"
+
+    assert sanitize_disclosure_text(local_path, mode=DisclosureMode.FULL) == local_path
+    assert "user:password" not in sanitize_disclosure_text(
+        credential_url,
+        mode=DisclosureMode.FULL,
+    )
+
+
+def test_command_argument_sanitizer_redacts_secret_like_values() -> None:
+    sanitized = sanitize_command_arguments(
+        (
+            "pytest",
+            "--token",
+            "abc123",
+            "--password=hunter2",
+            "https://user:secret@example.test/repo.git",
+            "/Users/jan/repo",
+        )
+    )
+
+    rendered = " ".join(sanitized)
+    assert "abc123" not in rendered
+    assert "hunter2" not in rendered
+    assert "user:secret" not in rendered
+    assert "/Users/jan/repo" not in rendered
