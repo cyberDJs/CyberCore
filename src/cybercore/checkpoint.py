@@ -96,9 +96,10 @@ def render_checkpoint(
     *,
     disclosure_mode: DisclosureMode | str = DisclosureMode.STANDARD,
 ) -> str:
+    mode = DisclosureMode(disclosure_mode)
     disclosed_context = disclosed_checkpoint_payload(
         checkpoint,
-        disclosure_mode=disclosure_mode,
+        disclosure_mode=mode,
     )
     cleanliness = "dirty" if checkpoint.dirty else "clean"
     lines = [
@@ -112,10 +113,13 @@ def render_checkpoint(
         f"- Working tree: **{cleanliness}**",
         f"- Project Kernel: {'present' if checkpoint.project_kernel_present else 'missing'}",
         f"- Project State: {'present' if checkpoint.project_state_present else 'missing'}",
+        f"- Changed path count: {disclosed_context['changed_path_count']}",
     ]
-    if checkpoint.changed_paths:
+    if mode is DisclosureMode.FULL and disclosed_context["changed_paths"]:
         lines.extend(["", "## Changed paths", ""])
-        lines.extend(f"- `{path}`" for path in checkpoint.changed_paths)
+        changed_paths = disclosed_context["changed_paths"]
+        assert isinstance(changed_paths, list)
+        lines.extend(f"- `{path}`" for path in changed_paths)
     return "\n".join(lines) + "\n"
 
 
@@ -142,7 +146,10 @@ def disclosed_checkpoint_payload(
         "commit": disclosed_context["commit"],
         "commit_subject": checkpoint.commit_subject,
         "dirty": disclosed_context["dirty"],
-        "changed_paths": list(checkpoint.changed_paths),
+        "changed_path_count": len(checkpoint.changed_paths),
+        "changed_paths": list(checkpoint.changed_paths)
+        if DisclosureMode(disclosure_mode) is DisclosureMode.FULL
+        else "[REDACTED]",
         "project_state_present": disclosed_context["project_state_present"],
         "project_kernel_present": disclosed_context["project_kernel_present"],
     }

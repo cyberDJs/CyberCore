@@ -104,6 +104,8 @@ def test_checkpoint_cli_json_redacts_repository_by_default(
     assert rc == 0
     assert payload["repository"] == "[REDACTED]"
     assert payload["dirty"] is False
+    assert payload["changed_path_count"] == 0
+    assert payload["changed_paths"] == "[REDACTED]"
     assert str(repo.resolve()) not in json.dumps(payload)
 
 
@@ -119,6 +121,7 @@ def test_checkpoint_cli_full_json_discloses_repository(
     assert rc == 0
     assert payload["repository"] == str(repo.resolve())
     assert payload["dirty"] is False
+    assert payload["changed_paths"] == []
 
 
 def test_checkpoint_cli_output_path_is_relative_by_default(
@@ -133,6 +136,58 @@ def test_checkpoint_cli_output_path_is_relative_by_default(
     assert rc == 0
     assert output == "CHECKPOINT checkpoint.md\n"
     assert str(repo.resolve()) not in output
+
+
+def test_checkpoint_standard_output_hides_sensitive_changed_paths(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo = _repo(tmp_path)
+    (repo / "customers" / "acme").mkdir(parents=True)
+    (repo / "customers" / "acme" / "prod-token.txt").write_text("x", encoding="utf-8")
+    (repo / "secrets" / "client-name").mkdir(parents=True)
+    (repo / "secrets" / "client-name" / "api-key.env").write_text("x", encoding="utf-8")
+    _git(repo, "add", "-N", "customers/acme/prod-token.txt")
+    _git(repo, "add", "-N", "secrets/client-name/api-key.env")
+
+    rc = main(["--repo", str(repo), "checkpoint"])
+    output = capsys.readouterr().out
+
+    assert rc == 0
+    assert "Changed path count: 2" in output
+    assert "customers/acme/prod-token.txt" not in output
+    assert "secrets/client-name/api-key.env" not in output
+
+
+def test_checkpoint_json_hides_sensitive_changed_paths_until_full(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    repo = _repo(tmp_path)
+    (repo / "customers" / "acme").mkdir(parents=True)
+    (repo / "customers" / "acme" / "prod-token.txt").write_text("x", encoding="utf-8")
+    (repo / "secrets" / "client-name").mkdir(parents=True)
+    (repo / "secrets" / "client-name" / "api-key.env").write_text("x", encoding="utf-8")
+    _git(repo, "add", "-N", "customers/acme/prod-token.txt")
+    _git(repo, "add", "-N", "secrets/client-name/api-key.env")
+
+    rc = main(["--repo", str(repo), "--json", "checkpoint", "--redact"])
+    redacted = json.loads(capsys.readouterr().out)
+
+    assert rc == 0
+    assert redacted["changed_path_count"] == 2
+    assert redacted["changed_paths"] == "[REDACTED]"
+    assert "customers/acme/prod-token.txt" not in json.dumps(redacted)
+    assert "secrets/client-name/api-key.env" not in json.dumps(redacted)
+
+    rc = main(["--repo", str(repo), "--json", "checkpoint", "--full"])
+    full = json.loads(capsys.readouterr().out)
+
+    assert rc == 0
+    assert full["changed_paths"] == [
+        "customers/acme/prod-token.txt",
+        "secrets/client-name/api-key.env",
+    ]
 
 
 def test_checkpoint_cli_rejects_redact_and_full_together(tmp_path: Path) -> None:
