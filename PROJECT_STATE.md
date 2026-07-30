@@ -7,7 +7,7 @@ _Last updated: 2026-07-30 01:01 CEST_
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
 - Active branch: `feat/remote-aware-repository-identity`
-- Active work block: `WB-0020 Remote-Aware Repository Identity v0.1`
+- Active work block: `WB-0020 Remote-Aware Repository Identity`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -157,25 +157,24 @@ Scope:
 - Work block: active
 - Branch: `feat/remote-aware-repository-identity`
 - Project Kernel: present
-- Runtime implementation: planned
-- Tests: 66 passed
+- Runtime implementation: implemented
+- Tests: 78 passed
 - Pull request: not created
 
 ## Next action
 
-Define remote identity normalization contract and tests.
-
+Prepare WB-0020 pull request
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:442641789d2135153b0a26c2388703342ef740b05a71357b7751f50d8ac0890f -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:9276592d0fa4dabfc1283b8d49de1b9877155cc0fc28b7f8a67183483d8bdaf8 -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T03:20:59.395931Z`
-- Branch: `feat/post-merge-state-transition`
-- Commit: `39987cefa72fbf1cc7ac8035701a50c8a7187dd4`
-- Commit subject: test(cli): cover controlled post-merge write entrypoint
+- Generated: `2026-07-30T05:15:03.966351Z`
+- Branch: `feat/remote-aware-repository-identity`
+- Commit: `3a2daae9382ec56f5953ca79bfd1e9dd3cee4fe6`
+- Commit subject: test(memory): cover remote identity and marker migration
 - Working tree: **clean**
-- Test evidence: `66 passed`
+- Test evidence: `78 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

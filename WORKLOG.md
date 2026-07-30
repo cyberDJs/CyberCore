@@ -71,3 +71,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `66 passed`
 - Next action: Prepare PR #23
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:9276592d0fa4dabfc1283b8d49de1b9877155cc0fc28b7f8a67183483d8bdaf8 -->
+## Checkpoint 2026-07-30T05:15:03.966351Z
+
+- Branch: `feat/remote-aware-repository-identity`
+- Commit: `3a2daae9382ec56f5953ca79bfd1e9dd3cee4fe6`
+- Commit subject: test(memory): cover remote identity and marker migration
+- Working tree: **clean**
+- Test evidence: `78 passed`
+- Next action: Prepare WB-0020 pull request
