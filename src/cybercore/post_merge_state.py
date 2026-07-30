@@ -1,0 +1,235 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+import os
+from pathlib import Path
+import re
+import tempfile
+
+from cybercore.post_merge import PostMergeTransitionError, PostMergeTransitionPreview
+
+
+@dataclass(frozen=True, slots=True)
+class PostMergeStatePlan:
+    kernel_path: Path
+    project_state_path: Path
+    kernel_content: str
+    project_state_content: str
+
+    def write(self) -> None:
+        targets = (
+            (self.kernel_path, self.kernel_content),
+            (self.project_state_path, self.project_state_content),
+        )
+        staged_updates: dict[Path, Path] = {}
+        staged_rollbacks: dict[Path, Path] = {}
+        replaced: list[Path] = []
+        try:
+            for target, content in targets:
+                staged_updates[target] = _stage(target, content.encode("utf-8"), ".new")
+                staged_rollbacks[target] = _stage(target, target.read_bytes(), ".rollback")
+            for target, _content in targets:
+                os.replace(staged_updates[target], target)
+                replaced.append(target)
+        except Exception:
+            rollback_error: Exception | None = None
+            for target in reversed(replaced):
+                try:
+                    os.replace(staged_rollbacks[target], target)
+                except Exception as exc:  # pragma: no cover - catastrophic filesystem failure
+                    rollback_error = rollback_error or exc
+            if rollback_error is not None:
+                raise PostMergeTransitionError(
+                    "Post-merge state write failed and rollback was incomplete"
+                ) from rollback_error
+            raise
+        finally:
+            for staged in (*staged_updates.values(), *staged_rollbacks.values()):
+                staged.unlink(missing_ok=True)
+
+
+def _stage(target: Path, content: bytes, suffix: str) -> Path:
+    descriptor, raw_path = tempfile.mkstemp(
+        prefix=f".{target.name}.cybercore-post-merge-",
+        suffix=suffix,
+        dir=target.parent,
+    )
+    staged = Path(raw_path)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        staged.unlink(missing_ok=True)
+        raise
+    return staged
+
+
+def _replace_required(pattern: str, replacement: str, content: str, label: str) -> str:
+    updated, count = re.subn(pattern, replacement, content, count=1, flags=re.MULTILINE)
+    if count != 1:
+        raise PostMergeTransitionError(f"Unable to update {label}")
+    return updated
+
+
+def _kernel_transition(
+    current: str,
+    preview: PostMergeTransitionPreview,
+    *,
+    completed_artifact: str,
+    verification: str,
+    next_artifact: str,
+    next_milestone: str,
+    next_branch: str,
+) -> str:
+    active_match = re.search(r"(?m)^  active_artifact: (\S+)$", current)
+    if active_match is None or active_match.group(1) != completed_artifact:
+        actual = active_match.group(1) if active_match else "missing"
+        raise PostMergeTransitionError(
+            f"Active artifact mismatch: {actual} != {completed_artifact}"
+        )
+
+    completed_marker = f"  - artifact: {completed_artifact}\n"
+    if completed_marker not in current:
+        completed_entry = (
+            f"  - artifact: {completed_artifact}\n"
+            f"    pull_request: {preview.pull_request.number}\n"
+            f"    merge_commit: {preview.pull_request.merge_commit}\n"
+            f"    verification: {verification}\n"
+        )
+        current = current.replace("\nnext:\n", "\n" + completed_entry + "\nnext:\n", 1)
+
+    current = _replace_required(
+        r"^  milestone: .+$", f"  milestone: {next_milestone}", current, "current milestone"
+    )
+    current = _replace_required(
+        r"^  active_artifact: .+$", f"  active_artifact: {next_artifact}", current, "active artifact"
+    )
+    current = _replace_required(
+        r"^  branch: .+$", f"  branch: {next_branch}", current, "active branch"
+    )
+    current = _replace_required(
+        r"^  pull_request: .+$", "  pull_request: null", current, "pull request"
+    )
+    current = _replace_required(
+        r"^  tests: .+$", f"  tests: {verification}", current, "test baseline"
+    )
+    return current
+
+
+def _project_state_transition(
+    current: str,
+    preview: PostMergeTransitionPreview,
+    *,
+    completed_artifact: str,
+    verification: str,
+    next_artifact: str,
+    next_milestone: str,
+    next_branch: str,
+    next_action: str,
+) -> str:
+    current = _replace_required(
+        r"^- Active branch: `[^`]+`$",
+        f"- Active branch: `{next_branch}`",
+        current,
+        "Project State active branch",
+    )
+    current = _replace_required(
+        r"^- Active work block: `[^`]+`$",
+        f"- Active work block: `{next_artifact} {next_milestone}`",
+        current,
+        "Project State active work block",
+    )
+    current = _replace_required(
+        r"(?ms)(^## Current milestone\n\n).*?(?=\n## )",
+        rf"\1{next_milestone}.\n",
+        current,
+        "Project State milestone",
+    )
+    current = _replace_required(
+        r"(?ms)(^## Current status\n\n).*?(?=\n## )",
+        (
+            "\\1- Work block: active\n"
+            f"- Branch: `{next_branch}`\n"
+            "- Project Kernel: present\n"
+            "- Runtime implementation: planned\n"
+            f"- Tests: {verification}\n"
+            "- Pull request: not created\n"
+        ),
+        current,
+        "Project State status",
+    )
+    current = _replace_required(
+        r"(?ms)(^## Next action\n\n).*?(?=\n<!-- CYBERCORE:CHECKPOINT:START -->)",
+        rf"\1{next_action}\n\n",
+        current,
+        "Project State next action",
+    )
+
+    heading = f"### PR #{preview.pull_request.number} — {preview.pull_request.title}"
+    if heading not in current:
+        completed = (
+            f"{heading}\n\n"
+            "Merged into `main` as:\n\n"
+            "```text\n"
+            f"{preview.pull_request.merge_commit}\n"
+            "```\n\n"
+            f"Completed artifact: `{completed_artifact}`.\n\n"
+            "Verification:\n\n"
+            f"- `pytest -q`: **{verification.replace('_', ' ')}**.\n\n"
+        )
+        current = current.replace("\n## Current milestone\n", "\n" + completed + "## Current milestone\n", 1)
+    return current
+
+
+def plan_post_merge_state_update(
+    repo: Path,
+    preview: PostMergeTransitionPreview,
+    *,
+    completed_artifact: str,
+    verification: str,
+    next_artifact: str,
+    next_milestone: str,
+    next_branch: str,
+    next_action: str,
+) -> PostMergeStatePlan:
+    kernel_path = repo / ".cybercore" / "project.yaml"
+    project_state_path = repo / "PROJECT_STATE.md"
+    if not kernel_path.is_file() or not project_state_path.is_file():
+        raise PostMergeTransitionError("Canonical Project Kernel or Project State is missing")
+
+    kernel_content = _kernel_transition(
+        kernel_path.read_text(encoding="utf-8"),
+        preview,
+        completed_artifact=completed_artifact,
+        verification=verification,
+        next_artifact=next_artifact,
+        next_milestone=next_milestone,
+        next_branch=next_branch,
+    )
+    project_state_content = _project_state_transition(
+        project_state_path.read_text(encoding="utf-8"),
+        preview,
+        completed_artifact=completed_artifact,
+        verification=verification,
+        next_artifact=next_artifact,
+        next_milestone=next_milestone,
+        next_branch=next_branch,
+        next_action=next_action,
+    )
+    return PostMergeStatePlan(
+        kernel_path=kernel_path,
+        project_state_path=project_state_path,
+        kernel_content=kernel_content,
+        project_state_content=project_state_content,
+    )
+
+
+def render_post_merge_state_preview(plan: PostMergeStatePlan) -> str:
+    return (
+        "=== .cybercore/project.yaml ===\n"
+        + plan.kernel_content
+        + "\n=== PROJECT_STATE.md ===\n"
+        + plan.project_state_content
+    )
