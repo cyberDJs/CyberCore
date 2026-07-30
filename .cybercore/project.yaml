@@ -22,9 +22,9 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Idempotent Canonical Memory v0.1
-  active_artifact: WB-0018
-  branch: feat/idempotent-canonical-memory
+  milestone: Post-Merge State Transition v0.1
+  active_artifact: WB-0019
+  branch: feat/post-merge-state-transition
   pull_request: null
 
 status:
@@ -33,12 +33,13 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 46_passed
+  tests: 52_passed
   ci: local_verification
   checkpoint_runtime: verified
   checkpoint_persistence: verified
   verification_evidence: verified
-  idempotent_canonical_memory: planned
+  idempotent_canonical_memory: verified
+  post_merge_state_transition: planned
 
 completed:
   - artifact: WB-0015
@@ -53,15 +54,20 @@ completed:
     pull_request: 21
     merge_commit: d21e3bc3875bf298939585958c90167fa36dd76c
     verification: 46_passed
+  - artifact: WB-0018
+    pull_request: 22
+    merge_commit: 1e174e9180e64c3bfc5c70fa52d5c7e399ead9eb
+    verification: 52_passed
 
 next:
-  - define a stable checkpoint identity independent of generation timestamp
-  - prevent duplicate WORKLOG.md entries for the same repository state
-  - make repeated preview and write operations converge to identical canonical content
-  - stage both canonical memory files before replacement
-  - prevent partial canonical-memory updates when one filesystem operation fails
-  - preserve human-controlled content and existing governance boundaries
-  - add fault-injection, idempotency, and local verification tests
+  - define an explicit post-merge state transition command
+  - verify the pull request is merged and its merge commit exists on main
+  - update the completed artifact ledger and verification baseline
+  - activate exactly one successor artifact
+  - reject dirty, stale, mismatched, or unverified repository state
+  - support preview before explicit write
+  - preserve human-controlled content and governance boundaries
+  - add transition, rejection, and idempotency regression tests
 
 rules:
   state_first: true
