@@ -111,3 +111,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `109 passed`
 - Next action: Define the Operation Context Disclosure Policy contract.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:510ac86821dc43380543fa9e3947774f200e61e0fa65ed2a6ceac95a305d669e -->
+## Checkpoint 2026-07-30T19:51:00Z
+
+- Branch: `feat/context-disclosure-policy`
+- Commit: `4ffa60b6727cd00797a210f191ec40ae7973f831`
+- Commit subject: fix(disclosure): sanitize checkpoint memory persistence
+- Working tree: **clean**
+- Test evidence: `201 passed`
+- Next action: Review PR #29 and verify security checks before merge.
