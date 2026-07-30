@@ -7,9 +7,7 @@ import subprocess
 from typing import Any, Callable
 from urllib.request import Request, urlopen
 
-from cybercore.repository_identity_policy import (
-    enforce_configured_repository_identity_policy,
-)
+from cybercore.trusted_operation_context import enforce_trusted_operation_context
 
 
 class PostMergeTransitionError(RuntimeError):
@@ -93,16 +91,12 @@ def plan_post_merge_transition(
     opener: Callable[..., Any] = urlopen,
 ) -> PostMergeTransitionPreview:
     repo = repo.resolve()
-    if not (repo / ".git").exists():
-        raise PostMergeTransitionError(f"Not a Git repository: {repo}")
-
-    enforce_configured_repository_identity_policy(
+    enforce_trusted_operation_context(
         repo,
-        operation="Post-merge transition",
+        operation="post_merge_transition",
+        risk="high",
+        require_clean=True,
     )
-
-    if _run_git(repo, "status", "--porcelain"):
-        raise PostMergeTransitionError("Working tree must be clean")
 
     repository = _repository_slug(repo)
     payload = _fetch_pull_request(repository, pull_request_number, opener=opener)
