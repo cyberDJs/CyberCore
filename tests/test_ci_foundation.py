@@ -11,6 +11,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 VERIFY_SCRIPT_PATH = REPO_ROOT / "scripts" / "verify.sh"
+ALLOWED_ACTIONS = {
+    "actions/checkout",
+    "actions/setup-python",
+    "actions/upload-artifact",
+}
+PINNED_ACTION_REF = re.compile(r"^(actions/[a-z0-9-]+)@([0-9a-f]{40})$")
 
 
 def _pyproject() -> dict[str, object]:
@@ -19,6 +25,13 @@ def _pyproject() -> dict[str, object]:
 
 def _workflow() -> dict[str, object]:
     return yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+
+def _uses_steps() -> list[dict[str, object]]:
+    steps: list[dict[str, object]] = []
+    for job in _workflow()["jobs"].values():
+        steps.extend(step for step in job["steps"] if "uses" in step)
+    return steps
 
 
 def test_pyproject_defines_required_development_toolchain() -> None:
@@ -61,12 +74,21 @@ def test_ci_workflow_parses_and_uses_expected_triggers() -> None:
 def test_ci_workflow_security_and_action_pinning_invariants() -> None:
     workflow_text = WORKFLOW_PATH.read_text(encoding="utf-8")
     workflow = _workflow()
+    uses_steps = _uses_steps()
 
     assert workflow["permissions"] == {"contents": "read"}
     assert "pull_request_target" not in workflow_text
     assert workflow["concurrency"]["cancel-in-progress"] is True
-    refs = re.findall(r"uses: actions/[-a-z]+@([0-9a-f]{40})", workflow_text)
-    assert len(refs) == 7
+
+    assert uses_steps
+    for step in uses_steps:
+        uses = step["uses"]
+        assert isinstance(uses, str)
+        ref = PINNED_ACTION_REF.fullmatch(uses)
+        assert ref is not None
+        assert ref.group(1) in ALLOWED_ACTIONS
+        if ref.group(1) == "actions/checkout":
+            assert step.get("with", {}).get("persist-credentials") is False
 
 
 def test_ci_workflow_defines_required_checks_and_python_matrix() -> None:
