@@ -1,3 +1,3 @@
-from cybercore.cli import main
+from cybercore.entrypoint import main
 
 raise SystemExit(main())
