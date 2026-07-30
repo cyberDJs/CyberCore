@@ -6,8 +6,8 @@ _Last updated: 2026-07-30 01:01 CEST_
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/post-merge-state-transition`
-- Active work block: `WB-0019 Post-Merge State Transition`
+- Active branch: `feat/remote-aware-repository-identity`
+- Active work block: `WB-0020 Remote-Aware Repository Identity`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: local or self-hosted verification; GitHub Actions are not required
 
@@ -120,48 +120,61 @@ Verification:
 
 - `pytest -q`: **52 passed**.
 
+### PR #23 — feat: add controlled post-merge state transitions
+
+Merged into `main` as:
+
+```text
+ca2da8b72563e65d0818861e00ff38ca6f12b75e
+```
+
+Completed artifact: `WB-0019`.
+
+Verification:
+
+- `pytest -q`: **66 passed**.
+
 ## Current milestone
 
-Post-Merge State Transition v0.1.
+Remote-Aware Repository Identity v0.1.
 
 ## Active objective
 
-Create a controlled transition that closes a merged work block, verifies its merge state, records completion, and activates exactly one successor artifact.
+Make repository and checkpoint identity stable across clone paths by deriving it from a normalized Git remote when available.
 
 Scope:
 
-1. define an explicit post-merge state transition command;
-2. verify the pull request is merged and its merge commit exists on `main`;
-3. update the completed-artifact ledger and verification baseline;
-4. activate exactly one successor artifact;
-5. reject dirty, stale, mismatched, or unverified repository state;
-6. provide preview before explicit write;
-7. preserve human-controlled content and governance boundaries;
-8. add transition, rejection, and idempotency regression tests.
+1. normalize supported HTTPS, SSH and SCP-style Git remote URLs;
+2. derive canonical repository identity from the origin remote;
+3. preserve a deterministic fallback for repositories without a usable remote;
+4. make checkpoint identity identical across separate clone locations;
+5. handle missing, changed and unsupported origin remotes safely;
+6. preserve compatibility with existing path-bound checkpoint markers;
+7. add normalization, migration and multi-clone regression tests;
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/post-merge-state-transition`
+- Branch: `feat/remote-aware-repository-identity`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: 66 passed
+- Tests: 78 passed
 - Pull request: not created
 
 ## Next action
 
-Prepare PR #23
+Prepare WB-0020 pull request
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:442641789d2135153b0a26c2388703342ef740b05a71357b7751f50d8ac0890f -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:9276592d0fa4dabfc1283b8d49de1b9877155cc0fc28b7f8a67183483d8bdaf8 -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T03:20:59.395931Z`
-- Branch: `feat/post-merge-state-transition`
-- Commit: `39987cefa72fbf1cc7ac8035701a50c8a7187dd4`
-- Commit subject: test(cli): cover controlled post-merge write entrypoint
+- Generated: `2026-07-30T05:15:03.966351Z`
+- Branch: `feat/remote-aware-repository-identity`
+- Commit: `3a2daae9382ec56f5953ca79bfd1e9dd3cee4fe6`
+- Commit subject: test(memory): cover remote identity and marker migration
 - Working tree: **clean**
-- Test evidence: `66 passed`
+- Test evidence: `78 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

@@ -22,9 +22,9 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Post-Merge State Transition v0.1
-  active_artifact: WB-0019
-  branch: feat/post-merge-state-transition
+  milestone: Remote-Aware Repository Identity v0.1
+  active_artifact: WB-0020
+  branch: feat/remote-aware-repository-identity
   pull_request: null
 
 status:
@@ -33,13 +33,14 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 52_passed
+  tests: 66_passed
   ci: local_verification
   checkpoint_runtime: verified
   checkpoint_persistence: verified
   verification_evidence: verified
   idempotent_canonical_memory: verified
-  post_merge_state_transition: planned
+  post_merge_state_transition: verified
+  remote_aware_repository_identity: planned
 
 completed:
   - artifact: WB-0015
@@ -59,15 +60,17 @@ completed:
     merge_commit: 1e174e9180e64c3bfc5c70fa52d5c7e399ead9eb
     verification: 52_passed
 
+  - artifact: WB-0019
+    pull_request: 23
+    merge_commit: ca2da8b72563e65d0818861e00ff38ca6f12b75e
+    verification: 66_passed
+
 next:
-  - define an explicit post-merge state transition command
-  - verify the pull request is merged and its merge commit exists on main
-  - update the completed artifact ledger and verification baseline
-  - activate exactly one successor artifact
-  - reject dirty, stale, mismatched, or unverified repository state
-  - support preview before explicit write
-  - preserve human-controlled content and governance boundaries
-  - add transition, rejection, and idempotency regression tests
+  - define the canonical repository identity contract
+  - implement Git remote URL normalization
+  - integrate remote identity into checkpoint hashing
+  - add path fallback and migration compatibility
+  - verify equivalent identities across multiple clone paths
 
 rules:
   state_first: true

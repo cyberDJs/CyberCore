@@ -36,7 +36,7 @@ class PostMergeStatePlan:
             for target in reversed(replaced):
                 try:
                     os.replace(staged_rollbacks[target], target)
-                except Exception as exc:  # pragma: no cover - catastrophic filesystem failure
+                except Exception as exc:  # pragma: no cover
                     rollback_error = rollback_error or exc
             if rollback_error is not None:
                 raise PostMergeTransitionError(
@@ -73,6 +73,16 @@ def _replace_required(pattern: str, replacement: str, content: str, label: str) 
     return updated
 
 
+def _set_status(current: str, key: str, value: str) -> str:
+    pattern = rf"(?m)^  {re.escape(key)}: .+$"
+    if re.search(pattern, current):
+        return re.sub(pattern, f"  {key}: {value}", current, count=1)
+    marker = "\ncompleted:\n"
+    if marker not in current:
+        raise PostMergeTransitionError("Unable to update capability status")
+    return current.replace(marker, f"  {key}: {value}\n{marker}", 1)
+
+
 def _kernel_transition(
     current: str,
     preview: PostMergeTransitionPreview,
@@ -82,6 +92,9 @@ def _kernel_transition(
     next_artifact: str,
     next_milestone: str,
     next_branch: str,
+    completed_status: str | None,
+    next_status: str | None,
+    next_tasks: tuple[str, ...],
 ) -> str:
     active_match = re.search(r"(?m)^  active_artifact: (\S+)$", current)
     if active_match is None or active_match.group(1) != completed_artifact:
@@ -115,6 +128,15 @@ def _kernel_transition(
     current = _replace_required(
         r"^  tests: .+$", f"  tests: {verification}", current, "test baseline"
     )
+    if completed_status:
+        current = _set_status(current, completed_status, "verified")
+    if next_status:
+        current = _set_status(current, next_status, "planned")
+    if next_tasks:
+        task_block = "next:\n" + "".join(f"  - {task}\n" for task in next_tasks)
+        current = _replace_required(
+            r"(?ms)^next:\n.*?(?=\nrules:)", task_block, current, "next task list"
+        )
     return current
 
 
@@ -128,6 +150,8 @@ def _project_state_transition(
     next_milestone: str,
     next_branch: str,
     next_action: str,
+    next_objective: str | None,
+    next_scope: tuple[str, ...],
 ) -> str:
     current = _replace_required(
         r"^- Active branch: `[^`]+`$",
@@ -147,6 +171,18 @@ def _project_state_transition(
         current,
         "Project State milestone",
     )
+    if next_objective is not None:
+        scope_text = "Scope:\n\n" + "".join(
+            f"{index}. {item.rstrip('.;')};\n"
+            for index, item in enumerate(next_scope, start=1)
+        )
+        replacement = f"\\1{next_objective}\n\n{scope_text}"
+        current = _replace_required(
+            r"(?ms)(^## Active objective\n\n).*?(?=\n## Current status)",
+            replacement,
+            current,
+            "Project State objective and scope",
+        )
     current = _replace_required(
         r"(?ms)(^## Current status\n\n).*?(?=\n## )",
         (
@@ -154,7 +190,7 @@ def _project_state_transition(
             f"- Branch: `{next_branch}`\n"
             "- Project Kernel: present\n"
             "- Runtime implementation: planned\n"
-            f"- Tests: {verification}\n"
+            f"- Tests: {verification.replace('_', ' ')}\n"
             "- Pull request: not created\n"
         ),
         current,
@@ -193,7 +229,14 @@ def plan_post_merge_state_update(
     next_milestone: str,
     next_branch: str,
     next_action: str,
+    completed_status: str | None = None,
+    next_status: str | None = None,
+    next_objective: str | None = None,
+    next_scope: tuple[str, ...] = (),
+    next_tasks: tuple[str, ...] = (),
 ) -> PostMergeStatePlan:
+    if next_objective is not None and not next_scope:
+        raise PostMergeTransitionError("A next objective requires at least one scope item")
     kernel_path = repo / ".cybercore" / "project.yaml"
     project_state_path = repo / "PROJECT_STATE.md"
     if not kernel_path.is_file() or not project_state_path.is_file():
@@ -207,6 +250,9 @@ def plan_post_merge_state_update(
         next_artifact=next_artifact,
         next_milestone=next_milestone,
         next_branch=next_branch,
+        completed_status=completed_status,
+        next_status=next_status,
+        next_tasks=next_tasks,
     )
     project_state_content = _project_state_transition(
         project_state_path.read_text(encoding="utf-8"),
@@ -217,6 +263,8 @@ def plan_post_merge_state_update(
         next_milestone=next_milestone,
         next_branch=next_branch,
         next_action=next_action,
+        next_objective=next_objective,
+        next_scope=next_scope,
     )
     return PostMergeStatePlan(
         kernel_path=kernel_path,

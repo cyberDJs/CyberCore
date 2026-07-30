@@ -40,6 +40,11 @@ def _post_merge_parser() -> argparse.ArgumentParser:
     post_merge.add_argument("--next-milestone")
     post_merge.add_argument("--next-branch")
     post_merge.add_argument("--next-action")
+    post_merge.add_argument("--completed-status")
+    post_merge.add_argument("--next-status")
+    post_merge.add_argument("--next-objective")
+    post_merge.add_argument("--next-scope", action="append", default=[])
+    post_merge.add_argument("--next-task", action="append", default=[])
     post_merge.add_argument(
         "--write",
         action="store_true",
@@ -48,24 +53,39 @@ def _post_merge_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _state_arguments(args: argparse.Namespace) -> tuple[str, str, str, str, str, str] | None:
-    values = (
-        args.completed_artifact,
-        args.verification,
-        args.next_artifact,
-        args.next_milestone,
-        args.next_branch,
-        args.next_action,
+def _state_arguments(args: argparse.Namespace) -> dict[str, object] | None:
+    scalar_names = (
+        "completed_artifact",
+        "verification",
+        "next_artifact",
+        "next_milestone",
+        "next_branch",
+        "next_action",
+        "completed_status",
+        "next_status",
+        "next_objective",
     )
-    supplied = [value is not None for value in values]
-    if any(supplied) and not all(supplied):
+    scalar_values = [getattr(args, name) for name in scalar_names]
+    any_state = any(value is not None for value in scalar_values) or bool(
+        args.next_scope or args.next_task
+    )
+    complete = all(value is not None for value in scalar_values) and bool(
+        args.next_scope and args.next_task
+    )
+    if any_state and not complete:
         raise ValueError(
-            "State transition requires --completed-artifact, --verification, "
-            "--next-artifact, --next-milestone, --next-branch and --next-action"
+            "State transition requires completed/next artifact metadata, capability "
+            "statuses, next objective, at least one --next-scope and at least one --next-task"
         )
-    if args.write and not all(supplied):
-        raise ValueError("--write requires all canonical state transition arguments")
-    return values if all(supplied) else None  # type: ignore[return-value]
+    if args.write and not complete:
+        raise ValueError("--write requires a complete successor work block contract")
+    if not complete:
+        return None
+    return {
+        **{name: getattr(args, name) for name in scalar_names},
+        "next_scope": tuple(args.next_scope),
+        "next_tasks": tuple(args.next_task),
+    }
 
 
 def _post_merge_payload(preview, *, mutation: str) -> dict[str, object]:
@@ -97,23 +117,10 @@ def _run_post_merge(argv: list[str]) -> int:
 
     state_plan = None
     if state_arguments is not None:
-        (
-            completed_artifact,
-            verification,
-            next_artifact,
-            next_milestone,
-            next_branch,
-            next_action,
-        ) = state_arguments
         state_plan = plan_post_merge_state_update(
             paths.repo,
             preview,
-            completed_artifact=completed_artifact,
-            verification=verification,
-            next_artifact=next_artifact,
-            next_milestone=next_milestone,
-            next_branch=next_branch,
-            next_action=next_action,
+            **state_arguments,
         )
 
     if args.write:
