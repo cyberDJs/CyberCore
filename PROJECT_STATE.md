@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-07-30 21:51 CEST_
+_Last updated: 2026-07-31 05:34 CEST_
 
 ## Source of truth
 
@@ -9,7 +9,7 @@ _Last updated: 2026-07-30 21:51 CEST_
 - Active branch: `feat/security-verification-pipeline`
 - Active work block: `WB-0025 Security Verification Pipeline`
 - Governance rule: no production mutation without explicit human approval
-- CI policy: local or self-hosted verification; GitHub Actions are not required
+- CI policy: GitHub Actions verification is required before merge; branch-protection enforcement is deferred
 
 ## Completed checkpoints
 
@@ -227,12 +227,22 @@ Scope:
 - Branch: `feat/security-verification-pipeline`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: 214 passed
-- Pull request: not created
+- Tests: 214 passed locally and in GitHub Actions
+- Hosted CI: verified — run `30588331452`, all 6 jobs passed
+- Pull request: #30 opened as draft
+
+Hosted CI jobs:
+
+1. `tests (python 3.11)` — passed;
+2. `tests (python 3.12)` — passed;
+3. `tests (python 3.13)` — passed;
+4. `tests (python 3.14)` — passed;
+5. `quality` — passed;
+6. `package` — passed.
 
 ## Next action
 
-Open a draft PR and observe the first GitHub Actions CI run.
+Review draft PR #30 and confirm the CI foundation before the ready-for-review transition.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:e3315217405865351d116ddbdc2d9a5a4f01e903893de145aefbd8875bd7e12e -->
