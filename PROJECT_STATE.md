@@ -245,15 +245,15 @@ Hosted CI jobs:
 Review draft PR #30 and confirm the CI foundation before the ready-for-review transition.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:e3315217405865351d116ddbdc2d9a5a4f01e903893de145aefbd8875bd7e12e -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:b6455e47afbc6860710121bdbb1467dc40d2bb3d8c91a672fe9cd20336ca341a -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T21:03:52.696599Z`
+- Generated: `2026-07-31T03:34:00Z`
 - Branch: `feat/security-verification-pipeline`
-- Commit: `a5c080f6b990b65bb54b0006cefa9a8701df8540`
-- Commit subject: docs(project): mark WB-0025 CI foundation implemented
+- Commit: `18bec34f76e7915fa02301ee345dece0ac575ba5`
+- Commit subject: docs(project): record PR 30 hosted CI state
 - Working tree: **clean**
-- Test evidence: `214 passed`
+- Test evidence: `214 passed; GitHub Actions run 30588331452: 6/6 jobs passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->
