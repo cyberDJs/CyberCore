@@ -234,7 +234,9 @@ Delivered:
 
 Verification:
 
-- local validation is required before opening a draft PR;
+- local validation completed: Ruff passed, Pyright reported 0 errors, pytest reported
+  218 passed, compileall passed, package build passed, scripts/verify.sh passed,
+  git diff --check passed, and the workflow security audit passed;
 - hosted CodeQL has not run yet and is not marked verified.
 
 ## Current milestone
@@ -260,7 +262,7 @@ Scope:
 - Branch: `feat/security-verification-codeql`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: Ruff passed; Pyright 0 errors; pytest 218 passed; compileall passed; build passed; scripts/verify.sh passed; git diff --check passed; workflow audit passed
+- Tests: pytest 218 passed; git diff --check passed
 - Pull request: not created
 
 ## Next action
@@ -268,15 +270,15 @@ Scope:
 Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:217b222ca17723d04c0b6e70ebd9cfc90afdc01ba9a8732f9c47fa2874ef349e -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:1f9ddcf958ceefe5b3b11f0b7289a69cc4f518bbfe6ee8a2170f37d8de66a849 -->
 ## Automated repository checkpoint
 
-- Generated: `2026-08-02T13:14:33.717174Z`
+- Generated: `2026-08-02T13:28:26.446552Z`
 - Branch: `feat/security-verification-codeql`
-- Commit: `458363e46b87902ff8a75cae8cea3d651e4c2ec2`
-- Commit subject: docs(project): mark WB-0025 CodeQL slice implemented
+- Commit: `1226605fdea6fdec9c30fb9a9c22f4e347414304`
+- Commit subject: docs(project): align WB-0025 CodeQL verification state
 - Working tree: **clean**
-- Test evidence: `Ruff passed; Pyright 0 errors; pytest 218 passed; compileall passed; build passed; scripts/verify.sh passed; git diff --check passed; workflow audit passed`
+- Test evidence: `pytest 218 passed; git diff --check passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

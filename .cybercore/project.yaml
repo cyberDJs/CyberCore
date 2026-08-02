@@ -34,7 +34,7 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 214_passed
+  tests: 218_passed
   ci: github_actions_verified
   checkpoint_runtime: verified
   checkpoint_persistence: verified

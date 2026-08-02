@@ -171,3 +171,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `Ruff passed; Pyright 0 errors; pytest 218 passed; compileall passed; build passed; scripts/verify.sh passed; git diff --check passed; workflow audit passed`
 - Next action: Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:1f9ddcf958ceefe5b3b11f0b7289a69cc4f518bbfe6ee8a2170f37d8de66a849 -->
+## Checkpoint 2026-08-02T13:28:26.446552Z
+
+- Branch: `feat/security-verification-codeql`
+- Commit: `1226605fdea6fdec9c30fb9a9c22f4e347414304`
+- Commit subject: docs(project): align WB-0025 CodeQL verification state
+- Working tree: **clean**
+- Test evidence: `pytest 218 passed; git diff --check passed`
+- Next action: Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
