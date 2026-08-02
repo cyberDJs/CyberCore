@@ -6,8 +6,8 @@ _Last updated: 2026-07-31 05:34 CEST_
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/security-verification-pipeline`
-- Active work block: `WB-0025 Security Verification Pipeline`
+- Active branch: `feat/security-verification-codeql`
+- Active work block: `WB-0025 Security Verification Pipeline - Slice 2`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; branch-protection enforcement is deferred
 
@@ -204,6 +204,21 @@ Verification:
 
 - `pytest -q`: **201 passed**.
 
+### WB-0025 Slice 1 — CI foundation
+
+Merged through PR #30 into `main` as:
+
+```text
+dbd61e9094d2b45ce11468d12b3700c66979cd0b
+```
+
+Verification:
+
+- local verification: **214 passed**;
+- GitHub Actions run `30602280063`: **6/6 jobs passed**;
+- Python 3.11, 3.12, 3.13 and 3.14 passed;
+- Ruff, Pyright, package build and clean-wheel smoke test passed.
+
 ## Current milestone
 
 Security Verification Pipeline v0.1.
@@ -224,25 +239,18 @@ Scope:
 ## Current status
 
 - Work block: active
-- Branch: `feat/security-verification-pipeline`
+- Slice: 2 - CodeQL and Merge Gates
+- Branch: `feat/security-verification-codeql`
 - Project Kernel: present
-- Runtime implementation: implemented
-- Tests: 214 passed locally and in GitHub Actions
-- Hosted CI: verified — run `30588331452`, all 6 jobs passed
-- Pull request: #30 opened as draft
-
-Hosted CI jobs:
-
-1. `tests (python 3.11)` — passed;
-2. `tests (python 3.12)` — passed;
-3. `tests (python 3.13)` — passed;
-4. `tests (python 3.14)` — passed;
-5. `quality` — passed;
-6. `package` — passed.
+- Runtime implementation: planned
+- Tests: 214 passed on merged baseline `dbd61e9094d2b45ce11468d12b3700c66979cd0b`
+- Slice 1: merged and verified through PR #30
+- Hosted CI: verified — run `30602280063`, all 6 jobs passed
+- Pull request: not created
 
 ## Next action
 
-Review draft PR #30 and confirm the CI foundation before the ready-for-review transition.
+Define the CodeQL workflow contract and required merge-gate checks without changing repository settings.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:b6455e47afbc6860710121bdbb1467dc40d2bb3d8c91a672fe9cd20336ca341a -->

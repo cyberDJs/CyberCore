@@ -25,8 +25,8 @@ canonical_sources:
 current:
   milestone: Security Verification Pipeline v0.1
   active_artifact: WB-0025
-  branch: feat/security-verification-pipeline
-  pull_request: 30
+  branch: feat/security-verification-codeql
+  pull_request: null
 
 status:
   ccl_specification: complete_draft
@@ -48,6 +48,7 @@ status:
   operation_context_disclosure_policy: verified
   security_verification_pipeline: implemented
   security_verification_pipeline_ci_foundation: verified
+  security_verification_pipeline_codeql_merge_gates: planned
 
 completed:
   - artifact: WB-0015
@@ -98,10 +99,10 @@ completed:
     verification: 201_passed
 
 next:
-  - review draft pull request 30
-  - confirm hosted CI evidence and package artifact
-  - prepare the later CodeQL slice
-  - document and configure branch protection in a later slice
+  - define CodeQL analysis for Python and GitHub Actions workflows
+  - establish stable required-check names for merge gates
+  - document branch-protection configuration and rollback procedure
+  - keep repository settings unchanged until explicit human approval
 
 rules:
   state_first: true
