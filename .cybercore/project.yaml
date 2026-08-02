@@ -48,7 +48,7 @@ status:
   operation_context_disclosure_policy: verified
   security_verification_pipeline: implemented
   security_verification_pipeline_ci_foundation: verified
-  security_verification_pipeline_codeql_merge_gates: planned
+  security_verification_pipeline_codeql_merge_gates: implemented
 
 completed:
   - artifact: WB-0015
@@ -99,9 +99,8 @@ completed:
     verification: 201_passed
 
 next:
-  - define CodeQL analysis for Python and GitHub Actions workflows
-  - establish stable required-check names for merge gates
-  - document branch-protection configuration and rollback procedure
+  - open a draft PR and observe the first hosted CodeQL run
+  - keep security_verification_pipeline_codeql_merge_gates unverified until hosted CodeQL succeeds
   - keep repository settings unchanged until explicit human approval
 
 rules:

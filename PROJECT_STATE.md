@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-07-31 05:34 CEST_
+_Last updated: 2026-08-02 15:20 CEST_
 
 ## Source of truth
 
@@ -10,6 +10,7 @@ _Last updated: 2026-07-31 05:34 CEST_
 - Active work block: `WB-0025 Security Verification Pipeline`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; branch-protection enforcement is deferred
+- CodeQL policy: implemented locally; verification is deferred until the hosted workflow succeeds
 
 ## Completed checkpoints
 
@@ -219,6 +220,23 @@ Verification:
 - Python 3.11, 3.12, 3.13 and 3.14 passed;
 - Ruff, Pyright, package build and clean-wheel smoke test passed.
 
+### WB-0025 Slice 2 — CodeQL and merge gates
+
+Implemented on branch `feat/security-verification-codeql`.
+
+Delivered:
+
+- pinned advanced CodeQL workflow for Python;
+- workflow-security tests for all `.github/workflows/*.yml` files;
+- exact proposed required checks for `main`;
+- branch-protection activation, rollback, and broken-check runbook;
+- explicit non-mutation boundary for repository settings.
+
+Verification:
+
+- local validation is required before opening a draft PR;
+- hosted CodeQL has not run yet and is not marked verified.
+
 ## Current milestone
 
 Security Verification Pipeline v0.1.
@@ -241,13 +259,13 @@ Scope:
 - Work block: active
 - Branch: `feat/security-verification-codeql`
 - Project Kernel: present
-- Runtime implementation: planned
-- Tests: 214 passed; PR #30 merged as dbd61e9094d2b45ce11468d12b3700c66979cd0b; GitHub Actions run 30602280063: 6/6 jobs passed
+- Runtime implementation: implemented
+- Tests: local validation pending for Slice 2; Slice 1 verified with 214 passed and GitHub Actions run 30602280063: 6/6 jobs passed
 - Pull request: not created
 
 ## Next action
 
-Define the CodeQL workflow contract and required merge-gate checks without changing repository settings.
+Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:566cde4bd0011a34fd4e38ade8c054c874b10dcca06367c9738de2b0f3bf8203 -->
