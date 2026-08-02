@@ -51,9 +51,7 @@ def _write_evidence(repo: Path, path: Path, *, commit: str | None = None) -> Non
     )
 
 
-def test_cli_memory_accepts_matching_evidence(
-    tmp_path: Path, capsys
-) -> None:
+def test_cli_memory_accepts_matching_evidence(tmp_path: Path, capsys) -> None:
     repo = _repo(tmp_path)
     evidence = repo / "evidence.json"
     _write_evidence(repo, evidence)
@@ -75,9 +73,7 @@ def test_cli_memory_accepts_matching_evidence(
     assert (repo / "PROJECT_STATE.md").read_text(encoding="utf-8") == "# State\n"
 
 
-def test_cli_rejects_evidence_with_manual_result(
-    tmp_path: Path, capsys
-) -> None:
+def test_cli_rejects_evidence_with_manual_result(tmp_path: Path, capsys) -> None:
     repo = _repo(tmp_path)
     evidence = repo / "evidence.json"
     _write_evidence(repo, evidence)
@@ -99,9 +95,7 @@ def test_cli_rejects_evidence_with_manual_result(
     assert "cannot be combined" in capsys.readouterr().err
 
 
-def test_cli_rejects_evidence_for_wrong_commit(
-    tmp_path: Path, capsys
-) -> None:
+def test_cli_rejects_evidence_for_wrong_commit(tmp_path: Path, capsys) -> None:
     repo = _repo(tmp_path)
     evidence = repo / "evidence.json"
     _write_evidence(repo, evidence, commit="wrong")

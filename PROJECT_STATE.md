@@ -1,15 +1,15 @@
 # CyberCore Project State
 
-_Last updated: 2026-07-30 21:51 CEST_
+_Last updated: 2026-07-31 05:34 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/context-disclosure-policy`
-- Active work block: `WB-0024 Operation Context Disclosure Policy`
+- Active branch: `feat/security-verification-pipeline`
+- Active work block: `WB-0025 Security Verification Pipeline`
 - Governance rule: no production mutation without explicit human approval
-- CI policy: local or self-hosted verification; GitHub Actions are not required
+- CI policy: GitHub Actions verification is required before merge; branch-protection enforcement is deferred
 
 ## Completed checkpoints
 
@@ -190,48 +190,70 @@ Verification:
 
 - `pytest -q`: **109 passed**.
 
+### PR #29 — fix: enforce operation context disclosure policy
+
+Merged into `main` as:
+
+```text
+1ba003f8e17448ac8f962955f88d6214c58c6cb2
+```
+
+Completed artifact: `WB-0024`.
+
+Verification:
+
+- `pytest -q`: **201 passed**.
+
 ## Current milestone
 
-Operation Context Disclosure Policy v0.1.
+Security Verification Pipeline v0.1.
 
 ## Active objective
 
-Define and enforce safe disclosure rules for Trusted Operation Context across terminal, JSON, logs and evidence.
+Establish reproducible automated security and quality verification for every change before merge.
 
 Scope:
 
-1. classify context fields as public, operational or sensitive;
-2. define safe default text and JSON disclosure contracts;
-3. add explicit redacted and full disclosure modes;
-4. preserve boolean values and stable machine-readable structure;
-5. protect repository paths, remote URLs and secret-like values;
-6. review and resolve the CodeQL clear-text logging finding;
-7. integrate disclosure policy into context CLI and protected workflows;
-8. add redaction, compatibility and regression tests;
+1. run the complete test suite in GitHub Actions;
+2. add CodeQL analysis for Python and workflow changes;
+3. configure Ruff linting and formatting checks;
+4. configure Pyright type checking;
+5. verify package build and clean installation;
+6. define required status checks and merge-gate documentation;
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/context-disclosure-policy`
+- Branch: `feat/security-verification-pipeline`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: 201 passed
-- Pull request: #29 opened for review
+- Tests: 214 passed locally and in GitHub Actions
+- Hosted CI: verified — run `30588331452`, all 6 jobs passed
+- Pull request: #30 opened as draft
+
+Hosted CI jobs:
+
+1. `tests (python 3.11)` — passed;
+2. `tests (python 3.12)` — passed;
+3. `tests (python 3.13)` — passed;
+4. `tests (python 3.14)` — passed;
+5. `quality` — passed;
+6. `package` — passed.
 
 ## Next action
 
-Review PR #29 and verify security checks before merge.
+Review draft PR #30 and confirm the CI foundation before the ready-for-review transition.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:510ac86821dc43380543fa9e3947774f200e61e0fa65ed2a6ceac95a305d669e -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:b6455e47afbc6860710121bdbb1467dc40d2bb3d8c91a672fe9cd20336ca341a -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-30T19:51:00Z`
-- Branch: `feat/context-disclosure-policy`
-- Commit: `4ffa60b6727cd00797a210f191ec40ae7973f831`
-- Commit subject: fix(disclosure): sanitize checkpoint memory persistence
+- Generated: `2026-07-31T03:34:00Z`
+- Branch: `feat/security-verification-pipeline`
+- Commit: `18bec34f76e7915fa02301ee345dece0ac575ba5`
+- Commit subject: docs(project): record PR 30 hosted CI state
 - Working tree: **clean**
-- Test evidence: `201 passed`
+- Test evidence: `214 passed; GitHub Actions run 30588331452: 6/6 jobs passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

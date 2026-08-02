@@ -50,9 +50,7 @@ def _binding_payload(repo: Path, commit: str) -> dict[str, object]:
 
 def test_load_and_validate_successful_evidence(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
-    checkpoint = collect_checkpoint(
-        repo, now=datetime(2026, 7, 29, 21, 0, tzinfo=timezone.utc)
-    )
+    checkpoint = collect_checkpoint(repo, now=datetime(2026, 7, 29, 21, 0, tzinfo=timezone.utc))
     path = repo / "evidence.json"
     path.write_text(json.dumps(_payload(repo, checkpoint.commit)), encoding="utf-8")
 
@@ -142,8 +140,7 @@ def test_legacy_evidence_command_redacts_url_credentials_and_query_token(
     checkpoint = collect_checkpoint(repo)
     payload = _payload(repo, checkpoint.commit)
     payload["command"] = (
-        "curl https://user:password@example.test/repo?token=tokensecret123 "
-        "--api-key=secret"
+        "curl https://user:password@example.test/repo?token=tokensecret123 --api-key=secret"
     )
 
     evidence = VerificationEvidence.from_dict(payload)

@@ -103,9 +103,7 @@ DISCLOSURE_FIELDS: Final[tuple[DisclosureField, ...]] = (
     ),
 )
 
-_FIELD_INDEX: Final[dict[str, DisclosureField]] = {
-    field.name: field for field in DISCLOSURE_FIELDS
-}
+_FIELD_INDEX: Final[dict[str, DisclosureField]] = {field.name: field for field in DISCLOSURE_FIELDS}
 _REDACTED: Final[str] = "[REDACTED]"
 _REDACTED_PATH: Final[str] = "[REDACTED_PATH]"
 _PATH_CHARS = r"[^\r\n;,`'\"\)\]\}<]+"
@@ -130,9 +128,7 @@ _SECRET_PARAMETER_NAMES: Final[set[str]] = {
     "api_key",
     "access_key",
 }
-_URL_PARAMETER = re.compile(
-    r"(?P<prefix>^|[&;?])(?P<key>[^=&;#?]+)=(?P<value>[^&;#]*)"
-)
+_URL_PARAMETER = re.compile(r"(?P<prefix>^|[&;?])(?P<key>[^=&;#?]+)=(?P<value>[^&;#]*)")
 _SECRET_ASSIGNMENT = re.compile(
     r"(?i)(?P<prefix>\b(?:token|access_token|refresh_token|password|passwd|"
     r"secret|credential|api[-_]?key|access[-_]?key)\b\s*[:=]\s*)"

@@ -60,9 +60,7 @@ def expected_repository_identity(repo: Path) -> str:
     expected = _configured_repository_identity(resolved)
     if expected is None:
         if not project.exists():
-            raise RepositoryIdentityPolicyError(
-                f"Canonical project state is missing: {project}"
-            )
+            raise RepositoryIdentityPolicyError(f"Canonical project state is missing: {project}")
         raise RepositoryIdentityPolicyError(
             "Canonical repository identity is not configured at identity.repository"
         )
@@ -142,9 +140,7 @@ def disclosed_repository_identity_policy_payload(
     else:
         actual = sanitize_disclosure_text(actual, mode=mode)
 
-    origin = (
-        None if result.origin is None else sanitize_disclosure_text(result.origin, mode=mode)
-    )
+    origin = None if result.origin is None else sanitize_disclosure_text(result.origin, mode=mode)
     if mode is DisclosureMode.REDACTED:
         actual = "[REDACTED]"
         origin = "[REDACTED]" if origin is not None else None
@@ -173,15 +169,18 @@ def render_repository_identity_policy(
         disclosure_mode=disclosure_mode,
     )
     origin = disclosed["origin"] or "not configured"
-    return "\n".join(
-        [
-            "REPOSITORY IDENTITY POLICY",
-            f"Status: {disclosed['status']}",
-            f"Compliant: {'yes' if disclosed['compliant'] else 'no'}",
-            f"Expected: {disclosed['expected_identity']}",
-            f"Actual: {disclosed['actual_identity']}",
-            f"Source: {disclosed['source']}",
-            f"Origin: {origin}",
-            f"Message: {disclosed['message']}",
-        ]
-    ) + "\n"
+    return (
+        "\n".join(
+            [
+                "REPOSITORY IDENTITY POLICY",
+                f"Status: {disclosed['status']}",
+                f"Compliant: {'yes' if disclosed['compliant'] else 'no'}",
+                f"Expected: {disclosed['expected_identity']}",
+                f"Actual: {disclosed['actual_identity']}",
+                f"Source: {disclosed['source']}",
+                f"Origin: {origin}",
+                f"Message: {disclosed['message']}",
+            ]
+        )
+        + "\n"
+    )

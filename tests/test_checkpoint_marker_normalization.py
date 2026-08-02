@@ -31,9 +31,7 @@ def _repo(tmp_path: Path, state: str) -> Path:
 def test_memory_plan_removes_orphan_end_marker(tmp_path: Path) -> None:
     repo = _repo(
         tmp_path,
-        "# State\n\nHuman section.\n\n"
-        + PROJECT_STATE_END
-        + "\n\nLegacy content.\n",
+        "# State\n\nHuman section.\n\n" + PROJECT_STATE_END + "\n\nLegacy content.\n",
     )
 
     plan = plan_memory_update(repo, collect_checkpoint(repo), test_result="44 passed")

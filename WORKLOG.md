@@ -121,3 +121,33 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `201 passed`
 - Next action: Review PR #29 and verify security checks before merge.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:b53aa6e7859062c86482a19b2bf7288c333218fb22d955d25bdeff937619965a -->
+## Checkpoint 2026-07-30T20:32:49.897252Z
+
+- Branch: `feat/security-verification-pipeline`
+- Commit: `27304c5190d13530a9e5fb06322bcbf37e91e75a`
+- Commit subject: docs(project): activate WB-0025 security verification pipeline
+- Working tree: **clean**
+- Test evidence: `201 passed`
+- Next action: Define the CI matrix and implement the first GitHub Actions verification workflow.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:e3315217405865351d116ddbdc2d9a5a4f01e903893de145aefbd8875bd7e12e -->
+## Checkpoint 2026-07-30T21:03:52.696599Z
+
+- Branch: `feat/security-verification-pipeline`
+- Commit: `a5c080f6b990b65bb54b0006cefa9a8701df8540`
+- Commit subject: docs(project): mark WB-0025 CI foundation implemented
+- Working tree: **clean**
+- Test evidence: `214 passed`
+- Next action: Open a draft PR and observe the first GitHub Actions CI run.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:b6455e47afbc6860710121bdbb1467dc40d2bb3d8c91a672fe9cd20336ca341a -->
+## Checkpoint 2026-07-31T03:34:00Z
+
+- Branch: `feat/security-verification-pipeline`
+- Commit: `18bec34f76e7915fa02301ee345dece0ac575ba5`
+- Commit subject: docs(project): record PR 30 hosted CI state
+- Working tree: **clean**
+- Test evidence: `214 passed; GitHub Actions run 30588331452: 6/6 jobs passed`
+- Next action: Review draft PR #30 and confirm the CI foundation before the ready-for-review transition.

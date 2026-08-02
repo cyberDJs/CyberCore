@@ -86,9 +86,7 @@ def test_post_merge_preview_rejects_unmerged_pr(tmp_path: Path) -> None:
         plan_post_merge_transition(
             repo,
             22,
-            opener=lambda *_args, **_kwargs: _Response(
-                _payload(merge_commit, merged=False)
-            ),
+            opener=lambda *_args, **_kwargs: _Response(_payload(merge_commit, merged=False)),
         )
 
 
@@ -99,9 +97,7 @@ def test_post_merge_preview_rejects_wrong_base_branch(tmp_path: Path) -> None:
         plan_post_merge_transition(
             repo,
             22,
-            opener=lambda *_args, **_kwargs: _Response(
-                _payload(merge_commit, base="develop")
-            ),
+            opener=lambda *_args, **_kwargs: _Response(_payload(merge_commit, base="develop")),
         )
 
 

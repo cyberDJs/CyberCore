@@ -26,8 +26,7 @@ class BuildResult:
 
 def canonical_json(data: dict[str, Any]) -> bytes:
     return (
-        json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        + "\n"
+        json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
     ).encode("utf-8")
 
 
@@ -37,9 +36,7 @@ def _source_files(source: Path) -> list[Path]:
     result = []
     for path in sorted(source.rglob("*")):
         if path.is_symlink():
-            raise ArtifactBuildError(
-                f"symlinks are forbidden: {path.relative_to(source)}"
-            )
+            raise ArtifactBuildError(f"symlinks are forbidden: {path.relative_to(source)}")
         if path.is_file():
             rel = PurePosixPath(path.relative_to(source).as_posix())
             if rel.is_absolute() or ".." in rel.parts:
@@ -111,9 +108,9 @@ def build_artifact(
         level=19, write_checksum=True, write_content_size=True, threads=0
     ).compress(payload_tar)
     payload_digest = hashlib.sha256(payload).hexdigest()
-    timestamp = created_at or datetime.now(timezone.utc).isoformat(
-        timespec="seconds"
-    ).replace("+00:00", "Z")
+    timestamp = created_at or datetime.now(timezone.utc).isoformat(timespec="seconds").replace(
+        "+00:00", "Z"
+    )
     manifest = {
         "artifact_id": artifact_id,
         "compatibility": {"runtime": runtime_compatibility},
@@ -135,10 +132,7 @@ def build_artifact(
         "metadata.json": canonical_json(metadata),
         "payload.tar.zst": payload,
     }
-    lines = [
-        f"{hashlib.sha256(entries[name]).hexdigest()}  {name}"
-        for name in sorted(entries)
-    ]
+    lines = [f"{hashlib.sha256(entries[name]).hexdigest()}  {name}" for name in sorted(entries)]
     entries["checksums.sha256"] = ("\n".join(lines) + "\n").encode()
     artifact = _artifact_tar(entries)
     digest = hashlib.sha256(artifact).hexdigest()

@@ -117,7 +117,10 @@ def _kernel_transition(
         r"^  milestone: .+$", f"  milestone: {next_milestone}", current, "current milestone"
     )
     current = _replace_required(
-        r"^  active_artifact: .+$", f"  active_artifact: {next_artifact}", current, "active artifact"
+        r"^  active_artifact: .+$",
+        f"  active_artifact: {next_artifact}",
+        current,
+        "active artifact",
     )
     current = _replace_required(
         r"^  branch: .+$", f"  branch: {next_branch}", current, "active branch"
@@ -173,8 +176,7 @@ def _project_state_transition(
     )
     if next_objective is not None:
         scope_text = "Scope:\n\n" + "".join(
-            f"{index}. {item.rstrip('.;')};\n"
-            for index, item in enumerate(next_scope, start=1)
+            f"{index}. {item.rstrip('.;')};\n" for index, item in enumerate(next_scope, start=1)
         )
         replacement = f"\\1{next_objective}\n\n{scope_text}"
         current = _replace_required(
@@ -215,7 +217,9 @@ def _project_state_transition(
             "Verification:\n\n"
             f"- `pytest -q`: **{verification.replace('_', ' ')}**.\n\n"
         )
-        current = current.replace("\n## Current milestone\n", "\n" + completed + "## Current milestone\n", 1)
+        current = current.replace(
+            "\n## Current milestone\n", "\n" + completed + "## Current milestone\n", 1
+        )
     return current
 
 

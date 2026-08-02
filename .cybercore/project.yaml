@@ -23,10 +23,10 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Operation Context Disclosure Policy v0.1
-  active_artifact: WB-0024
-  branch: feat/context-disclosure-policy
-  pull_request: 29
+  milestone: Security Verification Pipeline v0.1
+  active_artifact: WB-0025
+  branch: feat/security-verification-pipeline
+  pull_request: 30
 
 status:
   ccl_specification: complete_draft
@@ -34,8 +34,8 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 201_passed
-  ci: local_verification
+  tests: 214_passed
+  ci: github_actions_verified
   checkpoint_runtime: verified
   checkpoint_persistence: verified
   verification_evidence: verified
@@ -46,6 +46,8 @@ status:
   repository_identity_policy: verified
   trusted_operation_context: verified
   operation_context_disclosure_policy: verified
+  security_verification_pipeline: implemented
+  security_verification_pipeline_ci_foundation: verified
 
 completed:
   - artifact: WB-0015
@@ -90,11 +92,16 @@ completed:
     merge_commit: 03a04c5ad73489775552df34e21baa559f2a41da
     verification: 109_passed
 
+  - artifact: WB-0024
+    pull_request: 29
+    merge_commit: 1ba003f8e17448ac8f962955f88d6214c58c6cb2
+    verification: 201_passed
+
 next:
-  - review pull request 29
-  - verify security checks and CodeQL status
-  - confirm disclosure mode contracts and persistence boundaries
-  - merge only after review completion
+  - review draft pull request 30
+  - confirm hosted CI evidence and package artifact
+  - prepare the later CodeQL slice
+  - document and configure branch protection in a later slice
 
 rules:
   state_first: true

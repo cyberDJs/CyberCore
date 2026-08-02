@@ -111,21 +111,20 @@ class CCLValidator:
 
     def validate(self, record: dict[str, Any]) -> ValidationResult:
         record_type = record.get("type")
+        if not isinstance(record_type, str):
+            raise CCLValidationError(f"Unsupported CCL record type: {record_type!r}")
         filename = SCHEMA_FILES.get(record_type)
         if filename is None:
             raise CCLValidationError(f"Unsupported CCL record type: {record_type!r}")
         schema = self._schemas.get(filename)
         if schema is None:
-            raise CCLValidationError(
-                f"Schema is missing for CCL type {record_type!r}: {filename}"
-            )
+            raise CCLValidationError(f"Schema is missing for CCL type {record_type!r}: {filename}")
 
         validator_class = validator_for(schema)
         validator_class.check_schema(schema)
         validator = validator_class(schema, registry=self._registry)
         errors = [
-            self._schema_issue(error)
-            for error in sorted(validator.iter_errors(record), key=str)
+            self._schema_issue(error) for error in sorted(validator.iter_errors(record), key=str)
         ]
         if not errors:
             errors.extend(self._semantic_issues(record))
@@ -153,11 +152,7 @@ class CCLValidator:
         if record_type == "evidence":
             observed_at = attributes.get("observed_at")
             recorded_at = attributes.get("recorded_at")
-            if (
-                observed_at
-                and recorded_at
-                and _parse_time(recorded_at) < _parse_time(observed_at)
-            ):
+            if observed_at and recorded_at and _parse_time(recorded_at) < _parse_time(observed_at):
                 issues.append(
                     ValidationIssue(
                         code="semantic_time_order",
@@ -169,11 +164,7 @@ class CCLValidator:
         if record_type == "verification":
             started_at = attributes.get("apply_started_at")
             observed_at = attributes.get("observed_at")
-            if (
-                started_at
-                and observed_at
-                and _parse_time(observed_at) < _parse_time(started_at)
-            ):
+            if started_at and observed_at and _parse_time(observed_at) < _parse_time(started_at):
                 issues.append(
                     ValidationIssue(
                         code="semantic_verification_time",
@@ -208,7 +199,7 @@ class CCLValidator:
             "high": (0.70, 0.94),
             "verified": (0.95, 1.0),
         }
-        expected = ranges.get(level)
+        expected = ranges.get(level) if isinstance(level, str) else None
         if expected and not expected[0] <= score <= expected[1]:
             return [
                 ValidationIssue(

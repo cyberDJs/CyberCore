@@ -117,5 +117,8 @@ checkpoint
 
     assert "Make repository identity stable across clone locations" in plan.project_state_content
     assert "normalize HTTPS and SSH Git remote URLs" in plan.project_state_content
-    assert "Create a controlled transition that closes a merged work block" not in plan.project_state_content
+    assert (
+        "Create a controlled transition that closes a merged work block"
+        not in plan.project_state_content
+    )
     assert "- Tests: 66 passed" in plan.project_state_content

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from typing import TypedDict, cast
 
 from cybercore import cli
 from cybercore.operation_context_disclosure import (
@@ -37,6 +38,20 @@ from cybercore.trusted_operation_context import (
     TrustedOperationContextError,
     collect_trusted_operation_context,
 )
+
+
+class _StateArguments(TypedDict):
+    completed_artifact: str
+    verification: str
+    next_artifact: str
+    next_milestone: str
+    next_branch: str
+    next_action: str
+    completed_status: str
+    next_status: str
+    next_objective: str
+    next_scope: tuple[str, ...]
+    next_tasks: tuple[str, ...]
 
 
 def _post_merge_parser() -> argparse.ArgumentParser:
@@ -150,7 +165,7 @@ def _context_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _state_arguments(args: argparse.Namespace) -> dict[str, object] | None:
+def _state_arguments(args: argparse.Namespace) -> _StateArguments | None:
     scalar_names = (
         "completed_artifact",
         "verification",
@@ -179,9 +194,17 @@ def _state_arguments(args: argparse.Namespace) -> dict[str, object] | None:
     if not complete:
         return None
     return {
-        **{name: getattr(args, name) for name in scalar_names},
-        "next_scope": tuple(args.next_scope),
-        "next_tasks": tuple(args.next_task),
+        "completed_artifact": cast(str, args.completed_artifact),
+        "verification": cast(str, args.verification),
+        "next_artifact": cast(str, args.next_artifact),
+        "next_milestone": cast(str, args.next_milestone),
+        "next_branch": cast(str, args.next_branch),
+        "next_action": cast(str, args.next_action),
+        "completed_status": cast(str, args.completed_status),
+        "next_status": cast(str, args.next_status),
+        "next_objective": cast(str, args.next_objective),
+        "next_scope": tuple(cast(list[str], args.next_scope)),
+        "next_tasks": tuple(cast(list[str], args.next_task)),
     }
 
 

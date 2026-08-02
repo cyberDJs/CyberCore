@@ -39,9 +39,7 @@ def _repo(tmp_path: Path) -> Path:
     return repo
 
 
-def test_context_cli_defaults_to_standard_json_disclosure(
-    tmp_path: Path, capsys
-) -> None:
+def test_context_cli_defaults_to_standard_json_disclosure(tmp_path: Path, capsys) -> None:
     repo = _repo(tmp_path)
 
     exit_code = main(["--repo", str(repo), "--json", "context"])
@@ -53,9 +51,7 @@ def test_context_cli_defaults_to_standard_json_disclosure(
     assert payload["repository"] == "[REDACTED]"
 
 
-def test_context_cli_redacted_json_preserves_public_types(
-    tmp_path: Path, capsys
-) -> None:
+def test_context_cli_redacted_json_preserves_public_types(tmp_path: Path, capsys) -> None:
     repo = _repo(tmp_path)
 
     exit_code = main(["--repo", str(repo), "--json", "context", "--redact"])
@@ -68,9 +64,7 @@ def test_context_cli_redacted_json_preserves_public_types(
     assert payload["repository"] == "[REDACTED]"
 
 
-def test_context_cli_full_json_discloses_repository_path(
-    tmp_path: Path, capsys
-) -> None:
+def test_context_cli_full_json_discloses_repository_path(tmp_path: Path, capsys) -> None:
     repo = _repo(tmp_path)
 
     exit_code = main(["--repo", str(repo), "--json", "context", "--full"])
@@ -81,9 +75,7 @@ def test_context_cli_full_json_discloses_repository_path(
     assert payload["trusted"] is True
 
 
-def test_context_cli_text_uses_the_same_disclosure_policy(
-    tmp_path: Path, capsys
-) -> None:
+def test_context_cli_text_uses_the_same_disclosure_policy(tmp_path: Path, capsys) -> None:
     repo = _repo(tmp_path)
 
     exit_code = main(["--repo", str(repo), "context"])
@@ -96,9 +88,7 @@ def test_context_cli_text_uses_the_same_disclosure_policy(
     assert str(repo.resolve()) not in output
 
 
-def test_context_cli_error_does_not_leak_local_path(
-    tmp_path: Path, capsys
-) -> None:
+def test_context_cli_error_does_not_leak_local_path(tmp_path: Path, capsys) -> None:
     exit_code = main(["--repo", str(tmp_path), "context"])
     captured = capsys.readouterr()
 

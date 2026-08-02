@@ -80,7 +80,9 @@ def test_post_merge_state_defaults_to_preview(monkeypatch, tmp_path: Path, capsy
     monkeypatch.setattr(entrypoint, "plan_post_merge_transition", lambda *a, **k: _preview())
     monkeypatch.setattr(entrypoint, "plan_post_merge_state_update", lambda *a, **k: plan)
     monkeypatch.setattr(entrypoint, "render_post_merge_preview", lambda preview: "REMOTE PREVIEW\n")
-    monkeypatch.setattr(entrypoint, "render_post_merge_state_preview", lambda state: "STATE PREVIEW\n")
+    monkeypatch.setattr(
+        entrypoint, "render_post_merge_state_preview", lambda state: "STATE PREVIEW\n"
+    )
 
     result = entrypoint.main(["post-merge", "22", *_transition_args()])
 
@@ -106,7 +108,9 @@ def test_post_merge_write_applies_verified_plan(monkeypatch, tmp_path: Path, cap
     monkeypatch.setattr(entrypoint, "plan_post_merge_transition", lambda *a, **k: _preview())
     monkeypatch.setattr(entrypoint, "plan_post_merge_state_update", lambda *a, **k: plan)
     monkeypatch.setattr(entrypoint, "render_post_merge_preview", lambda preview: "REMOTE PREVIEW\n")
-    monkeypatch.setattr(entrypoint, "render_post_merge_state_preview", lambda state: "STATE PREVIEW\n")
+    monkeypatch.setattr(
+        entrypoint, "render_post_merge_state_preview", lambda state: "STATE PREVIEW\n"
+    )
 
     result = entrypoint.main(["post-merge", "22", *_transition_args(), "--write"])
 

@@ -47,9 +47,7 @@ def test_resolve_test_result_accepts_matching_evidence(tmp_path: Path) -> None:
     evidence_path = tmp_path / "evidence.json"
     _evidence(evidence_path, tmp_path)
 
-    summary, evidence = resolve_test_result(
-        _checkpoint(tmp_path), evidence_path=evidence_path
-    )
+    summary, evidence = resolve_test_result(_checkpoint(tmp_path), evidence_path=evidence_path)
 
     assert summary == "28 passed"
     assert evidence is not None
