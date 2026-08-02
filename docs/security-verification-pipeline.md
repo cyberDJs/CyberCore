@@ -1,8 +1,11 @@
 # Security Verification Pipeline
 
-WB-0025 Slice 1 establishes local and hosted verification for the Python package.
-CodeQL, branch protection, required-check enforcement, deployment, publishing, and
-release automation are deferred to later slices.
+WB-0025 Slice 1 established local and hosted verification for the Python
+package. Slice 2 adds reproducible CodeQL analysis for Python and defines the
+merge-gate contract proposed for `main`.
+
+Repository settings are not changed by this slice. Branch-protection activation
+requires explicit human approval after a successful hosted CodeQL run.
 
 ## Supported Python Matrix
 
@@ -52,3 +55,105 @@ The workflow runs for pull requests targeting `main`, pushes to `main`, and
 manual `workflow_dispatch` runs. It uses `contents: read`, cancels superseded
 runs for the same ref, avoids `pull_request_target`, and does not read secrets
 or publish packages.
+
+## CodeQL
+
+The CodeQL workflow is `.github/workflows/codeql.yml`.
+
+- Workflow name: `CodeQL`
+- Job id and job name: `codeql`
+- Runner: `ubuntu-24.04`
+- Language: `python`
+- Build mode: `none`
+- Query suite: `security-extended`
+- Analysis category: `/language:python`
+- Triggers: pull requests targeting `main`, pushes to `main`,
+  `workflow_dispatch`, and one weekly scheduled scan
+
+The workflow uses `actions/checkout` with `persist-credentials: false`. CodeQL
+`init` and `analyze` are pinned to the immutable commit for CodeQL Action
+`v4.37.4`, `f205ea1c3313d32999d8d6a48b4f6530d4437b38`.
+
+Permissions are scoped to the CodeQL job:
+
+- `contents: read`
+- `actions: read`
+- `security-events: write`
+
+`packages: read` is not configured because this Python analysis does not need
+package-registry access.
+
+## Proposed Required Checks
+
+These checks are the exact proposed merge gates for pull requests targeting
+`main`:
+
+- `tests (python 3.11)`
+- `tests (python 3.12)`
+- `tests (python 3.13)`
+- `tests (python 3.14)`
+- `quality`
+- `package`
+- `codeql`
+
+Job names must remain stable because branch protection matches required checks
+by their reported names. Renaming a required job can block merges until the
+branch-protection rule is updated by an approved repository administrator.
+
+Required checks must run on every pull request to `main`. Required workflows
+must not use path filtering because a skipped required workflow can leave a
+required check pending indefinitely.
+
+## Proposed Branch Protection
+
+After a successful hosted CodeQL run and explicit human approval, configure
+`main` branch protection as follows:
+
+- Require a pull request before merging.
+- Require the seven checks listed in "Proposed Required Checks".
+- Require branches to be up to date before merging.
+- Require conversation resolution before merging.
+- Require linear history if that matches the repository's existing merge policy.
+- Restrict direct pushes to `main`; no direct pushes by automation.
+- Keep administrators subject to the rule unless an emergency process is
+  explicitly approved.
+
+Strict branch-up-to-date behavior is recommended so the required checks validate
+the exact merge candidate against current `main`.
+
+## Manual Verification Checklist
+
+Before activating settings:
+
+- Confirm `.github/workflows/ci.yml` has completed successfully on the branch.
+- Confirm `.github/workflows/codeql.yml` has completed successfully on GitHub
+  Actions.
+- Confirm the CodeQL run reports under the stable check name `codeql`.
+- Confirm no workflow uses `pull_request_target`.
+- Confirm all action refs are immutable 40-character lowercase SHA values.
+- Confirm all checkout steps use `persist-credentials: false`.
+- Confirm no required workflow uses path filtering.
+- Confirm no repository settings, rulesets, secrets, or environments were
+  changed by this slice.
+
+## Rollback
+
+If a required check breaks after branch protection is enabled:
+
+1. Inspect the failed check and determine whether the failure is source,
+   dependency, runner, cache, or GitHub service related.
+2. If the check is invalid or cannot run, remove only that broken required check
+   from branch protection through the approved repository-settings process.
+3. Do not relax unrelated checks.
+4. Revert or repair the workflow on a feature branch.
+5. Re-run hosted CI and CodeQL.
+6. Restore the required check only after the hosted run succeeds under the same
+   stable job name.
+
+To disable a broken required check safely, first remove it from the branch
+protection required-check list, then merge or revert the workflow change through
+normal review. Removing or renaming the workflow while it is still required can
+leave pull requests blocked by a permanently pending check.
+
+This runbook intentionally contains no tokens, credentials, API write commands,
+or automation that mutates repository settings.
