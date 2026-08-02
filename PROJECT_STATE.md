@@ -7,7 +7,7 @@ _Last updated: 2026-07-31 05:34 CEST_
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
 - Active branch: `feat/security-verification-codeql`
-- Active work block: `WB-0025 Security Verification Pipeline - Slice 2`
+- Active work block: `WB-0025 Security Verification Pipeline`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; branch-protection enforcement is deferred
 
@@ -239,13 +239,10 @@ Scope:
 ## Current status
 
 - Work block: active
-- Slice: 2 - CodeQL and Merge Gates
 - Branch: `feat/security-verification-codeql`
 - Project Kernel: present
 - Runtime implementation: planned
-- Tests: 214 passed on merged baseline `dbd61e9094d2b45ce11468d12b3700c66979cd0b`
-- Slice 1: merged and verified through PR #30
-- Hosted CI: verified — run `30602280063`, all 6 jobs passed
+- Tests: 214 passed; PR #30 merged as dbd61e9094d2b45ce11468d12b3700c66979cd0b; GitHub Actions run 30602280063: 6/6 jobs passed
 - Pull request: not created
 
 ## Next action
@@ -253,15 +250,15 @@ Scope:
 Define the CodeQL workflow contract and required merge-gate checks without changing repository settings.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:b6455e47afbc6860710121bdbb1467dc40d2bb3d8c91a672fe9cd20336ca341a -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:566cde4bd0011a34fd4e38ade8c054c874b10dcca06367c9738de2b0f3bf8203 -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-31T03:34:00Z`
-- Branch: `feat/security-verification-pipeline`
-- Commit: `18bec34f76e7915fa02301ee345dece0ac575ba5`
-- Commit subject: docs(project): record PR 30 hosted CI state
+- Generated: `2026-08-02T11:49:03.307596Z`
+- Branch: `feat/security-verification-codeql`
+- Commit: `732bd4dd1e5d248dc0a1ecc7cacac7dbe049eb3d`
+- Commit subject: docs(project): activate WB-0025 CodeQL and merge gates
 - Working tree: **clean**
-- Test evidence: `214 passed; GitHub Actions run 30588331452: 6/6 jobs passed`
+- Test evidence: `214 passed; PR #30 merged as dbd61e9094d2b45ce11468d12b3700c66979cd0b; GitHub Actions run 30602280063: 6/6 jobs passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

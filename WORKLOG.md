@@ -151,3 +151,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `214 passed; GitHub Actions run 30588331452: 6/6 jobs passed`
 - Next action: Review draft PR #30 and confirm the CI foundation before the ready-for-review transition.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:566cde4bd0011a34fd4e38ade8c054c874b10dcca06367c9738de2b0f3bf8203 -->
+## Checkpoint 2026-08-02T11:49:03.307596Z
+
+- Branch: `feat/security-verification-codeql`
+- Commit: `732bd4dd1e5d248dc0a1ecc7cacac7dbe049eb3d`
+- Commit subject: docs(project): activate WB-0025 CodeQL and merge gates
+- Working tree: **clean**
+- Test evidence: `214 passed; PR #30 merged as dbd61e9094d2b45ce11468d12b3700c66979cd0b; GitHub Actions run 30602280063: 6/6 jobs passed`
+- Next action: Define the CodeQL workflow contract and required merge-gate checks without changing repository settings.
