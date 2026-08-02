@@ -161,3 +161,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `214 passed; PR #30 merged as dbd61e9094d2b45ce11468d12b3700c66979cd0b; GitHub Actions run 30602280063: 6/6 jobs passed`
 - Next action: Define the CodeQL workflow contract and required merge-gate checks without changing repository settings.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:217b222ca17723d04c0b6e70ebd9cfc90afdc01ba9a8732f9c47fa2874ef349e -->
+## Checkpoint 2026-08-02T13:14:33.717174Z
+
+- Branch: `feat/security-verification-codeql`
+- Commit: `458363e46b87902ff8a75cae8cea3d651e4c2ec2`
+- Commit subject: docs(project): mark WB-0025 CodeQL slice implemented
+- Working tree: **clean**
+- Test evidence: `Ruff passed; Pyright 0 errors; pytest 218 passed; compileall passed; build passed; scripts/verify.sh passed; git diff --check passed; workflow audit passed`
+- Next action: Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
