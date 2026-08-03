@@ -184,13 +184,24 @@ independent approval is present.
 
 ## Manual Verification Checklist
 
-Before marking PR #32 ready or merging:
+Before merging PR #32:
 
-- Confirm `.github/workflows/ci.yml` has completed successfully on PR #32.
-  Current canonical evidence: run `30784170890` passed.
-- Confirm `.github/workflows/codeql.yml` has completed successfully on PR #32.
-  Current canonical evidence: run `30784170892` passed.
-- Confirm the required CodeQL context is the stable lowercase job name `codeql`.
+- Confirm `.github/workflows/ci.yml` has completed successfully on the final
+  PR head after the last push.
+  Activation-time snapshot: head
+  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`, run `30784170890`.
+  Pre-correction snapshot: head
+  `034c77e156725169afb75e1cc89364bac252c67e`, run `30806185333`.
+  Neither snapshot substitutes for final-head evidence after a corrective push.
+- Confirm `.github/workflows/codeql.yml` has completed successfully on the
+  final PR head after the last push.
+  Activation-time snapshot: head
+  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`, run `30784170892`.
+  Pre-correction snapshot: head
+  `034c77e156725169afb75e1cc89364bac252c67e`, run `30806185411`.
+  Neither snapshot substitutes for final-head evidence after a corrective push.
+- Confirm the required CodeQL context is the stable lowercase job name
+  `codeql`.
 - Confirm the informational check named `CodeQL` is not confused with the
   required ruleset context `codeql`.
 - Confirm no workflow uses `pull_request_target`.
@@ -201,25 +212,36 @@ Before marking PR #32 ready or merging:
   the checked-in Advanced setup.
 - Confirm ruleset `18986451` is active with no bypass actors and
   `current_user_can_bypass: never`.
-- Confirm PR #32 is independently approved before merge.
+- Confirm PR #32 is independently approved after the final push.
 
 ## Rollback
 
-If a required check or ruleset configuration breaks after branch protection is
-enabled:
+### Failure of one required status context
 
-1. Inspect the failed check and determine whether the failure is source,
-   dependency, runner, cache, or GitHub service related.
-2. Disable enforcement only for ruleset `18986451`
-   (`main-branch-protection`) through the approved repository-settings
-   process.
-3. Verify no active `main` enforcement remains.
-4. Do not relax unrelated repository settings, secrets, environments, or
-   workflows.
-5. Revert or repair the workflow or ruleset documentation on a feature branch.
-6. Re-run hosted CI and CodeQL.
-7. Reactivate ruleset `18986451` only after the hosted run succeeds under the
-   same stable required job names.
+If one required check becomes unavailable or incorrectly configured:
+
+1. Inspect the failed context and determine whether the cause is source,
+   dependency, runner, cache, configuration, or GitHub service related.
+2. Keep ruleset `18986451` active and preserve all unaffected protections,
+   including pull-request review, approval, deletion, and non-fast-forward
+   protection.
+3. Through the explicitly approved repository-settings process, remove or
+   replace only the broken required status context. Do not add a bypass actor
+   and do not relax unrelated rules.
+4. Repair the workflow or required-context configuration on a feature branch.
+5. Re-run hosted CI and CodeQL on the repaired pull-request head.
+6. Restore the exact required context only after its hosted run succeeds.
+
+### Ruleset-wide failure
+
+Disabling the complete ruleset is reserved for a failure of the ruleset itself,
+not for failure of an individual required check.
+
+Before disabling ruleset `18986451`, an equivalent replacement ruleset must be
+active with pull-request, approval, deletion, non-fast-forward, and unaffected
+required-check protections. Full disablement requires separate explicit human
+approval. If equivalent protection cannot be established first, do not disable
+the ruleset; escalate the incident and keep `main` protected.
 
 This runbook intentionally contains no tokens, credentials, API write commands,
 or automation that mutates repository settings.

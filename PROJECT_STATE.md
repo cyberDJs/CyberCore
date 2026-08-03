@@ -276,7 +276,8 @@ Scope:
 - Branch: `feat/main-branch-protection-enforcement`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Pull request: #32, draft
+- Pull request: #32, ready for review; a corrective push is pending and
+  requires a fresh independent approval afterward
 - Ruleset: `18986451` (`main-branch-protection`), target `branch`, target ref
   `~DEFAULT_BRANCH`, enforcement `active`, bypass actors `none`,
   `current_user_can_bypass: never`
@@ -291,16 +292,21 @@ Scope:
   `tests (python 3.13)`, `tests (python 3.14)`, `quality`, `package`, `codeql`
 - Required status-check policy: `strict_required_status_checks_policy: true`,
   `do_not_enforce_on_create: false`
-- Verification against PR #32: head commit
+- Activation-time verification snapshot against PR #32: head commit
   `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`; CI run `30784170890`
-  passed; CodeQL run `30784170892` passed; all seven required contexts
-  passed; PR mergeable `MERGEABLE`; merge state `BLOCKED`; review decision
-  `REVIEW_REQUIRED`; PR remains draft
+  passed; CodeQL run `30784170892` passed; all seven required contexts passed
+- Pre-correction verification snapshot against PR #32: head commit
+  `034c77e156725169afb75e1cc89364bac252c67e`; CI run `30806185333`
+  passed; CodeQL run `30806185411` passed; all seven required contexts passed
+- Merge-time evidence must be captured from the final PR head after the last
+  push; neither earlier snapshot substitutes for final-head verification
 - Check-name distinction: the informational workflow check is named `CodeQL`,
   while the required ruleset context is the lowercase job context `codeql`
-- Rollback: disable enforcement only for ruleset `18986451`, verify there is
-  no active `main` enforcement, repair on a feature branch, and reactivate only
-  after hosted CI and CodeQL checks succeed
+- Rollback: preserve ruleset `18986451` and all unaffected protections;
+  remove or replace only a broken required context through explicit approval,
+  repair on a feature branch, rerun hosted checks, and restore the context only
+  after success; complete ruleset disablement is reserved for ruleset-wide
+  failure and requires equivalent replacement protection first
 - Tests: git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh
   passed on rerun after sandbox DNS failure: Ruff passed, Ruff format check
   passed, Pyright 0 errors, pytest 218 passed in 56.21s, compileall passed,
@@ -308,9 +314,10 @@ Scope:
 
 ## Next action
 
-- Update PR #32 metadata to reflect active and verified main protection.
-- Mark PR #32 ready for review.
-- Request independent approval from nulleimy.
+- Capture final-head CI and CodeQL evidence after the last corrective push.
+- Update PR #32 metadata with the final head and hosted run IDs.
+- Resolve both automated review threads.
+- Obtain fresh independent approval from nulleimy after the final push.
 - Merge only after all seven required checks succeed and approval is present.
 - Verify protected main after merge and close WB-0026.
 

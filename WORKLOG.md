@@ -63,20 +63,36 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Recorded required status-check policy:
   `strict_required_status_checks_policy: true` and
   `do_not_enforce_on_create: false`.
-- Recorded PR #32 verification at head commit
-  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`: CI run `30784170890` passed,
-  CodeQL run `30784170892` passed, all seven required contexts passed,
-  `mergeable: MERGEABLE`, merge state `BLOCKED`, review decision
-  `REVIEW_REQUIRED`, and PR remains draft.
+- Recorded activation-time PR #32 verification snapshot at head commit
+  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`: CI run `30784170890`
+  passed, CodeQL run `30784170892` passed, and all seven required contexts
+  passed.
+- Recorded pre-correction PR #32 verification snapshot at head commit
+  `034c77e156725169afb75e1cc89364bac252c67e`: CI run `30806185333`
+  passed, CodeQL run `30806185411` passed, and all seven required contexts
+  passed.
+- Recorded that merge-time evidence must come from the final PR head after the
+  final push.
 - Documented that the informational check is named `CodeQL`, while the
   required ruleset context is the lowercase job context `codeql`.
 - Preserved WB-0026 as active until PR #32 is reviewed, approved, merged, and
   protected `main` is verified after merge.
-- Preserved rollback: disable only ruleset `18986451` enforcement, verify no
-  active `main` enforcement remains, repair on a feature branch, and reactivate
-  only after hosted checks succeed.
+- Corrected rollback policy so a single failed required context does not
+  disable the complete ruleset: preserve unaffected protections, change only
+  the broken context through explicit approval, repair on a feature branch,
+  and restore it only after hosted checks succeed.
+- Reserved complete ruleset disablement for ruleset-wide failure with
+  equivalent replacement protection active first.
 - Did not commit, push, or change GitHub repository settings in this
   documentation update.
+- Automated Codex review of head
+  `034c77e156725169afb75e1cc89364bac252c67e` identified two findings:
+  selective rollback must preserve unaffected protections, and earlier run
+  evidence must be explicitly classified as snapshots rather than final-head
+  merge evidence.
+- Addressed both findings in canonical documentation.
+- Recorded that the corrective push dismisses the existing approval and
+  requires a fresh independent approval from `nulleimy`.
 
 ### Verification
 

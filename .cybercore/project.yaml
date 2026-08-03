@@ -105,9 +105,10 @@ completed:
     verification: 218_passed
 
 next:
-  - Update PR #32 metadata to reflect active and verified main protection
-  - Mark PR #32 ready for review
-  - Request independent approval from nulleimy
+  - Capture final-head CI and CodeQL evidence after the last corrective push
+  - Update PR #32 metadata with the final head and hosted run IDs
+  - Resolve the two automated review threads
+  - Obtain fresh independent approval from nulleimy after the last push
   - Merge only after all seven required checks succeed and approval is present
   - Verify protected main after merge and close WB-0026
 
