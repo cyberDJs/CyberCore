@@ -225,7 +225,7 @@ Verification:
 Merged through PR #31 into `main` as:
 
 ```text
-bd635ca
+bd635ca56bd2cb7ce0b221c03e9664b128095d25
 ```
 
 Delivered:

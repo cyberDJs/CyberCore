@@ -49,7 +49,7 @@ status:
   security_verification_pipeline: implemented
   security_verification_pipeline_ci_foundation: verified
   security_verification_pipeline_codeql_merge_gates: verified
-  main_branch_protection_enforcement: documentation_alignment
+  main_branch_protection_enforcement: planned
 
 completed:
   - artifact: WB-0015
@@ -101,12 +101,15 @@ completed:
 
   - artifact: WB-0025
     pull_request: 31
-    merge_commit: bd635ca
-    verification: ci_run_30774683751_codeql_run_30774683774_passed
+    merge_commit: bd635ca56bd2cb7ce0b221c03e9664b128095d25
+    verification: 218_passed
 
 next:
-  - keep repository settings unchanged until explicit human approval
-  - preserve branch protection as not enabled until explicit human approval
+  - Inventory the current branch protection and ruleset state
+  - Capture the exact required check contexts from successful hosted runs
+  - Prepare the proposed configuration and rollback plan
+  - Request explicit human approval before mutation
+  - Apply and verify the approved settings
 
 rules:
   state_first: true
