@@ -4,8 +4,10 @@ WB-0025 Slice 1 established local and hosted verification for the Python
 package. Slice 2 adds reproducible CodeQL analysis for Python and defines the
 merge-gate contract proposed for `main`.
 
-Repository settings are not changed by this slice. Branch-protection activation
-requires explicit human approval after a successful hosted CodeQL run.
+Repository settings are not changed by this slice. The hosted CI and Advanced
+CodeQL workflows have now passed after PR #31, but branch protection is still
+not enabled. Activation requires explicit human approval and a separate
+repository-settings action.
 
 ## Supported Python Matrix
 
@@ -56,6 +58,13 @@ manual `workflow_dispatch` runs. It uses `contents: read`, cancels superseded
 runs for the same ref, avoids `pull_request_target`, and does not read secrets
 or publish packages.
 
+Canonical hosted evidence after PR #31:
+
+- GitHub Actions CI run `30774683751`: passed.
+- This confirms the `tests (python 3.11)`, `tests (python 3.12)`,
+  `tests (python 3.13)`, `tests (python 3.14)`, `quality`, and `package`
+  jobs completed successfully for the PR #31 state.
+
 ## CodeQL
 
 The CodeQL workflow is `.github/workflows/codeql.yml`.
@@ -83,6 +92,16 @@ Permissions are scoped to the CodeQL job:
 `packages: read` is not configured because this Python analysis does not need
 package-registry access.
 
+Canonical hosted evidence after PR #31:
+
+- CodeQL run `30774683774`: passed under the stable `codeql` job.
+- GitHub CodeQL Default setup initially conflicted with this repository's
+  checked-in Advanced setup. A human explicitly disabled Default setup in
+  GitHub repository settings, then retried the run successfully.
+- The repository keeps Advanced setup as the source-controlled CodeQL contract.
+  Default setup must remain disabled unless the Advanced workflow is removed
+  through a separately reviewed change.
+
 ## Proposed Required Checks
 
 These checks are the exact proposed merge gates for pull requests targeting
@@ -106,7 +125,7 @@ required check pending indefinitely.
 
 ## Proposed Branch Protection
 
-After a successful hosted CodeQL run and explicit human approval, configure
+Branch protection is not yet enabled. After explicit human approval, configure
 `main` branch protection as follows:
 
 - Require a pull request before merging.
@@ -126,15 +145,18 @@ the exact merge candidate against current `main`.
 Before activating settings:
 
 - Confirm `.github/workflows/ci.yml` has completed successfully on the branch.
+  Current canonical evidence: run `30774683751` passed after PR #31.
 - Confirm `.github/workflows/codeql.yml` has completed successfully on GitHub
-  Actions.
+  Actions. Current canonical evidence: run `30774683774` passed after PR #31.
 - Confirm the CodeQL run reports under the stable check name `codeql`.
 - Confirm no workflow uses `pull_request_target`.
 - Confirm all action refs are immutable 40-character lowercase SHA values.
 - Confirm all checkout steps use `persist-credentials: false`.
 - Confirm no required workflow uses path filtering.
+- Confirm GitHub CodeQL Default setup is disabled so it does not conflict with
+  the checked-in Advanced setup.
 - Confirm no repository settings, rulesets, secrets, or environments were
-  changed by this slice.
+  changed by repository automation.
 
 ## Rollback
 

@@ -34,6 +34,27 @@ Local verification on macOS with Python `3.14.6`:
 
 PR #18 is technically verified. Next work should focus on persistent project memory automation as a separate work block.
 
+## 2026-08-03
+
+### Completed
+
+- Continued `WB-0026` on branch `feat/main-branch-protection-enforcement`.
+- Aligned canonical documentation after PR #31.
+- Recorded successful GitHub Actions CI run `30774683751`.
+- Recorded successful CodeQL run `30774683774`.
+- Recorded that GitHub CodeQL Default setup conflicted with the repository
+  Advanced setup, was disabled by explicit human action, and the retry
+  succeeded.
+- Preserved that `main` branch protection is not yet enabled.
+- Did not modify GitHub repository settings.
+
+### Verification
+
+- `git diff --check`: passed.
+- `PYTHON=.venv/bin/python scripts/verify.sh`: Ruff passed, Ruff format check
+  passed, Pyright reported 0 errors, pytest reported 218 passed, compileall
+  passed, and package build passed.
+
 ## Checkpoint 2026-07-29T20:55:18.888287Z
 
 - Branch: `feat/checkpoint-persistence`
@@ -181,3 +202,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `pytest 218 passed; git diff --check passed`
 - Next action: Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:57437a493ae5230754384e34abb1e68eaf05619f1e4685fcc4f88e59ca239eff -->
+## Checkpoint 2026-08-03T03:26:41.606453Z
+
+- Branch: `feat/main-branch-protection-enforcement`
+- Commit: `bd635ca56bd2cb7ce0b221c03e9664b128095d25`
+- Commit subject: ci(security): add CodeQL analysis and merge-gate contract (#31)
+- Working tree: **dirty**
+- Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 218 passed in 60.45s, compileall passed, build passed; GitHub Actions run 30774683751 passed; CodeQL run 30774683774 passed`
+- Next action: Review WB-0026 documentation alignment; branch protection remains not enabled until explicit human approval.

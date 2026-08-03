@@ -2,7 +2,7 @@
 
 Project: **CyberDJS / CyberCore**  
 Started: **2026-07-08**  
-Updated: **2026-07-20**
+Updated: **2026-08-03**
 Mode: living roadmap; GitHub `main` is the stable source of truth.
 
 ## Strategic outcome
@@ -186,6 +186,17 @@ These remain operational blockers and must not disappear inside platform work:
 ## Working rule
 
 No new implementation epic starts before its required foundation or specification change is merged into `main`.
+
+## Current Platform Checkpoint
+
+WB-0025 security verification is merged through PR #31. Hosted GitHub Actions CI
+run `30774683751` and hosted CodeQL run `30774683774` passed. GitHub CodeQL
+Default setup conflicted with the checked-in Advanced setup, was disabled by
+explicit human action, and the retry succeeded.
+
+WB-0026 is active only for documentation and canonical evidence alignment for
+main branch protection. Branch protection for `main` is not yet enabled and
+must not be enabled without explicit human approval.
 
 Critical flow:
 

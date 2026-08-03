@@ -1,16 +1,16 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-02 15:20 CEST_
+_Last updated: 2026-08-03 05:20 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/security-verification-codeql`
-- Active work block: `WB-0025 Security Verification Pipeline`
+- Active branch: `feat/main-branch-protection-enforcement`
+- Active work block: `WB-0026 Main Branch Protection Enforcement`
 - Governance rule: no production mutation without explicit human approval
-- CI policy: GitHub Actions verification is required before merge; branch-protection enforcement is deferred
-- CodeQL policy: implemented locally; verification is deferred until the hosted workflow succeeds
+- CI policy: GitHub Actions verification is required before merge; branch protection is not yet enabled
+- CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
 ## Completed checkpoints
 
@@ -222,7 +222,11 @@ Verification:
 
 ### WB-0025 Slice 2 — CodeQL and merge gates
 
-Implemented on branch `feat/security-verification-codeql`.
+Merged through PR #31 into `main` as:
+
+```text
+bd635ca
+```
 
 Delivered:
 
@@ -237,48 +241,53 @@ Verification:
 - local validation completed: Ruff passed, Pyright reported 0 errors, pytest reported
   218 passed, compileall passed, package build passed, scripts/verify.sh passed,
   git diff --check passed, and the workflow security audit passed;
-- hosted CodeQL has not run yet and is not marked verified.
+- GitHub Actions run `30774683751`: **passed**;
+- CodeQL run `30774683774`: **passed** under the stable `codeql` job;
+- GitHub CodeQL Default setup conflicted with the repository Advanced setup,
+  was disabled by explicit human action, and the retry succeeded;
+- branch protection is not yet enabled, and no repository settings are mutated
+  by repository automation.
 
 ## Current milestone
 
-Security Verification Pipeline v0.1.
+Main Branch Protection Enforcement v0.1.
 
 ## Active objective
 
-Establish reproducible automated security and quality verification for every change before merge.
+Align canonical documentation and evidence after PR #31 while preserving the
+explicit boundary that `main` branch protection is not yet enabled.
 
 Scope:
 
-1. run the complete test suite in GitHub Actions;
-2. add CodeQL analysis for Python and workflow changes;
-3. configure Ruff linting and formatting checks;
-4. configure Pyright type checking;
-5. verify package build and clean installation;
-6. define required status checks and merge-gate documentation;
+1. record successful GitHub Actions CI run `30774683751`;
+2. record successful CodeQL run `30774683774`;
+3. document the GitHub CodeQL Default setup conflict with Advanced setup;
+4. preserve that branch protection is not yet enabled;
+5. create a fresh canonical checkpoint after documentation alignment.
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/security-verification-codeql`
+- Branch: `feat/main-branch-protection-enforcement`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: pytest 218 passed; git diff --check passed
+- Tests: git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 218 passed in 60.45s, compileall passed, build passed; GitHub Actions run 30774683751 passed; CodeQL run 30774683774 passed
 - Pull request: not created
 
 ## Next action
 
-Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
+Review WB-0026 documentation alignment; branch protection remains not enabled until explicit human approval.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:1f9ddcf958ceefe5b3b11f0b7289a69cc4f518bbfe6ee8a2170f37d8de66a849 -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:57437a493ae5230754384e34abb1e68eaf05619f1e4685fcc4f88e59ca239eff -->
 ## Automated repository checkpoint
 
-- Generated: `2026-08-02T13:28:26.446552Z`
-- Branch: `feat/security-verification-codeql`
-- Commit: `1226605fdea6fdec9c30fb9a9c22f4e347414304`
-- Commit subject: docs(project): align WB-0025 CodeQL verification state
-- Working tree: **clean**
-- Test evidence: `pytest 218 passed; git diff --check passed`
+- Generated: `2026-08-03T03:26:41.606453Z`
+- Branch: `feat/main-branch-protection-enforcement`
+- Commit: `bd635ca56bd2cb7ce0b221c03e9664b128095d25`
+- Commit subject: ci(security): add CodeQL analysis and merge-gate contract (#31)
+- Working tree: **dirty**
+- Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 218 passed in 60.45s, compileall passed, build passed; GitHub Actions run 30774683751 passed; CodeQL run 30774683774 passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->
