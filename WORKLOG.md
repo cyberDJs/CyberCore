@@ -45,8 +45,38 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Recorded that GitHub CodeQL Default setup conflicted with the repository
   Advanced setup, was disabled by explicit human action, and the retry
   succeeded.
-- Preserved that `main` branch protection is not yet enabled.
-- Did not modify GitHub repository settings.
+- Recorded explicit human approval to activate `main` branch protection for
+  repository `cyberDJs/CyberCore`.
+- Recorded ruleset `18986451` (`main-branch-protection`) with target `branch`,
+  target ref `~DEFAULT_BRANCH`, enforcement `active`, no bypass actors,
+  `current_user_can_bypass: never`, and activation timestamp
+  `2026-08-03T10:47:03.259+02:00`.
+- Recorded exact active rules: deletion protection, non-fast-forward
+  protection, pull request required, one approving review required, stale
+  approvals dismissed after push, review thread resolution required,
+  CODEOWNERS review not required, last-push approval not required, allowed
+  merge methods `merge`, `squash`, and `rebase`, and linear history not
+  required.
+- Recorded required checks: `tests (python 3.11)`, `tests (python 3.12)`,
+  `tests (python 3.13)`, `tests (python 3.14)`, `quality`, `package`, and
+  `codeql`.
+- Recorded required status-check policy:
+  `strict_required_status_checks_policy: true` and
+  `do_not_enforce_on_create: false`.
+- Recorded PR #32 verification at head commit
+  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`: CI run `30784170890` passed,
+  CodeQL run `30784170892` passed, all seven required contexts passed,
+  `mergeable: MERGEABLE`, merge state `BLOCKED`, review decision
+  `REVIEW_REQUIRED`, and PR remains draft.
+- Documented that the informational check is named `CodeQL`, while the
+  required ruleset context is the lowercase job context `codeql`.
+- Preserved WB-0026 as active until PR #32 is reviewed, approved, merged, and
+  protected `main` is verified after merge.
+- Preserved rollback: disable only ruleset `18986451` enforcement, verify no
+  active `main` enforcement remains, repair on a feature branch, and reactivate
+  only after hosted checks succeed.
+- Did not commit, push, or change GitHub repository settings in this
+  documentation update.
 
 ### Verification
 
@@ -211,4 +241,4 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Commit subject: ci(security): add CodeQL analysis and merge-gate contract (#31)
 - Working tree: **dirty**
 - Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 218 passed in 60.45s, compileall passed, build passed; GitHub Actions run 30774683751 passed; CodeQL run 30774683774 passed`
-- Next action: Review WB-0026 documentation alignment; branch protection remains not enabled until explicit human approval.
+- Next action: Superseded by WB-0026 active main protection verification for PR #32.

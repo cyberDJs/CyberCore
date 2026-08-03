@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-03 05:20 CEST_
+_Last updated: 2026-08-03 10:47 CEST_
 
 ## Source of truth
 
@@ -9,7 +9,9 @@ _Last updated: 2026-08-03 05:20 CEST_
 - Active branch: `feat/main-branch-protection-enforcement`
 - Active work block: `WB-0026 Main Branch Protection Enforcement`
 - Governance rule: no production mutation without explicit human approval
-- CI policy: GitHub Actions verification is required before merge; branch protection is not yet enabled
+- CI policy: GitHub Actions verification is required before merge; `main`
+  branch protection is active and verified through ruleset
+  `main-branch-protection` (`18986451`)
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
 ## Completed checkpoints
@@ -245,8 +247,8 @@ Verification:
 - CodeQL run `30774683774`: **passed** under the stable `codeql` job;
 - GitHub CodeQL Default setup conflicted with the repository Advanced setup,
   was disabled by explicit human action, and the retry succeeded;
-- branch protection is not yet enabled, and no repository settings are mutated
-  by repository automation.
+- branch protection remained disabled for PR #31 and was later activated under
+  WB-0026 only after explicit human approval.
 
 ## Current milestone
 
@@ -254,16 +256,19 @@ Main Branch Protection Enforcement v0.1.
 
 ## Active objective
 
-Align canonical documentation and evidence after PR #31 while preserving the
-explicit boundary that `main` branch protection is not yet enabled.
+Record that `main` branch protection for PR #32 was explicitly approved,
+activated, and verified while keeping WB-0026 active until PR #32 is reviewed
+and merged.
 
 Scope:
 
-1. record successful GitHub Actions CI run `30774683751`;
-2. record successful CodeQL run `30774683774`;
-3. document the GitHub CodeQL Default setup conflict with Advanced setup;
-4. preserve that branch protection is not yet enabled;
-5. create a fresh canonical checkpoint after documentation alignment.
+1. record explicit human approval for activating `main` protection;
+2. record ruleset `18986451`, `main-branch-protection`, activated at
+   `2026-08-03T10:47:03.259+02:00`;
+3. record the active ruleset configuration and required checks;
+4. record hosted verification against PR #32;
+5. preserve rollback and keep WB-0026 active until PR #32 is reviewed,
+   approved, merged, and protected `main` is verified after merge.
 
 ## Current status
 
@@ -271,12 +276,43 @@ Scope:
 - Branch: `feat/main-branch-protection-enforcement`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 218 passed in 60.45s, compileall passed, build passed; GitHub Actions run 30774683751 passed; CodeQL run 30774683774 passed
-- Pull request: not created
+- Pull request: #32, draft
+- Ruleset: `18986451` (`main-branch-protection`), target `branch`, target ref
+  `~DEFAULT_BRANCH`, enforcement `active`, bypass actors `none`,
+  `current_user_can_bypass: never`
+- Activated: `2026-08-03T10:47:03.259+02:00` after explicit human approval
+- Rules enabled: deletion protection, non-fast-forward protection, pull request
+  required, one approving review required, stale approvals dismissed after push,
+  review thread resolution required
+- Rules not enabled: CODEOWNERS review not required, last-push approval not
+  required, linear history not required
+- Allowed merge methods: merge, squash, rebase
+- Required checks: `tests (python 3.11)`, `tests (python 3.12)`,
+  `tests (python 3.13)`, `tests (python 3.14)`, `quality`, `package`, `codeql`
+- Required status-check policy: `strict_required_status_checks_policy: true`,
+  `do_not_enforce_on_create: false`
+- Verification against PR #32: head commit
+  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`; CI run `30784170890`
+  passed; CodeQL run `30784170892` passed; all seven required contexts
+  passed; PR mergeable `MERGEABLE`; merge state `BLOCKED`; review decision
+  `REVIEW_REQUIRED`; PR remains draft
+- Check-name distinction: the informational workflow check is named `CodeQL`,
+  while the required ruleset context is the lowercase job context `codeql`
+- Rollback: disable enforcement only for ruleset `18986451`, verify there is
+  no active `main` enforcement, repair on a feature branch, and reactivate only
+  after hosted CI and CodeQL checks succeed
+- Tests: git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh
+  passed on rerun after sandbox DNS failure: Ruff passed, Ruff format check
+  passed, Pyright 0 errors, pytest 218 passed in 56.21s, compileall passed,
+  package build passed
 
 ## Next action
 
-Review WB-0026 documentation alignment; branch protection remains not enabled until explicit human approval.
+- Update PR #32 metadata to reflect active and verified main protection.
+- Mark PR #32 ready for review.
+- Request independent approval from nulleimy.
+- Merge only after all seven required checks succeed and approval is present.
+- Verify protected main after merge and close WB-0026.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:57437a493ae5230754384e34abb1e68eaf05619f1e4685fcc4f88e59ca239eff -->

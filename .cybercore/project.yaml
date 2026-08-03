@@ -26,7 +26,7 @@ current:
   milestone: Main Branch Protection Enforcement v0.1
   active_artifact: WB-0026
   branch: feat/main-branch-protection-enforcement
-  pull_request: null
+  pull_request: 32
 
 status:
   ccl_specification: complete_draft
@@ -49,7 +49,7 @@ status:
   security_verification_pipeline: implemented
   security_verification_pipeline_ci_foundation: verified
   security_verification_pipeline_codeql_merge_gates: verified
-  main_branch_protection_enforcement: planned
+  main_branch_protection_enforcement: verified
 
 completed:
   - artifact: WB-0015
@@ -105,11 +105,11 @@ completed:
     verification: 218_passed
 
 next:
-  - Inventory the current branch protection and ruleset state
-  - Capture the exact required check contexts from successful hosted runs
-  - Prepare the proposed configuration and rollback plan
-  - Request explicit human approval before mutation
-  - Apply and verify the approved settings
+  - Update PR #32 metadata to reflect active and verified main protection
+  - Mark PR #32 ready for review
+  - Request independent approval from nulleimy
+  - Merge only after all seven required checks succeed and approval is present
+  - Verify protected main after merge and close WB-0026
 
 rules:
   state_first: true

@@ -1,13 +1,14 @@
 # Security Verification Pipeline
 
 WB-0025 Slice 1 established local and hosted verification for the Python
-package. Slice 2 adds reproducible CodeQL analysis for Python and defines the
-merge-gate contract proposed for `main`.
+package. Slice 2 added reproducible CodeQL analysis for Python and defined the
+merge-gate contract now enforced for `main`.
 
-Repository settings are not changed by this slice. The hosted CI and Advanced
-CodeQL workflows have now passed after PR #31, but branch protection is still
-not enabled. Activation requires explicit human approval and a separate
-repository-settings action.
+Repository automation does not mutate repository settings. After explicit
+human approval, the `main-branch-protection` ruleset was activated for
+`cyberDJs/CyberCore` and verified against PR #32. WB-0026 remains active until
+PR #32 is reviewed, approved, merged, and protected `main` is verified after
+merge.
 
 ## Supported Python Matrix
 
@@ -102,9 +103,9 @@ Canonical hosted evidence after PR #31:
   Default setup must remain disabled unless the Advanced workflow is removed
   through a separately reviewed change.
 
-## Proposed Required Checks
+## Required Checks
 
-These checks are the exact proposed merge gates for pull requests targeting
+These checks are the exact required merge gates for pull requests targeting
 `main`:
 
 - `tests (python 3.11)`
@@ -119,63 +120,106 @@ Job names must remain stable because branch protection matches required checks
 by their reported names. Renaming a required job can block merges until the
 branch-protection rule is updated by an approved repository administrator.
 
+GitHub also reports an informational workflow check named `CodeQL`. The active
+ruleset required context is not that display check; it is the lowercase CodeQL
+job context `codeql`.
+
 Required checks must run on every pull request to `main`. Required workflows
 must not use path filtering because a skipped required workflow can leave a
 required check pending indefinitely.
 
-## Proposed Branch Protection
+## Active Branch Protection
 
-Branch protection is not yet enabled. After explicit human approval, configure
-`main` branch protection as follows:
+Main branch protection was explicitly approved, activated, and verified through
+this ruleset:
 
-- Require a pull request before merging.
-- Require the seven checks listed in "Proposed Required Checks".
-- Require branches to be up to date before merging.
-- Require conversation resolution before merging.
-- Require linear history if that matches the repository's existing merge policy.
-- Restrict direct pushes to `main`; no direct pushes by automation.
-- Keep administrators subject to the rule unless an emergency process is
-  explicitly approved.
+- Repository: `cyberDJs/CyberCore`
+- Pull request: #32
+- Ruleset id: `18986451`
+- Ruleset name: `main-branch-protection`
+- Target: `branch`
+- Target ref: `~DEFAULT_BRANCH`
+- Enforcement: `active`
+- Bypass actors: none
+- `current_user_can_bypass: never`
+- Activated: `2026-08-03T10:47:03.259+02:00`
 
-Strict branch-up-to-date behavior is recommended so the required checks validate
-the exact merge candidate against current `main`.
+Rules:
+
+- Deletion protection enabled.
+- Non-fast-forward protection enabled.
+- Pull request required.
+- One approving review required.
+- Stale approvals dismissed after push.
+- Review thread resolution required.
+- CODEOWNERS review not required.
+- Last-push approval not required.
+- Allowed merge methods: merge, squash, rebase.
+- Linear history not required.
+
+Required status-check policy:
+
+- `strict_required_status_checks_policy: true`
+- `do_not_enforce_on_create: false`
+
+Strict required status checks mean the required checks validate the merge
+candidate against current `main`.
+
+## PR #32 Verification
+
+Verification against PR #32:
+
+- Head commit: `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`
+- CI run: `30784170890` passed
+- CodeQL run: `30784170892` passed
+- All seven required contexts passed
+- PR mergeable: `MERGEABLE`
+- Merge state: `BLOCKED`
+- Review decision: `REVIEW_REQUIRED`
+- PR remains draft
+
+The merge state is expected: the ruleset is active, all required checks have
+passed, and merge remains blocked until the draft PR is marked ready and an
+independent approval is present.
 
 ## Manual Verification Checklist
 
-Before activating settings:
+Before marking PR #32 ready or merging:
 
-- Confirm `.github/workflows/ci.yml` has completed successfully on the branch.
-  Current canonical evidence: run `30774683751` passed after PR #31.
-- Confirm `.github/workflows/codeql.yml` has completed successfully on GitHub
-  Actions. Current canonical evidence: run `30774683774` passed after PR #31.
-- Confirm the CodeQL run reports under the stable check name `codeql`.
+- Confirm `.github/workflows/ci.yml` has completed successfully on PR #32.
+  Current canonical evidence: run `30784170890` passed.
+- Confirm `.github/workflows/codeql.yml` has completed successfully on PR #32.
+  Current canonical evidence: run `30784170892` passed.
+- Confirm the required CodeQL context is the stable lowercase job name `codeql`.
+- Confirm the informational check named `CodeQL` is not confused with the
+  required ruleset context `codeql`.
 - Confirm no workflow uses `pull_request_target`.
 - Confirm all action refs are immutable 40-character lowercase SHA values.
 - Confirm all checkout steps use `persist-credentials: false`.
 - Confirm no required workflow uses path filtering.
 - Confirm GitHub CodeQL Default setup is disabled so it does not conflict with
   the checked-in Advanced setup.
-- Confirm no repository settings, rulesets, secrets, or environments were
-  changed by repository automation.
+- Confirm ruleset `18986451` is active with no bypass actors and
+  `current_user_can_bypass: never`.
+- Confirm PR #32 is independently approved before merge.
 
 ## Rollback
 
-If a required check breaks after branch protection is enabled:
+If a required check or ruleset configuration breaks after branch protection is
+enabled:
 
 1. Inspect the failed check and determine whether the failure is source,
    dependency, runner, cache, or GitHub service related.
-2. If the check is invalid or cannot run, remove only that broken required check
-   from branch protection through the approved repository-settings process.
-3. Do not relax unrelated checks.
-4. Revert or repair the workflow on a feature branch.
-5. Re-run hosted CI and CodeQL.
-6. Restore the required check only after the hosted run succeeds under the same
-   stable job name.
-
-To disable a broken required check safely, first remove it from the branch
-protection required-check list, then merge or revert the workflow change through
-normal review. Removing or renaming the workflow while it is still required can
-leave pull requests blocked by a permanently pending check.
+2. Disable enforcement only for ruleset `18986451`
+   (`main-branch-protection`) through the approved repository-settings
+   process.
+3. Verify no active `main` enforcement remains.
+4. Do not relax unrelated repository settings, secrets, environments, or
+   workflows.
+5. Revert or repair the workflow or ruleset documentation on a feature branch.
+6. Re-run hosted CI and CodeQL.
+7. Reactivate ruleset `18986451` only after the hosted run succeeds under the
+   same stable required job names.
 
 This runbook intentionally contains no tokens, credentials, API write commands,
 or automation that mutates repository settings.

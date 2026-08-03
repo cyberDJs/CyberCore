@@ -194,9 +194,47 @@ run `30774683751` and hosted CodeQL run `30774683774` passed. GitHub CodeQL
 Default setup conflicted with the checked-in Advanced setup, was disabled by
 explicit human action, and the retry succeeded.
 
-WB-0026 is active only for documentation and canonical evidence alignment for
-main branch protection. Branch protection for `main` is not yet enabled and
-must not be enabled without explicit human approval.
+WB-0026 remains active for documentation, review, merge, and post-merge
+verification of `main` branch protection. Main protection was explicitly
+approved by a human, activated, and verified for PR #32, but WB-0026 must not
+be closed until PR #32 is independently approved, merged, and protected `main`
+is verified after merge.
+
+Active protection evidence:
+
+- Repository: `cyberDJs/CyberCore`.
+- Pull request: #32, still draft.
+- Ruleset: `18986451`, `main-branch-protection`, target `branch`, target ref
+  `~DEFAULT_BRANCH`, enforcement `active`, bypass actors `none`,
+  `current_user_can_bypass: never`.
+- Activated: `2026-08-03T10:47:03.259+02:00`.
+- Rules: deletion and non-fast-forward protection enabled; pull request
+  required; one approving review required; stale approvals dismissed after
+  push; review thread resolution required; CODEOWNERS review not required;
+  last-push approval not required; linear history not required.
+- Allowed merge methods: merge, squash, rebase.
+- Required checks: `tests (python 3.11)`, `tests (python 3.12)`,
+  `tests (python 3.13)`, `tests (python 3.14)`, `quality`, `package`, `codeql`.
+- Required status-check policy: `strict_required_status_checks_policy: true`;
+  `do_not_enforce_on_create: false`.
+- Verification against PR #32 head
+  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`: CI run `30784170890` passed,
+  CodeQL run `30784170892` passed, all seven required contexts passed,
+  `mergeable: MERGEABLE`, merge state `BLOCKED`, review decision
+  `REVIEW_REQUIRED`, and PR remains draft.
+- Check-name distinction: `CodeQL` is informational; the required ruleset
+  context is lowercase `codeql`.
+- Rollback: disable enforcement only for ruleset `18986451`, verify no active
+  `main` enforcement remains, repair on a feature branch, and reactivate only
+  after hosted checks succeed.
+
+Next:
+
+- Update PR #32 metadata to reflect active and verified main protection.
+- Mark PR #32 ready for review.
+- Request independent approval from nulleimy.
+- Merge only after all seven required checks succeed and approval is present.
+- Verify protected main after merge and close WB-0026.
 
 Critical flow:
 
