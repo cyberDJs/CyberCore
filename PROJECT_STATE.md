@@ -1,15 +1,16 @@
 # CyberCore Project State
 
-_Last updated: 2026-07-31 05:34 CEST_
+_Last updated: 2026-08-02 15:20 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/security-verification-pipeline`
+- Active branch: `feat/security-verification-codeql`
 - Active work block: `WB-0025 Security Verification Pipeline`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; branch-protection enforcement is deferred
+- CodeQL policy: implemented locally; verification is deferred until the hosted workflow succeeds
 
 ## Completed checkpoints
 
@@ -204,6 +205,40 @@ Verification:
 
 - `pytest -q`: **201 passed**.
 
+### WB-0025 Slice 1 — CI foundation
+
+Merged through PR #30 into `main` as:
+
+```text
+dbd61e9094d2b45ce11468d12b3700c66979cd0b
+```
+
+Verification:
+
+- local verification: **214 passed**;
+- GitHub Actions run `30602280063`: **6/6 jobs passed**;
+- Python 3.11, 3.12, 3.13 and 3.14 passed;
+- Ruff, Pyright, package build and clean-wheel smoke test passed.
+
+### WB-0025 Slice 2 — CodeQL and merge gates
+
+Implemented on branch `feat/security-verification-codeql`.
+
+Delivered:
+
+- pinned advanced CodeQL workflow for Python;
+- workflow-security tests for all `.github/workflows/*.yml` files;
+- exact proposed required checks for `main`;
+- branch-protection activation, rollback, and broken-check runbook;
+- explicit non-mutation boundary for repository settings.
+
+Verification:
+
+- local validation completed: Ruff passed, Pyright reported 0 errors, pytest reported
+  218 passed, compileall passed, package build passed, scripts/verify.sh passed,
+  git diff --check passed, and the workflow security audit passed;
+- hosted CodeQL has not run yet and is not marked verified.
+
 ## Current milestone
 
 Security Verification Pipeline v0.1.
@@ -224,36 +259,26 @@ Scope:
 ## Current status
 
 - Work block: active
-- Branch: `feat/security-verification-pipeline`
+- Branch: `feat/security-verification-codeql`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Tests: 214 passed locally and in GitHub Actions
-- Hosted CI: verified — run `30588331452`, all 6 jobs passed
-- Pull request: #30 opened as draft
-
-Hosted CI jobs:
-
-1. `tests (python 3.11)` — passed;
-2. `tests (python 3.12)` — passed;
-3. `tests (python 3.13)` — passed;
-4. `tests (python 3.14)` — passed;
-5. `quality` — passed;
-6. `package` — passed.
+- Tests: pytest 218 passed; git diff --check passed
+- Pull request: not created
 
 ## Next action
 
-Review draft PR #30 and confirm the CI foundation before the ready-for-review transition.
+Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:b6455e47afbc6860710121bdbb1467dc40d2bb3d8c91a672fe9cd20336ca341a -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:1f9ddcf958ceefe5b3b11f0b7289a69cc4f518bbfe6ee8a2170f37d8de66a849 -->
 ## Automated repository checkpoint
 
-- Generated: `2026-07-31T03:34:00Z`
-- Branch: `feat/security-verification-pipeline`
-- Commit: `18bec34f76e7915fa02301ee345dece0ac575ba5`
-- Commit subject: docs(project): record PR 30 hosted CI state
+- Generated: `2026-08-02T13:28:26.446552Z`
+- Branch: `feat/security-verification-codeql`
+- Commit: `1226605fdea6fdec9c30fb9a9c22f4e347414304`
+- Commit subject: docs(project): align WB-0025 CodeQL verification state
 - Working tree: **clean**
-- Test evidence: `214 passed; GitHub Actions run 30588331452: 6/6 jobs passed`
+- Test evidence: `pytest 218 passed; git diff --check passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

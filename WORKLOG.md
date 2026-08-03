@@ -151,3 +151,33 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `214 passed; GitHub Actions run 30588331452: 6/6 jobs passed`
 - Next action: Review draft PR #30 and confirm the CI foundation before the ready-for-review transition.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:566cde4bd0011a34fd4e38ade8c054c874b10dcca06367c9738de2b0f3bf8203 -->
+## Checkpoint 2026-08-02T11:49:03.307596Z
+
+- Branch: `feat/security-verification-codeql`
+- Commit: `732bd4dd1e5d248dc0a1ecc7cacac7dbe049eb3d`
+- Commit subject: docs(project): activate WB-0025 CodeQL and merge gates
+- Working tree: **clean**
+- Test evidence: `214 passed; PR #30 merged as dbd61e9094d2b45ce11468d12b3700c66979cd0b; GitHub Actions run 30602280063: 6/6 jobs passed`
+- Next action: Define the CodeQL workflow contract and required merge-gate checks without changing repository settings.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:217b222ca17723d04c0b6e70ebd9cfc90afdc01ba9a8732f9c47fa2874ef349e -->
+## Checkpoint 2026-08-02T13:14:33.717174Z
+
+- Branch: `feat/security-verification-codeql`
+- Commit: `458363e46b87902ff8a75cae8cea3d651e4c2ec2`
+- Commit subject: docs(project): mark WB-0025 CodeQL slice implemented
+- Working tree: **clean**
+- Test evidence: `Ruff passed; Pyright 0 errors; pytest 218 passed; compileall passed; build passed; scripts/verify.sh passed; git diff --check passed; workflow audit passed`
+- Next action: Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:1f9ddcf958ceefe5b3b11f0b7289a69cc4f518bbfe6ee8a2170f37d8de66a849 -->
+## Checkpoint 2026-08-02T13:28:26.446552Z
+
+- Branch: `feat/security-verification-codeql`
+- Commit: `1226605fdea6fdec9c30fb9a9c22f4e347414304`
+- Commit subject: docs(project): align WB-0025 CodeQL verification state
+- Working tree: **clean**
+- Test evidence: `pytest 218 passed; git diff --check passed`
+- Next action: Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
