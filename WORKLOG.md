@@ -34,6 +34,73 @@ Local verification on macOS with Python `3.14.6`:
 
 PR #18 is technically verified. Next work should focus on persistent project memory automation as a separate work block.
 
+## 2026-08-03
+
+### Completed
+
+- Continued `WB-0026` on branch `feat/main-branch-protection-enforcement`.
+- Aligned canonical documentation after PR #31.
+- Recorded successful GitHub Actions CI run `30774683751`.
+- Recorded successful CodeQL run `30774683774`.
+- Recorded that GitHub CodeQL Default setup conflicted with the repository
+  Advanced setup, was disabled by explicit human action, and the retry
+  succeeded.
+- Recorded explicit human approval to activate `main` branch protection for
+  repository `cyberDJs/CyberCore`.
+- Recorded ruleset `18986451` (`main-branch-protection`) with target `branch`,
+  target ref `~DEFAULT_BRANCH`, enforcement `active`, no bypass actors,
+  `current_user_can_bypass: never`, and activation timestamp
+  `2026-08-03T10:47:03.259+02:00`.
+- Recorded exact active rules: deletion protection, non-fast-forward
+  protection, pull request required, one approving review required, stale
+  approvals dismissed after push, review thread resolution required,
+  CODEOWNERS review not required, last-push approval not required, allowed
+  merge methods `merge`, `squash`, and `rebase`, and linear history not
+  required.
+- Recorded required checks: `tests (python 3.11)`, `tests (python 3.12)`,
+  `tests (python 3.13)`, `tests (python 3.14)`, `quality`, `package`, and
+  `codeql`.
+- Recorded required status-check policy:
+  `strict_required_status_checks_policy: true` and
+  `do_not_enforce_on_create: false`.
+- Recorded activation-time PR #32 verification snapshot at head commit
+  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`: CI run `30784170890`
+  passed, CodeQL run `30784170892` passed, and all seven required contexts
+  passed.
+- Recorded pre-correction PR #32 verification snapshot at head commit
+  `034c77e156725169afb75e1cc89364bac252c67e`: CI run `30806185333`
+  passed, CodeQL run `30806185411` passed, and all seven required contexts
+  passed.
+- Recorded that merge-time evidence must come from the final PR head after the
+  final push.
+- Documented that the informational check is named `CodeQL`, while the
+  required ruleset context is the lowercase job context `codeql`.
+- Preserved WB-0026 as active until PR #32 is reviewed, approved, merged, and
+  protected `main` is verified after merge.
+- Corrected rollback policy so a single failed required context does not
+  disable the complete ruleset: preserve unaffected protections, change only
+  the broken context through explicit approval, repair on a feature branch,
+  and restore it only after hosted checks succeed.
+- Reserved complete ruleset disablement for ruleset-wide failure with
+  equivalent replacement protection active first.
+- Did not commit, push, or change GitHub repository settings in this
+  documentation update.
+- Automated Codex review of head
+  `034c77e156725169afb75e1cc89364bac252c67e` identified two findings:
+  selective rollback must preserve unaffected protections, and earlier run
+  evidence must be explicitly classified as snapshots rather than final-head
+  merge evidence.
+- Addressed both findings in canonical documentation.
+- Recorded that the corrective push dismisses the existing approval and
+  requires a fresh independent approval from `nulleimy`.
+
+### Verification
+
+- `git diff --check`: passed.
+- `PYTHON=.venv/bin/python scripts/verify.sh`: Ruff passed, Ruff format check
+  passed, Pyright reported 0 errors, pytest reported 218 passed, compileall
+  passed, and package build passed.
+
 ## Checkpoint 2026-07-29T20:55:18.888287Z
 
 - Branch: `feat/checkpoint-persistence`
@@ -181,3 +248,13 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **clean**
 - Test evidence: `pytest 218 passed; git diff --check passed`
 - Next action: Open a draft PR and observe the first hosted CodeQL run; do not change repository settings before explicit human approval.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:57437a493ae5230754384e34abb1e68eaf05619f1e4685fcc4f88e59ca239eff -->
+## Checkpoint 2026-08-03T03:26:41.606453Z
+
+- Branch: `feat/main-branch-protection-enforcement`
+- Commit: `bd635ca56bd2cb7ce0b221c03e9664b128095d25`
+- Commit subject: ci(security): add CodeQL analysis and merge-gate contract (#31)
+- Working tree: **dirty**
+- Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 218 passed in 60.45s, compileall passed, build passed; GitHub Actions run 30774683751 passed; CodeQL run 30774683774 passed`
+- Next action: Superseded by WB-0026 active main protection verification for PR #32.

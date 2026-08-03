@@ -23,10 +23,10 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Security Verification Pipeline v0.1
-  active_artifact: WB-0025
-  branch: feat/security-verification-codeql
-  pull_request: null
+  milestone: Main Branch Protection Enforcement v0.1
+  active_artifact: WB-0026
+  branch: feat/main-branch-protection-enforcement
+  pull_request: 32
 
 status:
   ccl_specification: complete_draft
@@ -48,7 +48,8 @@ status:
   operation_context_disclosure_policy: verified
   security_verification_pipeline: implemented
   security_verification_pipeline_ci_foundation: verified
-  security_verification_pipeline_codeql_merge_gates: implemented
+  security_verification_pipeline_codeql_merge_gates: verified
+  main_branch_protection_enforcement: verified
 
 completed:
   - artifact: WB-0015
@@ -98,10 +99,18 @@ completed:
     merge_commit: 1ba003f8e17448ac8f962955f88d6214c58c6cb2
     verification: 201_passed
 
+  - artifact: WB-0025
+    pull_request: 31
+    merge_commit: bd635ca56bd2cb7ce0b221c03e9664b128095d25
+    verification: 218_passed
+
 next:
-  - open a draft PR and observe the first hosted CodeQL run
-  - keep security_verification_pipeline_codeql_merge_gates unverified until hosted CodeQL succeeds
-  - keep repository settings unchanged until explicit human approval
+  - Capture final-head CI and CodeQL evidence after the last corrective push
+  - Update PR #32 metadata with the final head and hosted run IDs
+  - Resolve the two automated review threads
+  - Obtain fresh independent approval from nulleimy after the last push
+  - Merge only after all seven required checks succeed and approval is present
+  - Verify protected main after merge and close WB-0026
 
 rules:
   state_first: true
