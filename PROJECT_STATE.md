@@ -1,13 +1,13 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-03 10:47 CEST_
+_Last updated: 2026-08-03 19:17 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/main-branch-protection-enforcement`
-- Active work block: `WB-0026 Main Branch Protection Enforcement`
+- Active branch: `feat/visual-documentation-learn-capture`
+- Active work block: `WB-0027 Visual Documentation and Learn Capture v0.1`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; `main`
   branch protection is active and verified through ruleset
@@ -250,76 +250,53 @@ Verification:
 - branch protection remained disabled for PR #31 and was later activated under
   WB-0026 only after explicit human approval.
 
+### PR #32 — docs(project): record verified main branch protection
+
+Merged into `main` as:
+
+```text
+00b408dd9439caa7e6c660737d1123d0eaa1c12f
+```
+
+Completed artifact: `WB-0026`.
+
+Verification:
+
+- local `pytest -q`: **218 passed**;
+- final PR head:
+  `bb14c930dd4404c665dc8faec8a3cd89ce812df4`;
+- GitHub Actions CI run `30827098051`: **passed**;
+- CodeQL run `30827098042`: **passed**;
+- independent approval: `nulleimy`;
+- automated review threads were resolved before merge.
+
 ## Current milestone
 
-Main Branch Protection Enforcement v0.1.
+Visual Documentation and Learn Capture v0.1.
 
 ## Active objective
 
-Record that `main` branch protection for PR #32 was explicitly approved,
-activated, and verified while keeping WB-0026 active until PR #32 is reviewed
-and merged.
+Create governed visual documentation and reusable learning capture for CyberCore operations.
 
 Scope:
 
-1. record explicit human approval for activating `main` protection;
-2. record ruleset `18986451`, `main-branch-protection`, activated at
-   `2026-08-03T10:47:03.259+02:00`;
-3. record the active ruleset configuration and required checks;
-4. record hosted verification against PR #32;
-5. preserve rollback and keep WB-0026 active until PR #32 is reviewed,
-   approved, merged, and protected `main` is verified after merge.
+1. define canonical visual documentation artifacts;
+2. capture reusable operational learning from verified work;
+3. preserve evidence, provenance, and human approval boundaries;
 
 ## Current status
 
 - Work block: active
-- Branch: `feat/main-branch-protection-enforcement`
+- Branch: `feat/visual-documentation-learn-capture`
 - Project Kernel: present
-- Runtime implementation: implemented
-- Pull request: #32, ready for review; a corrective push is pending and
-  requires a fresh independent approval afterward
-- Ruleset: `18986451` (`main-branch-protection`), target `branch`, target ref
-  `~DEFAULT_BRANCH`, enforcement `active`, bypass actors `none`,
-  `current_user_can_bypass: never`
-- Activated: `2026-08-03T10:47:03.259+02:00` after explicit human approval
-- Rules enabled: deletion protection, non-fast-forward protection, pull request
-  required, one approving review required, stale approvals dismissed after push,
-  review thread resolution required
-- Rules not enabled: CODEOWNERS review not required, last-push approval not
-  required, linear history not required
-- Allowed merge methods: merge, squash, rebase
-- Required checks: `tests (python 3.11)`, `tests (python 3.12)`,
-  `tests (python 3.13)`, `tests (python 3.14)`, `quality`, `package`, `codeql`
-- Required status-check policy: `strict_required_status_checks_policy: true`,
-  `do_not_enforce_on_create: false`
-- Activation-time verification snapshot against PR #32: head commit
-  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`; CI run `30784170890`
-  passed; CodeQL run `30784170892` passed; all seven required contexts passed
-- Pre-correction verification snapshot against PR #32: head commit
-  `034c77e156725169afb75e1cc89364bac252c67e`; CI run `30806185333`
-  passed; CodeQL run `30806185411` passed; all seven required contexts passed
-- Merge-time evidence must be captured from the final PR head after the last
-  push; neither earlier snapshot substitutes for final-head verification
-- Check-name distinction: the informational workflow check is named `CodeQL`,
-  while the required ruleset context is the lowercase job context `codeql`
-- Rollback: preserve ruleset `18986451` and all unaffected protections;
-  remove or replace only a broken required context through explicit approval,
-  repair on a feature branch, rerun hosted checks, and restore the context only
-  after success; complete ruleset disablement is reserved for ruleset-wide
-  failure and requires equivalent replacement protection first
-- Tests: git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh
-  passed on rerun after sandbox DNS failure: Ruff passed, Ruff format check
-  passed, Pyright 0 errors, pytest 218 passed in 56.21s, compileall passed,
-  package build passed
+- Runtime implementation: planned
+- Tests: 218 passed
+- Pull request: not created
 
 ## Next action
 
-- Capture final-head CI and CodeQL evidence after the last corrective push.
-- Update PR #32 metadata with the final head and hosted run IDs.
-- Resolve both automated review threads.
-- Obtain fresh independent approval from nulleimy after the final push.
-- Merge only after all seven required checks succeed and approval is present.
-- Verify protected main after merge and close WB-0026.
+Define the visual documentation and learning-capture contract and tests.
+
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:57437a493ae5230754384e34abb1e68eaf05619f1e4685fcc4f88e59ca239eff -->
