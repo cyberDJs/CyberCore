@@ -258,3 +258,31 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **dirty**
 - Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 218 passed in 60.45s, compileall passed, build passed; GitHub Actions run 30774683751 passed; CodeQL run 30774683774 passed`
 - Next action: Superseded by WB-0026 active main protection verification for PR #32.
+
+## 2026-08-03 — WB-0026 post-merge closeout
+
+### Completed
+
+- Confirmed PR #32 was independently approved by `nulleimy`.
+- Confirmed PR #32 was merged into protected `main`.
+- Recorded final PR head
+  `bb14c930dd4404c665dc8faec8a3cd89ce812df4`.
+- Recorded merge commit
+  `00b408dd9439caa7e6c660737d1123d0eaa1c12f`.
+- Recorded successful CI run `30827098051`.
+- Recorded successful CodeQL run `30827098042`.
+- Verified the merged pull request through the CyberCore post-merge command.
+- Wrote the canonical transition closing `WB-0026`.
+- Activated planned successor `WB-0027 — Visual Documentation and Learn Capture
+  v0.1`.
+- Preserved historical generated checkpoints as immutable audit records.
+
+### Current state
+
+- Closeout branch: `docs/close-wb-0026`.
+- Successor implementation branch:
+  `feat/visual-documentation-learn-capture`.
+- WB-0027 runtime implementation: planned, not started.
+- No GitHub settings, secrets, rulesets or production systems were changed by
+  this closeout update.
+- This closeout record was prepared before its own commit and push.

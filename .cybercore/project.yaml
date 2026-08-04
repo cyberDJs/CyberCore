@@ -23,10 +23,10 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Main Branch Protection Enforcement v0.1
-  active_artifact: WB-0026
-  branch: feat/main-branch-protection-enforcement
-  pull_request: 32
+  milestone: Visual Documentation and Learn Capture v0.1
+  active_artifact: WB-0027
+  branch: feat/visual-documentation-learn-capture
+  pull_request: null
 
 status:
   ccl_specification: complete_draft
@@ -50,6 +50,7 @@ status:
   security_verification_pipeline_ci_foundation: verified
   security_verification_pipeline_codeql_merge_gates: verified
   main_branch_protection_enforcement: verified
+  visual_documentation_learn_capture: planned
 
 completed:
   - artifact: WB-0015
@@ -104,13 +105,14 @@ completed:
     merge_commit: bd635ca56bd2cb7ce0b221c03e9664b128095d25
     verification: 218_passed
 
+  - artifact: WB-0026
+    pull_request: 32
+    merge_commit: 00b408dd9439caa7e6c660737d1123d0eaa1c12f
+    verification: 218_passed
+
 next:
-  - Capture final-head CI and CodeQL evidence after the last corrective push
-  - Update PR #32 metadata with the final head and hosted run IDs
-  - Resolve the two automated review threads
-  - Obtain fresh independent approval from nulleimy after the last push
-  - Merge only after all seven required checks succeed and approval is present
-  - Verify protected main after merge and close WB-0026
+  - define the WB-0027 artifact and validation contract
+  - add representative documentation and learning-capture fixtures
 
 rules:
   state_first: true

@@ -321,59 +321,44 @@ No new implementation epic starts before its required foundation or specificatio
 
 ## Current Platform Checkpoint
 
-WB-0025 security verification is merged through PR #31. Hosted GitHub Actions CI
-run `30774683751` and hosted CodeQL run `30774683774` passed. GitHub CodeQL
-Default setup conflicted with the checked-in Advanced setup, was disabled by
-explicit human action, and the retry succeeded.
+WB-0025 security verification is merged through PR #31 and remains verified.
 
-WB-0026 remains active for documentation, review, merge, and post-merge
-verification of `main` branch protection. Main protection was explicitly
-approved by a human, activated, and verified for PR #32, but WB-0026 must not
-be closed until PR #32 is independently approved, merged, and protected `main`
-is verified after merge.
+WB-0026 Main Branch Protection Enforcement was independently approved and
+merged through PR #32.
 
-Active protection evidence:
+Completion evidence:
 
-- Repository: `cyberDJs/CyberCore`.
-- Pull request: #32, ready for review; a corrective push requires fresh
-  independent approval afterward.
-- Ruleset: `18986451`, `main-branch-protection`, target `branch`, target ref
-  `~DEFAULT_BRANCH`, enforcement `active`, bypass actors `none`,
-  `current_user_can_bypass: never`.
-- Activated: `2026-08-03T10:47:03.259+02:00`.
-- Rules: deletion and non-fast-forward protection enabled; pull request
-  required; one approving review required; stale approvals dismissed after
-  push; review thread resolution required; CODEOWNERS review not required;
-  last-push approval not required; linear history not required.
-- Allowed merge methods: merge, squash, rebase.
-- Required checks: `tests (python 3.11)`, `tests (python 3.12)`,
-  `tests (python 3.13)`, `tests (python 3.14)`, `quality`, `package`, `codeql`.
-- Required status-check policy: `strict_required_status_checks_policy: true`;
-  `do_not_enforce_on_create: false`.
-- Activation-time snapshot: PR #32 head
-  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`, CI run `30784170890`,
-  CodeQL run `30784170892`; all seven required contexts passed.
-- Pre-correction snapshot: PR #32 head
-  `034c77e156725169afb75e1cc89364bac252c67e`, CI run `30806185333`,
-  CodeQL run `30806185411`; all seven required contexts passed.
-- Merge-time evidence must be captured from the final PR head after the last
-  push.
-- Check-name distinction: `CodeQL` is informational; the required ruleset
-  context is lowercase `codeql`.
-- Rollback for one failed context preserves the active ruleset and every
-  unaffected protection, changing only the broken required context through an
-  explicitly approved settings operation.
-- Complete ruleset disablement is reserved for ruleset-wide failure and
-  requires equivalent replacement protection to be active first.
+- Final PR head:
+  `bb14c930dd4404c665dc8faec8a3cd89ce812df4`.
+- Merge commit:
+  `00b408dd9439caa7e6c660737d1123d0eaa1c12f`.
+- CI run `30827098051`: passed.
+- CodeQL run `30827098042`: passed.
+- Independent approval: `nulleimy`.
+- Automated review threads were resolved before merge.
+- Ruleset `18986451`, `main-branch-protection`, was last verified active
+  before merge, with no bypass actors and seven required status contexts.
+- This closeout does not claim a separate post-merge repository-settings read.
+
+The post-merge state transition closes WB-0026 and activates the planned
+successor:
+
+`WB-0027 — Visual Documentation and Learn Capture v0.1`
+
+Expected implementation branch:
+
+`feat/visual-documentation-learn-capture`
+
+WB-0027 implementation has not started. This closeout branch records only the
+verified state transition and must be merged before implementation begins.
 
 Next:
 
-- Capture final-head CI and CodeQL evidence after the last corrective push.
-- Update PR #32 metadata with the final head and hosted run IDs.
-- Resolve both automated review threads.
-- Obtain fresh independent approval from nulleimy after the final push.
-- Merge only after all seven required checks succeed and approval is present.
-- Verify protected main after merge and close WB-0026.
+- review and merge the WB-0026 closeout change;
+- synchronize protected `main`;
+- create `feat/visual-documentation-learn-capture` from current `main`;
+- run the verification baseline;
+- implement WB-0027 without modifying GitHub settings or production systems.
 
 Critical flow:
 
