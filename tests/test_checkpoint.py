@@ -536,6 +536,81 @@ Old action.
         assert "- Runtime implementation: implemented" not in state
 
 
+@pytest.mark.parametrize("planner", [plan_memory_update, legacy_plan_memory_update])
+def test_memory_write_preserves_completed_state_without_active_artifact(
+    tmp_path: Path,
+    planner,
+) -> None:
+    def human_state(state: str) -> str:
+        return state.split(PROJECT_STATE_START, 1)[0]
+
+    repo = _repo(tmp_path)
+    (repo / ".cybercore" / "project.yaml").write_text(
+        """version: 1
+current:
+  milestone: Visual Documentation and Learn Capture v0.1 complete
+  active_artifact: null
+  branch: main
+  pull_request: 34
+""",
+        encoding="utf-8",
+    )
+    (repo / "PROJECT_STATE.md").write_text(
+        """# CyberCore Project State
+
+## Source of truth
+
+- Active branch: `main`
+- Active work block: none; `WB-0027 Visual Documentation and Learn Capture v0.1` completed
+
+## Current milestone
+
+Visual Documentation and Learn Capture v0.1 complete.
+
+## Current status
+
+- Work block: WB-0027 completed and merge verified
+- Branch: `main`
+- Project Kernel: present
+- Visual documentation: verified
+- Tests: 221 passed
+- Pull request: #34 merged
+
+## Next action
+
+No successor Work Block is active.
+""",
+        encoding="utf-8",
+    )
+
+    planner(repo, collect_checkpoint(repo), test_result="221 passed").write()
+    first = (repo / "PROJECT_STATE.md").read_text(encoding="utf-8")
+    planner(repo, collect_checkpoint(repo), test_result="221 passed").write()
+    second = (repo / "PROJECT_STATE.md").read_text(encoding="utf-8")
+    assert (
+        main(
+            [
+                "--repo",
+                str(repo),
+                "checkpoint",
+                "--memory",
+                "--write",
+                "--test-result",
+                "221 passed",
+            ]
+        )
+        == 0
+    )
+    third = (repo / "PROJECT_STATE.md").read_text(encoding="utf-8")
+
+    for state in (first, second, third):
+        assert "Work block: WB-0027 completed and merge verified" in state
+        assert "Pull request: #34 merged" in state
+        assert "Work block: active" not in state
+        assert "Pull request: not created" not in state
+    assert human_state(first) == human_state(second) == human_state(third)
+
+
 def test_memory_plan_write_updates_both_files(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     checkpoint = collect_checkpoint(repo)
