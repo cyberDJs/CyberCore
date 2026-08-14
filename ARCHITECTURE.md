@@ -97,6 +97,11 @@ Private overlays contain credentials, production-derived inventory, client data,
 
 The boundary is mandatory. Private data must never be required for the public framework to remain understandable and testable.
 
+The [visual architecture overview](docs/visual/generated/architecture-overview.svg)
+and [public/private overlay diagram](docs/visual/generated/public-private-overlay.svg)
+provide a compact orientation layer. This document remains the authoritative
+written architecture specification.
+
 ## Core boundaries
 
 ### Foundation

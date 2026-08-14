@@ -349,8 +349,10 @@ Expected implementation branch:
 
 `feat/visual-documentation-learn-capture`
 
-WB-0027 implementation has not started. This closeout branch records only the
-verified state transition and must be merged before implementation begins.
+WB-0027 visual documentation and Learn capture is locally verified on
+`feat/visual-documentation-learn-capture`, including rendering, capture, media
+review, and the repository verification suite. It is committed on the feature
+branch and has not been proposed for review.
 
 Next:
 
@@ -358,7 +360,8 @@ Next:
 - synchronize protected `main`;
 - create `feat/visual-documentation-learn-capture` from current `main`;
 - run the verification baseline;
-- implement WB-0027 without modifying GitHub settings or production systems.
+- review the committed WB-0027 change set without modifying GitHub settings
+  or production systems.
 
 Critical flow:
 

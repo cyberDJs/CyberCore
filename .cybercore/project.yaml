@@ -34,7 +34,7 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 218_passed
+  tests: 220_passed
   ci: github_actions_verified
   checkpoint_runtime: verified
   checkpoint_persistence: verified
@@ -50,7 +50,10 @@ status:
   security_verification_pipeline_ci_foundation: verified
   security_verification_pipeline_codeql_merge_gates: verified
   main_branch_protection_enforcement: verified
-  visual_documentation_learn_capture: planned
+  visual_documentation_learn_capture: verified
+  visual_documentation: implemented
+  mermaid_render_pipeline: implemented
+  learn_capture_pipeline: implemented
 
 completed:
   - artifact: WB-0015
@@ -111,8 +114,8 @@ completed:
     verification: 218_passed
 
 next:
-  - define the WB-0027 artifact and validation contract
-  - add representative documentation and learning-capture fixtures
+  - review WB-0027 as a committed feature branch change set
+  - prepare a focused commit or pull request only after human review
 
 rules:
   state_first: true

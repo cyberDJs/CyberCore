@@ -44,6 +44,16 @@ CyberCore is designed to answer:
 
 > Technology serves people. Never the other way around.
 
+## Visual overview
+
+![CyberCore architecture overview](docs/visual/generated/architecture-overview.svg)
+
+[![CyberCore Learn: evidence lifecycle](docs/visual/generated/learn-evidence-lifecycle.gif)](docs/visual/generated/learn-evidence-lifecycle.webm)
+
+The [complete visual documentation](docs/visual/README.md) includes the evidence
+lifecycle, Work Block lifecycle, security merge gate, architecture overview,
+public/private boundary, and local Learn demo.
+
 ## The CyberCore pipeline
 
 ```text

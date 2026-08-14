@@ -105,6 +105,8 @@ Canonical hosted evidence after PR #31:
 
 ## Required Checks
 
+![Security merge-gate architecture](visual/generated/security-merge-gate.svg)
+
 These checks are the exact required merge gates for pull requests targeting
 `main`:
 
