@@ -311,3 +311,26 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **dirty**
 - Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 220 passed, compileall passed, build passed; scripts/render_visual_docs.sh passed; scripts/capture_learn_demo.sh passed; scripts/verify_visual_docs.sh passed`
 - Next action: Review the uncommitted WB-0027 visual documentation and Learn capture change set; do not commit, push, or open a pull request without explicit human approval.
+
+## 2026-08-14 — WB-0027 post-merge closeout
+
+- Confirmed PR #34 was independently approved by `nulleimy` and squash-merged
+  into `main` as `94cb1998274e31e9ce3314f59d2e0ae290bc40cc`.
+- Confirmed final CI and CodeQL checks passed on the merged Work Block.
+- Recorded WB-0027 visual documentation, Mermaid rendering, Learn capture, and
+  generated media as verified.
+- Preserved historical generated checkpoints as immutable audit records.
+- Recorded six high-severity transitive `npm audit` findings as deferred
+  security debt in the isolated visual documentation toolchain.
+- No successor Work Block has been activated, and no repository settings,
+  secrets, production systems, or external infrastructure were changed.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:80bbb2b5501cac33afcda7851c1a54cacf9854c1add8f25f32281f56e250677b -->
+## Checkpoint 2026-08-14T16:07:46.672655Z
+
+- Branch: `main`
+- Commit: `94cb1998274e31e9ce3314f59d2e0ae290bc40cc`
+- Commit subject: feat(visual-docs): add visual documentation and Learn capture (#34)
+- Working tree: **dirty**
+- Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 221 passed, compileall passed, build passed; final PR #34 CI and CodeQL passed`
+- Next action: No successor Work Block has been activated; retain the isolated visual-toolchain npm audit findings as deferred security debt until separately reviewed.

@@ -23,10 +23,10 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Visual Documentation and Learn Capture v0.1
-  active_artifact: WB-0027
-  branch: feat/visual-documentation-learn-capture
-  pull_request: null
+  milestone: Visual Documentation and Learn Capture v0.1 complete
+  active_artifact: null
+  branch: main
+  pull_request: 34
 
 status:
   ccl_specification: complete_draft
@@ -34,7 +34,7 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 220_passed
+  tests: 221_passed
   ci: github_actions_verified
   checkpoint_runtime: verified
   checkpoint_persistence: verified
@@ -51,9 +51,9 @@ status:
   security_verification_pipeline_codeql_merge_gates: verified
   main_branch_protection_enforcement: verified
   visual_documentation_learn_capture: verified
-  visual_documentation: implemented
-  mermaid_render_pipeline: implemented
-  learn_capture_pipeline: implemented
+  visual_documentation: verified
+  mermaid_render_pipeline: verified
+  learn_capture_pipeline: verified
 
 completed:
   - artifact: WB-0015
@@ -112,10 +112,14 @@ completed:
     pull_request: 32
     merge_commit: 00b408dd9439caa7e6c660737d1123d0eaa1c12f
     verification: 218_passed
+  - artifact: WB-0027
+    pull_request: 34
+    merge_commit: 94cb1998274e31e9ce3314f59d2e0ae290bc40cc
+    verification: 221_passed
 
 next:
-  - review WB-0027 as a committed feature branch change set
-  - prepare a focused commit or pull request only after human review
+  - no successor Work Block has been activated
+  - retain the isolated visual-toolchain npm audit findings as deferred security debt
 
 rules:
   state_first: true
