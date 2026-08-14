@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="description" content="CyberCore evidence lifecycle Learn demo.">
+    <title>CyberCore Learn: Evidence Lifecycle</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="learn-demo" aria-labelledby="demo-title">
+      <header class="demo-header">
+        <img class="brand-mark" src="../../../assets/brand/cybercore-mark.svg" alt="CyberCore">
+        <div>
+          <p class="eyebrow">CyberCore Learn</p>
+          <h1 id="demo-title">Evidence lifecycle</h1>
+        </div>
+        <button id="replay" class="replay" type="button" aria-label="Replay evidence lifecycle animation">Replay</button>
+      </header>
+
+      <section class="lifecycle" aria-label="CyberCore evidence lifecycle animation" aria-live="polite">
+        <svg class="lifecycle-lines" viewBox="0 0 1120 360" aria-hidden="true" preserveAspectRatio="none">
+          <path data-edge="0" d="M114 180 H126" />
+          <path data-edge="1" d="M240 180 H252" />
+          <path data-edge="2" d="M366 180 H378" />
+          <path data-edge="3" d="M492 180 H504" />
+          <path data-edge="4" d="M618 180 H630" />
+          <path data-edge="5" d="M744 180 H756" />
+          <path data-edge="6" d="M870 180 H882" />
+          <path data-edge="7" d="M996 180 H1008" />
+        </svg>
+        <ol class="lifecycle-nodes">
+          <li data-step="0"><span>Reality</span><small>Observed state</small></li>
+          <li data-step="1"><span>Observation</span><small>Recorded signal</small></li>
+          <li data-step="2"><span>Evidence</span><small>Recorded support</small></li>
+          <li data-step="3"><span>Knowledge</span><small>Validated context</small></li>
+          <li data-step="4"><span>Decision</span><small>Explainable intent</small></li>
+          <li data-step="5" class="approval"><span>Human Approval</span><small>Explicit gate</small></li>
+          <li data-step="6"><span>Execution</span><small>Controlled action</small></li>
+          <li data-step="7"><span>Verification</span><small>Observed outcome</small></li>
+          <li data-step="8"><span>Memory</span><small>Future context</small></li>
+        </ol>
+      </section>
+
+      <section class="narration" aria-atomic="true">
+        <p class="eyebrow">Current step</p>
+        <p id="narration-text">Reality is observed.</p>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

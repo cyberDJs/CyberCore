@@ -1,0 +1,23 @@
+{
+  "theme": "base",
+  "themeVariables": {
+    "background": "#0b1014",
+    "primaryColor": "#14231f",
+    "primaryTextColor": "#f2f8f5",
+    "primaryBorderColor": "#38d996",
+    "lineColor": "#8ea59b",
+    "secondaryColor": "#101b20",
+    "tertiaryColor": "#172329",
+    "clusterBkg": "#10171c",
+    "clusterBorder": "#517066",
+    "edgeLabelBackground": "#0b1014",
+    "fontFamily": "-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+    "fontSize": "16px"
+  },
+  "flowchart": {
+    "htmlLabels": true,
+    "curve": "basis",
+    "useMaxWidth": true
+  },
+  "securityLevel": "strict"
+}

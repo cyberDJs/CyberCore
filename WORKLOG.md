@@ -286,3 +286,28 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - No GitHub settings, secrets, rulesets or production systems were changed by
   this closeout update.
 - This closeout record was prepared before its own commit and push.
+
+## 2026-08-14 — WB-0027 local implementation and verification
+
+- Added version-controlled Mermaid sources and rendered SVG documentation for
+  the evidence lifecycle, Work Block lifecycle, security merge gate,
+  architecture overview, and public/private overlay.
+- Added a local, keyboard-accessible Learn evidence-lifecycle demo with
+  deterministic replay and reduced-motion support.
+- Captured and inspected 1280x720 WebM, MP4, GIF, and poster assets.
+- Verified `git diff --check`, the visual documentation contract, and the full
+  Python suite: Ruff, format check, Pyright, 220 pytest tests, compileall, and
+  package build.
+- No GitHub settings, secrets, Cloudflare resources, or production systems were
+  changed. Draft PR #34 exists; review is in progress while confirmed blockers
+  are resolved.
+
+<!-- CYBERCORE:WORKLOG-CHECKPOINT:0b5e2c1c58d929e500581e0bf6bc0c4843cb8a64ef77acd410dce392dc7cd824 -->
+## Checkpoint 2026-08-14T14:06:26.325311Z
+
+- Branch: `feat/visual-documentation-learn-capture`
+- Commit: `643ed6d979ca3846ff067f2e826f954cf8ceea34`
+- Commit subject: Merge pull request #33 from cyberDJs/docs/close-wb-0026
+- Working tree: **dirty**
+- Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 220 passed, compileall passed, build passed; scripts/render_visual_docs.sh passed; scripts/capture_learn_demo.sh passed; scripts/verify_visual_docs.sh passed`
+- Next action: Review the uncommitted WB-0027 visual documentation and Learn capture change set; do not commit, push, or open a pull request without explicit human approval.

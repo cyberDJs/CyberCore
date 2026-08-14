@@ -1,0 +1,14 @@
+{
+  "name": "cybercore-visual-docs",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pinned local tooling for CyberCore visual documentation.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@mermaid-js/mermaid-cli": "11.12.0",
+    "playwright": "1.55.0"
+  }
+}

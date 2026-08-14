@@ -11,6 +11,8 @@ id_ed25519
 *.bak
 .DS_Store
 node_modules/
+.playwright/
+docs/visual/generated/.capture-tmp/
 __pycache__/
 .mypy_cache/
 .pytest_cache/
