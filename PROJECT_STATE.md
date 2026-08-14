@@ -1,13 +1,13 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-03 19:17 CEST_
+_Last updated: 2026-08-14 16:07 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `feat/visual-documentation-learn-capture`
-- Active work block: `WB-0027 Visual Documentation and Learn Capture v0.1`
+- Active branch: `main`
+- Active work block: none; `WB-0027 Visual Documentation and Learn Capture v0.1` completed
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; `main`
   branch protection is active and verified through ruleset
@@ -270,46 +270,61 @@ Verification:
 - independent approval: `nulleimy`;
 - automated review threads were resolved before merge.
 
+### PR #34 — Visual Documentation and Learn Capture v0.1
+
+Merged into `main` as:
+
+```text
+94cb1998274e31e9ce3314f59d2e0ae290bc40cc
+```
+
+Completed artifact: `WB-0027`.
+
+Verification:
+
+- independent approval: `nulleimy`;
+- final CI and CodeQL checks passed;
+- Mermaid rendering, Learn capture, generated-media review, and local visual
+  documentation verification passed;
+- six high-severity transitive `npm audit` findings remain deferred security
+  debt in the isolated visual documentation toolchain.
+
 ## Current milestone
 
-Visual Documentation and Learn Capture v0.1.
+Visual Documentation and Learn Capture v0.1 complete.
 
 ## Active objective
 
-Create governed visual documentation and reusable learning capture for CyberCore operations.
-
-Scope:
-
-1. define canonical visual documentation artifacts;
-2. capture reusable operational learning from verified work;
-3. preserve evidence, provenance, and human approval boundaries;
+No successor Work Block is active.
 
 ## Current status
 
-- Work block: Draft PR #34 under review; confirmed blockers are being resolved
-- Branch: `feat/visual-documentation-learn-capture`
+- Work block: WB-0027 completed and merge verified
+- Branch: `main`
 - Project Kernel: present
 - Runtime implementation: implemented
-- Visual documentation: implemented
-- Mermaid render pipeline: implemented
-- Learn capture pipeline: implemented
-- Tests: git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 220 passed, compileall passed, build passed; scripts/render_visual_docs.sh passed; scripts/capture_learn_demo.sh passed; scripts/verify_visual_docs.sh passed
-- Pull request: #34 (Draft)
+- Visual documentation: verified
+- Mermaid render pipeline: verified
+- Learn capture pipeline: verified
+- Tests: git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 221 passed, compileall passed, build passed; final PR #34 CI and CodeQL passed
+- Pull request: #34 merged
+- Security follow-up: six high-severity transitive `npm audit` findings remain
+  deferred debt in the isolated visual documentation toolchain
 
 ## Next action
 
-Resolve the confirmed WB-0027 review blockers, then update Draft PR #34 for review.
+No successor Work Block has been activated; retain the isolated visual-toolchain npm audit findings as deferred security debt until separately reviewed.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:0b5e2c1c58d929e500581e0bf6bc0c4843cb8a64ef77acd410dce392dc7cd824 -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:80bbb2b5501cac33afcda7851c1a54cacf9854c1add8f25f32281f56e250677b -->
 ## Automated repository checkpoint
 
-- Generated: `2026-08-14T14:06:26.325311Z`
-- Branch: `feat/visual-documentation-learn-capture`
-- Commit: `643ed6d979ca3846ff067f2e826f954cf8ceea34`
-- Commit subject: Merge pull request #33 from cyberDJs/docs/close-wb-0026
+- Generated: `2026-08-14T16:07:46.672655Z`
+- Branch: `main`
+- Commit: `94cb1998274e31e9ce3314f59d2e0ae290bc40cc`
+- Commit subject: feat(visual-docs): add visual documentation and Learn capture (#34)
 - Working tree: **dirty**
-- Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 220 passed, compileall passed, build passed; scripts/render_visual_docs.sh passed; scripts/capture_learn_demo.sh passed; scripts/verify_visual_docs.sh passed`
+- Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 221 passed, compileall passed, build passed; final PR #34 CI and CodeQL passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->

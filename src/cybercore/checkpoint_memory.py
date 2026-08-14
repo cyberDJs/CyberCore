@@ -220,7 +220,8 @@ def _kernel_current_values(repo: Path) -> tuple[str | None, str | None]:
         if stripped.startswith("milestone:"):
             milestone = stripped.split(":", 1)[1].strip()
         elif stripped.startswith("active_artifact:"):
-            artifact = stripped.split(":", 1)[1].strip()
+            value = stripped.split(":", 1)[1].strip()
+            artifact = None if value.lower() in {"", "null", "~"} else value
     return milestone, artifact
 
 
@@ -261,21 +262,22 @@ def _synchronize_state_fields(
             rf"\1{milestone}.\n",
             updated,
         )
-    status_lines = [
-        "- Work block: active",
-        f"- Branch: `{checkpoint.branch}`",
-        "- Project Kernel: present"
-        if checkpoint.project_kernel_present
-        else "- Project Kernel: missing",
-        f"- Runtime implementation: {_runtime_implementation_status(current)}",
-        f"- Tests: {test_result or 'not supplied'}",
-        "- Pull request: not created",
-    ]
-    updated = re.sub(
-        r"(?ms)(^## Current status\n\n).*?(?=\n## |\Z)",
-        "\\1" + "\n".join(status_lines) + "\n",
-        updated,
-    )
+    if artifact is not None:
+        status_lines = [
+            "- Work block: active",
+            f"- Branch: `{checkpoint.branch}`",
+            "- Project Kernel: present"
+            if checkpoint.project_kernel_present
+            else "- Project Kernel: missing",
+            f"- Runtime implementation: {_runtime_implementation_status(current)}",
+            f"- Tests: {test_result or 'not supplied'}",
+            "- Pull request: not created",
+        ]
+        updated = re.sub(
+            r"(?ms)(^## Current status\n\n).*?(?=\n## |\Z)",
+            "\\1" + "\n".join(status_lines) + "\n",
+            updated,
+        )
     if next_action:
         updated = re.sub(
             r"(?ms)(^## Next action\n\n).*?(?=\n## |\Z)",
