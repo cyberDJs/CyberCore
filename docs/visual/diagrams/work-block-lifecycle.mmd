@@ -1,0 +1,13 @@
+stateDiagram-v2
+  [*] --> Intent
+  Intent --> Specification: defines contract
+  Specification --> WorkBlock: scopes implementation
+  WorkBlock --> Implementation: approved work
+  Implementation --> LocalVerification: checks behavior
+  LocalVerification --> PullRequest: reviewable change
+  PullRequest --> CIAndCodeQL: required analysis
+  CIAndCodeQL --> MergeGate: checks complete
+  MergeGate --> Merge: allowed
+  MergeGate --> PullRequest: blocked or changes requested
+  Merge --> PostMergeState: canonical transition
+  PostMergeState --> [*]

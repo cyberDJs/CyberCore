@@ -1,0 +1,20 @@
+flowchart TB
+  interfaces[Users and AI interfaces]
+  core[CyberCore Core]
+  domains[Evidence / Knowledge / Decisions / Execution / Memory]
+  boundary[Provider and Driver Boundary]
+  providers[GitHub / Linux / InterServer / DirectAdmin / DNS / Mail / VPS / Nextcloud / OpenWrt]
+
+  interfaces --> core
+  core --> domains
+  domains --> boundary
+  boundary --> providers
+
+  classDef interface fill:#172329,stroke:#8ea59b,color:#f2f8f5,stroke-width:2px;
+  classDef core fill:#14231f,stroke:#38d996,color:#f2f8f5,stroke-width:3px;
+  classDef boundary fill:#27311e,stroke:#b9df54,color:#f2f8f5,stroke-width:3px;
+  classDef provider fill:#12202b,stroke:#61c7ff,color:#f2f8f5,stroke-width:2px;
+  class interfaces interface;
+  class core,domains core;
+  class boundary boundary;
+  class providers provider;

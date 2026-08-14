@@ -1,0 +1,27 @@
+flowchart LR
+  subgraph public[Public reusable framework]
+    framework[Framework logic]
+    specifications[Specifications and schemas]
+    examples[Sanitized examples]
+    tests[Tests and documentation]
+  end
+  subgraph private[Private overlay]
+    credentials[Credentials]
+    inventory[Production inventory]
+    topology[Private topology]
+    clients[Client data]
+  end
+  framework --> adapter[Environment-specific adapter]
+  specifications --> adapter
+  adapter --> inventory
+  credentials --> adapter
+  topology --> adapter
+  clients --> adapter
+  private -. never committed to .-> public
+
+  classDef public fill:#14231f,stroke:#38d996,color:#f2f8f5,stroke-width:2px;
+  classDef private fill:#321d26,stroke:#ff7892,color:#f2f8f5,stroke-width:2px;
+  classDef adapter fill:#27311e,stroke:#b9df54,color:#f2f8f5,stroke-width:3px;
+  class framework,specifications,examples,tests public;
+  class credentials,inventory,topology,clients private;
+  class adapter adapter;

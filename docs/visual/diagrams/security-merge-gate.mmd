@@ -1,0 +1,23 @@
+flowchart TB
+  pr[Pull Request] --> matrix[Python 3.11 / 3.12 / 3.13 / 3.14]
+  pr --> quality[Ruff and Pyright]
+  pr --> build[Package Build]
+  pr --> codeql[CodeQL]
+  matrix --> checks[Required Checks]
+  quality --> checks
+  build --> checks
+  codeql --> checks
+  checks --> gate{All required checks pass?}
+  gate -->|yes| allowed[Merge Allowed]
+  gate -->|no| blocked[Merge Blocked]
+
+  classDef entry fill:#172329,stroke:#8ea59b,color:#f2f8f5,stroke-width:2px;
+  classDef check fill:#14231f,stroke:#38d996,color:#f2f8f5,stroke-width:2px;
+  classDef decision fill:#27311e,stroke:#b9df54,color:#f2f8f5,stroke-width:3px;
+  classDef success fill:#123125,stroke:#38d996,color:#f2f8f5,stroke-width:3px;
+  classDef failure fill:#321d26,stroke:#ff7892,color:#f2f8f5,stroke-width:3px;
+  class pr entry;
+  class matrix,quality,build,codeql,checks check;
+  class gate decision;
+  class allowed success;
+  class blocked failure;

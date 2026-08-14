@@ -1,0 +1,19 @@
+flowchart LR
+  reality[Reality] --> observation[Observation]
+  observation --> evidence[Evidence]
+  evidence --> knowledge[Knowledge]
+  knowledge --> decision[Decision]
+  decision --> approval[Human Approval]
+  approval --> execution[Execution]
+  execution --> verification[Verification]
+  verification --> memory[Memory]
+  memory -. informs future observation .-> observation
+
+  classDef source fill:#172329,stroke:#8ea59b,color:#f2f8f5,stroke-width:2px;
+  classDef core fill:#14231f,stroke:#38d996,color:#f2f8f5,stroke-width:2px;
+  classDef gate fill:#27311e,stroke:#b9df54,color:#f2f8f5,stroke-width:3px;
+  classDef outcome fill:#12202b,stroke:#61c7ff,color:#f2f8f5,stroke-width:2px;
+  class reality,observation source;
+  class evidence,knowledge,decision core;
+  class approval gate;
+  class execution,verification,memory outcome;
