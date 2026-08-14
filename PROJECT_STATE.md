@@ -286,28 +286,30 @@ Scope:
 
 ## Current status
 
-- Work block: active
+- Work block: verified locally, review pending
 - Branch: `feat/visual-documentation-learn-capture`
 - Project Kernel: present
-- Runtime implementation: planned
-- Tests: 218 passed
+- Runtime implementation: implemented
+- Visual documentation: implemented
+- Mermaid render pipeline: implemented
+- Learn capture pipeline: implemented
+- Tests: git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 220 passed, compileall passed, build passed; scripts/render_visual_docs.sh passed; scripts/capture_learn_demo.sh passed; scripts/verify_visual_docs.sh passed
 - Pull request: not created
 
 ## Next action
 
-Define the visual documentation and learning-capture contract and tests.
-
+Review the committed WB-0027 visual documentation and Learn capture change set; do not push or open a pull request without explicit human approval.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:57437a493ae5230754384e34abb1e68eaf05619f1e4685fcc4f88e59ca239eff -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:0b5e2c1c58d929e500581e0bf6bc0c4843cb8a64ef77acd410dce392dc7cd824 -->
 ## Automated repository checkpoint
 
-- Generated: `2026-08-03T03:26:41.606453Z`
-- Branch: `feat/main-branch-protection-enforcement`
-- Commit: `bd635ca56bd2cb7ce0b221c03e9664b128095d25`
-- Commit subject: ci(security): add CodeQL analysis and merge-gate contract (#31)
+- Generated: `2026-08-14T14:06:26.325311Z`
+- Branch: `feat/visual-documentation-learn-capture`
+- Commit: `643ed6d979ca3846ff067f2e826f954cf8ceea34`
+- Commit subject: Merge pull request #33 from cyberDJs/docs/close-wb-0026
 - Working tree: **dirty**
-- Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 218 passed in 60.45s, compileall passed, build passed; GitHub Actions run 30774683751 passed; CodeQL run 30774683774 passed`
+- Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 220 passed, compileall passed, build passed; scripts/render_visual_docs.sh passed; scripts/capture_learn_demo.sh passed; scripts/verify_visual_docs.sh passed`
 - Project Kernel: present
 - Project State: present
 <!-- CYBERCORE:CHECKPOINT:END -->
