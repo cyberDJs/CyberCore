@@ -286,7 +286,7 @@ Scope:
 
 ## Current status
 
-- Work block: verified locally, review pending
+- Work block: Draft PR #34 under review; confirmed blockers are being resolved
 - Branch: `feat/visual-documentation-learn-capture`
 - Project Kernel: present
 - Runtime implementation: implemented
@@ -294,11 +294,11 @@ Scope:
 - Mermaid render pipeline: implemented
 - Learn capture pipeline: implemented
 - Tests: git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 220 passed, compileall passed, build passed; scripts/render_visual_docs.sh passed; scripts/capture_learn_demo.sh passed; scripts/verify_visual_docs.sh passed
-- Pull request: not created
+- Pull request: #34 (Draft)
 
 ## Next action
 
-Review the committed WB-0027 visual documentation and Learn capture change set; do not push or open a pull request without explicit human approval.
+Resolve the confirmed WB-0027 review blockers, then update Draft PR #34 for review.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:0b5e2c1c58d929e500581e0bf6bc0c4843cb8a64ef77acd410dce392dc7cd824 -->

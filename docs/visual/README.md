@@ -60,3 +60,10 @@ The renderer fails when Mermaid source is invalid. The capture script fails
 when FFmpeg, Playwright, or a local Chromium executable is unavailable. No
 global Node packages, remote browser resources, capture frames, browser binaries, or
 `node_modules` are committed.
+
+## Toolchain follow-up
+
+`npm audit` reports six high-severity transitive findings in this isolated
+documentation toolchain. They are explicitly deferred security debt for
+WB-0027 and do not affect the Python runtime package; update the pinned visual
+tool dependencies in a separately reviewed maintenance change.

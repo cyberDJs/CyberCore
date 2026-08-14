@@ -26,6 +26,13 @@ fail() {
   exit 1
 }
 
+file_size_bytes() {
+  case "$(uname -s)" in
+    Darwin) stat -f '%z' "$1" ;;
+    *) stat -c '%s' "$1" ;;
+  esac
+}
+
 for script in render_visual_docs.sh capture_learn_demo.sh verify_visual_docs.sh; do
   script_path="${script_dir}/${script}"
   [[ -f "${script_path}" ]] || fail "required script is missing: scripts/${script}"
@@ -91,7 +98,7 @@ else
     "learn-evidence-lifecycle.gif:5242880"; do
     asset="${entry%%:*}"
     limit="${entry##*:}"
-    size="$(stat -f '%z' "${generated_dir}/${asset}")"
+    size="$(file_size_bytes "${generated_dir}/${asset}")"
     if (( size > limit )); then
       printf '%s\n' "Warning: ${asset} exceeds its preferred documentation size limit." >&2
     fi

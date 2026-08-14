@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { createReadStream, existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { dirname, extname, resolve } from "node:path";
+import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { resolveChromiumPath } from "./browser.mjs";
@@ -12,7 +12,7 @@ const learnDirectory = resolve(repositoryRoot, "docs/visual/learn");
 const assetsDirectory = resolve(repositoryRoot, "assets");
 const [output] = process.argv.slice(2);
 const frameRate = 15;
-const frameCount = 158;
+const frameCount = 162;
 
 if (!output) {
   throw new Error("Usage: node capture.mjs <intermediate-webm-output>");
@@ -31,6 +31,13 @@ const contentTypes = {
   ".js": "text/javascript; charset=utf-8",
   ".svg": "image/svg+xml"
 };
+
+function isWithin(directory, filePath) {
+  const pathFromDirectory = relative(directory, filePath);
+  return pathFromDirectory !== "" && pathFromDirectory !== ".."
+    && !pathFromDirectory.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)
+    && !isAbsolute(pathFromDirectory);
+}
 
 function run(command, args) {
   return new Promise((resolvePromise, reject) => {
@@ -63,7 +70,7 @@ const server = createServer((request, response) => {
   const filePath = requestPath.startsWith("/assets/")
     ? resolve(repositoryRoot, `.${requestPath}`)
     : resolve(learnDirectory, `.${requestPath}`);
-  const permitted = filePath.startsWith(learnDirectory) || filePath.startsWith(assetsDirectory);
+  const permitted = isWithin(learnDirectory, filePath) || isWithin(assetsDirectory, filePath);
   if (!permitted || !existsSync(filePath)) {
     response.writeHead(404);
     response.end("Not found");
@@ -91,6 +98,7 @@ try {
   const page = await context.newPage();
   await page.goto(`http://127.0.0.1:${address.port}/?capture=1`, { waitUntil: "networkidle" });
   await page.evaluate(() => window.CyberCoreLearn.stop());
+  const stepCount = await page.evaluate(() => window.CyberCoreLearn.stepCount);
   const framesDirectory = resolve(dirname(resolve(output)), "learn-evidence-lifecycle-frames");
   await mkdir(framesDirectory, { recursive: true });
   const startedAt = Date.now();
@@ -99,7 +107,7 @@ try {
     const nextFrameAt = startedAt + elapsed;
     const wait = nextFrameAt - Date.now();
     if (wait > 0) await page.waitForTimeout(wait);
-    await page.evaluate((step) => window.CyberCoreLearn.showStep(step), Math.floor(elapsed / 1200) % 8);
+    await page.evaluate((step) => window.CyberCoreLearn.showStep(step), Math.floor(elapsed / 1200) % stepCount);
     await page.screenshot({ path: resolve(framesDirectory, `frame-${String(index).padStart(4, "0")}.png`) });
   }
   await settle("Playwright context shutdown", context.close());

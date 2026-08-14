@@ -299,8 +299,8 @@ PR #18 is technically verified. Next work should focus on persistent project mem
   Python suite: Ruff, format check, Pyright, 220 pytest tests, compileall, and
   package build.
 - No GitHub settings, secrets, Cloudflare resources, or production systems were
-  changed. The change set was fully verified before commit and has not been
-  proposed for review.
+  changed. Draft PR #34 exists; review is in progress while confirmed blockers
+  are resolved.
 
 <!-- CYBERCORE:WORKLOG-CHECKPOINT:0b5e2c1c58d929e500581e0bf6bc0c4843cb8a64ef77acd410dce392dc7cd824 -->
 ## Checkpoint 2026-08-14T14:06:26.325311Z

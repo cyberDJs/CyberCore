@@ -1,19 +1,20 @@
 (() => {
   const steps = [
     "Reality is observed.",
+    "Observation records reality.",
     "Observation becomes evidence.",
     "Evidence supports knowledge.",
     "Knowledge informs a decision.",
     "Human approval unlocks execution.",
     "Execution produces verification.",
-    "Verification becomes memory."
+    "Verification becomes memory.",
+    "Memory informs future observation."
   ];
   const nodes = [...document.querySelectorAll("[data-step]")];
   const edges = [...document.querySelectorAll("[data-edge]")];
   const narration = document.querySelector("#narration-text");
   const replay = document.querySelector("#replay");
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const cycleDuration = 9600;
   const stepDuration = 1200;
   let timer;
 
@@ -51,6 +52,6 @@
     if (document.hidden) stop();
     else start();
   });
-  window.CyberCoreLearn = { showStep, start, stop };
+  window.CyberCoreLearn = { showStep, start, stop, stepCount: nodes.length };
   start();
 })();

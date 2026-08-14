@@ -19,6 +19,13 @@ temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/cybercore-learn-capture.XXXXXX")"
 cleanup() { rm -rf -- "${temp_dir}"; }
 trap cleanup EXIT
 
+file_size_bytes() {
+  case "$(uname -s)" in
+    Darwin) stat -f '%z' "$1" ;;
+    *) stat -c '%s' "$1" ;;
+  esac
+}
+
 intermediate="${temp_dir}/learn-evidence-lifecycle-browser.webm"
 mkdir -p "${output_dir}"
 node "${tool_dir}/capture.mjs" "${intermediate}"
@@ -47,7 +54,7 @@ warn_if_oversized() {
   local limit_bytes="$2"
   local label="$3"
   local size_bytes
-  size_bytes="$(stat -f '%z' "${path}")"
+  size_bytes="$(file_size_bytes "${path}")"
   if (( size_bytes > limit_bytes )); then
     printf '%s\n' "Warning: ${label} exceeds its preferred documentation size limit." >&2
   fi

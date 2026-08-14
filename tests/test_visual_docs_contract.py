@@ -32,6 +32,25 @@ def test_visual_documentation_contract_is_complete_and_local() -> None:
         assert "https://" not in text
 
 
+def test_learn_lifecycle_includes_observation_in_canonical_order() -> None:
+    learn_html = (REPOSITORY_ROOT / "docs" / "visual" / "learn" / "index.html").read_text(
+        encoding="utf-8"
+    )
+    lifecycle = (
+        "Reality",
+        "Observation",
+        "Evidence",
+        "Knowledge",
+        "Decision",
+        "Human Approval",
+        "Execution",
+        "Verification",
+        "Memory",
+    )
+    positions = [learn_html.index(f"<span>{step}</span>") for step in lifecycle]
+    assert positions == sorted(positions)
+
+
 def test_visual_documentation_scripts_use_safe_shell_behavior() -> None:
     for name in (
         "render_visual_docs.sh",

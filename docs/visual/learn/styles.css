@@ -63,7 +63,7 @@ h1 { margin: 0; font-size: 30px; font-weight: 650; letter-spacing: 0; }
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(8, minmax(100px, 1fr));
+  grid-template-columns: repeat(9, minmax(100px, 1fr));
   gap: 12px;
   align-items: center;
   min-height: 360px;
@@ -98,8 +98,8 @@ h1 { margin: 0; font-size: 30px; font-weight: 650; letter-spacing: 0; }
 @media (max-width: 800px) {
   .learn-demo { min-height: 720px; padding: 28px 20px; }
   .lifecycle { min-height: 460px; overflow-x: auto; }
-  .lifecycle-lines { min-width: 960px; }
-  .lifecycle-nodes { min-width: 960px; }
+  .lifecycle-lines { min-width: 1024px; }
+  .lifecycle-nodes { min-width: 1024px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
