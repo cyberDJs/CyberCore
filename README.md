@@ -1,385 +1,85 @@
-<div align="center">
+<p align="center">
+  <img src="assets/brand/cybercore-mark.svg" width="88" alt="CyberCore mark">
+</p>
 
-![CyberCore logo](assets/brand/cybercore-logo.svg)
+<h1 align="center">CYBERCORE</h1>
 
-# CYBERCORE
+<p align="center"><strong>Infrastructure Intelligence Platform</strong></p>
 
-### Infrastructure Context & Intelligence Platform
+<p align="center">
+  Understand operational reality from evidence, make governed decisions, and execute only with explicit human approval.
+</p>
 
-**AI-first Infrastructure Control Plane**
-
-**Observe reality. Build knowledge. Make safe decisions. Learn from outcomes.**
-
-[![Status](https://img.shields.io/badge/status-foundation%20release-111111?style=for-the-badge)](CHANGELOG.md)
-[![Architecture](https://img.shields.io/badge/architecture-specification--first-24292f?style=for-the-badge)](ARCHITECTURE.md)
-[![Automation](https://img.shields.io/badge/automation-human--controlled-30363d?style=for-the-badge)](SECURITY.md)
-
-</div>
+<p align="center">
+  <a href=".github/workflows/ci.yml"><img src="https://github.com/cyberDJs/CyberCore/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href=".github/workflows/codeql.yml"><img src="https://github.com/cyberDJs/CyberCore/actions/workflows/codeql.yml/badge.svg" alt="CodeQL status"></a>
+  <a href="pyproject.toml"><code>Python 3.11+</code></a>
+  <a href="LICENSE.md"><code>Apache-2.0</code></a>
+  <a href="PROJECT_STATE.md"><code>Reference implementation</code></a>
+</p>
 
 ---
 
-## What is CyberCore?
+## What CyberCore Does
 
-CyberCore is an **open architecture and reference implementation for evidence-driven infrastructure intelligence**.
+### Understand infrastructure
 
-It models operational reality as a living system of **entities, relationships, events, evidence, decisions, actions, and memory**. Instead of automating first and explaining later, CyberCore builds an explicit world model, reasons over trusted evidence, and keeps humans in control of every meaningful mutation.
+Build a traceable model of systems, services, relationships, events, and observed state from evidence rather than assumptions.
 
-CyberCore is currently developed as the control and intelligence layer for the Eimy Herrer / CyberDJS infrastructure ecosystem, with an initial focus on InterServer-hosted services, shared hosting, VPS, DirectAdmin, mail, DNS, WordPress, Nextcloud, and selected applications.
+### Make evidence-backed decisions
 
-## Why CyberCore exists
+Connect trusted observations to knowledge, policy, risk, and explainable decisions that retain their operational context.
 
-Infrastructure usually becomes risky before it becomes unavailable.
+### Execute safely
 
-Ownership becomes unclear. Documentation drifts. Decisions lose context. Monitoring produces data without understanding. Automation grows faster than confidence.
+Keep meaningful mutation human-governed, explicitly approved, reversible where possible, and verified against the resulting state.
 
-CyberCore is designed to answer:
+CyberCore is a public reference implementation, not a hosted control plane. Reusable models, contracts, and sanitized examples stay separate from private credentials, production inventory, topology, and client data. When a claim cannot be traced to evidence and a decision lacks accountable approval, the system treats that gap as operational context to resolve in practice rather than certainty to automate.
 
-- What exists?
-- Why does it exist?
-- What changed?
-- What evidence supports the current state?
-- What is risky, obsolete, or unnecessarily expensive?
-- What can be changed safely?
-- What must remain under explicit human control?
+## Architecture Overview
 
-> Technology serves people. Never the other way around.
+CyberCore keeps interfaces, core reasoning, operational domains, and provider boundaries explicit.
 
-## Visual overview
+The core connects human and AI interfaces to evidence-backed reasoning, then crosses an explicit boundary into providers and drivers only for controlled operational work.
 
 ![CyberCore architecture overview](docs/visual/generated/architecture-overview.svg)
 
-[![CyberCore Learn: evidence lifecycle](docs/visual/generated/learn-evidence-lifecycle.gif)](docs/visual/generated/learn-evidence-lifecycle.webm)
+Read the [architecture specification](ARCHITECTURE.md) or browse the [complete visual documentation](docs/visual/README.md).
 
-The [complete visual documentation](docs/visual/README.md) includes the evidence
-lifecycle, Work Block lifecycle, security merge gate, architecture overview,
-public/private boundary, and local Learn demo.
+## Canonical Lifecycle
 
-## The CyberCore pipeline
+The evidence-first operating model connects reality to safe action and future context.
 
-```text
-Reality
-   ↓
-Observation
-   ↓
-Evidence
-   ↓
-World Model
-   ↓
-Knowledge
-   ↓
-Reasoning
-   ↓
-Decision
-   ↓
-Execution
-   ↓
-Verification
-   ↓
-Memory
-```
+![CyberCore evidence lifecycle](docs/visual/generated/evidence-lifecycle.svg)
 
-This is the core operating model of CyberCore:
+Reality -> Observation -> Evidence -> Knowledge -> Decision -> Human Approval -> Execution -> Verification -> Memory
 
-- **Reality** is the source of truth.
-- **Evidence** supports every important claim.
-- **Knowledge** is derived, not guessed.
-- **Decisions** must be explainable.
-- **Execution** must be controlled and verifiable.
-- **Memory** improves future decisions.
+The [Learn evidence lifecycle](docs/visual/generated/learn-evidence-lifecycle.webm) is also available as a [short GIF](docs/visual/generated/learn-evidence-lifecycle.gif).
 
-## Core principles
+## Current State
 
-- Reality first
-- Evidence before assumptions
-- Human intent before automation
-- Explainable decisions
-- Reversible change where possible
-- Explicit verification
-- Specification before implementation
-- Simplicity before abstraction
-- Public framework, private operational overlay
+The repository is a working foundation for evidence-driven infrastructure intelligence. Its implemented contracts are useful for study, extension, and verification; its operational surface remains deliberately constrained.
 
-## CyberCore compared to traditional tooling
+| Available / implemented | In progress / experimental | Not production-ready yet |
+| --- | --- | --- |
+| Python reference runtime and CLI | Provider and driver integrations | Autonomous infrastructure management |
+| Evidence, knowledge, decision, and checkpoint foundations | Controlled execution patterns | Production-changing automation without explicit approval |
+| Mermaid visual documentation and Learn capture | Public framework expansion | Private inventory, topology, and credentials in this repository |
+| CI verification and CodeQL merge-gate contract | | |
 
-| Traditional tooling | CyberCore |
-|---|---|
-| Monitoring | Operational understanding |
-| Inventory | Living world model |
-| CMDB | Evidence-backed relationships and state |
-| Scripts | Governed execution |
-| AI assistant | Explainable reasoning over trusted context |
-| Configuration | Observed state + desired state |
-| Logs | Evidence, events, outcomes, and memory |
+CyberCore does not replace provider APIs, configuration tools, or human operational judgment. It supplies the traceable context and governance model that can connect them.
 
-CyberCore is not intended to replace Terraform, Ansible, monitoring platforms, or provider APIs. It provides the intelligence, context, governance, and execution model that connects them.
+## Explore
 
-## Core model
-
-Everything in CyberCore is represented through a small number of fundamental concepts.
-
-### Entity
-
-Any relevant object in the managed world.
-
-Examples:
-
-- server
-- container
-- service
-- domain
-- certificate
-- repository
-- application
-- user
-- organization
-
-### Relationship
-
-A first-class connection between entities.
-
-Examples:
-
-- `HOSTS`
-- `RUNS`
-- `DEPENDS_ON`
-- `CONNECTS_TO`
-- `OWNS`
-- `PROTECTS`
-- `OBSERVES`
-- `MANAGED_BY`
-- `BACKS_UP`
-
-### Event
-
-Anything that happened and may affect state or knowledge.
-
-Examples:
-
-- entity observed
-- property changed
-- evidence collected
-- risk detected
-- execution started
-- execution failed
-- execution verified
-
-### Evidence
-
-An immutable observation supporting a claim.
-
-Evidence includes source, timestamp, confidence, verification context, and the original observation.
-
-### Decision
-
-A traceable conclusion derived from evidence, knowledge, policy, and risk.
-
-### Memory
-
-Operational experience captured as incident, decision, outcome, and lesson.
-
-## Architecture
-
-```text
-Users and systems
-CLI · API · Web · AI interfaces
-              │
-              ▼
-┌─────────────────────────────────────┐
-│            CyberCore Core           │
-│                                     │
-│  Entity Model                       │
-│  Relationship Model                 │
-│  Event Model                        │
-│  Evidence Model                     │
-│  World Model                        │
-│  Decision Model                     │
-│  Execution Model                    │
-│  Memory                             │
-└─────────────────────────────────────┘
-              │
-              ▼
-Drivers and providers
-Linux · Docker · GitHub · DNS · Mail · VPS · OpenWrt · Nextcloud · More
-```
-
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the detailed conceptual system map.
-
-## Engineering model
-
-Critical changes follow a governed path:
-
-```text
-Observation
-  → Evidence
-  → Knowledge
-  → Decision
-  → Specification
-  → Work Block
-  → Verification
-  → Human approval
-  → Apply
-  → Outcome
-  → Memory
-```
-
-CyberCore deliberately separates reasoning from execution.
-
-Execution should be intentionally simple:
-
-```text
-Intent
-  → Plan
-  → Work Blocks
-  → Pre-checks
-  → Execution
-  → Verification
-  → Recorded outcome
-```
-
-## Current capabilities
-
-The current reference implementation includes or is actively developing:
-
-- structured registry
-- registry graph
-- infrastructure doctor
-- discovery
-- evidence collection
-- policy evaluation
-- risk assessment
-- planning
-- work-block generation
-- controlled apply flow
-- provider and driver abstractions
-
-The project remains pre-release. Runtime contracts and execution safety are still being stabilized before production-changing automation is broadly enabled.
-
-## Repository map
-
-```text
-foundation/              Stable principles and engineering models
-docs/specifications/     Technical contracts and protocols
-engineering/work-blocks/ Traceable implementation units
-knowledge/               Evidence, inventory, context, and generated knowledge
-src/                     CyberCore reference implementation
-providers/               Infrastructure adapters and provider integrations
-runtime/                 Runtime and execution assets
-automation/              Supporting operational automation
-monitoring/              Observability definitions and configuration
-security/                Security guidance and hardening material
-```
-
-## Public framework and private overlay
-
-The public repository contains reusable architecture, framework code, schemas, sanitized examples, tests, and documentation.
-
-Private overlays contain:
-
-- credentials
-- production-derived inventory
-- private topology
-- client data
-- environment-specific configuration
-
-Private information must never be required for the public framework to remain understandable and testable.
-
-## Current milestone
-
-### Foundation Release v0.1
-
-The current milestone establishes:
-
-- project identity and positioning
-- specification-first architecture
-- evidence-driven operating model
-- core terminology
-- governed execution model
-- human approval before mutation
-- public repository structure
-- foundation documents and terminology
-- CXP v1 package, runtime, publisher, and Git-integration contracts
-- an initial Python CLI/runtime
-- deterministic CXP artifact publishing
-- release branding assets
-- GitHub `main` as the stable source of truth
-
-Provider integrations, signing, encryption, registry publication, and GitHub write automation remain outside this release.
-
-CyberCore v0.1 is a foundation release. Production-changing automation remains behind explicit human approval and future provider work.
-
-## Initial operational priorities
-
-1. Maintain secrets hygiene and rotate exposed credentials.
-2. Stabilize the CyberCore specification and core contracts.
-3. Complete the provider framework and InterServer provider.
-4. Produce sanitized infrastructure inventory and topology.
-5. Stabilize and update Nextcloud using backup-first verification.
-6. Replace FTP-first deployment with a controlled Git-based workflow.
-7. Introduce reference tests for ontology, evidence, and execution behavior.
-
-## Project status
-
-CyberCore is an early-stage, public, open-source architecture and reference implementation.
-
-It is suitable today as:
-
-- an architecture reference
-- an infrastructure intelligence research project
-- a governed automation framework
-- a portfolio demonstration of systems architecture, infrastructure, telephony, AI integration, and automation
-
-It is **not yet positioned as production-ready autonomous infrastructure management software**.
-
-## Documentation
-
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — conceptual architecture
-- [`roadmap.md`](roadmap.md) — delivery plan and current work
-- [`foundation/FOUNDATIONS.md`](foundation/FOUNDATIONS.md) — stable project foundations
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contribution rules
-- [`SECURITY.md`](SECURITY.md) — security policy
-- [`CHANGELOG.md`](CHANGELOG.md) — notable changes
-- [`docs/releases/v0.1.0.md`](docs/releases/v0.1.0.md) — foundation release notes
-
-## Vision
-
-CyberCore aims to become a reference architecture for autonomous management of complex digital systems.
-
-Infrastructure is the first domain.
-
-The long-term model is broader:
-
-```text
-Perceive
-  → Understand
-  → Decide
-  → Act
-  → Verify
-  → Learn
-```
+- [Architecture](ARCHITECTURE.md)
+- [Visual documentation](docs/visual/README.md)
+- [Roadmap](roadmap.md)
+- [Security](SECURITY.md)
+- [Contributing](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
 
 ## Maintainer
 
-CyberCore is founded and maintained by **Jan Kočí**, Systems Architect focused on:
+Maintained by **Jan Kočí**. See [CONTRIBUTING.md](CONTRIBUTING.md) and [LICENSE.md](LICENSE.md) for contribution and licensing details.
 
-- Linux infrastructure
-- telephony and VoIP
-- enterprise operations
-- automation and DevOps
-- AI integration
-- observability
-- security and governance
-- technical architecture
-
-## License and contribution
-
-Contributions, architectural discussion, and implementation feedback are welcome.
-
-Before contributing, read [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md`](SECURITY.md).
-
----
-
-<div align="center">
-
-**Built from evidence. Governed by humans. Designed to learn.**
-
-</div>
+<p align="center"><strong>Built from evidence. Governed by humans. Designed to learn.</strong></p>
