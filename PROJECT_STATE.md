@@ -157,3 +157,18 @@ Merge readiness:
 ## Next action
 
 Finish PR #37 remediation, re-run hosted CI/CodeQL, re-request Codex review, run second AI review, then request human approval if clean.
+
+<!-- CYBERCORE:CHECKPOINT:START -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:manual-pr37-remediation -->
+## Manual repository checkpoint
+
+- Generated: `2026-08-17T14:09:00+02:00`
+- Branch: `docs/state-reconcile-security-baseline`
+- Pull request: `#37`
+- Active artifact: `OPS-0001`
+- Last verified main: `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6`
+- Working tree: connector-managed PR branch
+- Test evidence: initial CI/CodeQL passed on `9a55503b189ac7d5df02b752a39df4e2264434e8`; remediation commits require fresh hosted CI/CodeQL before Ready for Review
+- Project Kernel: present
+- Project State: reconciled manually for PR #37
+<!-- CYBERCORE:CHECKPOINT:END -->
