@@ -7,8 +7,8 @@ identity:
   maturity: alpha
 
 mission: >-
-  Build an evidence-driven control plane for infrastructure, knowledge,
-  decisions, and controlled mutation.
+  Build an evidence-driven Infrastructure Intelligence Platform for
+  infrastructure, knowledge, decisions, and controlled mutation.
 
 vision: Every decision is traceable to evidence.
 
@@ -23,10 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Visual Documentation and Learn Capture v0.1 complete
-  active_artifact: null
-  branch: main
-  pull_request: 34
+  milestone: Security and Source-of-Truth Baseline active
+  active_artifact: OPS-0001
+  branch: docs/state-reconcile-security-baseline
+  pull_request: null
+  last_verified_main: 3fbbc846f82ed98c3f7c69047792ffeb3abd19f6
 
 status:
   ccl_specification: complete_draft
@@ -34,7 +35,7 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 221_passed
+  tests: 223_passed
   ci: github_actions_verified
   checkpoint_runtime: verified
   checkpoint_persistence: verified
@@ -54,6 +55,10 @@ status:
   visual_documentation: verified
   mermaid_render_pipeline: verified
   learn_capture_pipeline: verified
+  checkpoint_inactive_artifact_persistence: verified
+  readme_landing_page: verified
+  caser_e_google_drive_workspace: initialized
+  security_source_of_truth_baseline: active
 
 completed:
   - artifact: WB-0015
@@ -72,42 +77,34 @@ completed:
     pull_request: 22
     merge_commit: 1e174e9180e64c3bfc5c70fa52d5c7e399ead9eb
     verification: 52_passed
-
   - artifact: WB-0019
     pull_request: 23
     merge_commit: ca2da8b72563e65d0818861e00ff38ca6f12b75e
     verification: 66_passed
-
   - artifact: WB-0020
     pull_request: 24
     merge_commit: 5ac0db5278acc57710f4987ba34e605cdaaf2ec3
     verification: 78_passed
-
   - artifact: WB-0021
     pull_request: 25
     merge_commit: 6c9a4cff56731e8e53bfb886fde6c61a2340a085
     verification: 86_passed
-
   - artifact: WB-0022
     pull_request: 26
     merge_commit: e674edc707a17ab8eb9ba1af9d40ae7a80657334
     verification: 98_passed
-
   - artifact: WB-0023
     pull_request: 27
     merge_commit: 03a04c5ad73489775552df34e21baa559f2a41da
     verification: 109_passed
-
   - artifact: WB-0024
     pull_request: 29
     merge_commit: 1ba003f8e17448ac8f962955f88d6214c58c6cb2
     verification: 201_passed
-
   - artifact: WB-0025
     pull_request: 31
     merge_commit: bd635ca56bd2cb7ce0b221c03e9664b128095d25
     verification: 218_passed
-
   - artifact: WB-0026
     pull_request: 32
     merge_commit: 00b408dd9439caa7e6c660737d1123d0eaa1c12f
@@ -116,10 +113,21 @@ completed:
     pull_request: 34
     merge_commit: 94cb1998274e31e9ce3314f59d2e0ae290bc40cc
     verification: 221_passed
+  - artifact: WB-0027-post-merge-state-reconciliation
+    pull_request: 35
+    merge_commit: 26d1947f3f75ed95192a0c9ad59506e965d90ab3
+    verification: 223_passed
+  - artifact: README-landing-page-redesign
+    pull_request: 36
+    merge_commit: 3fbbc846f82ed98c3f7c69047792ffeb3abd19f6
+    verification: 223_passed
 
 next:
-  - no successor Work Block has been activated
-  - retain the isolated visual-toolchain npm audit findings as deferred security debt
+  - execute OPS-0001 as read-first security and source-of-truth baseline
+  - confirm InterServer exposed credential revocation and rotation status without storing secret values
+  - produce sanitized infrastructure snapshot plan before any production mutation
+  - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
+  - keep MOP Workflow and Approval Attestation planned but not active until OPS-0001 resolves blockers or explicitly defers them
 
 rules:
   state_first: true
@@ -127,3 +135,4 @@ rules:
   repository_is_truth: true
   one_active_artifact: true
   no_production_mutation_without_human_approval: true
+  secrets_never_in_git_or_drive: true
