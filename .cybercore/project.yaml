@@ -26,7 +26,7 @@ current:
   milestone: Security and Source-of-Truth Baseline active
   active_artifact: OPS-0001
   branch: docs/state-reconcile-security-baseline
-  pull_request: null
+  pull_request: 37
   last_verified_main: 3fbbc846f82ed98c3f7c69047792ffeb3abd19f6
 
 status:
@@ -135,4 +135,14 @@ rules:
   repository_is_truth: true
   one_active_artifact: true
   no_production_mutation_without_human_approval: true
-  secrets_never_in_git_or_drive: true
+  plaintext_secrets_denied_in:
+    - github
+    - google_drive
+    - chatgpt_library
+    - slack
+    - chat
+    - caser_documents
+    - ordinary_evidence_logs
+  approved_plaintext_secret_targets:
+    - os_backed_secret_store
+    - approved_external_vault
