@@ -25,7 +25,7 @@ This work is opened because current canonical planning still lists unresolved im
 
 - revoke the exposed InterServer API key;
 - rotate the exposed InterServer 2FA/TOTP secret;
-- store replacement secrets outside chat and Git;
+- store replacement secrets only in an OS-backed secret store or approved external vault;
 - produce the first sanitized infrastructure snapshot;
 - record the production/development separation strategy.
 
@@ -44,7 +44,7 @@ Google Drive also contains earlier runbook/checklist evidence for the InterServe
 ### Out of scope without explicit human approval
 
 - Revoking or creating InterServer credentials.
-- Handling or storing plaintext secrets.
+- Handling or storing plaintext secrets outside an OS-backed secret store or approved external vault.
 - SSH access to production systems.
 - Production configuration changes.
 - DirectAdmin, VPS, mail, DNS, WordPress, Nextcloud, or billing mutations.
@@ -61,8 +61,9 @@ Google Drive also contains earlier runbook/checklist evidence for the InterServe
 
 ## Safety rules
 
-- Do not store API keys, TOTP seeds, passwords, SSH private keys, cookies, or recovery codes in GitHub, Google Drive, Slack, or chat.
-- Store only safe references, aliases, providers, timestamps, scopes, and verification status.
+- Do not store API keys, TOTP seeds, passwords, SSH private keys, cookies, recovery codes, or other plaintext secret values in GitHub, Google Drive, ChatGPT Library, Slack, chat, CASER documents, or ordinary evidence logs.
+- Plaintext replacement secrets may only be placed in an OS-backed secret store or approved external vault after explicit human approval.
+- Evidence records may store only safe references, aliases, provider names, scopes, timestamps, fingerprints/hashes where safe, owner/status fields, and verification state.
 - Treat missing provenance as `UNKNOWN`.
 - Treat old Drive copies as historical unless they match canonical GitHub state.
 - Do not promote an idea, checklist, or chat message to current truth without authority evidence.
