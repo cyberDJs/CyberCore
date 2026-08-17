@@ -46,7 +46,7 @@ Execute `OPS-0001` as a read-first security and source-of-truth baseline:
 - GitHub `main`: still canonical product state
 - Google Drive CASER-E: evidence/archive/collaboration layer only, not canonical product state
 - Initial PR #37 CI/CodeQL passed on `9a55503b189ac7d5df02b752a39df4e2264434e8`
-- Current remediation commits must pass hosted CI/CodeQL again before Ready for Review
+- Manual remediation head `30ee4b23af3f1bb51b81f535b98e83b9eac171ed` has been pushed and still requires hosted CI/CodeQL before Ready for Review
 
 ## Secret-handling boundary
 
@@ -119,6 +119,12 @@ Purpose:
 - activate `OPS-0001` as the next read-first operational artifact;
 - add CASER-SOURCER kickoff evidence tying GitHub canonical state to Google Drive CASER-E;
 - enforce the expanded no-secret boundary including ChatGPT Library.
+
+Manual remediation:
+
+- `871c0aab9b5e47de2bd478ecae1ee95ad83b725c` broadened the project-kernel secret boundary;
+- `2d3eee97bd58c8d7420cd9cf88c54cc6e96b097c` clarified the OPS-0001 no-secret boundary;
+- `30ee4b23af3f1bb51b81f535b98e83b9eac171ed` retained the checkpoint block after project-state reconciliation.
 
 Merge readiness:
 
