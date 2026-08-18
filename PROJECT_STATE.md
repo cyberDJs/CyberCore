@@ -1,330 +1,184 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-14 16:07 CEST_
+_Last updated: 2026-08-17 14:09 CEST_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Stable branch: `main`
-- Active branch: `main`
-- Active work block: none; `WB-0027 Visual Documentation and Learn Capture v0.1` completed
+- Canonical product state: GitHub `main`
+- Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
+- Active branch: `docs/state-reconcile-security-baseline`
+- Active pull request: `#37`
+- Active artifact: `OPS-0001 — Security and Source-of-Truth Baseline`
+- Active work block: `OPS-0001 — Security and Source-of-Truth Baseline`
+- Last verified `main`: `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; `main`
   branch protection is active and verified through ruleset
   `main-branch-protection` (`18986451`)
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
-## Completed checkpoints
-
-### PR #18 — Interactive demo, Project Kernel and CCL runtime foundation
-
-Squash-merged into `main` as:
-
-```text
-df222d59635398d325d467110a7139210fe46396
-```
-
-Delivered:
-
-- interactive demo and learning framework,
-- architecture audit and reference architecture v2,
-- CyberCore Genome v0,
-- CCL-0001 through CCL-0005,
-- JSON Schemas for the canonical lifecycle,
-- CCL runtime validator and CLI,
-- validation fixtures and tests.
-
-Verification:
-
-- `pytest -q`: **14 passed in 1.05s**,
-- tested feature commit: `f83285474afe323eee6fd12296957283238258df`.
-
-### PR #19 — Repository checkpoint runtime
-
-Squash-merged into `main` as:
-
-```text
-4ef4bbf
-```
-
-Delivered:
-
-- `cybercore checkpoint`,
-- repository branch, commit and working-tree collection,
-- Markdown and JSON checkpoint rendering,
-- optional explicit file output,
-- clean and dirty repository tests.
-
-Verification:
-
-- `pytest -q`: **18 passed in 3.23s**,
-- checkpoint reported clean working tree,
-- Project Kernel and Project State reported present.
-
-### PR #20 — Controlled checkpoint persistence
-
-Squash-merged into `main` as:
-
-```text
-de4f8f211ef1bf88db65b00ffb5ee577e9c20a86
-```
-
-Delivered:
-
-- project-memory preview and explicit write mode,
-- managed `PROJECT_STATE.md` synchronization,
-- structured `WORKLOG.md` checkpoints,
-- preservation of human-controlled governance content,
-- validation of incompatible checkpoint options.
-
-Verification:
-
-- `pytest -q`: **23 passed in 5.90s**.
-
-### PR #21 — Verification evidence automation
-
-Merged into `main` as:
-
-```text
-d21e3bc3875bf298939585958c90167fa36dd76c
-```
-
-Delivered:
-
-- structured repository- and commit-bound verification evidence,
-- shell-free verification command execution,
-- evidence validation during canonical checkpoint persistence,
-- rejection of failed, stale, malformed, or mismatched evidence,
-- generated-evidence exclusion from version control,
-- managed checkpoint marker normalization while preserving human content.
-
-Verification:
-
-- `pytest -q`: **46 passed**.
-
-### PR #22 — Idempotent canonical memory
-
-Merged into `main` as:
-
-```text
-1e174e9180e64c3bfc5c70fa52d5c7e399ead9eb
-```
-
-Delivered:
-
-- stable checkpoint identity independent of generation time,
-- duplicate-safe `WORKLOG.md` checkpoint persistence,
-- convergent repeated preview and write operations,
-- staged canonical-memory writes,
-- rollback after partial filesystem mutation,
-- temporary-file cleanup and fault-injection coverage.
-
-Verification:
-
-- `pytest -q`: **52 passed**.
-
-### PR #23 — feat: add controlled post-merge state transitions
-
-Merged into `main` as:
-
-```text
-ca2da8b72563e65d0818861e00ff38ca6f12b75e
-```
-
-Completed artifact: `WB-0019`.
-
-Verification:
-
-- `pytest -q`: **66 passed**.
-
-### PR #24 — feat: add remote-aware repository identity
-
-Merged into `main` as:
-
-```text
-5ac0db5278acc57710f4987ba34e605cdaaf2ec3
-```
-
-Completed artifact: `WB-0020`.
-
-Verification:
-
-- `pytest -q`: **78 passed**.
-
-### PR #25 — feat: add repository identity diagnostics
-
-Merged into `main` as:
-
-```text
-6c9a4cff56731e8e53bfb886fde6c61a2340a085
-```
-
-Completed artifact: `WB-0021`.
-
-Verification:
-
-- `pytest -q`: **86 passed**.
-
-### PR #26 — feat: enforce canonical repository identity policy
-
-Merged into `main` as:
-
-```text
-e674edc707a17ab8eb9ba1af9d40ae7a80657334
-```
-
-Completed artifact: `WB-0022`.
-
-Verification:
-
-- `pytest -q`: **98 passed**.
-
-### PR #27 — feat: add trusted operation context
-
-Merged into `main` as:
-
-```text
-03a04c5ad73489775552df34e21baa559f2a41da
-```
-
-Completed artifact: `WB-0023`.
-
-Verification:
-
-- `pytest -q`: **109 passed**.
-
-### PR #29 — fix: enforce operation context disclosure policy
-
-Merged into `main` as:
-
-```text
-1ba003f8e17448ac8f962955f88d6214c58c6cb2
-```
-
-Completed artifact: `WB-0024`.
-
-Verification:
-
-- `pytest -q`: **201 passed**.
-
-### WB-0025 Slice 1 — CI foundation
-
-Merged through PR #30 into `main` as:
-
-```text
-dbd61e9094d2b45ce11468d12b3700c66979cd0b
-```
-
-Verification:
-
-- local verification: **214 passed**;
-- GitHub Actions run `30602280063`: **6/6 jobs passed**;
-- Python 3.11, 3.12, 3.13 and 3.14 passed;
-- Ruff, Pyright, package build and clean-wheel smoke test passed.
-
-### WB-0025 Slice 2 — CodeQL and merge gates
-
-Merged through PR #31 into `main` as:
-
-```text
-bd635ca56bd2cb7ce0b221c03e9664b128095d25
-```
-
-Delivered:
-
-- pinned advanced CodeQL workflow for Python;
-- workflow-security tests for all `.github/workflows/*.yml` files;
-- exact proposed required checks for `main`;
-- branch-protection activation, rollback, and broken-check runbook;
-- explicit non-mutation boundary for repository settings.
-
-Verification:
-
-- local validation completed: Ruff passed, Pyright reported 0 errors, pytest reported
-  218 passed, compileall passed, package build passed, scripts/verify.sh passed,
-  git diff --check passed, and the workflow security audit passed;
-- GitHub Actions run `30774683751`: **passed**;
-- CodeQL run `30774683774`: **passed** under the stable `codeql` job;
-- GitHub CodeQL Default setup conflicted with the repository Advanced setup,
-  was disabled by explicit human action, and the retry succeeded;
-- branch protection remained disabled for PR #31 and was later activated under
-  WB-0026 only after explicit human approval.
-
-### PR #32 — docs(project): record verified main branch protection
-
-Merged into `main` as:
-
-```text
-00b408dd9439caa7e6c660737d1123d0eaa1c12f
-```
-
-Completed artifact: `WB-0026`.
-
-Verification:
-
-- local `pytest -q`: **218 passed**;
-- final PR head:
-  `bb14c930dd4404c665dc8faec8a3cd89ce812df4`;
-- GitHub Actions CI run `30827098051`: **passed**;
-- CodeQL run `30827098042`: **passed**;
-- independent approval: `nulleimy`;
-- automated review threads were resolved before merge.
-
-### PR #34 — Visual Documentation and Learn Capture v0.1
-
-Merged into `main` as:
-
-```text
-94cb1998274e31e9ce3314f59d2e0ae290bc40cc
-```
-
-Completed artifact: `WB-0027`.
-
-Verification:
-
-- independent approval: `nulleimy`;
-- final CI and CodeQL checks passed;
-- Mermaid rendering, Learn capture, generated-media review, and local visual
-  documentation verification passed;
-- six high-severity transitive `npm audit` findings remain deferred security
-  debt in the isolated visual documentation toolchain.
-
 ## Current milestone
 
-Visual Documentation and Learn Capture v0.1 complete.
+Security and Source-of-Truth Baseline active.
+
+This supersedes the prior idle state after WB-0027. The next work is not a runtime or provider mutation; it is a read-first operational baseline that reconciles source-of-truth state and prepares safe, human-approved security work.
 
 ## Active objective
 
-No successor Work Block is active.
+Execute `OPS-0001` as a read-first security and source-of-truth baseline:
+
+1. confirm InterServer exposed credential revocation and rotation status without storing secret values;
+2. reconcile GitHub canonical state, Google Drive CASER-E evidence, historical Drive copies, screenshots, and pasted operator reports;
+3. produce a sanitized infrastructure snapshot plan before any production mutation;
+4. draft a secret-rotation MOP with no secret values;
+5. record production/development separation strategy;
+6. recommend the next implementation work block only after blockers are verified closed or explicitly deferred.
 
 ## Current status
 
-- Work block: WB-0027 completed and merge verified
-- Branch: `main`
-- Project Kernel: present
-- Runtime implementation: implemented
-- Visual documentation: verified
-- Mermaid render pipeline: verified
-- Learn capture pipeline: verified
-- Tests: git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 221 passed, compileall passed, build passed; final PR #34 CI and CodeQL passed
-- Pull request: #34 merged
-- Security follow-up: six high-severity transitive `npm audit` findings remain
-  deferred debt in the isolated visual documentation toolchain
+- Work block: `OPS-0001` active candidate
+- Branch: `docs/state-reconcile-security-baseline`
+- Pull request: `#37` open as Ready for Review
+- Runtime code changes: none
+- Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
+- Secret values stored: none
+- GitHub `main`: still canonical product state
+- Google Drive CASER-E: evidence/archive/collaboration layer only, not canonical product state
+- Initial PR #37 CI/CodeQL passed on `9a55503b189ac7d5df02b752a39df4e2264434e8`
+- Manual remediation commits have been pushed and the latest PR head must pass hosted CI/CodeQL before merge
+
+## Secret-handling boundary
+
+Plaintext secrets are denied in:
+
+- GitHub;
+- Google Drive;
+- ChatGPT Library;
+- Slack;
+- chat;
+- CASER documents;
+- ordinary evidence logs.
+
+Actual replacement secrets may only be placed in an OS-backed secret store or approved external vault after explicit human approval. Evidence may record only safe references, aliases, provider names, scopes, timestamps, fingerprints/hashes where safe, owner/status fields, and verification state.
+
+## Recent completed state changes
+
+### PR #35 — WB-0027 post-merge state reconciliation
+
+Squash-merged into `main` as:
+
+```text
+26d1947f3f75ed95192a0c9ad59506e965d90ab3
+```
+
+Delivered:
+
+- reconciled project state after PR #34;
+- fixed inactive-artifact persistence so YAML null/empty values are not treated as active artifact state;
+- verified checkpoint persistence remains stable across repeats.
+
+Verification:
+
+- hosted CI and CodeQL passed;
+- regression tests passed with **223 passed**;
+- independent approval: `nulleimy`.
+
+### PR #36 — README landing-page redesign
+
+Squash-merged into `main` as:
+
+```text
+3fbbc846f82ed98c3f7c69047792ffeb3abd19f6
+```
+
+Delivered:
+
+- reduced README into a GitHub-native landing page;
+- retained architecture and lifecycle visuals;
+- linked detailed architecture/specification material instead of duplicating it;
+- no runtime changes.
+
+Verification:
+
+- `git diff --check`;
+- `PYTHON=.venv/bin/python scripts/verify.sh` with **223 tests passed**;
+- `scripts/verify_visual_docs.sh`;
+- README relative links and referenced local assets verified;
+- AI review #1: Codex;
+- AI review #2: independent assistant review;
+- human approval: `nulleimy`.
+
+### PR #37 — Security and Source-of-Truth Baseline activation
+
+Current Ready PR.
+
+Purpose:
+
+- reconcile `.cybercore/project.yaml` and this `PROJECT_STATE.md` after PR #35/#36;
+- activate `OPS-0001` as the next read-first operational artifact;
+- add CASER-SOURCER kickoff evidence tying GitHub canonical state to Google Drive CASER-E;
+- enforce the expanded no-secret boundary including ChatGPT Library;
+- retain the parser-compatible `Active work block` field while also recording the broader active artifact label.
+
+Manual remediation:
+
+- project kernel now sets `current.pull_request: 37` and declares the expanded plaintext-secret denial policy;
+- `OPS-0001` now denies plaintext secrets in GitHub, Google Drive, ChatGPT Library, Slack, chat, CASER documents, and ordinary evidence logs;
+- this `PROJECT_STATE.md` now records PR #35/#36 completion, active branch, active PR #37, active artifact `OPS-0001`, active work block `OPS-0001`, and gate state;
+- exact remediation commit history is the PR commit list; this document intentionally avoids naming the moving latest head.
+
+Merge readiness:
+
+- manual AI review completed;
+- hosted CI/CodeQL must pass on the latest head;
+- human approval must be present on current head;
+- merge requires explicit operator authorization.
+
+## Completed checkpoint summary
+
+| Artifact / PR | Merge commit | Verification |
+|---|---|---|
+| PR #18 — Interactive demo, Project Kernel and CCL runtime foundation | `df222d59635398d325d467110a7139210fe46396` | 14 passed |
+| WB-0015 / PR #19 — Repository checkpoint runtime | `4ef4bbf` | 18 passed |
+| WB-0016 / PR #20 — Controlled checkpoint persistence | `de4f8f211ef1bf88db65b00ffb5ee577e9c20a86` | 23 passed |
+| WB-0017 / PR #21 — Verification evidence automation | `d21e3bc3875bf298939585958c90167fa36dd76c` | 46 passed |
+| WB-0018 / PR #22 — Idempotent canonical memory | `1e174e9180e64c3bfc5c70fa52d5c7e399ead9eb` | 52 passed |
+| WB-0019 / PR #23 — Controlled post-merge state transitions | `ca2da8b72563e65d0818861e00ff38ca6f12b75e` | 66 passed |
+| WB-0020 / PR #24 — Remote-aware repository identity | `5ac0db5278acc57710f4987ba34e605cdaaf2ec3` | 78 passed |
+| WB-0021 / PR #25 — Repository identity diagnostics | `6c9a4cff56731e8e53bfb886fde6c61a2340a085` | 86 passed |
+| WB-0022 / PR #26 — Canonical repository identity policy | `e674edc707a17ab8eb9ba1af9d40ae7a80657334` | 98 passed |
+| WB-0023 / PR #27 — Trusted operation context | `03a04c5ad73489775552df34e21baa559f2a41da` | 109 passed |
+| WB-0024 / PR #29 — Operation context disclosure policy | `1ba003f8e17448ac8f962955f88d6214c58c6cb2` | 201 passed |
+| WB-0025 / PR #30 — CI foundation | `dbd61e9094d2b45ce11468d12b3700c66979cd0b` | 214 passed; GitHub Actions 6/6 passed |
+| WB-0025 / PR #31 — CodeQL and merge gates | `bd635ca56bd2cb7ce0b221c03e9664b128095d25` | 218 passed; CI and CodeQL passed |
+| WB-0026 / PR #32 — Verified main branch protection | `00b408dd9439caa7e6c660737d1123d0eaa1c12f` | 218 passed; CI and CodeQL passed; `nulleimy` approval |
+| WB-0027 / PR #34 — Visual Documentation and Learn Capture v0.1 | `94cb1998274e31e9ce3314f59d2e0ae290bc40cc` | 221 passed; CI and CodeQL passed; `nulleimy` approval |
+| WB-0027 post-merge / PR #35 — State reconciliation and inactive-artifact persistence | `26d1947f3f75ed95192a0c9ad59506e965d90ab3` | 223 passed; CI and CodeQL passed; `nulleimy` approval |
+| README landing-page redesign / PR #36 | `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6` | 223 passed; CI and CodeQL passed; AI+human gate passed |
+
+## Security follow-up
+
+- Six high-severity transitive `npm audit` findings remain deferred security debt in the isolated visual documentation toolchain.
+- InterServer exposed API key and 2FA/TOTP rotation status remains unresolved until verified by a human-approved MOP with no secret values in ordinary evidence stores.
 
 ## Next action
 
-No successor Work Block has been activated; retain the isolated visual-toolchain npm audit findings as deferred security debt until separately reviewed.
+Merge PR #37 after latest hosted CI/CodeQL and current-head approval gates are satisfied.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:80bbb2b5501cac33afcda7851c1a54cacf9854c1add8f25f32281f56e250677b -->
-## Automated repository checkpoint
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:manual-pr37-remediation -->
+## Manual repository checkpoint
 
-- Generated: `2026-08-14T16:07:46.672655Z`
-- Branch: `main`
-- Commit: `94cb1998274e31e9ce3314f59d2e0ae290bc40cc`
-- Commit subject: feat(visual-docs): add visual documentation and Learn capture (#34)
-- Working tree: **dirty**
-- Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 221 passed, compileall passed, build passed; final PR #34 CI and CodeQL passed`
+- Generated: `2026-08-17T14:09:00+02:00`
+- Branch: `docs/state-reconcile-security-baseline`
+- Pull request: `#37`
+- Active artifact: `OPS-0001`
+- Active work block: `OPS-0001`
+- Last verified main: `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6`
+- Working tree: connector-managed PR branch
+- Test evidence: CI/CodeQL must pass on latest PR head before merge
 - Project Kernel: present
-- Project State: present
+- Project State: reconciled manually for PR #37
 <!-- CYBERCORE:CHECKPOINT:END -->
