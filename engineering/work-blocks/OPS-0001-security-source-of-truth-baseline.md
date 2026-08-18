@@ -41,10 +41,16 @@ Google Drive also contains earlier runbook/checklist evidence for the InterServe
 - Drafting MOP/runbook material for secret rotation, sanitized inventory, and restore-first infrastructure baseline.
 - Preparing non-production PRs and documents.
 
+### Absolute secret-destination rule
+
+Plaintext secret values must never be stored in GitHub, Google Drive, ChatGPT Library, Slack, chat, CASER documents, or ordinary evidence logs.
+
+Actual replacement secrets may only be placed in an OS-backed secret store or approved external vault after explicit human approval. This destination rule is unconditional; human approval may authorize a rotation workflow, but it does not authorize plaintext storage in ordinary evidence, collaboration, chat, or repository systems.
+
 ### Out of scope without explicit human approval
 
 - Revoking or creating InterServer credentials.
-- Handling or storing plaintext secrets outside an OS-backed secret store or approved external vault.
+- Handling plaintext secret values directly in any rotation workflow.
 - SSH access to production systems.
 - Production configuration changes.
 - DirectAdmin, VPS, mail, DNS, WordPress, Nextcloud, or billing mutations.
