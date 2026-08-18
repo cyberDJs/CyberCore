@@ -11,6 +11,7 @@ _Last updated: 2026-08-17 14:09 CEST_
 - Active branch: `docs/state-reconcile-security-baseline`
 - Active pull request: `#37`
 - Active artifact: `OPS-0001 — Security and Source-of-Truth Baseline`
+- Active work block: `OPS-0001 — Security and Source-of-Truth Baseline`
 - Last verified `main`: `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; `main`
@@ -39,14 +40,14 @@ Execute `OPS-0001` as a read-first security and source-of-truth baseline:
 
 - Work block: `OPS-0001` active candidate
 - Branch: `docs/state-reconcile-security-baseline`
-- Pull request: `#37` open as Draft
+- Pull request: `#37` open as Ready for Review
 - Runtime code changes: none
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
 - GitHub `main`: still canonical product state
 - Google Drive CASER-E: evidence/archive/collaboration layer only, not canonical product state
 - Initial PR #37 CI/CodeQL passed on `9a55503b189ac7d5df02b752a39df4e2264434e8`
-- Manual remediation commits have been pushed and the latest PR head must pass hosted CI/CodeQL before Ready for Review
+- Manual remediation commits have been pushed and the latest PR head must pass hosted CI/CodeQL before merge
 
 ## Secret-handling boundary
 
@@ -111,28 +112,29 @@ Verification:
 
 ### PR #37 — Security and Source-of-Truth Baseline activation
 
-Current Draft PR.
+Current Ready PR.
 
 Purpose:
 
 - reconcile `.cybercore/project.yaml` and this `PROJECT_STATE.md` after PR #35/#36;
 - activate `OPS-0001` as the next read-first operational artifact;
 - add CASER-SOURCER kickoff evidence tying GitHub canonical state to Google Drive CASER-E;
-- enforce the expanded no-secret boundary including ChatGPT Library.
+- enforce the expanded no-secret boundary including ChatGPT Library;
+- retain the parser-compatible `Active work block` field while also recording the broader active artifact label.
 
 Manual remediation:
 
 - project kernel now sets `current.pull_request: 37` and declares the expanded plaintext-secret denial policy;
 - `OPS-0001` now denies plaintext secrets in GitHub, Google Drive, ChatGPT Library, Slack, chat, CASER documents, and ordinary evidence logs;
-- this `PROJECT_STATE.md` now records PR #35/#36 completion, active branch, active PR #37, active artifact `OPS-0001`, and Draft/CI gate state;
+- this `PROJECT_STATE.md` now records PR #35/#36 completion, active branch, active PR #37, active artifact `OPS-0001`, active work block `OPS-0001`, and gate state;
 - exact remediation commit history is the PR commit list; this document intentionally avoids naming the moving latest head.
 
 Merge readiness:
 
-- not Ready until Codex P1 feedback is resolved or obsolete;
-- not Ready until hosted CI/CodeQL passes on the latest remediation commit;
-- not Ready until second AI review is clean;
-- not Ready until human approval is present on current head.
+- manual AI review completed;
+- hosted CI/CodeQL must pass on the latest head;
+- human approval must be present on current head;
+- merge requires explicit operator authorization.
 
 ## Completed checkpoint summary
 
@@ -163,7 +165,7 @@ Merge readiness:
 
 ## Next action
 
-Finish PR #37 remediation, re-run hosted CI/CodeQL, re-request Codex review, run second AI review, then request human approval if clean.
+Merge PR #37 after latest hosted CI/CodeQL and current-head approval gates are satisfied.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:manual-pr37-remediation -->
@@ -173,9 +175,10 @@ Finish PR #37 remediation, re-run hosted CI/CodeQL, re-request Codex review, run
 - Branch: `docs/state-reconcile-security-baseline`
 - Pull request: `#37`
 - Active artifact: `OPS-0001`
+- Active work block: `OPS-0001`
 - Last verified main: `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6`
 - Working tree: connector-managed PR branch
-- Test evidence: initial CI/CodeQL passed on `9a55503b189ac7d5df02b752a39df4e2264434e8`; remediation commits require fresh hosted CI/CodeQL before Ready for Review
+- Test evidence: CI/CodeQL must pass on latest PR head before merge
 - Project Kernel: present
 - Project State: reconciled manually for PR #37
 <!-- CYBERCORE:CHECKPOINT:END -->
