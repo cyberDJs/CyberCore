@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-19 05:52 CEST_
+_Last updated: 2026-08-19 14:19 CEST_
 
 ## Source of truth
 
@@ -38,7 +38,7 @@ Execute `OPS-0001` as a read-first security and source-of-truth baseline:
 
 - Work block: `OPS-0001` active
 - Branch: `docs/close-pr37-post-merge`
-- Pull request: `#38` open as Draft
+- Pull request: `#38` open as Ready for Review
 - Runtime code changes: none
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
@@ -109,7 +109,7 @@ Verification:
 
 ### PR #37 — Security and Source-of-Truth Baseline activation
 
-Squash-merged into `main` as:
+Merged into `main` as:
 
 ```text
 6b74a56ee32278e5048ca3553bd7d87c1dd07645
