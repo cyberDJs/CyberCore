@@ -32,8 +32,9 @@ secret_policy:
   plaintext_secrets_in_drive_or_caser_docs: denied
   approved_secret_locations:
     - os_backed_secret_store
-    - github_environment_secret_interserver_staging
     - approved_external_vault
+  proposed_secret_locations_requiring_governance_acceptance:
+    - github_environment_secret_interserver_staging
   required_secret_aliases:
     - INTERSERVER_STAGING_HOST
     - INTERSERVER_STAGING_USER
