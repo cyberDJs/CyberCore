@@ -39,7 +39,7 @@ observed facts, resolves explicitly designated canonical sources, classifies
 recommendation. It performs no network calls and no writes.
 
 The dependency remains optional for consumers. Development and CI install it so the accepted
-orchestration boundary remains continuously exercised.
+boundary remains continuously testable.
 
 ## Why LangGraph
 
@@ -87,20 +87,28 @@ grow.
 
 ## Acceptance evidence
 
-ADR-0005 was accepted after LG-0001 satisfied the proposed acceptance gate on candidate head
-`2536b6728ef03abff84302161d6b14779be88352`:
+ADR-0005 was explicitly accepted by Jan Kočí on 2026-08-19 after LG-0001 demonstrated:
 
-1. deterministic `CURRENT`, `DRIFT`, `CONFLICT`, and `UNKNOWN` classification is covered by the
-   LG-0001 regression suite;
-2. the PR #37 / PR #38 duplicate-remediation scenario is covered and returns
-   `OBSERVE_EXISTING_REMEDIATION`;
-3. independent diff review found no provider writes, network calls, LLM calls, write nodes, or
-   secret persistence in LG-0001;
-4. hosted CI run `32256609212` passed Python 3.11–3.14 tests, Ruff lint/format, Pyright, package
-   build and wheel smoke test; hosted CodeQL run `32256609137` passed;
-5. LG-0001 documents a removal path that leaves the canonical CyberCore domain model, provider
-   contracts and persisted formats intact.
+1. deterministic `CURRENT`, `DRIFT`, `CONFLICT`, and `UNKNOWN` classification;
+2. regression coverage for the PR #37 / PR #38 duplicate-remediation scenario;
+3. no provider writes, network calls, LLM calls, or secret persistence;
+4. no regression in existing CyberCore tests, package build, lint, type checks or CodeQL;
+5. a documented removal path that leaves the core domain model intact.
 
-Acceptance establishes the architecture decision only. It does **not** authorize merge,
-deployment, production mutation, provider writes, secret access, or future write-capable
-LangGraph nodes. Those remain subject to their existing independent governance gates.
+Verification evidence:
+
+- CI run `32256609212`: PASS on implementation head `2536b6728ef03abff84302161d6b14779be88352`;
+- CodeQL run `32256609137`: PASS on the same implementation head;
+- acceptance-only commit `4da361b181210aeeea236ec8c2d80a19002d42a4` was then re-verified by CI run `32257110896` and CodeQL run `32257109968`, both PASS.
+
+## Guardrails after acceptance
+
+Acceptance does not authorize provider access, write-capable graph nodes, production mutation,
+secret handling, autonomous remediation, or merge/deployment bypass. Each later slice must pass
+its own value, authority, security and verification gates.
+
+## Removal path
+
+Remove the optional `orchestration` dependency extra and the orchestration module. The core
+CyberCore domain model, provider contracts, canonical state and persisted formats remain valid
+without LangGraph.
