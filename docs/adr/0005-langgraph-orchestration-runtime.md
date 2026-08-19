@@ -1,7 +1,9 @@
 # ADR-0005 — LangGraph as Optional Orchestration Runtime
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-19
+- Accepted: 2026-08-19
+- Authorized by: Jan Kočí
 - Decision owners: CyberCore maintainers
 - Related: LG-0001, OPS-0001
 
@@ -17,12 +19,12 @@ a pull request as merged while a tracked project-state document still reports th
 state. A reconciler must detect that drift without treating lower-authority copies as canonical
 and without opening duplicate remediation when an existing pull request already covers it.
 
-## Proposed decision
+## Decision
 
 Adopt LangGraph as an **optional orchestration runtime** behind CyberCore's existing governance
 and provider boundaries.
 
-LangGraph would own workflow control flow and transient graph state. It would not become:
+LangGraph owns workflow control flow and transient graph state. It does not become:
 
 - the CyberCore source of truth;
 - an authorization or policy authority;
@@ -36,8 +38,8 @@ observed facts, resolves explicitly designated canonical sources, classifies
 `CURRENT | DRIFT | CONFLICT | UNKNOWN`, detects existing remediation, and returns a
 recommendation. It performs no network calls and no writes.
 
-The dependency remains optional for consumers while the decision is evaluated. Development
-and CI install it so the candidate implementation can be tested.
+The dependency remains optional for consumers. Development and CI install it so the accepted
+orchestration boundary remains continuously exercised.
 
 ## Why LangGraph
 
@@ -83,14 +85,22 @@ still require a separate agent orchestration model.
 Lowest complexity now, but leaves repeated multi-step control flow to ad-hoc code as workflows
 grow.
 
-## Acceptance gate
+## Acceptance evidence
 
-This ADR remains **Proposed** until LG-0001 demonstrates all of the following in hosted CI:
+ADR-0005 was accepted after LG-0001 satisfied the proposed acceptance gate on candidate head
+`2536b6728ef03abff84302161d6b14779be88352`:
 
-1. deterministic `CURRENT`, `DRIFT`, `CONFLICT`, and `UNKNOWN` classification;
-2. regression coverage for the PR #37 / PR #38 duplicate-remediation scenario;
-3. no provider writes, network calls, LLM calls, or secret persistence;
-4. no regression in existing CyberCore tests, package build, lint, type checks or CodeQL;
-5. a documented removal path that leaves the core domain model intact.
+1. deterministic `CURRENT`, `DRIFT`, `CONFLICT`, and `UNKNOWN` classification is covered by the
+   LG-0001 regression suite;
+2. the PR #37 / PR #38 duplicate-remediation scenario is covered and returns
+   `OBSERVE_EXISTING_REMEDIATION`;
+3. independent diff review found no provider writes, network calls, LLM calls, write nodes, or
+   secret persistence in LG-0001;
+4. hosted CI run `32256609212` passed Python 3.11–3.14 tests, Ruff lint/format, Pyright, package
+   build and wheel smoke test; hosted CodeQL run `32256609137` passed;
+5. LG-0001 documents a removal path that leaves the canonical CyberCore domain model, provider
+   contracts and persisted formats intact.
 
-Acceptance or rejection requires an explicit maintainer decision after that evidence exists.
+Acceptance establishes the architecture decision only. It does **not** authorize merge,
+deployment, production mutation, provider writes, secret access, or future write-capable
+LangGraph nodes. Those remain subject to their existing independent governance gates.
