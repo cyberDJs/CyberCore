@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0028 Self-Deployment Staging Loop v0 active candidate
-  active_artifact: WB-0028
-  branch: feat/wb-0028-self-deploy-staging-loop
-  pull_request: 39
-  last_verified_main: cd4e8426b0e97d7362d6061653d56f27274bca5b
+  milestone: WB-0029 Disabled Manual Staging Workflow and Manifest Validator active candidate
+  active_artifact: WB-0029
+  branch: feat/wb-0029-staging-workflow-validator
+  pull_request: 42
+  last_verified_main: 4f582583789346724813a2c515fe30450c173b0c
 
 status:
   ccl_specification: complete_draft
@@ -61,7 +61,8 @@ status:
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
   pr38_post_merge_reconciliation: merged
-  self_deployment_staging_loop: active_candidate
+  self_deployment_staging_loop: merged
+  staging_workflow_validator: active_candidate
 
 completed:
   - artifact: WB-0015
@@ -132,11 +133,15 @@ completed:
     pull_request: 38
     merge_commit: cd4e8426b0e97d7362d6061653d56f27274bca5b
     verification: ci_codeql_passed
+  - artifact: WB-0028-self-deployment-staging-loop-v0
+    pull_request: 39
+    merge_commit: 4f582583789346724813a2c515fe30450c173b0c
+    verification: ci_codeql_passed
 
 next:
-  - define InterServer shared-hosting staging target registry without secret values
-  - create self-deployment control-plane architecture for plan to deploy to verify to evidence
-  - keep live staging deployment blocked until staging target identifiers and secret aliases are verified in approved storage
+  - validate InterServer staging target and manifest without secrets
+  - keep staging workflow manual and plan-only until first remote-write gate is separately approved
+  - add executable dry-run receipt evidence without connecting to InterServer
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 
