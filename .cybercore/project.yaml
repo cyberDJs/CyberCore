@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0028 Self-Deployment Staging Loop v0 active candidate
+  milestone: WB-0028 Self-Deployment Staging Loop v0 active
   active_artifact: WB-0028
-  branch: feat/wb-0028-self-deploy-staging-loop
-  pull_request: 39
-  last_verified_main: cd4e8426b0e97d7362d6061653d56f27274bca5b
+  branch: fix/adr-0006-post-merge-reconciliation
+  pull_request: 43
+  last_verified_main: 2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187
 
 status:
   ccl_specification: complete_draft
@@ -35,7 +35,7 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 223_passed
+  tests: 244_passed
   ci: github_actions_verified
   checkpoint_runtime: verified
   checkpoint_persistence: verified
@@ -61,7 +61,10 @@ status:
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
   pr38_post_merge_reconciliation: merged
-  self_deployment_staging_loop: active_candidate
+  wb0028_self_deployment_staging_foundation: merged
+  lg0001_sot_reconciler: merged_verified
+  lg0002_trusted_source_ingest: merged_verified
+  self_deployment_staging_boundary_adr: proposed_adr_0006
 
 completed:
   - artifact: WB-0015
@@ -132,11 +135,23 @@ completed:
     pull_request: 38
     merge_commit: cd4e8426b0e97d7362d6061653d56f27274bca5b
     verification: ci_codeql_passed
+  - artifact: WB-0028-self-deployment-staging-loop-foundation
+    pull_request: 39
+    merge_commit: 4f582583789346724813a2c515fe30450c173b0c
+    verification: ci_codeql_passed
+  - artifact: LG-0001-source-of-truth-reconciler
+    pull_request: 40
+    merge_commit: 56ccb7b8ea3871b592b79b2601da29122e677183
+    verification: ci_codeql_passed
+  - artifact: LG-0002-trusted-source-ingest
+    pull_request: 41
+    merge_commit: 2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187
+    verification: 244_passed_ci_codeql
 
 next:
-  - define InterServer shared-hosting staging target registry without secret values
-  - create self-deployment control-plane architecture for plan to deploy to verify to evidence
-  - keep live staging deployment blocked until staging target identifiers and secret aliases are verified in approved storage
+  - review proposed ADR-0006 for the staging-only self-deployment boundary
+  - keep live staging deployment blocked until staging target identifiers, secret aliases, rollback, and effect verifier are verified
+  - add the next staging workflow slice only after the target contract and authority gates are satisfied
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 

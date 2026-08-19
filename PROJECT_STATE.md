@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-19 15:26 CEST_
+_Last updated: 2026-08-19 20:49 CEST_
 
 ## Source of truth
 
@@ -8,42 +8,44 @@ _Last updated: 2026-08-19 15:26 CEST_
 - Stable branch: `main`
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Active branch: `feat/wb-0028-self-deploy-staging-loop`
-- Active pull request: `#39`
+- Active branch: `fix/adr-0006-post-merge-reconciliation`
+- Active pull request: `#43` — ADR renumbering and post-merge state reconciliation
 - Active artifact: `WB-0028 — Self-Deployment Staging Loop v0`
 - Active work block: `WB-0028 — Self-Deployment Staging Loop v0`
-- Last verified `main`: `cd4e8426b0e97d7362d6061653d56f27274bca5b`
+- Last verified `main`: `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; `main` branch protection is active
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
 ## Current milestone
 
-`WB-0028 — Self-Deployment Staging Loop v0` is active as a candidate work block.
+`WB-0028 — Self-Deployment Staging Loop v0` remains the active work stream after its documentation/state foundation merged through PR #39.
 
-PR #38 has been merged into `main` as `cd4e8426b0e97d7362d6061653d56f27274bca5b`. The previous post-merge state reconciliation is complete, and the next development slice starts the staging-only self-deployment foundation.
+PR #40 added accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime` and LG-0001. PR #41 added LG-0002 trusted source ingest. Because PR #39 had independently introduced the self-deployment staging-boundary proposal as another `ADR-0005`, PR #43 renumbers the self-deployment ADR to `ADR-0006` without changing its decision semantics.
 
 ## Active objective
 
-Define the first safe CyberCore self-deployment loop for InterServer shared-hosting staging:
+Continue the first safe CyberCore self-deployment loop for InterServer shared-hosting staging:
 
-1. define a staging-only self-deploy architecture;
-2. create a non-secret InterServer staging target contract;
-3. create a manual staging preparation runbook;
-4. propose the self-deployment staging boundary as an ADR candidate;
-5. record kickoff evidence;
-6. keep live remote deployment blocked until staging target identity, secret aliases, rollback, and effect verifier are verified.
+1. preserve the staging-only self-deploy architecture;
+2. keep the non-secret InterServer staging target contract authoritative for the current work stream;
+3. keep the manual staging preparation and rollback/effect-verification model reviewable;
+4. review the self-deployment staging boundary as proposed `ADR-0006`;
+5. keep live remote deployment blocked until staging target identity, secret aliases, rollback, and effect verifier are verified;
+6. use LG-0001/LG-0002 as read-only source-of-truth orchestration support, not as mutation authority.
 
 ## Current status
 
-- Work block: `WB-0028` active candidate
-- Branch: `feat/wb-0028-self-deploy-staging-loop`
-- Pull request: `#39` open as Ready for Review
-- Runtime code changes: none in this initial slice
+- Work block: `WB-0028` active
+- Branch: `fix/adr-0006-post-merge-reconciliation`
+- Pull request: `#43` open as Ready for Review
+- WB-0028 foundation / PR #39: merged as `4f582583789346724813a2c515fe30450c173b0c`
+- LG-0001 / PR #40: merged as `56ccb7b8ea3871b592b79b2601da29122e677183`
+- LG-0002 / PR #41: merged as `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187`
+- Runtime code changes: LG-0001 and LG-0002 are on `main`; the initial WB-0028 slice itself remains staging-foundation documentation/state
 - Live InterServer staging deployment: blocked until target gates pass
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
-- PR #38: merged into `main` as `cd4e8426b0e97d7362d6061653d56f27274bca5b`
 - GitHub `main`: canonical product state
 - Google Drive CASER-E: evidence/archive/collaboration layer only, not canonical product state
 
@@ -77,7 +79,7 @@ Blocked without separate explicit approval:
 - DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or provider mutation;
 - live InterServer remote write;
 - reading or storing plaintext secrets;
-- accepting ADR-0005.
+- accepting ADR-0006.
 
 ## Recent completed state changes
 
@@ -172,6 +174,69 @@ Verification:
 - manual AI review passed;
 - explicit operator authorization was provided for merge.
 
+### PR #39 — WB-0028 self-deployment staging foundation
+
+Merged into `main` as:
+
+```text
+4f582583789346724813a2c515fe30450c173b0c
+```
+
+Delivered:
+
+- activated WB-0028 as the staging-only self-deployment work stream;
+- added target contract, architecture, runbooks, rollback/effect-verifier, authority and stop-line documentation;
+- kept live InterServer deployment and production mutation blocked;
+- introduced the self-deployment staging-boundary ADR proposal, later renumbered from ADR-0005 to ADR-0006 after collision detection.
+
+Verification:
+
+- hosted CI run #58 passed on final PR head `1601f69170e96e9a35b4d89ca25a88a2b86d4f3a`;
+- CodeQL run #55 passed on the same head.
+
+### PR #40 — LG-0001 Source-of-Truth Reconciler
+
+Merged into `main` as:
+
+```text
+56ccb7b8ea3871b592b79b2601da29122e677183
+```
+
+Delivered:
+
+- accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime`;
+- added deterministic read-only LG-0001 reconciliation;
+- classified `CURRENT | DRIFT | CONFLICT | UNKNOWN`;
+- detected existing remediation to prevent duplicate corrective work.
+
+Verification:
+
+- hosted CI and CodeQL passed on final head `aef5469c2ea0dca84dac1b39a289289775584f27`;
+- Python 3.11–3.14 matrix, Ruff, Pyright, package build and wheel smoke passed.
+
+### PR #41 — LG-0002 Trusted Source Ingest
+
+Merged into `main` as:
+
+```text
+2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187
+```
+
+Delivered:
+
+- added trusted GitHub/Google Drive provider-observation binding into LG-0001;
+- prevented provider payloads from self-declaring authority;
+- added fail-closed validation for unsupported authorities/providers and unsafe provenance locators;
+- kept the graph read-only with no provider/network/write/production authority.
+
+Verification:
+
+- exact-head CI run #69 passed;
+- exact-head CodeQL run #66 passed;
+- Python 3.11 reported **244 passed**; Python 3.11–3.14 matrix passed;
+- Ruff, Pyright, package build and wheel smoke passed;
+- P1/P2 review findings were remediated before merge.
+
 ## Completed checkpoint summary
 
 | Artifact / PR | Merge commit | Verification |
@@ -195,6 +260,9 @@ Verification:
 | README landing-page redesign / PR #36 | `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6` | 223 passed; CI and CodeQL passed; AI+human gate passed |
 | OPS-0001 activation / PR #37 | `6b74a56ee32278e5048ca3553bd7d87c1dd07645` | CI and CodeQL passed; human approval; merged |
 | PR #37 post-merge reconciliation / PR #38 | `cd4e8426b0e97d7362d6061653d56f27274bca5b` | CI and CodeQL passed; manual AI review; merged |
+| WB-0028 foundation / PR #39 | `4f582583789346724813a2c515fe30450c173b0c` | CI #58 and CodeQL #55 passed |
+| LG-0001 / PR #40 | `56ccb7b8ea3871b592b79b2601da29122e677183` | CI and CodeQL passed; Python 3.11–3.14 gates passed |
+| LG-0002 / PR #41 | `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187` | 244 passed on Python 3.11; CI #69 and CodeQL #66 passed |
 
 ## Security follow-up
 
@@ -204,20 +272,20 @@ Verification:
 
 ## Next action
 
-Run hosted CI/CodeQL for PR #39. If green, review the non-production self-deployment boundary and decide whether to add the first disabled/manual staging workflow in the next slice.
+Review proposed `ADR-0006 — Self-Deployment Staging Boundary`. If it is explicitly accepted, separately decide whether to authorize the next disabled/manual staging workflow slice. Live staging and production writes remain blocked until their existing target, secret, rollback, effect-verification, and human-authorization gates are satisfied.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:wb0028-self-deploy-candidate -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:post-pr39-pr41-reconciliation -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-19T15:26:00+02:00`
-- Branch: `feat/wb-0028-self-deploy-staging-loop`
-- Pull request: `#39`
+- Generated: `2026-08-19T20:49:00+02:00`
+- Branch: `fix/adr-0006-post-merge-reconciliation`
+- Pull request: `#43`
 - Active artifact: `WB-0028`
 - Active work block: `WB-0028`
-- Last verified main: `cd4e8426b0e97d7362d6061653d56f27274bca5b`
-- Working tree: connector-managed PR branch
-- Test evidence: hosted CI/CodeQL required before merge
+- Last verified main: `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187`
+- Working tree: connector-managed corrective PR branch
+- Test evidence: PR #43 exact-head CI/CodeQL must pass after the final review remediation before merge
 - Project Kernel: present
-- Project State: transitioned to WB-0028 active candidate
+- Project State: ADR-0005/ADR-0006 collision corrected on PR #43; canonical transition awaits merge
 <!-- CYBERCORE:CHECKPOINT:END -->

@@ -44,7 +44,7 @@ This work block starts the self-deployment layer without granting production mut
 - DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or provider mutations.
 - Creating, rotating, reading, or storing plaintext secrets.
 - Running a live deploy against InterServer.
-- Accepting ADR-0005 or any governance policy change.
+- Accepting ADR-0006 or any governance policy change.
 - Disabling required checks or weakening branch protection.
 
 ## Safety gates
