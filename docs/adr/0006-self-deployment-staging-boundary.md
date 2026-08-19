@@ -4,6 +4,9 @@ Status: Proposed
 Date: 2026-08-19
 Work block: `WB-0028`
 Renumbered from: `ADR-0005` after post-merge identifier collision with the accepted LangGraph ADR
+Decision readiness: `READY_FOR_DECISION`
+Review recommendation: `ACCEPT`
+Review evidence: `docs/audits/2026-08-19-adr-0006-decision-readiness.md`
 
 ## Context
 
@@ -11,7 +14,7 @@ CyberCore is moving toward controlled self-development and self-deployment. The 
 
 Autonomous deployment increases risk because a system that can change itself can also damage its own source of truth, evidence trail, or production environment if the authority boundary is weak.
 
-PR #39 originally introduced this proposal as `ADR-0005`. PR #40 independently established and accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime`. After both branches landed, the repository contained two ADRs with the same identifier. This document is renumbered to `ADR-0006`; the self-deployment decision content is otherwise unchanged.
+PR #39 originally introduced this proposal as `ADR-0005`. PR #40 independently established and accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime`. After both branches landed, the repository contained two ADRs with the same identifier. PR #43 renumbered this document to `ADR-0006`; the self-deployment decision content is otherwise unchanged.
 
 ## Decision proposal
 
@@ -48,6 +51,16 @@ Tradeoffs:
 - InterServer shared-hosting limitations may force fallback from atomic symlink deployment to backup/no-overwrite deployment.
 - Production automation remains deliberately blocked.
 
+## Decision readiness review
+
+The 2026-08-19 review recommends **ACCEPT** and classifies this ADR as `READY_FOR_DECISION`.
+
+The review found that unknown InterServer staging URL/path, deployment protocol, staging identity, rollback mode, and effect verifier are implementation/runtime gates. They do not invalidate the architecture decision because this ADR explicitly requires those gates to be verified before `staging_apply`.
+
+Acceptance of ADR-0006 would authorize only the staging-first architectural boundary. It would not authorize a live InterServer connection, remote write, credential operation, provider mutation, production deployment, or automatic staging-to-production promotion.
+
 ## Acceptance
 
-This ADR is only proposed. It is not accepted until Jan Kočí explicitly accepts it or a later approved governance workflow marks it accepted.
+This ADR remains **Proposed**. It is not accepted until Jan Kočí explicitly accepts it or a later approved governance workflow marks it accepted.
+
+If accepted, record the acceptance date, authority, and evidence without removing the historical proposal/review context.
