@@ -1,0 +1,78 @@
+version: 1
+
+target_id: interserver-shared-hosting-staging
+provider: InterServer
+environment_class: staging
+status: target_contract_draft
+
+purpose: >-
+  Non-production staging target for CyberCore self-deployment loop validation.
+
+production_boundary:
+  production_domains:
+    - eimyherrer.com
+  production_mutation_allowed: false
+  production_credentials_allowed: false
+  provider_mutation_allowed_without_explicit_approval: false
+
+staging_identity:
+  domain_or_url: TBD_NON_PRODUCTION_STAGING_URL
+  document_root: TBD_NON_PRODUCTION_STAGING_PATH
+  deployment_user_scope: staging_path_only
+  capability_status: UNKNOWN_UNTIL_VERIFIED
+
+allowed_modes:
+  - plan_only
+  - dry_run
+  - staging_apply_after_explicit_operator_approval
+
+secret_policy:
+  plaintext_secrets_in_repository: denied
+  plaintext_secrets_in_chat: denied
+  plaintext_secrets_in_drive_or_caser_docs: denied
+  approved_secret_locations:
+    - os_backed_secret_store
+    - approved_external_vault
+  proposed_secret_locations_requiring_governance_acceptance:
+    - github_environment_secret_interserver_staging
+  required_secret_aliases:
+    - INTERSERVER_STAGING_HOST
+    - INTERSERVER_STAGING_USER
+    - INTERSERVER_STAGING_PORT
+    - INTERSERVER_STAGING_SSH_KEY_OR_SFTP_PASSWORD
+
+required_preflight:
+  - verify_target_is_non_production
+  - verify_target_path_is_not_production_document_root
+  - verify_no_production_credentials_are_reused
+  - verify_rollback_method
+  - verify_effect_verifier
+  - verify_operator_authorization_for_first_remote_write
+
+rollback:
+  preferred: immutable_release_directory_with_current_symlink
+  fallback:
+    - timestamped_backup_before_overwrite
+    - no_overwrite_upload_to_new_staging_path
+  block_if_no_rollback_for_nontrivial_change: true
+
+evidence:
+  receipt_class: staging_deploy_receipt
+  secret_values_allowed: false
+  required_fields:
+    - run_id
+    - timestamp
+    - repository
+    - source_branch
+    - source_commit
+    - target_id
+    - deploy_mode
+    - verifier_result
+    - rollback_mode
+    - operator_authorization_reference
+
+current_gate_state:
+  live_staging_deploy: blocked
+  reason: >-
+    Staging URL, staging path, deployment method, secret aliases, rollback method,
+    and effect verifier are not yet verified.

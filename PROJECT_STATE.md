@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-19 14:19 CEST_
+_Last updated: 2026-08-19 15:26 CEST_
 
 ## Source of truth
 
@@ -8,41 +8,42 @@ _Last updated: 2026-08-19 14:19 CEST_
 - Stable branch: `main`
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Active branch: `docs/close-pr37-post-merge`
-- Active pull request: `#38`
-- Active artifact: `OPS-0001 — Security and Source-of-Truth Baseline`
-- Active work block: `OPS-0001 — Security and Source-of-Truth Baseline`
-- Last verified `main`: `6b74a56ee32278e5048ca3553bd7d87c1dd07645`
+- Active branch: `feat/wb-0028-self-deploy-staging-loop`
+- Active pull request: `#39`
+- Active artifact: `WB-0028 — Self-Deployment Staging Loop v0`
+- Active work block: `WB-0028 — Self-Deployment Staging Loop v0`
+- Last verified `main`: `cd4e8426b0e97d7362d6061653d56f27274bca5b`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; `main` branch protection is active
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
 ## Current milestone
 
-OPS-0001 Security and Source-of-Truth Baseline is active.
+`WB-0028 — Self-Deployment Staging Loop v0` is active as a candidate work block.
 
-PR #37 has been merged into `main`; PR #38 is the post-merge state reconciliation that removes stale pre-merge PR wording and records PR #37 as completed while keeping OPS-0001 active as the current operational baseline.
+PR #38 has been merged into `main` as `cd4e8426b0e97d7362d6061653d56f27274bca5b`. The previous post-merge state reconciliation is complete, and the next development slice starts the staging-only self-deployment foundation.
 
 ## Active objective
 
-Execute `OPS-0001` as a read-first security and source-of-truth baseline:
+Define the first safe CyberCore self-deployment loop for InterServer shared-hosting staging:
 
-1. confirm InterServer exposed credential revocation and rotation status without storing secret values;
-2. reconcile GitHub canonical state, Google Drive CASER-E evidence, historical Drive copies, screenshots, and pasted operator reports;
-3. produce a sanitized infrastructure snapshot plan before any production mutation;
-4. draft a secret-rotation MOP with no secret values;
-5. record production/development separation strategy;
-6. recommend the next implementation work block only after blockers are verified closed or explicitly deferred.
+1. define a staging-only self-deploy architecture;
+2. create a non-secret InterServer staging target contract;
+3. create a manual staging preparation runbook;
+4. propose the self-deployment staging boundary as an ADR candidate;
+5. record kickoff evidence;
+6. keep live remote deployment blocked until staging target identity, secret aliases, rollback, and effect verifier are verified.
 
 ## Current status
 
-- Work block: `OPS-0001` active
-- Branch: `docs/close-pr37-post-merge`
-- Pull request: `#38` open as Ready for Review
-- Runtime code changes: none
+- Work block: `WB-0028` active candidate
+- Branch: `feat/wb-0028-self-deploy-staging-loop`
+- Pull request: `#39` open as Ready for Review
+- Runtime code changes: none in this initial slice
+- Live InterServer staging deployment: blocked until target gates pass
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
-- PR #37: merged into `main` as `6b74a56ee32278e5048ca3553bd7d87c1dd07645`
+- PR #38: merged into `main` as `cd4e8426b0e97d7362d6061653d56f27274bca5b`
 - GitHub `main`: canonical product state
 - Google Drive CASER-E: evidence/archive/collaboration layer only, not canonical product state
 
@@ -58,7 +59,25 @@ Plaintext secrets are denied in:
 - CASER documents;
 - ordinary evidence logs.
 
-Actual replacement secrets may only be placed in an OS-backed secret store or approved external vault after explicit human approval. Evidence may record only safe references, aliases, provider names, scopes, timestamps, fingerprints/hashes where safe, owner/status fields, and verification state.
+Actual replacement or deployment secrets may only be placed in an OS-backed secret store or an approved external vault after explicit approval. A GitHub Environment secret for `interserver-staging` is only a proposed future option until an accepted governance decision authorizes it. Evidence may record only safe references, aliases, provider names, scopes, timestamps, fingerprints/hashes where safe, owner/status fields, and verification state.
+
+## Self-deployment boundary
+
+The current self-deployment work is staging-only.
+
+Allowed in WB-0028:
+
+- branch, docs, target registry, runbook, ADR candidate, audit evidence;
+- staging plan and dry-run design;
+- future manual workflow proposal that fails closed when target data or secret aliases are missing.
+
+Blocked without separate explicit approval:
+
+- production deployment;
+- DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or provider mutation;
+- live InterServer remote write;
+- reading or storing plaintext secrets;
+- accepting ADR-0005.
 
 ## Recent completed state changes
 
@@ -130,6 +149,29 @@ Verification:
 - review threads resolved;
 - human approval present before merge.
 
+### PR #38 — PR #37 post-merge reconciliation
+
+Merged into `main` as:
+
+```text
+cd4e8426b0e97d7362d6061653d56f27274bca5b
+```
+
+Delivered:
+
+- recorded PR #37 as merged;
+- kept `OPS-0001` active as the operational baseline;
+- removed stale open/ready wording for PR #37;
+- added a post-merge audit note;
+- updated review model so Amy / `nulleimy` is not required for docs/state-only non-production PRs.
+
+Verification:
+
+- hosted CI and CodeQL passed on final head `68697f41549fcb35df8867b9b9116677398e00e7`;
+- Codex P2 wording thread resolved;
+- manual AI review passed;
+- explicit operator authorization was provided for merge.
+
 ## Completed checkpoint summary
 
 | Artifact / PR | Merge commit | Verification |
@@ -152,28 +194,30 @@ Verification:
 | WB-0027 post-merge / PR #35 — State reconciliation and inactive-artifact persistence | `26d1947f3f75ed95192a0c9ad59506e965d90ab3` | 223 passed; CI and CodeQL passed; `nulleimy` approval |
 | README landing-page redesign / PR #36 | `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6` | 223 passed; CI and CodeQL passed; AI+human gate passed |
 | OPS-0001 activation / PR #37 | `6b74a56ee32278e5048ca3553bd7d87c1dd07645` | CI and CodeQL passed; human approval; merged |
+| PR #37 post-merge reconciliation / PR #38 | `cd4e8426b0e97d7362d6061653d56f27274bca5b` | CI and CodeQL passed; manual AI review; merged |
 
 ## Security follow-up
 
 - Six high-severity transitive `npm audit` findings remain deferred security debt in the isolated visual documentation toolchain.
 - InterServer exposed API key and 2FA/TOTP rotation status remains unresolved until verified by a human-approved MOP with no secret values in ordinary evidence stores.
+- WB-0028 does not resolve those blockers; it makes live staging deploy depend on target and secret verification.
 
 ## Next action
 
-Verify PR #38 hosted CI/CodeQL, then continue with OPS-0001 evidence inventory and sanitized infrastructure snapshot planning.
+Run hosted CI/CodeQL for PR #39. If green, review the non-production self-deployment boundary and decide whether to add the first disabled/manual staging workflow in the next slice.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr37-post-merge-reconciliation -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:wb0028-self-deploy-candidate -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-19T05:52:00+02:00`
-- Branch: `docs/close-pr37-post-merge`
-- Pull request: `#38`
-- Active artifact: `OPS-0001`
-- Active work block: `OPS-0001`
-- Last verified main: `6b74a56ee32278e5048ca3553bd7d87c1dd07645`
+- Generated: `2026-08-19T15:26:00+02:00`
+- Branch: `feat/wb-0028-self-deploy-staging-loop`
+- Pull request: `#39`
+- Active artifact: `WB-0028`
+- Active work block: `WB-0028`
+- Last verified main: `cd4e8426b0e97d7362d6061653d56f27274bca5b`
 - Working tree: connector-managed PR branch
-- Test evidence: hosted CI/CodeQL required for PR #38 before merge
+- Test evidence: hosted CI/CodeQL required before merge
 - Project Kernel: present
-- Project State: reconciled manually for PR #37 post-merge state
+- Project State: transitioned to WB-0028 active candidate
 <!-- CYBERCORE:CHECKPOINT:END -->

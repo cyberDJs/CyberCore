@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: OPS-0001 Security and Source-of-Truth Baseline active
-  active_artifact: OPS-0001
-  branch: docs/close-pr37-post-merge
-  pull_request: 38
-  last_verified_main: 6b74a56ee32278e5048ca3553bd7d87c1dd07645
+  milestone: WB-0028 Self-Deployment Staging Loop v0 active candidate
+  active_artifact: WB-0028
+  branch: feat/wb-0028-self-deploy-staging-loop
+  pull_request: 39
+  last_verified_main: cd4e8426b0e97d7362d6061653d56f27274bca5b
 
 status:
   ccl_specification: complete_draft
@@ -60,6 +60,8 @@ status:
   caser_e_google_drive_workspace: initialized
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
+  pr38_post_merge_reconciliation: merged
+  self_deployment_staging_loop: active_candidate
 
 completed:
   - artifact: WB-0015
@@ -126,13 +128,17 @@ completed:
     pull_request: 37
     merge_commit: 6b74a56ee32278e5048ca3553bd7d87c1dd07645
     verification: ci_codeql_passed
+  - artifact: PR37-post-merge-state-reconciliation
+    pull_request: 38
+    merge_commit: cd4e8426b0e97d7362d6061653d56f27274bca5b
+    verification: ci_codeql_passed
 
 next:
-  - execute OPS-0001 as read-first security and source-of-truth baseline
-  - confirm InterServer exposed credential revocation and rotation status without storing secret values
-  - produce sanitized infrastructure snapshot plan before any production mutation
+  - define InterServer shared-hosting staging target registry without secret values
+  - create self-deployment control-plane architecture for plan to deploy to verify to evidence
+  - keep live staging deployment blocked until staging target identifiers and secret aliases are verified in approved storage
+  - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
-  - keep MOP Workflow and Approval Attestation planned but not active until OPS-0001 resolves blockers or explicitly defers them
 
 rules:
   state_first: true
