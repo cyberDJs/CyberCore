@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-19 16:45 CEST_
+_Last updated: 2026-08-19 20:49 CEST_
 
 ## Source of truth
 
@@ -8,8 +8,8 @@ _Last updated: 2026-08-19 16:45 CEST_
 - Stable branch: `main`
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Active branch: `main`
-- Active pull request: none — PR #39, PR #40, and PR #41 are merged
+- Active branch: `fix/adr-0006-post-merge-reconciliation`
+- Active pull request: `#43` — ADR renumbering and post-merge state reconciliation
 - Active artifact: `WB-0028 — Self-Deployment Staging Loop v0`
 - Active work block: `WB-0028 — Self-Deployment Staging Loop v0`
 - Last verified `main`: `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187`
@@ -21,7 +21,7 @@ _Last updated: 2026-08-19 16:45 CEST_
 
 `WB-0028 — Self-Deployment Staging Loop v0` remains the active work stream after its documentation/state foundation merged through PR #39.
 
-PR #40 added accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime` and LG-0001. PR #41 added LG-0002 trusted source ingest. Because PR #39 had independently introduced the self-deployment staging-boundary proposal as another `ADR-0005`, the self-deployment ADR is being renumbered to `ADR-0006` without changing its decision semantics.
+PR #40 added accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime` and LG-0001. PR #41 added LG-0002 trusted source ingest. Because PR #39 had independently introduced the self-deployment staging-boundary proposal as another `ADR-0005`, PR #43 renumbers the self-deployment ADR to `ADR-0006` without changing its decision semantics.
 
 ## Active objective
 
@@ -37,8 +37,8 @@ Continue the first safe CyberCore self-deployment loop for InterServer shared-ho
 ## Current status
 
 - Work block: `WB-0028` active
-- Branch: `main`
-- Pull request: none after PR #39, PR #40, and PR #41 merges
+- Branch: `fix/adr-0006-post-merge-reconciliation`
+- Pull request: `#43` open as Ready for Review
 - WB-0028 foundation / PR #39: merged as `4f582583789346724813a2c515fe30450c173b0c`
 - LG-0001 / PR #40: merged as `56ccb7b8ea3871b592b79b2601da29122e677183`
 - LG-0002 / PR #41: merged as `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187`
@@ -272,20 +272,20 @@ Verification:
 
 ## Next action
 
-Complete the ADR identifier reconciliation so `ADR-0005` remains uniquely assigned to the accepted LangGraph decision and the self-deployment staging proposal becomes `ADR-0006`. Then review whether to accept ADR-0006 and, separately, whether to authorize the next disabled/manual staging workflow slice. No live staging or production write is authorized by this state reconciliation.
+Review proposed `ADR-0006 — Self-Deployment Staging Boundary`. If it is explicitly accepted, separately decide whether to authorize the next disabled/manual staging workflow slice. Live staging and production writes remain blocked until their existing target, secret, rollback, effect-verification, and human-authorization gates are satisfied.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:post-pr39-pr41-reconciliation -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-19T16:45:00+02:00`
-- Branch: `main`
-- Pull request: none after PR #39, PR #40, and PR #41 merges
+- Generated: `2026-08-19T20:49:00+02:00`
+- Branch: `fix/adr-0006-post-merge-reconciliation`
+- Pull request: `#43`
 - Active artifact: `WB-0028`
 - Active work block: `WB-0028`
 - Last verified main: `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187`
-- Working tree: clean canonical `main` at reconciliation start
-- Test evidence: PR #41 exact-head CI #69 / CodeQL #66 passed; Python 3.11 reported 244 passed
+- Working tree: connector-managed corrective PR branch
+- Test evidence: PR #43 exact-head CI/CodeQL must pass after the final review remediation before merge
 - Project Kernel: present
-- Project State: reconciled after PR #39, PR #40, and PR #41 merges; self-deployment ADR renumbered to ADR-0006 candidate
+- Project State: ADR-0005/ADR-0006 collision corrected on PR #43; canonical transition awaits merge
 <!-- CYBERCORE:CHECKPOINT:END -->
