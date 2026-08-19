@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-17 14:09 CEST_
+_Last updated: 2026-08-19 14:19 CEST_
 
 ## Source of truth
 
@@ -8,22 +8,20 @@ _Last updated: 2026-08-17 14:09 CEST_
 - Stable branch: `main`
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Active branch: `docs/state-reconcile-security-baseline`
-- Active pull request: `#37`
+- Active branch: `docs/close-pr37-post-merge`
+- Active pull request: `#38`
 - Active artifact: `OPS-0001 — Security and Source-of-Truth Baseline`
 - Active work block: `OPS-0001 — Security and Source-of-Truth Baseline`
-- Last verified `main`: `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6`
+- Last verified `main`: `6b74a56ee32278e5048ca3553bd7d87c1dd07645`
 - Governance rule: no production mutation without explicit human approval
-- CI policy: GitHub Actions verification is required before merge; `main`
-  branch protection is active and verified through ruleset
-  `main-branch-protection` (`18986451`)
+- CI policy: GitHub Actions verification is required before merge; `main` branch protection is active
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
 ## Current milestone
 
-Security and Source-of-Truth Baseline active.
+OPS-0001 Security and Source-of-Truth Baseline is active.
 
-This supersedes the prior idle state after WB-0027. The next work is not a runtime or provider mutation; it is a read-first operational baseline that reconciles source-of-truth state and prepares safe, human-approved security work.
+PR #37 has been merged into `main`; PR #38 is the post-merge state reconciliation that removes stale pre-merge PR wording and records PR #37 as completed while keeping OPS-0001 active as the current operational baseline.
 
 ## Active objective
 
@@ -38,16 +36,15 @@ Execute `OPS-0001` as a read-first security and source-of-truth baseline:
 
 ## Current status
 
-- Work block: `OPS-0001` active candidate
-- Branch: `docs/state-reconcile-security-baseline`
-- Pull request: `#37` open as Ready for Review
+- Work block: `OPS-0001` active
+- Branch: `docs/close-pr37-post-merge`
+- Pull request: `#38` open as Ready for Review
 - Runtime code changes: none
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
-- GitHub `main`: still canonical product state
+- PR #37: merged into `main` as `6b74a56ee32278e5048ca3553bd7d87c1dd07645`
+- GitHub `main`: canonical product state
 - Google Drive CASER-E: evidence/archive/collaboration layer only, not canonical product state
-- Initial PR #37 CI/CodeQL passed on `9a55503b189ac7d5df02b752a39df4e2264434e8`
-- Manual remediation commits have been pushed and the latest PR head must pass hosted CI/CodeQL before merge
 
 ## Secret-handling boundary
 
@@ -112,29 +109,26 @@ Verification:
 
 ### PR #37 — Security and Source-of-Truth Baseline activation
 
-Current Ready PR.
+Merged into `main` as:
 
-Purpose:
+```text
+6b74a56ee32278e5048ca3553bd7d87c1dd07645
+```
 
-- reconcile `.cybercore/project.yaml` and this `PROJECT_STATE.md` after PR #35/#36;
-- activate `OPS-0001` as the next read-first operational artifact;
-- add CASER-SOURCER kickoff evidence tying GitHub canonical state to Google Drive CASER-E;
-- enforce the expanded no-secret boundary including ChatGPT Library;
-- retain the parser-compatible `Active work block` field while also recording the broader active artifact label.
+Delivered:
 
-Manual remediation:
+- reconciled `.cybercore/project.yaml` and `PROJECT_STATE.md` after PR #35/#36;
+- activated `OPS-0001` as the next read-first operational artifact;
+- added CASER-SOURCER kickoff evidence tying GitHub canonical state to Google Drive CASER-E;
+- enforced the expanded no-secret boundary including ChatGPT Library;
+- retained parser-compatible `Active work block` state;
+- made approved plaintext-secret destinations unconditional: OS-backed secret store or approved external vault only.
 
-- project kernel now sets `current.pull_request: 37` and declares the expanded plaintext-secret denial policy;
-- `OPS-0001` now denies plaintext secrets in GitHub, Google Drive, ChatGPT Library, Slack, chat, CASER documents, and ordinary evidence logs;
-- this `PROJECT_STATE.md` now records PR #35/#36 completion, active branch, active PR #37, active artifact `OPS-0001`, active work block `OPS-0001`, and gate state;
-- exact remediation commit history is the PR commit list; this document intentionally avoids naming the moving latest head.
+Verification:
 
-Merge readiness:
-
-- manual AI review completed;
-- hosted CI/CodeQL must pass on the latest head;
-- human approval must be present on current head;
-- merge requires explicit operator authorization.
+- hosted CI and CodeQL passed on final head `d7dff64cf0fd8b62c61daef833ce4851ffc34794`;
+- review threads resolved;
+- human approval present before merge.
 
 ## Completed checkpoint summary
 
@@ -157,6 +151,7 @@ Merge readiness:
 | WB-0027 / PR #34 — Visual Documentation and Learn Capture v0.1 | `94cb1998274e31e9ce3314f59d2e0ae290bc40cc` | 221 passed; CI and CodeQL passed; `nulleimy` approval |
 | WB-0027 post-merge / PR #35 — State reconciliation and inactive-artifact persistence | `26d1947f3f75ed95192a0c9ad59506e965d90ab3` | 223 passed; CI and CodeQL passed; `nulleimy` approval |
 | README landing-page redesign / PR #36 | `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6` | 223 passed; CI and CodeQL passed; AI+human gate passed |
+| OPS-0001 activation / PR #37 | `6b74a56ee32278e5048ca3553bd7d87c1dd07645` | CI and CodeQL passed; human approval; merged |
 
 ## Security follow-up
 
@@ -165,20 +160,20 @@ Merge readiness:
 
 ## Next action
 
-Merge PR #37 after latest hosted CI/CodeQL and current-head approval gates are satisfied.
+Verify PR #38 hosted CI/CodeQL, then continue with OPS-0001 evidence inventory and sanitized infrastructure snapshot planning.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:manual-pr37-remediation -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr37-post-merge-reconciliation -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-17T14:09:00+02:00`
-- Branch: `docs/state-reconcile-security-baseline`
-- Pull request: `#37`
+- Generated: `2026-08-19T05:52:00+02:00`
+- Branch: `docs/close-pr37-post-merge`
+- Pull request: `#38`
 - Active artifact: `OPS-0001`
 - Active work block: `OPS-0001`
-- Last verified main: `3fbbc846f82ed98c3f7c69047792ffeb3abd19f6`
+- Last verified main: `6b74a56ee32278e5048ca3553bd7d87c1dd07645`
 - Working tree: connector-managed PR branch
-- Test evidence: CI/CodeQL must pass on latest PR head before merge
+- Test evidence: hosted CI/CodeQL required for PR #38 before merge
 - Project Kernel: present
-- Project State: reconciled manually for PR #37
+- Project State: reconciled manually for PR #37 post-merge state
 <!-- CYBERCORE:CHECKPOINT:END -->

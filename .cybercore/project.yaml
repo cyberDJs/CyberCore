@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Security and Source-of-Truth Baseline active
+  milestone: OPS-0001 Security and Source-of-Truth Baseline active
   active_artifact: OPS-0001
-  branch: docs/state-reconcile-security-baseline
-  pull_request: 37
-  last_verified_main: 3fbbc846f82ed98c3f7c69047792ffeb3abd19f6
+  branch: docs/close-pr37-post-merge
+  pull_request: 38
+  last_verified_main: 6b74a56ee32278e5048ca3553bd7d87c1dd07645
 
 status:
   ccl_specification: complete_draft
@@ -59,6 +59,7 @@ status:
   readme_landing_page: verified
   caser_e_google_drive_workspace: initialized
   security_source_of_truth_baseline: active
+  pr37_security_source_of_truth_activation: merged
 
 completed:
   - artifact: WB-0015
@@ -121,6 +122,10 @@ completed:
     pull_request: 36
     merge_commit: 3fbbc846f82ed98c3f7c69047792ffeb3abd19f6
     verification: 223_passed
+  - artifact: OPS-0001-security-source-of-truth-baseline-activation
+    pull_request: 37
+    merge_commit: 6b74a56ee32278e5048ca3553bd7d87c1dd07645
+    verification: ci_codeql_passed
 
 next:
   - execute OPS-0001 as read-first security and source-of-truth baseline
