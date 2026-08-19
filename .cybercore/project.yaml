@@ -26,7 +26,7 @@ current:
   milestone: WB-0028 Self-Deployment Staging Loop v0 active candidate
   active_artifact: WB-0028
   branch: feat/wb-0028-self-deploy-staging-loop
-  pull_request: null
+  pull_request: 39
   last_verified_main: cd4e8426b0e97d7362d6061653d56f27274bca5b
 
 status:
