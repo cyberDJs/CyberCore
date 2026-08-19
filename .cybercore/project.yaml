@@ -25,8 +25,8 @@ canonical_sources:
 current:
   milestone: WB-0028 Self-Deployment Staging Loop v0 active
   active_artifact: WB-0028
-  branch: main
-  pull_request: null
+  branch: fix/adr-0006-post-merge-reconciliation
+  pull_request: 43
   last_verified_main: 2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187
 
 status:
