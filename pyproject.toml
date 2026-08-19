@@ -13,8 +13,10 @@ authors = [{ name = "CyberDJS" }]
 dependencies = ["jsonschema>=4.23", "rich>=13.9", "zstandard>=0.23"]
 
 [project.optional-dependencies]
+orchestration = ["langgraph>=1.2,<2"]
 dev = [
     "build>=1.2,<2",
+    "langgraph>=1.2,<2",
     "pyright>=1.1.400,<2",
     "pytest>=8.0,<10",
     "PyYAML>=6.0.2,<7",
