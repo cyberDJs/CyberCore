@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-19 14:55 CEST_
+_Last updated: 2026-08-19 15:07 CEST_
 
 ## Source of truth
 
@@ -9,7 +9,7 @@ _Last updated: 2026-08-19 14:55 CEST_
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
 - Active branch: `feat/wb-0028-self-deploy-staging-loop`
-- Active pull request: pending
+- Active pull request: `#39`
 - Active artifact: `WB-0028 — Self-Deployment Staging Loop v0`
 - Active work block: `WB-0028 — Self-Deployment Staging Loop v0`
 - Last verified `main`: `cd4e8426b0e97d7362d6061653d56f27274bca5b`
@@ -38,7 +38,7 @@ Define the first safe CyberCore self-deployment loop for InterServer shared-host
 
 - Work block: `WB-0028` active candidate
 - Branch: `feat/wb-0028-self-deploy-staging-loop`
-- Pull request: pending
+- Pull request: `#39` open as Draft
 - Runtime code changes: none in this initial slice
 - Live InterServer staging deployment: blocked until target gates pass
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
@@ -180,7 +180,7 @@ Verification:
 | WB-0015 / PR #19 — Repository checkpoint runtime | `4ef4bbf` | 18 passed |
 | WB-0016 / PR #20 — Controlled checkpoint persistence | `de4f8f211ef1bf88db65b00ffb5ee577e9c20a86` | 23 passed |
 | WB-0017 / PR #21 — Verification evidence automation | `d21e3bc3875bf298939585958c90167fa36dd76c` | 46 passed |
-| WB-0018 / PR #22 — Idempotent canonical memory | `1e174e64c3bfc5c70fa52d5c7e399ead9eb` | 52 passed |
+| WB-0018 / PR #22 — Idempotent canonical memory | `1e174e9180e64c3bfc5c70fa52d5c7e399ead9eb` | 52 passed |
 | WB-0019 / PR #23 — Controlled post-merge state transitions | `ca2da8b72563e65d0818861e00ff38ca6f12b75e` | 66 passed |
 | WB-0020 / PR #24 — Remote-aware repository identity | `5ac0db5278acc57710f4987ba34e605cdaaf2ec3` | 78 passed |
 | WB-0021 / PR #25 — Repository identity diagnostics | `6c9a4cff56731e8e53bfb886fde6c61a2340a085` | 86 passed |
@@ -204,15 +204,15 @@ Verification:
 
 ## Next action
 
-Open PR for WB-0028 and run hosted CI/CodeQL. If green, review the non-production self-deployment boundary and decide whether to add the first disabled/manual staging workflow in the next slice.
+Run hosted CI/CodeQL for PR #39. If green, review the non-production self-deployment boundary and decide whether to add the first disabled/manual staging workflow in the next slice.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:wb0028-self-deploy-candidate -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-19T14:55:00+02:00`
+- Generated: `2026-08-19T15:07:00+02:00`
 - Branch: `feat/wb-0028-self-deploy-staging-loop`
-- Pull request: pending
+- Pull request: `#39`
 - Active artifact: `WB-0028`
 - Active work block: `WB-0028`
 - Last verified main: `cd4e8426b0e97d7362d6061653d56f27274bca5b`
