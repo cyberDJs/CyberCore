@@ -53,6 +53,12 @@ A provider observation contains:
 
 Provider observations intentionally contain **no authority field**.
 
+`facts` are a trusted-adapter input contract: adapters must normalize and sanitize them before
+LG-0002 receives them, and secret values are forbidden. Fact values can appear in LG-0001
+findings, so LG-0002 does not pretend a generic regex can provide reliable DLP. Secret detection,
+redaction, and content classification belong at the provider/normalization boundary before graph
+invocation.
+
 ### Safe locator keys
 
 GitHub: `repository`, `ref`, `path`, `resource_kind`, `number`, `sha`.
@@ -155,7 +161,8 @@ LG-0002 is ready for merge when:
 5. unsafe locator keys are rejected before provenance capture;
 6. LG-0001 behavior remains unchanged;
 7. real LangGraph execution, Python 3.11–3.14 tests, Ruff, Pyright, package build, and CodeQL pass;
-8. no private Drive IDs or secret values are committed.
+8. no private Drive IDs or secret values are committed;
+9. adapters are explicitly responsible for passing normalized, sanitized, secret-free facts.
 
 ## Non-goals
 
@@ -165,7 +172,8 @@ LG-0002 is ready for merge when:
 - automated remediation;
 - GitHub or Drive writes;
 - production mutation;
-- policy/approval decisions.
+- policy/approval decisions;
+- generic secret/DLP scanning inside the graph.
 
 ## Removal path
 
