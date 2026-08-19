@@ -157,4 +157,3 @@ rules:
   approved_plaintext_secret_targets:
     - os_backed_secret_store
     - approved_external_vault
-    - github_environment_secret_interserver_staging
