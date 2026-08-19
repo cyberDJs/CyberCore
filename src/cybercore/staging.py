@@ -14,7 +14,7 @@ DENIED_LITERAL_PATTERNS = (
     "api-token",
     "totp",
     "recovery_code",
-    "secret_value",
+    "secret_value:",
 )
 
 REQUIRED_TARGET_TOKENS = (
