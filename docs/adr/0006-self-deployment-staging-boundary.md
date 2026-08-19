@@ -1,14 +1,17 @@
-# ADR-0005 — Self-Deployment Staging Boundary
+# ADR-0006 — Self-Deployment Staging Boundary
 
 Status: Proposed
 Date: 2026-08-19
 Work block: `WB-0028`
+Renumbered from: `ADR-0005` after post-merge identifier collision with the accepted LangGraph ADR
 
 ## Context
 
 CyberCore is moving toward controlled self-development and self-deployment. The operator selected a complete self-development loop and InterServer shared hosting as the first staging target.
 
 Autonomous deployment increases risk because a system that can change itself can also damage its own source of truth, evidence trail, or production environment if the authority boundary is weak.
+
+PR #39 originally introduced this proposal as `ADR-0005`. PR #40 independently established and accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime`. After both branches landed, the repository contained two ADRs with the same identifier. This document is renumbered to `ADR-0006`; the self-deployment decision content is otherwise unchanged.
 
 ## Decision proposal
 
