@@ -78,6 +78,44 @@ def test_provider_payload_cannot_self_declare_authority():
     assert result["sources"][0]["authority"] == "CANONICAL"
 
 
+def test_invalid_binding_authority_fails_closed():
+    binding = _github_binding()
+    binding["authority"] = "CANONCIAL"
+
+    result = bind_provider_observations([_github_observation()], [binding])
+
+    assert result["status"] == "UNKNOWN"
+    assert result["sources"] == []
+    assert result["provenance"] == []
+    assert result["binding_issues"][0]["reason"] == "INVALID_BINDING"
+    assert "authority" in result["binding_issues"][0]["detail"].lower()
+
+
+def test_unsupported_observation_provider_fails_closed_without_exception():
+    observation = _github_observation()
+    observation["provider"] = "GITLAB"
+
+    result = bind_provider_observations([observation], [_github_binding()])
+
+    assert result["status"] == "UNKNOWN"
+    assert result["sources"] == []
+    assert result["provenance"] == []
+    assert result["binding_issues"][0]["reason"] == "UNSUPPORTED_PROVIDER"
+
+
+def test_unsupported_binding_provider_fails_closed_without_exception():
+    binding = _github_binding()
+    binding["provider"] = "GITLAB"
+
+    result = bind_provider_observations([_github_observation()], [binding])
+
+    assert result["status"] == "UNKNOWN"
+    assert result["sources"] == []
+    assert result["provenance"] == []
+    assert result["binding_issues"][0]["reason"] == "INVALID_BINDING"
+    assert "provider" in result["binding_issues"][0]["detail"].lower()
+
+
 def test_newer_drive_observation_does_not_gain_canonical_authority():
     observation = {
         "source_id": "drive-working",
