@@ -12,12 +12,15 @@ BindingIssueReason = Literal[
     "INVALID_BINDING",
     "DUPLICATE_BINDING_ID",
     "DUPLICATE_SOURCE_ID",
+    "UNSUPPORTED_PROVIDER",
     "UNSAFE_LOCATOR",
     "UNBOUND",
     "AMBIGUOUS_BINDING",
     "INVALID_CONTENT_HASH",
 ]
 
+_VALID_PROVIDERS = frozenset({"GITHUB", "GOOGLE_DRIVE"})
+_VALID_AUTHORITIES = frozenset({"CANONICAL", "EVIDENCE", "WORKING"})
 _SAFE_LOCATOR_KEYS: dict[Provider, frozenset[str]] = {
     "GITHUB": frozenset({"repository", "ref", "path", "resource_kind", "number", "sha"}),
     "GOOGLE_DRIVE": frozenset(
@@ -89,20 +92,28 @@ def _valid_match_value(value: LocatorScalar) -> bool:
 
 
 def _validate_binding(binding: TrustedSourceBinding) -> str | None:
+    provider = binding["provider"]
+    if provider not in _VALID_PROVIDERS:
+        return f"Unsupported binding provider: {provider!r}."
+
+    authority = binding["authority"]
+    if authority not in _VALID_AUTHORITIES:
+        return f"Unsupported binding authority: {authority!r}."
+
     match = binding.get("match", {})
     if not match:
         return "Binding match must not be empty; provider-wide authority is forbidden."
 
-    safe_keys = _SAFE_LOCATOR_KEYS[binding["provider"]]
+    safe_keys = _SAFE_LOCATOR_KEYS[provider]
     unsafe_keys = sorted(set(match) - safe_keys)
     if unsafe_keys:
         return f"Binding uses unsupported locator keys: {', '.join(unsafe_keys)}"
     if any(not _valid_match_value(value) for value in match.values()):
         return "Binding match values must be stable, non-empty locator values."
 
-    if binding["provider"] == "GITHUB" and "repository" not in match:
+    if provider == "GITHUB" and "repository" not in match:
         return "GitHub bindings must pin repository identity."
-    if binding["provider"] == "GOOGLE_DRIVE" and not {
+    if provider == "GOOGLE_DRIVE" and not {
         "file_id",
         "parent_id",
         "ancestor_id",
@@ -198,6 +209,17 @@ def bind_provider_observations(
     for observation in observations:
         source_id = observation["source_id"]
         if source_id in duplicate_source_ids:
+            continue
+
+        provider = observation["provider"]
+        if provider not in _VALID_PROVIDERS:
+            issues.append(
+                _issue(
+                    source_id,
+                    "UNSUPPORTED_PROVIDER",
+                    f"Unsupported observation provider: {provider!r}.",
+                )
+            )
             continue
 
         locator_error = _safe_observation_locator(observation)
