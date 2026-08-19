@@ -1,0 +1,59 @@
+name: Staging dry run
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DRY_RUN_ONLY to validate staging plan without remote write"
+        required: true
+        type: string
+      manifest:
+        description: "Manifest path to validate"
+        required: false
+        default: ".cybercore/deploy/manifests/interserver-staging-plan-only.example.yaml"
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TARGET_CONTRACT: .cybercore/deploy/staging-targets/interserver-shared-hosting-staging.yaml
+
+jobs:
+  validate-plan-only:
+    name: validate plan-only staging manifest
+    runs-on: ubuntu-latest
+    if: ${{ inputs.confirm == 'DRY_RUN_ONLY' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: python -m pip install -e .
+
+      - name: Validate target and manifest
+        run: >-
+          python scripts/validate_staging_plan.py
+          --target "$TARGET_CONTRACT"
+          --manifest "${{ inputs.manifest }}"
+
+      - name: Write no-remote-write receipt
+        run: |
+          mkdir -p dist/staging
+          cat > dist/staging/receipt.txt <<'RECEIPT'
+          status=PLAN_ONLY_VALIDATED
+          remote_write=false
+          production_write=false
+          secrets_read=false
+          RECEIPT
+
+      - name: Upload receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-plan-only-receipt
+          path: dist/staging/receipt.txt
