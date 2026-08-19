@@ -72,9 +72,7 @@ def test_existing_remediation_is_reused_after_trusted_ingest():
         {
             "observations": _observations(),
             "bindings": _bindings(),
-            "remediations": [
-                {"id": "PR#39", "state": "OPEN", "target_keys": ["pr:40:state"]}
-            ],
+            "remediations": [{"id": "PR#39", "state": "OPEN", "target_keys": ["pr:40:state"]}],
         }
     )
 
