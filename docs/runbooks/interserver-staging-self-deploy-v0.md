@@ -47,11 +47,14 @@ INTERSERVER_STAGING_PORT
 INTERSERVER_STAGING_SSH_KEY_OR_SFTP_PASSWORD
 ```
 
-Allowed storage:
+Allowed storage under current governance:
 
 - OS-backed secret store;
-- GitHub Environment secret for `interserver-staging`;
 - approved external vault.
+
+Proposed future storage, not authorized by this runbook:
+
+- GitHub Environment secret for `interserver-staging`, pending an accepted governance decision.
 
 Denied storage:
 
