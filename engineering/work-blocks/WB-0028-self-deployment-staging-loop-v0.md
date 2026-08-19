@@ -44,7 +44,7 @@ This work block starts the self-deployment layer without granting production mut
 - DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or provider mutations.
 - Creating, rotating, reading, or storing plaintext secrets.
 - Running a live deploy against InterServer.
-- Accepting ADR-0004 or any governance policy change.
+- Accepting ADR-0005 or any governance policy change.
 - Disabling required checks or weakening branch protection.
 
 ## Safety gates
@@ -53,12 +53,14 @@ Live staging deployment remains blocked until all are true:
 
 1. staging target identity is verified and recorded without secrets;
 2. staging host/path/user are non-production and isolated from production;
-3. replacement credentials are stored only in an OS-backed secret store, GitHub Environment secret, or approved external vault;
+3. replacement credentials are stored only in an OS-backed secret store or approved external vault;
 4. no production credential is reused for staging;
 5. rollback path is verified or a limited no-overwrite deploy mode is used;
 6. effect verifier is defined before deployment;
 7. deployment receipt format is ready before deployment;
 8. Jan Kočí gives explicit approval for the first live staging deploy attempt.
+
+A GitHub Environment secret for `interserver-staging` remains a proposed future storage option only. It is not authorized by this work block unless a later accepted governance decision explicitly permits it.
 
 ## Required outputs
 
