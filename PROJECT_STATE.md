@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-19 15:07 CEST_
+_Last updated: 2026-08-19 15:26 CEST_
 
 ## Source of truth
 
@@ -38,7 +38,7 @@ Define the first safe CyberCore self-deployment loop for InterServer shared-host
 
 - Work block: `WB-0028` active candidate
 - Branch: `feat/wb-0028-self-deploy-staging-loop`
-- Pull request: `#39` open as Draft
+- Pull request: `#39` open as Ready for Review
 - Runtime code changes: none in this initial slice
 - Live InterServer staging deployment: blocked until target gates pass
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
@@ -59,7 +59,7 @@ Plaintext secrets are denied in:
 - CASER documents;
 - ordinary evidence logs.
 
-Actual replacement or deployment secrets may only be placed in an OS-backed secret store, an approved external vault, or a GitHub Environment secret for `interserver-staging` after explicit approval. Evidence may record only safe references, aliases, provider names, scopes, timestamps, fingerprints/hashes where safe, owner/status fields, and verification state.
+Actual replacement or deployment secrets may only be placed in an OS-backed secret store or an approved external vault after explicit approval. A GitHub Environment secret for `interserver-staging` is only a proposed future option until an accepted governance decision authorizes it. Evidence may record only safe references, aliases, provider names, scopes, timestamps, fingerprints/hashes where safe, owner/status fields, and verification state.
 
 ## Self-deployment boundary
 
@@ -77,7 +77,7 @@ Blocked without separate explicit approval:
 - DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or provider mutation;
 - live InterServer remote write;
 - reading or storing plaintext secrets;
-- accepting ADR-0004.
+- accepting ADR-0005.
 
 ## Recent completed state changes
 
@@ -210,7 +210,7 @@ Run hosted CI/CodeQL for PR #39. If green, review the non-production self-deploy
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:wb0028-self-deploy-candidate -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-19T15:07:00+02:00`
+- Generated: `2026-08-19T15:26:00+02:00`
 - Branch: `feat/wb-0028-self-deploy-staging-loop`
 - Pull request: `#39`
 - Active artifact: `WB-0028`
