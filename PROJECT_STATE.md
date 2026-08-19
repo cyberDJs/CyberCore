@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-19 05:49 CEST_
+_Last updated: 2026-08-19 05:52 CEST_
 
 ## Source of truth
 
@@ -9,7 +9,7 @@ _Last updated: 2026-08-19 05:49 CEST_
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
 - Active branch: `docs/close-pr37-post-merge`
-- Active pull request: pending
+- Active pull request: `#38`
 - Active artifact: `OPS-0001 — Security and Source-of-Truth Baseline`
 - Active work block: `OPS-0001 — Security and Source-of-Truth Baseline`
 - Last verified `main`: `6b74a56ee32278e5048ca3553bd7d87c1dd07645`
@@ -21,7 +21,7 @@ _Last updated: 2026-08-19 05:49 CEST_
 
 OPS-0001 Security and Source-of-Truth Baseline is active.
 
-PR #37 has been merged into `main`; this follow-up state reconciliation removes stale pre-merge PR wording and records PR #37 as completed while keeping OPS-0001 active as the current operational baseline.
+PR #37 has been merged into `main`; PR #38 is the post-merge state reconciliation that removes stale pre-merge PR wording and records PR #37 as completed while keeping OPS-0001 active as the current operational baseline.
 
 ## Active objective
 
@@ -38,7 +38,7 @@ Execute `OPS-0001` as a read-first security and source-of-truth baseline:
 
 - Work block: `OPS-0001` active
 - Branch: `docs/close-pr37-post-merge`
-- Pull request: pending
+- Pull request: `#38` open as Draft
 - Runtime code changes: none
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
@@ -160,20 +160,20 @@ Verification:
 
 ## Next action
 
-Create the PR #37 post-merge state reconciliation pull request, verify hosted CI/CodeQL, then continue with OPS-0001 evidence inventory and sanitized infrastructure snapshot planning.
+Verify PR #38 hosted CI/CodeQL, then continue with OPS-0001 evidence inventory and sanitized infrastructure snapshot planning.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr37-post-merge-reconciliation -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-19T05:49:00+02:00`
+- Generated: `2026-08-19T05:52:00+02:00`
 - Branch: `docs/close-pr37-post-merge`
-- Pull request: pending
+- Pull request: `#38`
 - Active artifact: `OPS-0001`
 - Active work block: `OPS-0001`
 - Last verified main: `6b74a56ee32278e5048ca3553bd7d87c1dd07645`
 - Working tree: connector-managed PR branch
-- Test evidence: hosted CI/CodeQL required for the follow-up PR before merge
+- Test evidence: hosted CI/CodeQL required for PR #38 before merge
 - Project Kernel: present
 - Project State: reconciled manually for PR #37 post-merge state
 <!-- CYBERCORE:CHECKPOINT:END -->
