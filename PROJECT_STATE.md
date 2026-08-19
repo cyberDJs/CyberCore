@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-19 20:49 CEST_
+_Last updated: 2026-08-19 22:07 CEST_
 
 ## Source of truth
 
@@ -8,11 +8,11 @@ _Last updated: 2026-08-19 20:49 CEST_
 - Stable branch: `main`
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Active branch: `fix/adr-0006-post-merge-reconciliation`
-- Active pull request: `#43` — ADR renumbering and post-merge state reconciliation
+- Active branch: `docs/adr-0006-decision-readiness`
+- Active pull request: `#44` — post-PR43 reconciliation and ADR-0006 decision readiness
 - Active artifact: `WB-0028 — Self-Deployment Staging Loop v0`
 - Active work block: `WB-0028 — Self-Deployment Staging Loop v0`
-- Last verified `main`: `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187`
+- Last verified `main`: `4ca00fb7e1a6b618746afb2045e230a1763256e4`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge; `main` branch protection is active
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
@@ -21,7 +21,9 @@ _Last updated: 2026-08-19 20:49 CEST_
 
 `WB-0028 — Self-Deployment Staging Loop v0` remains the active work stream after its documentation/state foundation merged through PR #39.
 
-PR #40 added accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime` and LG-0001. PR #41 added LG-0002 trusted source ingest. Because PR #39 had independently introduced the self-deployment staging-boundary proposal as another `ADR-0005`, PR #43 renumbers the self-deployment ADR to `ADR-0006` without changing its decision semantics.
+PR #40 added accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime` and LG-0001. PR #41 added LG-0002 trusted source ingest. PR #43 resolved the duplicate ADR identifier by preserving accepted LangGraph ADR-0005 and renumbering the self-deployment staging-boundary proposal to `ADR-0006`.
+
+PR #44 now reconciles the canonical state after PR #43 and records the decision-readiness review for ADR-0006. The review recommendation is **ACCEPT**, while the ADR lifecycle status remains **Proposed** until explicit operator authorization.
 
 ## Active objective
 
@@ -30,19 +32,23 @@ Continue the first safe CyberCore self-deployment loop for InterServer shared-ho
 1. preserve the staging-only self-deploy architecture;
 2. keep the non-secret InterServer staging target contract authoritative for the current work stream;
 3. keep the manual staging preparation and rollback/effect-verification model reviewable;
-4. review the self-deployment staging boundary as proposed `ADR-0006`;
-5. keep live remote deployment blocked until staging target identity, secret aliases, rollback, and effect verifier are verified;
+4. decide whether to accept proposed `ADR-0006 — Self-Deployment Staging Boundary`;
+5. keep live remote deployment blocked until staging target identity, secret aliases, deployment capability, rollback, and effect verifier are verified;
 6. use LG-0001/LG-0002 as read-only source-of-truth orchestration support, not as mutation authority.
 
 ## Current status
 
 - Work block: `WB-0028` active
-- Branch: `fix/adr-0006-post-merge-reconciliation`
-- Pull request: `#43` open as Ready for Review
+- Branch: `docs/adr-0006-decision-readiness`
+- Pull request: `#44` open as Draft during final verification
 - WB-0028 foundation / PR #39: merged as `4f582583789346724813a2c515fe30450c173b0c`
 - LG-0001 / PR #40: merged as `56ccb7b8ea3871b592b79b2601da29122e677183`
 - LG-0002 / PR #41: merged as `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187`
-- Runtime code changes: LG-0001 and LG-0002 are on `main`; the initial WB-0028 slice itself remains staging-foundation documentation/state
+- ADR identifier reconciliation / PR #43: merged as `4ca00fb7e1a6b618746afb2045e230a1763256e4`
+- ADR-0006 lifecycle status: Proposed
+- ADR-0006 review state: `READY_FOR_DECISION`
+- ADR-0006 review recommendation: ACCEPT
+- Runtime code changes: LG-0001 and LG-0002 are on `main`; PR #44 is documentation/state/decision evidence only
 - Live InterServer staging deployment: blocked until target gates pass
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
@@ -237,6 +243,27 @@ Verification:
 - Ruff, Pyright, package build and wheel smoke passed;
 - P1/P2 review findings were remediated before merge.
 
+### PR #43 — ADR identifier and post-merge reconciliation
+
+Merged into `main` as:
+
+```text
+4ca00fb7e1a6b618746afb2045e230a1763256e4
+```
+
+Delivered:
+
+- preserved accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime`;
+- renumbered the proposed self-deployment staging boundary to `ADR-0006`;
+- reconciled project state after PR #39, PR #40, and PR #41;
+- kept ADR-0006 Proposed and preserved all staging/production authority gates.
+
+Verification:
+
+- exact-head CI run #73 passed;
+- exact-head CodeQL run #70 passed;
+- final P2 state/review findings were remediated before merge.
+
 ## Completed checkpoint summary
 
 | Artifact / PR | Merge commit | Verification |
@@ -263,6 +290,7 @@ Verification:
 | WB-0028 foundation / PR #39 | `4f582583789346724813a2c515fe30450c173b0c` | CI #58 and CodeQL #55 passed |
 | LG-0001 / PR #40 | `56ccb7b8ea3871b592b79b2601da29122e677183` | CI and CodeQL passed; Python 3.11–3.14 gates passed |
 | LG-0002 / PR #41 | `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187` | 244 passed on Python 3.11; CI #69 and CodeQL #66 passed |
+| ADR identifier reconciliation / PR #43 | `4ca00fb7e1a6b618746afb2045e230a1763256e4` | CI #73 and CodeQL #70 passed |
 
 ## Security follow-up
 
@@ -272,20 +300,20 @@ Verification:
 
 ## Next action
 
-Review proposed `ADR-0006 — Self-Deployment Staging Boundary`. If it is explicitly accepted, separately decide whether to authorize the next disabled/manual staging workflow slice. Live staging and production writes remain blocked until their existing target, secret, rollback, effect-verification, and human-authorization gates are satisfied.
+Make the explicit operator decision on `ADR-0006 — Self-Deployment Staging Boundary`. The decision-readiness review recommends **ACCEPT**. If accepted, separately decide whether to authorize the next disabled/manual staging workflow + manifest/target-validator slice. Live staging and production writes remain blocked until their existing target, secret, rollback, effect-verification, and human-authorization gates are satisfied.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:post-pr39-pr41-reconciliation -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:adr0006-decision-readiness -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-19T20:49:00+02:00`
-- Branch: `fix/adr-0006-post-merge-reconciliation`
-- Pull request: `#43`
+- Generated: `2026-08-19T22:07:00+02:00`
+- Branch: `docs/adr-0006-decision-readiness`
+- Pull request: `#44`
 - Active artifact: `WB-0028`
 - Active work block: `WB-0028`
-- Last verified main: `2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187`
-- Working tree: connector-managed corrective PR branch
-- Test evidence: PR #43 exact-head CI/CodeQL must pass after the final review remediation before merge
+- Last verified main: `4ca00fb7e1a6b618746afb2045e230a1763256e4`
+- Working tree: connector-managed ADR review/reconciliation PR branch
+- Test evidence: hosted CI/CodeQL required on final PR #44 head before Ready for Review
 - Project Kernel: present
-- Project State: ADR-0005/ADR-0006 collision corrected on PR #43; canonical transition awaits merge
+- Project State: PR #43 merged and reconciled; ADR-0006 is Proposed + READY_FOR_DECISION with review recommendation ACCEPT
 <!-- CYBERCORE:CHECKPOINT:END -->
