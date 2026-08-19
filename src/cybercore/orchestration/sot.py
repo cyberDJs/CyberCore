@@ -142,9 +142,7 @@ def _detect_existing_remediation(state: ReconciliationState) -> dict[str, object
         }
 
     drift_keys = {
-        finding["key"]
-        for finding in state.get("findings", [])
-        if finding["kind"] == "DRIFT"
+        finding["key"] for finding in state.get("findings", []) if finding["kind"] == "DRIFT"
     }
     covered_keys: set[str] = set()
     remediation_ids: list[str] = []
