@@ -20,7 +20,15 @@ def _ready_readiness_text() -> str:
     return (
         READINESS.read_text(encoding="utf-8")
         .replace("staging_url_status: UNKNOWN", "staging_url_status: VERIFIED")
+        .replace(
+            "staging_url_safe_reference: TBD_NON_PRODUCTION_STAGING_URL",
+            "staging_url_safe_reference: INTERSERVER_STAGING_URL_REFERENCE",
+        )
         .replace("staging_path_status: UNKNOWN", "staging_path_status: VERIFIED")
+        .replace(
+            "staging_path_safe_reference: TBD_NON_PRODUCTION_STAGING_PATH",
+            "staging_path_safe_reference: INTERSERVER_STAGING_PATH_REFERENCE",
+        )
         .replace(
             "production_document_root_excluded: UNKNOWN",
             "production_document_root_excluded: VERIFIED",
@@ -32,6 +40,10 @@ def _ready_readiness_text() -> str:
         .replace(
             "operator_authorization_status: UNKNOWN",
             "operator_authorization_status: APPROVED",
+        )
+        .replace(
+            "authorization_reference: REQUIRED_BEFORE_REMOTE_WRITE",
+            "authorization_reference: OPERATOR_AUTHORIZATION_REFERENCE",
         )
     )
 
@@ -338,3 +350,50 @@ def test_remote_write_readiness_requires_exact_boolean_types(tmp_path: Path) -> 
         "safe_secret_aliases_only: True" in error and "expected bool" in error
         for error in result.errors
     )
+
+
+def test_remote_write_readiness_rejects_yaml_comments(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(_ready_readiness_text() + "\n# credential hunter2\n", encoding="utf-8")
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("forbids YAML comments" in error for error in result.errors)
+
+
+def test_remote_write_readiness_constrains_safe_reference_strings(tmp_path: Path) -> None:
+    cases = (
+        (
+            "staging_url_safe_reference: INTERSERVER_STAGING_URL_REFERENCE",
+            "staging_url_safe_reference: hunter2",
+            "staging_url_safe_reference",
+        ),
+        (
+            "staging_path_safe_reference: INTERSERVER_STAGING_PATH_REFERENCE",
+            "staging_path_safe_reference: production write approved",
+            "staging_path_safe_reference",
+        ),
+        (
+            "rollback_method: immutable_release_directory_with_current_symlink_or_timestamped_backup",
+            "rollback_method: hunter2",
+            "rollback_method",
+        ),
+        (
+            "authorization_reference: OPERATOR_AUTHORIZATION_REFERENCE",
+            "authorization_reference: production write approved",
+            "authorization_reference",
+        ),
+    )
+
+    for expected, replacement, key in cases:
+        readiness = tmp_path / f"{key}.yaml"
+        readiness.write_text(
+            _ready_readiness_text().replace(expected, replacement, 1),
+            encoding="utf-8",
+        )
+
+        result = validate_remote_write_readiness(readiness)
+
+        assert not result.ok
+        assert any(f"requires {key}:" in error for error in result.errors)
