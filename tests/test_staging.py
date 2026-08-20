@@ -249,15 +249,17 @@ def test_remote_write_readiness_rejects_unexpected_effect_checks(tmp_path: Path)
 def test_remote_write_readiness_rejects_unknown_top_level_fields(tmp_path: Path) -> None:
     readiness = tmp_path / "readiness.yaml"
     readiness.write_text(
-        _ready_readiness_text()
-        + "\ncredential: hunter2\nproduction_mutation_allowed: true\n",
+        _ready_readiness_text() + "\ncredential: hunter2\nproduction_mutation_allowed: true\n",
         encoding="utf-8",
     )
 
     result = validate_remote_write_readiness(readiness)
 
     assert not result.ok
-    assert any("unexpected keys: credential, production_mutation_allowed" in error for error in result.errors)
+    assert any(
+        "unexpected keys: credential, production_mutation_allowed" in error
+        for error in result.errors
+    )
 
 
 def test_remote_write_readiness_rejects_unknown_nested_fields(tmp_path: Path) -> None:
@@ -274,14 +276,16 @@ def test_remote_write_readiness_rejects_unknown_nested_fields(tmp_path: Path) ->
     result = validate_remote_write_readiness(readiness)
 
     assert not result.ok
-    assert any("secret_alias_readiness contains unexpected keys: credential" in error for error in result.errors)
+    assert any(
+        "secret_alias_readiness contains unexpected keys: credential" in error
+        for error in result.errors
+    )
 
 
 def test_remote_write_readiness_rejects_yaml_merge_keys(tmp_path: Path) -> None:
     readiness = tmp_path / "readiness.yaml"
     readiness.write_text(
-        "unsafe: &unsafe\n  remote_write_allowed: true\n<<: *unsafe\n"
-        + _ready_readiness_text(),
+        "unsafe: &unsafe\n  remote_write_allowed: true\n<<: *unsafe\n" + _ready_readiness_text(),
         encoding="utf-8",
     )
 
