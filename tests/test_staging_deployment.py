@@ -1,4 +1,5 @@
 from copy import deepcopy
+import json
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ from cybercore.deployment.staging import (
     assess_target,
     build_manifest,
     load_target,
+    main,
 )
 
 TARGET = (
@@ -46,10 +48,15 @@ def test_remote_modes_are_never_authorized_in_this_slice(mode: str) -> None:
         assess_target(_target(), mode=mode)
 
 
-def test_target_id_and_environment_are_locked_to_staging() -> None:
+def test_target_identity_is_locked_to_interserver_staging() -> None:
     target = _target()
     target["target_id"] = "production"
     with pytest.raises(StagingValidationError, match="target_id"):
+        assess_target(target, mode="plan_only")
+
+    target = _target()
+    target["provider"] = "OtherProvider"
+    with pytest.raises(StagingValidationError, match="provider"):
         assess_target(target, mode="plan_only")
 
     target = _target()
@@ -70,6 +77,13 @@ def test_production_and_provider_boundaries_cannot_be_weakened() -> None:
             assess_target(target, mode="plan_only")
 
 
+def test_required_preflight_contract_cannot_be_weakened() -> None:
+    target = _target()
+    target["required_preflight"].remove("verify_operator_authorization_for_first_remote_write")
+    with pytest.raises(StagingValidationError, match="required_preflight"):
+        assess_target(target, mode="plan_only")
+
+
 def test_live_deploy_gate_and_user_scope_must_remain_locked() -> None:
     target = _target()
     target["current_gate_state"]["live_staging_deploy"] = "ready"
@@ -86,6 +100,23 @@ def test_production_domain_cannot_be_used_as_staging_target() -> None:
     target = _target()
     target["staging_identity"]["domain_or_url"] = "https://eimyherrer.com/preview"
     with pytest.raises(StagingValidationError, match="denied production domain"):
+        assess_target(target, mode="plan_only")
+
+
+def test_rollback_and_evidence_safety_contracts_cannot_be_weakened() -> None:
+    target = _target()
+    target["rollback"]["block_if_no_rollback_for_nontrivial_change"] = False
+    with pytest.raises(StagingValidationError, match="rollback must block"):
+        assess_target(target, mode="plan_only")
+
+    target = _target()
+    target["evidence"]["secret_values_allowed"] = True
+    with pytest.raises(StagingValidationError, match="evidence must deny secret values"):
+        assess_target(target, mode="plan_only")
+
+    target = _target()
+    target["evidence"]["required_fields"].remove("operator_authorization_reference")
+    with pytest.raises(StagingValidationError, match="required_fields"):
         assess_target(target, mode="plan_only")
 
 
@@ -163,3 +194,43 @@ def test_manifest_is_local_only_and_validates_source_identity() -> None:
             artifact_identity="source-tree",
             evidence_destination="../secret.json",
         )
+
+
+def _cli_args(output: str, evidence_destination: str) -> list[str]:
+    return [
+        "--target",
+        str(TARGET),
+        "--mode",
+        "plan_only",
+        "--run-id",
+        "run-cli",
+        "--source-branch",
+        "main",
+        "--source-commit",
+        SHA,
+        "--artifact-identity",
+        "source-tree",
+        "--evidence-destination",
+        evidence_destination,
+        "--output",
+        output,
+    ]
+
+
+def test_cli_rejects_unsafe_or_mismatched_output_paths() -> None:
+    assert main(_cli_args("../outside.json", "evidence/staging-manifest.json")) == 2
+    assert main(_cli_args("manifest.json", "evidence/staging-manifest.json")) == 2
+
+
+def test_cli_plan_only_writes_only_declared_relative_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    destination = "evidence/staging-manifest.json"
+    assert main(_cli_args(destination, destination)) == 0
+
+    output = tmp_path / destination
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["remote_write_allowed"] is False
+    assert payload["plan_status"] == "BLOCKED"
+    assert payload["evidence_destination"] == destination
