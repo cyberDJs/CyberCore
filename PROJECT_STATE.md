@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-20 09:54 CEST_
+_Last updated: 2026-08-20 22:12 CEST_
 
 ## Source of truth
 
@@ -8,35 +8,35 @@ _Last updated: 2026-08-20 09:54 CEST_
 - Stable branch: `main`
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Active branch: `feat/wb-0030-staging-readiness-gate`
-- Active pull request: pending — WB-0030 staging readiness gate
-- Active artifact: `WB-0030 — Staging Readiness Gate`
-- Active work block: `WB-0030 — Staging Readiness Gate`
-- Last verified `main`: `dd389e87eb2684a4c90a816d35c0472e0b5e1fee`
+- Active branch: `docs/post-pr49-reconciliation`
+- Active pull request: pending — PR #49 post-merge state reconciliation and WB-0031 kickoff
+- Active artifact: `WB-0031 — Staging Runtime Gate Preflight`
+- Active work block: `WB-0031 — Staging Runtime Gate Preflight`
+- Last verified `main`: `2de294bb3334e4194769f3b883d58a2e5e3a8ea5`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
 ## Current milestone
 
-`WB-0030 — Staging Readiness Gate` is the active candidate after PR #48 reconciled PR #47 / WB-0029 post-merge state.
+`WB-0030 — Staging Readiness Gate` merged through PR #49 and is now canonical on `main` as `2de294bb3334e4194769f3b883d58a2e5e3a8ea5`.
 
-This slice adds a fail-closed readiness evidence validator for future staging remote writes. It does not authorize live InterServer access, does not read secrets, and does not perform remote writes.
+The current work is a post-merge reconciliation and next-slice kickoff: record PR #49 as merged, update canonical project state, and define `WB-0031 — Staging Runtime Gate Preflight` from `main@2de294bb3334e4194769f3b883d58a2e5e3a8ea5`.
 
 ## Active objective
 
 Continue the first safe CyberCore self-deployment loop for InterServer shared-hosting staging:
 
 1. preserve accepted ADR-0006 staging-only boundary;
-2. add readiness evidence fields for target identity, secret aliases, rollback, effect verifier, and operator authorization;
-3. validate that readiness is blocked until all gate fields are verified or approved;
-4. keep `staging_apply` blocked unless a later work block has verified all runtime gates and receives fresh explicit remote-write authorization;
+2. treat `WB-0030` as the canonical fail-closed readiness gate;
+3. prepare `WB-0031` as a non-remote-write preflight for target identity, secret alias readiness, rollback proof, effect-verifier proof, and operator authorization references;
+4. keep `staging_apply` blocked unless a later work block verifies all runtime gates and receives fresh explicit remote-write authorization;
 5. use LG-0001/LG-0002 as read-only source-of-truth orchestration support, not as mutation authority.
 
 ## Current status
 
-- Work block: `WB-0030` active candidate
-- Branch: `feat/wb-0030-staging-readiness-gate`
+- Work block: `WB-0031` active candidate
+- Branch: `docs/post-pr49-reconciliation`
 - Pull request: pending
 - WB-0028 foundation / PR #39: merged as `4f582583789346724813a2c515fe30450c173b0c`
 - ADR-0006 lifecycle status: Accepted
@@ -45,6 +45,7 @@ Continue the first safe CyberCore self-deployment loop for InterServer shared-ho
 - ADR-0006 decision state: `DECIDED`
 - WB-0029 / PR #47: merged as `09750d7c5b2e49b9b4006c1288391d6d5c6066d5`
 - PR #48 post-merge reconciliation: merged as `dd389e87eb2684a4c90a816d35c0472e0b5e1fee`
+- WB-0030 / PR #49: merged as `2de294bb3334e4194769f3b883d58a2e5e3a8ea5`
 - Live InterServer staging deployment: blocked until target gates and fresh explicit remote-write authorization pass
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
@@ -69,13 +70,13 @@ Actual replacement or deployment secrets may only be placed in an OS-backed secr
 
 The current self-deployment work is staging-only.
 
-Allowed in WB-0030:
+Allowed in WB-0031:
 
-- readiness evidence schema/example;
-- local validation logic;
-- tests proving the readiness gate fails closed;
-- documentation and audit evidence;
-- no-remote-write CLI behavior with explicit `--expect-blocked` support.
+- non-secret preflight documentation;
+- closed evidence requirements for target identity, secret aliases, rollback, effect verifier, and operator authorization references;
+- checks that define what must be true before a later remote-write request can be considered;
+- docs/state/audit updates only;
+- no-remote-write planning artifacts.
 
 Blocked without separate explicit approval:
 
@@ -83,6 +84,7 @@ Blocked without separate explicit approval:
 - DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or provider mutation;
 - live InterServer remote write;
 - reading or storing plaintext secrets;
+- creating, changing, or reading GitHub Environment secret values;
 - executing `staging_apply` or equivalent remote mutation without all runtime gates and fresh explicit operator authorization.
 
 ## Recent completed state changes
@@ -107,39 +109,60 @@ dd389e87eb2684a4c90a816d35c0472e0b5e1fee
 
 Recorded PR #47 / WB-0029 as merged, closed stale superseded PRs #42 and #46, and added next-slice planning docs and remote-write gate checklist.
 
+### PR #49 — WB-0030 staging readiness gate
+
+Merged into `main` as:
+
+```text
+2de294bb3334e4194769f3b883d58a2e5e3a8ea5
+```
+
+Delivered a fail-closed staging readiness gate, closed readiness evidence schema, hardened YAML preflight, manual `workflow_dispatch` readiness validator, regression tests for fail-closed bypass channels, runbook, audit evidence, and no-remote-write receipt semantics.
+
+Verification recorded in the merge commit:
+
+- exact head `334189a867ec071b085465cd1340e51e459c4bf6`;
+- CI #135 PASS;
+- CodeQL #132 PASS;
+- fresh Codex adversarial review: no major issues;
+- all review threads resolved;
+- manual AI review PASS.
+
 ## Current work block
 
-### WB-0030 — Staging Readiness Gate
+### WB-0031 — Staging Runtime Gate Preflight
 
-This work block adds:
+This work block prepares the evidence and authorization shape for a future first live staging remote-write request without performing that request.
 
-- `.cybercore/deploy/readiness/interserver-staging-readiness.example.yaml`;
-- `validate_remote_write_readiness`;
-- `scripts/validate_staging_readiness.py`;
-- tests that prove the readiness example is intentionally blocked;
-- tests that reject remote-write claims and plaintext secret literals.
+It must define:
+
+- how staging URL and staging path identity can be verified without touching production;
+- how secret aliases can be verified without reading or storing secret values;
+- how rollback readiness will be proven before any write;
+- how effect verification will prove staging changed and production did not;
+- what fresh operator authorization must contain before a later remote-write work block starts.
 
 ## Security follow-up
 
 - Six high-severity transitive `npm audit` findings remain deferred security debt in the isolated visual documentation toolchain.
 - InterServer exposed API key and 2FA/TOTP rotation status remains unresolved until verified by a human-approved MOP with no secret values in ordinary evidence stores.
-- WB-0030 does not resolve those blockers; it keeps live staging deploy blocked behind target, secret, rollback, effect verifier, and fresh authorization gates.
+- WB-0031 does not resolve those blockers; it keeps live staging deploy blocked behind target, secret, rollback, effect verifier, and fresh authorization gates.
 
 ## Next action
 
-Open PR for WB-0030 and run CI/CodeQL. Stop at `READY_FOR_MERGE`. Do not perform any live remote write, provider mutation, production mutation, DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or plaintext-secret handling.
+Open a post-PR49 reconciliation PR from `main@2de294bb3334e4194769f3b883d58a2e5e3a8ea5`. Stop at `READY_FOR_MERGE`. Do not perform any live remote write, provider mutation, production mutation, DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or plaintext-secret handling.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:wb0030-staging-readiness-gate -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr49-post-merge-wb0031 -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-20T09:54:00+02:00`
-- Branch: `feat/wb-0030-staging-readiness-gate`
+- Generated: `2026-08-20T22:12:00+02:00`
+- Branch: `docs/post-pr49-reconciliation`
 - Pull request: pending
-- Active artifact: `WB-0030`
-- Active work block: `WB-0030 — Staging Readiness Gate`
-- Last verified main: `dd389e87eb2684a4c90a816d35c0472e0b5e1fee`
+- Active artifact: `WB-0031`
+- Active work block: `WB-0031 — Staging Runtime Gate Preflight`
+- Last verified main: `2de294bb3334e4194769f3b883d58a2e5e3a8ea5`
 - Test evidence: hosted CI/CodeQL required on the PR before merge
 - Project Kernel: present
-- Project State: WB-0030 active candidate; remote-write and production gates remain blocked
+- Project State: WB-0030 merged; WB-0031 active candidate; remote-write and production gates remain blocked
 <!-- CYBERCORE:CHECKPOINT:END -->
