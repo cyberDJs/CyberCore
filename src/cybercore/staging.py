@@ -89,7 +89,6 @@ READINESS_TOP_LEVEL_KEYS = {
     "effect_verifier_readiness",
     "operator_authorization",
     "blocked_until",
-    "notes",
 }
 READINESS_IDENTITY_KEYS = {
     "staging_url_status",
@@ -125,6 +124,7 @@ EXPECTED_BLOCKED_UNTIL = {
     "effect_verifier_status": "VERIFIED",
     "operator_authorization_status": "APPROVED",
 }
+YAML_MERGE_TAG = "tag:yaml.org,2002:merge"
 
 
 @dataclass(frozen=True)
@@ -184,6 +184,8 @@ def _collect_duplicate_yaml_keys(node: Node, errors: list[str]) -> None:
                 key = key_node.value
                 if key == "<<":
                     errors.append("readiness evidence forbids YAML merge key: <<")
+                elif key_node.tag == YAML_MERGE_TAG:
+                    errors.append("readiness evidence forbids YAML merge tag")
                 if key in seen:
                     errors.append(f"readiness evidence contains duplicate YAML key: {key}")
                 seen.add(key)
@@ -219,8 +221,11 @@ def _require_value(
     mapping: dict[str, object], key: str, expected: object, errors: list[str]
 ) -> None:
     value = mapping.get(key)
-    if value != expected:
-        errors.append(f"readiness evidence requires {key}: {expected}; got {value!r}")
+    if type(value) is not type(expected) or value != expected:
+        errors.append(
+            f"readiness evidence requires {key}: {expected}; got {value!r} "
+            f"({type(value).__name__}, expected {type(expected).__name__})"
+        )
 
 
 def _require_string(mapping: dict[str, object], key: str, errors: list[str]) -> None:
@@ -275,7 +280,7 @@ def _validate_blocked_until(document: dict[str, object], errors: list[str]) -> N
         seen.add(key)
 
         expected = EXPECTED_BLOCKED_UNTIL[key]
-        if status != expected:
+        if type(status) is not type(expected) or status != expected:
             errors.append(
                 f"readiness evidence blocked_until requires {key}: {expected}; got {status!r}"
             )
@@ -443,8 +448,6 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
         _require_string(authorization, "authorization_reference", errors)
 
     _validate_blocked_until(document, errors)
-    if "notes" in document and not isinstance(document["notes"], str):
-        errors.append("readiness evidence notes must be a string")
 
     if errors:
         warnings.append("live staging remote write remains blocked")
