@@ -1,0 +1,57 @@
+name: Staging readiness gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type READINESS_GATE_ONLY to validate readiness evidence without remote write"
+        required: true
+        type: string
+      readiness:
+        description: "Readiness evidence path to validate"
+        required: false
+        default: ".cybercore/deploy/readiness/interserver-staging-readiness.example.yaml"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-readiness-blocked:
+    name: validate readiness gate remains blocked
+    runs-on: ubuntu-latest
+    if: ${{ inputs.confirm == 'READINESS_GATE_ONLY' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: python -m pip install -e .
+
+      - name: Validate readiness gate is blocked
+        env:
+          READINESS_PATH: ${{ inputs.readiness }}
+        run: >-
+          python scripts/validate_staging_readiness.py
+          --readiness "$READINESS_PATH"
+          --expect-blocked
+
+      - name: Write no-remote-write readiness receipt
+        run: |
+          mkdir -p dist/staging
+          cat > dist/staging/readiness-receipt.txt <<'RECEIPT'
+          status=READINESS_GATE_BLOCKED_AS_EXPECTED
+          remote_write=false
+          production_write=false
+          secrets_read=false
+          RECEIPT
+
+      - name: Show local readiness receipt
+        run: cat dist/staging/readiness-receipt.txt
