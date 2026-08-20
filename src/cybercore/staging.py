@@ -6,6 +6,7 @@ from typing import Iterable
 
 import yaml
 from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
+from yaml.tokens import AliasToken, AnchorToken, DirectiveToken
 
 
 DENIED_LITERAL_PATTERNS = (
@@ -176,6 +177,19 @@ def _extract_scalar(text: str, key: str) -> str | None:
         if stripped.startswith(prefix):
             return stripped[len(prefix) :].strip().strip('"').strip("'")
     return None
+
+
+def _reject_yaml_metadata(text: str, errors: list[str]) -> None:
+    try:
+        for token in yaml.scan(text, Loader=yaml.SafeLoader):
+            if isinstance(token, AnchorToken):
+                errors.append("readiness evidence forbids YAML anchors")
+            elif isinstance(token, AliasToken):
+                errors.append("readiness evidence forbids YAML aliases")
+            elif isinstance(token, DirectiveToken):
+                errors.append("readiness evidence forbids YAML directives")
+    except yaml.YAMLError as exc:
+        errors.append(f"readiness evidence is invalid YAML: {exc}")
 
 
 def _collect_duplicate_yaml_keys(node: Node, errors: list[str]) -> None:
@@ -358,6 +372,7 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
     for literal in _find_denied_literals(text):
         errors.append(f"readiness evidence contains denied literal pattern: {literal}")
 
+    _reject_yaml_metadata(text, errors)
     if errors:
         warnings.append("live staging remote write remains blocked")
         return ValidationResult(False, tuple(errors), tuple(warnings))
