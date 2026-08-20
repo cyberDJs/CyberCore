@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0029 Disabled Manual Staging Workflow and Manifest Validator active candidate
-  active_artifact: WB-0029
-  branch: feat/wb-0029-staging-workflow-validator-v3
+  milestone: PR47 post-merge reconciliation active candidate
+  active_artifact: PR47-post-merge-state-reconciliation
+  branch: docs/post-pr47-reconciliation
   pull_request: pending
-  last_verified_main: 883abf1126c87c07c9a65f8cc59c3e2582048c92
+  last_verified_main: 09750d7c5b2e49b9b4006c1288391d6d5c6066d5
 
 status:
   ccl_specification: complete_draft
@@ -67,7 +67,9 @@ status:
   pr43_adr_identifier_reconciliation: merged_verified
   adr0006_decision_readiness: merged_verified
   self_deployment_staging_boundary_adr: accepted_adr_0006
-  staging_workflow_validator: active_candidate
+  wb0029_staging_workflow_validator: merged_verified
+  pr42_superseded_closed: true
+  pr46_superseded_closed: true
 
 completed:
   - artifact: WB-0015
@@ -158,11 +160,15 @@ completed:
     pull_request: 44
     merge_commit: 883abf1126c87c07c9a65f8cc59c3e2582048c92
     verification: ci_codeql_passed
+  - artifact: WB-0029-disabled-manual-staging-workflow-validator
+    pull_request: 47
+    merge_commit: 09750d7c5b2e49b9b4006c1288391d6d5c6066d5
+    verification: ci_94_codeql_91_manual_review_passed
 
 next:
-  - validate InterServer staging target and manifest without secrets
-  - keep staging workflow manual and plan-only until first remote-write gate is separately approved
-  - add executable dry-run receipt evidence without connecting to InterServer
+  - reconcile PR47 post-merge state and close stale superseded PRs 42 and 46
+  - keep live staging deployment blocked until staging target identifiers, secret aliases, rollback, effect verifier, and fresh remote-write authorization are verified
+  - prepare the next non-production staging readiness slice without remote writes
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 
