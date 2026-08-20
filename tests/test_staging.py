@@ -397,3 +397,32 @@ def test_remote_write_readiness_constrains_safe_reference_strings(tmp_path: Path
 
         assert not result.ok
         assert any(f"requires {key}:" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_yaml_anchors_and_aliases(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text()
+        .replace("version: 1", "version: &hunter2 1", 1)
+        .replace("remote_write_allowed: false", "remote_write_allowed: *hunter2", 1),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("forbids YAML anchors" in error for error in result.errors)
+    assert any("forbids YAML aliases" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_yaml_directives(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        "%TAG !secret! tag:example.com,2026:\n---\n" + _ready_readiness_text(),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("forbids YAML directives" in error for error in result.errors)
