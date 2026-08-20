@@ -225,7 +225,9 @@ def assess_target(target: Mapping[str, Any], *, mode: str) -> TargetAssessment:
 
     rollback = _mapping(target.get("rollback"), "rollback")
     if rollback.get("block_if_no_rollback_for_nontrivial_change") is not True:
-        raise StagingValidationError("rollback must block nontrivial changes when no rollback exists")
+        raise StagingValidationError(
+            "rollback must block nontrivial changes when no rollback exists"
+        )
     if _is_unresolved(rollback.get("verified_mode")):
         unresolved.append("rollback.verified_mode")
 
