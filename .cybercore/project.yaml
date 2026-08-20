@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0030 Staging Readiness Gate active candidate
-  active_artifact: WB-0030
-  branch: feat/wb-0030-staging-readiness-gate
+  milestone: WB-0031 Staging Runtime Gate Preflight active candidate
+  active_artifact: WB-0031
+  branch: docs/post-pr49-reconciliation
   pull_request: pending
-  last_verified_main: dd389e87eb2684a4c90a816d35c0472e0b5e1fee
+  last_verified_main: 2de294bb3334e4194769f3b883d58a2e5e3a8ea5
 
 status:
   ccl_specification: complete_draft
@@ -35,7 +35,7 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 244_passed
+  tests: github_actions_verified
   ci: github_actions_verified
   checkpoint_runtime: verified
   checkpoint_persistence: verified
@@ -71,7 +71,8 @@ status:
   pr42_superseded_closed: true
   pr46_superseded_closed: true
   pr48_post_merge_reconciliation: merged_verified
-  wb0030_staging_readiness_gate: active_candidate
+  wb0030_staging_readiness_gate: merged_verified
+  wb0031_staging_runtime_gate_preflight: active_candidate
 
 completed:
   - artifact: WB-0015
@@ -170,9 +171,14 @@ completed:
     pull_request: 48
     merge_commit: dd389e87eb2684a4c90a816d35c0472e0b5e1fee
     verification: ci_99_codeql_96_manual_review_passed
+  - artifact: WB-0030-staging-readiness-gate
+    pull_request: 49
+    merge_commit: 2de294bb3334e4194769f3b883d58a2e5e3a8ea5
+    verification: ci_135_codeql_132_codex_no_major_issues_manual_review_passed
 
 next:
-  - validate remote-write readiness evidence without reading or storing secrets
+  - reconcile PR49 post-merge state from main@2de294bb3334e4194769f3b883d58a2e5e3a8ea5
+  - define WB-0031 staging runtime gate preflight without InterServer remote write or plaintext secrets
   - keep live staging deployment blocked until all readiness statuses are VERIFIED and fresh operator authorization is APPROVED
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
