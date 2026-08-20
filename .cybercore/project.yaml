@@ -26,7 +26,7 @@ current:
   milestone: WB-0031 Staging Runtime Gate Preflight active candidate
   active_artifact: WB-0031
   branch: docs/post-pr49-reconciliation
-  pull_request: pending
+  pull_request: 50
   last_verified_main: 2de294bb3334e4194769f3b883d58a2e5e3a8ea5
 
 status:
