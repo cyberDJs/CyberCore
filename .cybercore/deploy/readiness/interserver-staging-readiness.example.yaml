@@ -1,0 +1,59 @@
+version: 1
+
+target_id: interserver-shared-hosting-staging
+readiness_class: pre_remote_write_gate
+
+remote_write_requested: false
+remote_write_allowed: false
+production_write_allowed: false
+plaintext_secret_values_present: false
+safe_secret_aliases_only: true
+fresh_operator_authorization_required: true
+
+staging_target_identity:
+  staging_url_status: UNKNOWN
+  staging_url_safe_reference: TBD_NON_PRODUCTION_STAGING_URL
+  staging_path_status: UNKNOWN
+  staging_path_safe_reference: TBD_NON_PRODUCTION_STAGING_PATH
+  production_document_root_excluded: UNKNOWN
+
+secret_alias_readiness:
+  secret_alias_status: UNKNOWN
+  required_aliases:
+    - INTERSERVER_STAGING_HOST
+    - INTERSERVER_STAGING_USER
+    - INTERSERVER_STAGING_PORT
+    - INTERSERVER_STAGING_SSH_KEY_OR_SFTP_PASSWORD
+  secret_values_recorded: false
+  secret_values_read: false
+
+rollback_readiness:
+  rollback_status: UNKNOWN
+  rollback_method: immutable_release_directory_with_current_symlink_or_timestamped_backup
+  rollback_tested: false
+
+effect_verifier_readiness:
+  effect_verifier_status: UNKNOWN
+  required_checks:
+    - staging_url_returns_success
+    - deployed_version_marker_matches_source_commit
+    - production_url_is_unchanged
+    - no_denied_path_is_touched
+    - receipt_is_stored_without_secrets
+
+operator_authorization:
+  operator_authorization_status: UNKNOWN
+  authorization_reference: REQUIRED_BEFORE_REMOTE_WRITE
+
+blocked_until:
+  - staging_url_status: VERIFIED
+  - staging_path_status: VERIFIED
+  - secret_alias_status: VERIFIED
+  - rollback_status: VERIFIED
+  - effect_verifier_status: VERIFIED
+  - operator_authorization_status: APPROVED
+
+notes: >-
+  This file is intentionally not ready. It proves the gate fails closed until safe
+  target identity, secret aliases, rollback, effect verification, and fresh
+  operator authorization are all present without plaintext secret values.
