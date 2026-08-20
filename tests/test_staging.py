@@ -98,7 +98,9 @@ def test_remote_write_readiness_rejects_remote_write_claims(tmp_path: Path) -> N
 
 def test_remote_write_readiness_rejects_plaintext_secret_literals(tmp_path: Path) -> None:
     readiness = tmp_path / "readiness.yaml"
-    readiness.write_text(READINESS.read_text(encoding="utf-8") + "\napi_key=bad\n", encoding="utf-8")
+    readiness.write_text(
+        READINESS.read_text(encoding="utf-8") + "\napi_key=bad\n", encoding="utf-8"
+    )
 
     result = validate_remote_write_readiness(readiness)
 
