@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+import yaml
+
 
 DENIED_LITERAL_PATTERNS = (
     "BEGIN OPENSSH PRIVATE KEY",
@@ -56,51 +58,19 @@ REQUIRED_MANIFEST_TOKENS = (
     "operator_authorization_reference:",
 )
 
-REQUIRED_READINESS_TOKENS = (
-    "target_id: interserver-shared-hosting-staging",
-    "readiness_class: pre_remote_write_gate",
-    "remote_write_requested: false",
-    "remote_write_allowed: false",
-    "production_write_allowed: false",
-    "plaintext_secret_values_present: false",
-    "staging_url_status:",
-    "staging_path_status:",
-    "production_document_root_excluded:",
-    "secret_alias_status:",
+ALLOWED_DEPLOY_MODES = ("plan_only", "dry_run")
+REQUIRED_STAGING_SECRET_ALIASES = {
     "INTERSERVER_STAGING_HOST",
     "INTERSERVER_STAGING_USER",
     "INTERSERVER_STAGING_PORT",
     "INTERSERVER_STAGING_SSH_KEY_OR_SFTP_PASSWORD",
-    "secret_values_recorded:",
-    "secret_values_read:",
-    "rollback_status:",
-    "rollback_tested:",
-    "effect_verifier_status:",
-    "operator_authorization_status:",
-)
-
-ALLOWED_DEPLOY_MODES = ("plan_only", "dry_run")
-READINESS_REQUIRED_VALUES = {
-    "target_id": "interserver-shared-hosting-staging",
-    "readiness_class": "pre_remote_write_gate",
-    "staging_url_status": "VERIFIED",
-    "staging_path_status": "VERIFIED",
-    "production_document_root_excluded": "VERIFIED",
-    "secret_alias_status": "VERIFIED",
-    "rollback_status": "VERIFIED",
-    "effect_verifier_status": "VERIFIED",
-    "operator_authorization_status": "APPROVED",
 }
-READINESS_REQUIRED_BOOLEANS = {
-    "remote_write_requested": "false",
-    "remote_write_allowed": "false",
-    "production_write_allowed": "false",
-    "plaintext_secret_values_present": "false",
-    "fresh_operator_authorization_required": "true",
-    "safe_secret_aliases_only": "true",
-    "secret_values_recorded": "false",
-    "secret_values_read": "false",
-    "rollback_tested": "true",
+REQUIRED_EFFECT_CHECKS = {
+    "staging_url_returns_success",
+    "deployed_version_marker_matches_source_commit",
+    "production_url_is_unchanged",
+    "no_denied_path_is_touched",
+    "receipt_is_stored_without_secrets",
 }
 
 
@@ -142,47 +112,43 @@ def _find_denied_literals(text: str) -> tuple[str, ...]:
     return tuple(found)
 
 
-def _extract_scalars(text: str, key: str) -> tuple[str, ...]:
+def _extract_scalar(text: str, key: str) -> str | None:
     prefix = f"{key}:"
-    values: list[str] = []
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith(prefix):
-            values.append(stripped[len(prefix) :].strip().strip('"').strip("'"))
-    return tuple(values)
-
-
-def _extract_scalar(text: str, key: str) -> str | None:
-    values = _extract_scalars(text, key)
-    return values[0] if values else None
-
-
-def _extract_unique_scalar(text: str, key: str) -> tuple[str | None, str | None]:
-    values = _extract_scalars(text, key)
-    if not values:
-        return None, f"readiness evidence missing {key}"
-    if len(values) != 1:
-        return None, f"readiness evidence requires exactly one {key}; got {len(values)}"
-    return values[0], None
-
-
-def _extract_required_bool(text: str, key: str, expected: str) -> str | None:
-    value, error = _extract_unique_scalar(text, key)
-    if error:
-        return error
-    assert value is not None
-    if value.lower() != expected:
-        return f"readiness evidence requires {key}: {expected}; got {value}"
+            return stripped[len(prefix) :].strip().strip('"').strip("'")
     return None
 
 
-def _extract_required_value(text: str, key: str, expected: str) -> str | None:
-    value, error = _extract_unique_scalar(text, key)
-    if error:
-        return error
+def _require_mapping(
+    document: dict[str, object], key: str, errors: list[str]
+) -> dict[str, object] | None:
+    value = document.get(key)
+    if not isinstance(value, dict):
+        errors.append(f"readiness evidence requires mapping: {key}")
+        return None
+    return value
+
+
+def _require_value(
+    mapping: dict[str, object], key: str, expected: object, errors: list[str]
+) -> None:
+    value = mapping.get(key)
     if value != expected:
-        return f"readiness evidence requires {key}: {expected}; got {value}"
-    return None
+        errors.append(f"readiness evidence requires {key}: {expected}; got {value!r}")
+
+
+def _require_string_set(
+    mapping: dict[str, object], key: str, required: set[str], errors: list[str]
+) -> None:
+    value = mapping.get(key)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        errors.append(f"readiness evidence requires string list: {key}")
+        return
+    missing = sorted(required - set(value))
+    if missing:
+        errors.append(f"readiness evidence missing {key}: {', '.join(missing)}")
 
 
 def validate_target_contract(path: Path) -> ValidationResult:
@@ -249,21 +215,60 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
         errors.append(f"missing remote-write readiness evidence: {path}")
         return ValidationResult(False, tuple(errors))
 
-    for token in _missing_tokens(text, REQUIRED_READINESS_TOKENS):
-        errors.append(f"readiness evidence missing required token: {token}")
-
     for literal in _find_denied_literals(text):
         errors.append(f"readiness evidence contains denied literal pattern: {literal}")
 
-    for key, expected in READINESS_REQUIRED_VALUES.items():
-        error = _extract_required_value(text, key, expected)
-        if error:
-            errors.append(error)
+    try:
+        loaded = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        errors.append(f"readiness evidence is invalid YAML: {exc}")
+        return ValidationResult(False, tuple(errors))
 
-    for key, expected in READINESS_REQUIRED_BOOLEANS.items():
-        error = _extract_required_bool(text, key, expected)
-        if error:
-            errors.append(error)
+    if not isinstance(loaded, dict):
+        errors.append("readiness evidence must be a mapping")
+        return ValidationResult(False, tuple(errors))
+    document: dict[str, object] = loaded
+
+    for key, expected in (
+        ("target_id", "interserver-shared-hosting-staging"),
+        ("readiness_class", "pre_remote_write_gate"),
+        ("remote_write_requested", False),
+        ("remote_write_allowed", False),
+        ("production_write_allowed", False),
+        ("plaintext_secret_values_present", False),
+        ("safe_secret_aliases_only", True),
+        ("fresh_operator_authorization_required", True),
+    ):
+        _require_value(document, key, expected, errors)
+
+    identity = _require_mapping(document, "staging_target_identity", errors)
+    if identity is not None:
+        _require_value(identity, "staging_url_status", "VERIFIED", errors)
+        _require_value(identity, "staging_path_status", "VERIFIED", errors)
+        _require_value(identity, "production_document_root_excluded", "VERIFIED", errors)
+
+    secret_aliases = _require_mapping(document, "secret_alias_readiness", errors)
+    if secret_aliases is not None:
+        _require_value(secret_aliases, "secret_alias_status", "VERIFIED", errors)
+        _require_string_set(
+            secret_aliases, "required_aliases", REQUIRED_STAGING_SECRET_ALIASES, errors
+        )
+        _require_value(secret_aliases, "secret_values_recorded", False, errors)
+        _require_value(secret_aliases, "secret_values_read", False, errors)
+
+    rollback = _require_mapping(document, "rollback_readiness", errors)
+    if rollback is not None:
+        _require_value(rollback, "rollback_status", "VERIFIED", errors)
+        _require_value(rollback, "rollback_tested", True, errors)
+
+    verifier = _require_mapping(document, "effect_verifier_readiness", errors)
+    if verifier is not None:
+        _require_value(verifier, "effect_verifier_status", "VERIFIED", errors)
+        _require_string_set(verifier, "required_checks", REQUIRED_EFFECT_CHECKS, errors)
+
+    authorization = _require_mapping(document, "operator_authorization", errors)
+    if authorization is not None:
+        _require_value(authorization, "operator_authorization_status", "APPROVED", errors)
 
     if errors:
         warnings.append("live staging remote write remains blocked")
