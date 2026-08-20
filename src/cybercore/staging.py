@@ -10,11 +10,17 @@ DENIED_LITERAL_PATTERNS = (
     "BEGIN RSA PRIVATE KEY",
     "BEGIN PRIVATE KEY",
     "password=",
+    "password:",
     "api_key=",
+    "api_key:",
     "api-token",
-    "totp",
-    "recovery_code",
+    "api_token:",
+    "private_key:",
     "secret_value:",
+    "token:",
+    "totp",
+    "totp_seed:",
+    "recovery_code",
 )
 
 REQUIRED_TARGET_TOKENS = (
@@ -59,22 +65,43 @@ REQUIRED_READINESS_TOKENS = (
     "plaintext_secret_values_present: false",
     "staging_url_status:",
     "staging_path_status:",
+    "production_document_root_excluded:",
     "secret_alias_status:",
+    "INTERSERVER_STAGING_HOST",
+    "INTERSERVER_STAGING_USER",
+    "INTERSERVER_STAGING_PORT",
+    "INTERSERVER_STAGING_SSH_KEY_OR_SFTP_PASSWORD",
+    "secret_values_recorded:",
+    "secret_values_read:",
     "rollback_status:",
+    "rollback_tested:",
     "effect_verifier_status:",
     "operator_authorization_status:",
 )
 
 ALLOWED_DEPLOY_MODES = ("plan_only", "dry_run")
-READINESS_APPROVED_VALUES = {"VERIFIED", "APPROVED"}
-READINESS_STATUS_KEYS = (
-    "staging_url_status",
-    "staging_path_status",
-    "secret_alias_status",
-    "rollback_status",
-    "effect_verifier_status",
-    "operator_authorization_status",
-)
+READINESS_REQUIRED_VALUES = {
+    "target_id": "interserver-shared-hosting-staging",
+    "readiness_class": "pre_remote_write_gate",
+    "staging_url_status": "VERIFIED",
+    "staging_path_status": "VERIFIED",
+    "production_document_root_excluded": "VERIFIED",
+    "secret_alias_status": "VERIFIED",
+    "rollback_status": "VERIFIED",
+    "effect_verifier_status": "VERIFIED",
+    "operator_authorization_status": "APPROVED",
+}
+READINESS_REQUIRED_BOOLEANS = {
+    "remote_write_requested": "false",
+    "remote_write_allowed": "false",
+    "production_write_allowed": "false",
+    "plaintext_secret_values_present": "false",
+    "fresh_operator_authorization_required": "true",
+    "safe_secret_aliases_only": "true",
+    "secret_values_recorded": "false",
+    "secret_values_read": "false",
+    "rollback_tested": "true",
+}
 
 
 @dataclass(frozen=True)
@@ -115,20 +142,45 @@ def _find_denied_literals(text: str) -> tuple[str, ...]:
     return tuple(found)
 
 
-def _extract_scalar(text: str, key: str) -> str | None:
+def _extract_scalars(text: str, key: str) -> tuple[str, ...]:
     prefix = f"{key}:"
+    values: list[str] = []
     for line in text.splitlines():
         stripped = line.strip()
         if stripped.startswith(prefix):
-            return stripped[len(prefix) :].strip().strip('"').strip("'")
-    return None
+            values.append(stripped[len(prefix) :].strip().strip('"').strip("'"))
+    return tuple(values)
+
+
+def _extract_scalar(text: str, key: str) -> str | None:
+    values = _extract_scalars(text, key)
+    return values[0] if values else None
+
+
+def _extract_unique_scalar(text: str, key: str) -> tuple[str | None, str | None]:
+    values = _extract_scalars(text, key)
+    if not values:
+        return None, f"readiness evidence missing {key}"
+    if len(values) != 1:
+        return None, f"readiness evidence requires exactly one {key}; got {len(values)}"
+    return values[0], None
 
 
 def _extract_required_bool(text: str, key: str, expected: str) -> str | None:
-    value = _extract_scalar(text, key)
-    if value is None:
-        return f"readiness evidence missing {key}"
+    value, error = _extract_unique_scalar(text, key)
+    if error:
+        return error
+    assert value is not None
     if value.lower() != expected:
+        return f"readiness evidence requires {key}: {expected}; got {value}"
+    return None
+
+
+def _extract_required_value(text: str, key: str, expected: str) -> str | None:
+    value, error = _extract_unique_scalar(text, key)
+    if error:
+        return error
+    if value != expected:
         return f"readiness evidence requires {key}: {expected}; got {value}"
     return None
 
@@ -203,26 +255,15 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
     for literal in _find_denied_literals(text):
         errors.append(f"readiness evidence contains denied literal pattern: {literal}")
 
-    for key, expected in (
-        ("remote_write_requested", "false"),
-        ("remote_write_allowed", "false"),
-        ("production_write_allowed", "false"),
-        ("plaintext_secret_values_present", "false"),
-    ):
-        error = _extract_required_bool(text, key, expected)
+    for key, expected in READINESS_REQUIRED_VALUES.items():
+        error = _extract_required_value(text, key, expected)
         if error:
             errors.append(error)
 
-    for key in READINESS_STATUS_KEYS:
-        value = _extract_scalar(text, key)
-        if value not in READINESS_APPROVED_VALUES:
-            errors.append(f"readiness gate not satisfied: {key} is {value or 'MISSING'}")
-
-    if "fresh_operator_authorization_required: true" not in text:
-        errors.append("readiness evidence must require fresh operator authorization")
-
-    if "safe_secret_aliases_only: true" not in text:
-        errors.append("readiness evidence must use safe secret aliases only")
+    for key, expected in READINESS_REQUIRED_BOOLEANS.items():
+        error = _extract_required_bool(text, key, expected)
+        if error:
+            errors.append(error)
 
     if errors:
         warnings.append("live staging remote write remains blocked")
