@@ -73,6 +73,58 @@ REQUIRED_EFFECT_CHECKS = {
     "no_denied_path_is_touched",
     "receipt_is_stored_without_secrets",
 }
+READINESS_TOP_LEVEL_KEYS = {
+    "version",
+    "target_id",
+    "readiness_class",
+    "remote_write_requested",
+    "remote_write_allowed",
+    "production_write_allowed",
+    "plaintext_secret_values_present",
+    "safe_secret_aliases_only",
+    "fresh_operator_authorization_required",
+    "staging_target_identity",
+    "secret_alias_readiness",
+    "rollback_readiness",
+    "effect_verifier_readiness",
+    "operator_authorization",
+    "blocked_until",
+    "notes",
+}
+READINESS_IDENTITY_KEYS = {
+    "staging_url_status",
+    "staging_url_safe_reference",
+    "staging_path_status",
+    "staging_path_safe_reference",
+    "production_document_root_excluded",
+}
+READINESS_SECRET_ALIAS_KEYS = {
+    "secret_alias_status",
+    "required_aliases",
+    "secret_values_recorded",
+    "secret_values_read",
+}
+READINESS_ROLLBACK_KEYS = {
+    "rollback_status",
+    "rollback_method",
+    "rollback_tested",
+}
+READINESS_EFFECT_VERIFIER_KEYS = {
+    "effect_verifier_status",
+    "required_checks",
+}
+READINESS_AUTHORIZATION_KEYS = {
+    "operator_authorization_status",
+    "authorization_reference",
+}
+EXPECTED_BLOCKED_UNTIL = {
+    "staging_url_status": "VERIFIED",
+    "staging_path_status": "VERIFIED",
+    "secret_alias_status": "VERIFIED",
+    "rollback_status": "VERIFIED",
+    "effect_verifier_status": "VERIFIED",
+    "operator_authorization_status": "APPROVED",
+}
 
 
 @dataclass(frozen=True)
@@ -130,6 +182,8 @@ def _collect_duplicate_yaml_keys(node: Node, errors: list[str]) -> None:
                 errors.append("readiness evidence mapping keys must be scalar values")
             else:
                 key = key_node.value
+                if key == "<<":
+                    errors.append("readiness evidence forbids YAML merge key: <<")
                 if key in seen:
                     errors.append(f"readiness evidence contains duplicate YAML key: {key}")
                 seen.add(key)
@@ -137,6 +191,20 @@ def _collect_duplicate_yaml_keys(node: Node, errors: list[str]) -> None:
     elif isinstance(node, SequenceNode):
         for item in node.value:
             _collect_duplicate_yaml_keys(item, errors)
+
+
+def _reject_unknown_keys(
+    mapping: dict[str, object], allowed: set[str], context: str, errors: list[str]
+) -> None:
+    non_string = [repr(key) for key in mapping if not isinstance(key, str)]
+    if non_string:
+        errors.append(f"{context} contains non-string keys: {', '.join(non_string)}")
+
+    unexpected = sorted(
+        key for key in mapping if isinstance(key, str) and key not in allowed
+    )
+    if unexpected:
+        errors.append(f"{context} contains unexpected keys: {', '.join(unexpected)}")
 
 
 def _require_mapping(
@@ -157,6 +225,12 @@ def _require_value(
         errors.append(f"readiness evidence requires {key}: {expected}; got {value!r}")
 
 
+def _require_string(mapping: dict[str, object], key: str, errors: list[str]) -> None:
+    value = mapping.get(key)
+    if not isinstance(value, str) or not value.strip():
+        errors.append(f"readiness evidence requires non-empty string: {key}")
+
+
 def _require_string_set(
     mapping: dict[str, object], key: str, required: set[str], errors: list[str]
 ) -> None:
@@ -174,6 +248,41 @@ def _require_string_set(
         errors.append(f"readiness evidence contains unexpected {key}: {', '.join(unexpected)}")
     if len(value) != len(actual):
         errors.append(f"readiness evidence contains duplicate values in {key}")
+
+
+def _validate_blocked_until(document: dict[str, object], errors: list[str]) -> None:
+    value = document.get("blocked_until")
+    if not isinstance(value, list):
+        errors.append("readiness evidence requires list: blocked_until")
+        return
+
+    seen: set[str] = set()
+    for index, item in enumerate(value):
+        if not isinstance(item, dict) or len(item) != 1:
+            errors.append(f"readiness evidence blocked_until item {index} must have exactly one key")
+            continue
+
+        key, status = next(iter(item.items()))
+        if not isinstance(key, str):
+            errors.append(f"readiness evidence blocked_until item {index} key must be a string")
+            continue
+        if key not in EXPECTED_BLOCKED_UNTIL:
+            errors.append(f"readiness evidence blocked_until contains unexpected key: {key}")
+            continue
+        if key in seen:
+            errors.append(f"readiness evidence blocked_until contains duplicate key: {key}")
+            continue
+        seen.add(key)
+
+        expected = EXPECTED_BLOCKED_UNTIL[key]
+        if status != expected:
+            errors.append(
+                f"readiness evidence blocked_until requires {key}: {expected}; got {status!r}"
+            )
+
+    missing = sorted(set(EXPECTED_BLOCKED_UNTIL) - seen)
+    if missing:
+        errors.append(f"readiness evidence blocked_until missing keys: {', '.join(missing)}")
 
 
 def validate_target_contract(path: Path) -> ValidationResult:
@@ -269,7 +378,9 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
         return ValidationResult(False, tuple(errors))
     document: dict[str, object] = loaded
 
+    _reject_unknown_keys(document, READINESS_TOP_LEVEL_KEYS, "readiness evidence", errors)
     for key, expected in (
+        ("version", 1),
         ("target_id", "interserver-shared-hosting-staging"),
         ("readiness_class", "pre_remote_write_gate"),
         ("remote_write_requested", False),
@@ -283,12 +394,18 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
 
     identity = _require_mapping(document, "staging_target_identity", errors)
     if identity is not None:
+        _reject_unknown_keys(identity, READINESS_IDENTITY_KEYS, "staging_target_identity", errors)
         _require_value(identity, "staging_url_status", "VERIFIED", errors)
+        _require_string(identity, "staging_url_safe_reference", errors)
         _require_value(identity, "staging_path_status", "VERIFIED", errors)
+        _require_string(identity, "staging_path_safe_reference", errors)
         _require_value(identity, "production_document_root_excluded", "VERIFIED", errors)
 
     secret_aliases = _require_mapping(document, "secret_alias_readiness", errors)
     if secret_aliases is not None:
+        _reject_unknown_keys(
+            secret_aliases, READINESS_SECRET_ALIAS_KEYS, "secret_alias_readiness", errors
+        )
         _require_value(secret_aliases, "secret_alias_status", "VERIFIED", errors)
         _require_string_set(
             secret_aliases, "required_aliases", REQUIRED_STAGING_SECRET_ALIASES, errors
@@ -298,17 +415,36 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
 
     rollback = _require_mapping(document, "rollback_readiness", errors)
     if rollback is not None:
+        _reject_unknown_keys(rollback, READINESS_ROLLBACK_KEYS, "rollback_readiness", errors)
         _require_value(rollback, "rollback_status", "VERIFIED", errors)
+        _require_string(rollback, "rollback_method", errors)
         _require_value(rollback, "rollback_tested", True, errors)
 
     verifier = _require_mapping(document, "effect_verifier_readiness", errors)
     if verifier is not None:
+        _reject_unknown_keys(
+            verifier,
+            READINESS_EFFECT_VERIFIER_KEYS,
+            "effect_verifier_readiness",
+            errors,
+        )
         _require_value(verifier, "effect_verifier_status", "VERIFIED", errors)
         _require_string_set(verifier, "required_checks", REQUIRED_EFFECT_CHECKS, errors)
 
     authorization = _require_mapping(document, "operator_authorization", errors)
     if authorization is not None:
+        _reject_unknown_keys(
+            authorization,
+            READINESS_AUTHORIZATION_KEYS,
+            "operator_authorization",
+            errors,
+        )
         _require_value(authorization, "operator_authorization_status", "APPROVED", errors)
+        _require_string(authorization, "authorization_reference", errors)
+
+    _validate_blocked_until(document, errors)
+    if "notes" in document and not isinstance(document["notes"], str):
+        errors.append("readiness evidence notes must be a string")
 
     if errors:
         warnings.append("live staging remote write remains blocked")
