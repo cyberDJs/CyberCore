@@ -293,3 +293,42 @@ def test_remote_write_readiness_rejects_yaml_merge_keys(tmp_path: Path) -> None:
 
     assert not result.ok
     assert any("forbids YAML merge key: <<" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_yaml_merge_tags(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        "!!merge ignored: {remote_write_allowed: true}\n" + _ready_readiness_text(),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("forbids YAML merge tag" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_free_form_notes(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(_ready_readiness_text() + "\nnotes: hunter2\n", encoding="utf-8")
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("unexpected keys: notes" in error for error in result.errors)
+
+
+def test_remote_write_readiness_requires_exact_boolean_types(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text()
+        .replace("remote_write_allowed: false", "remote_write_allowed: 0", 1)
+        .replace("safe_secret_aliases_only: true", "safe_secret_aliases_only: 1", 1),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("remote_write_allowed: False" in error and "expected bool" in error for error in result.errors)
+    assert any("safe_secret_aliases_only: True" in error and "expected bool" in error for error in result.errors)
