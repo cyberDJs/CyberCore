@@ -1,10 +1,12 @@
 # ADR-0006 — Self-Deployment Staging Boundary
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-19
+Accepted: 2026-08-20
+Authorized by: Jan Kočí
 Work block: `WB-0028`
 Renumbered from: `ADR-0005` after post-merge identifier collision with the accepted LangGraph ADR
-Decision readiness: `READY_FOR_DECISION`
+Decision readiness: `DECIDED`
 Review recommendation: `ACCEPT`
 Review evidence: `docs/audits/2026-08-19-adr-0006-decision-readiness.md`
 
@@ -16,7 +18,7 @@ Autonomous deployment increases risk because a system that can change itself can
 
 PR #39 originally introduced this proposal as `ADR-0005`. PR #40 independently established and accepted `ADR-0005 — LangGraph as Optional Orchestration Runtime`. After both branches landed, the repository contained two ADRs with the same identifier. PR #43 renumbered this document to `ADR-0006`; the self-deployment decision content is otherwise unchanged.
 
-## Decision proposal
+## Decision
 
 CyberCore self-deployment must start with a staging-only boundary.
 
@@ -26,7 +28,7 @@ The permitted v0 loop is:
 branch -> tests -> PR -> staging plan -> explicit operator authorization -> staging deploy -> effect verification -> evidence receipt
 ```
 
-Production promotion is explicitly outside this ADR candidate and remains blocked by separate human approval, MOP, backup/restore readiness, and effect verification.
+Production promotion is explicitly outside this ADR and remains blocked by separate human approval, MOP, backup/restore readiness, and effect verification.
 
 ## Rules
 
@@ -53,14 +55,14 @@ Tradeoffs:
 
 ## Decision readiness review
 
-The 2026-08-19 review recommends **ACCEPT** and classifies this ADR as `READY_FOR_DECISION`.
+The 2026-08-19 review recommended **ACCEPT** and classified this ADR as `READY_FOR_DECISION`.
 
 The review found that unknown InterServer staging URL/path, deployment protocol, staging identity, rollback mode, and effect verifier are implementation/runtime gates. They do not invalidate the architecture decision because this ADR explicitly requires those gates to be verified before `staging_apply`.
 
-Acceptance of ADR-0006 would authorize only the staging-first architectural boundary. It would not authorize a live InterServer connection, remote write, credential operation, provider mutation, production deployment, or automatic staging-to-production promotion.
+Acceptance of ADR-0006 authorizes only the staging-first architectural boundary. It does not authorize a live InterServer connection, remote write, credential operation, provider mutation, production deployment, or automatic staging-to-production promotion.
 
 ## Acceptance
 
-This ADR remains **Proposed**. It is not accepted until Jan Kočí explicitly accepts it or a later approved governance workflow marks it accepted.
+Jan Kočí explicitly accepted ADR-0006 on 2026-08-20.
 
-If accepted, record the acceptance date, authority, and evidence without removing the historical proposal/review context.
+This acceptance authorizes the staging-only self-deployment architecture boundary. It does **not** authorize `staging_apply`, any InterServer remote write, secret-value access, provider mutation, or production deployment. Those remain separate fail-closed gates requiring fresh applicable authorization and verification.
