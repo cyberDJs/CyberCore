@@ -68,8 +68,10 @@ def _mapping(value: object, name: str) -> Mapping[str, Any]:
 
 
 def _string_list(value: object, name: str) -> list[str]:
-    if not isinstance(value, list) or not value or not all(
-        isinstance(item, str) and item.strip() for item in value
+    if (
+        not isinstance(value, list)
+        or not value
+        or not all(isinstance(item, str) and item.strip() for item in value)
     ):
         raise StagingValidationError(f"{name} must contain non-empty strings")
     return value
@@ -152,7 +154,9 @@ def assess_target(target: Mapping[str, Any], *, mode: str) -> TargetAssessment:
     if production.get("production_credentials_allowed") is not False:
         raise StagingValidationError("production credentials must remain denied")
     if production.get("provider_mutation_allowed_without_explicit_approval") is not False:
-        raise StagingValidationError("provider mutation without explicit approval must remain denied")
+        raise StagingValidationError(
+            "provider mutation without explicit approval must remain denied"
+        )
 
     gate_state = _mapping(target.get("current_gate_state"), "current_gate_state")
     if gate_state.get("live_staging_deploy") != "blocked":
@@ -174,7 +178,9 @@ def assess_target(target: Mapping[str, Any], *, mode: str) -> TargetAssessment:
     domain_or_url = identity.get("domain_or_url")
     production_domains = production.get("production_domains")
     if isinstance(domain_or_url, str) and not _is_unresolved(domain_or_url):
-        denied_hosts = {_host(domain) for domain in _string_list(production_domains, "production_domains")}
+        denied_hosts = {
+            _host(domain) for domain in _string_list(production_domains, "production_domains")
+        }
         if _host(domain_or_url) in denied_hosts:
             raise StagingValidationError("staging domain resolves to a denied production domain")
 
