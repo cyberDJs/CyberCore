@@ -25,9 +25,9 @@ canonical_sources:
 current:
   milestone: WB-0028 Self-Deployment Staging Loop v0 active
   active_artifact: WB-0028
-  branch: docs/adr-0006-decision-readiness
-  pull_request: 44
-  last_verified_main: 4ca00fb7e1a6b618746afb2045e230a1763256e4
+  branch: feat/wb-0028-staging-plan-validator
+  pull_request: 45
+  last_verified_main: 883abf1126c87c07c9a65f8cc59c3e2582048c92
 
 status:
   ccl_specification: complete_draft
@@ -35,7 +35,7 @@ status:
   validator: verified
   cli_validation: verified
   fixtures: verified
-  tests: 244_passed
+  tests: 244_passed_canonical_before_pr45
   ci: github_actions_verified
   checkpoint_runtime: verified
   checkpoint_persistence: verified
@@ -65,7 +65,11 @@ status:
   lg0001_sot_reconciler: merged_verified
   lg0002_trusted_source_ingest: merged_verified
   pr43_adr_identifier_reconciliation: merged_verified
+  pr44_adr0006_acceptance: merged_verified
   self_deployment_staging_boundary_adr: accepted_adr_0006
+  staging_plan_validator: candidate_pr45
+  staging_plan_workflow: manual_local_only_candidate_pr45
+  live_staging_deploy: blocked
 
 completed:
   - artifact: WB-0015
@@ -152,12 +156,18 @@ completed:
     pull_request: 43
     merge_commit: 4ca00fb7e1a6b618746afb2045e230a1763256e4
     verification: ci_73_codeql_70_passed
+  - artifact: PR44-adr0006-acceptance-and-state-reconciliation
+    pull_request: 44
+    merge_commit: 883abf1126c87c07c9a65f8cc59c3e2582048c92
+    verification: ci_86_codeql_83_passed
 
 next:
-  - merge PR #44 after exact-head CI/CodeQL and review pass
-  - reconcile post-merge state on a fresh branch from the resulting main
-  - implement the separately authorized disabled/manual staging workflow plus manifest/target-validator slice
-  - keep live staging deployment blocked until staging target identifiers, secret aliases, rollback, and effect verifier are verified
+  - complete exact-head hosted CI and CodeQL for PR #45
+  - complete Codex review and remediate valid findings without weakening fail-closed gates
+  - prove plan_only creates only a non-authoritative local manifest with remote_write_allowed false
+  - prove dry_run fails closed while target identity, secret-alias verification, rollback, and effect verifier remain unresolved
+  - stop PR #45 at READY_FOR_MERGE; do not merge under the current authorization
+  - keep live staging deployment blocked until a fresh explicit remote-write authorization and all target gates pass
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 

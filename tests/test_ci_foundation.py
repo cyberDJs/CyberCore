@@ -12,6 +12,7 @@ PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 CI_WORKFLOW_PATH = WORKFLOW_DIR / "ci.yml"
 CODEQL_WORKFLOW_PATH = WORKFLOW_DIR / "codeql.yml"
+STAGING_WORKFLOW_PATH = WORKFLOW_DIR / "staging-plan.yml"
 VERIFY_SCRIPT_PATH = REPO_ROOT / "scripts" / "verify.sh"
 ALLOWED_ACTIONS = {
     "actions/checkout",
@@ -89,11 +90,13 @@ def test_pyproject_defines_required_development_toolchain() -> None:
     project = pyproject["project"]
     dependencies = project["dependencies"]
     dev_dependencies = project["optional-dependencies"]["dev"]
+    runtime_names = {dependency.split(">=", 1)[0].lower() for dependency in dependencies}
     dev_names = {dependency.split(">=", 1)[0].lower() for dependency in dev_dependencies}
 
     assert pyproject["build-system"]["build-backend"] == "hatchling.build"
     assert project["requires-python"] == ">=3.11"
-    assert {"pytest", "ruff", "pyright", "build", "pyyaml"} <= dev_names
+    assert "pyyaml" in runtime_names
+    assert {"pytest", "ruff", "pyright", "build"} <= dev_names
     assert all("ruff" not in dependency.lower() for dependency in dependencies)
     assert all("pyright" not in dependency.lower() for dependency in dependencies)
     assert all("pytest" not in dependency.lower() for dependency in dependencies)
@@ -115,7 +118,7 @@ def test_pyproject_configures_ruff_and_pyright_baselines() -> None:
 def test_all_workflows_parse_as_valid_yaml() -> None:
     paths = _workflow_paths()
 
-    assert paths == [CI_WORKFLOW_PATH, CODEQL_WORKFLOW_PATH]
+    assert paths == [CI_WORKFLOW_PATH, CODEQL_WORKFLOW_PATH, STAGING_WORKFLOW_PATH]
     for path in paths:
         workflow = _workflow(path)
         assert isinstance(workflow, dict)
@@ -148,7 +151,7 @@ def test_workflow_permissions_remain_minimal() -> None:
         jobs = workflow["jobs"]
         assert isinstance(jobs, dict)
 
-        if path == CI_WORKFLOW_PATH:
+        if path in {CI_WORKFLOW_PATH, STAGING_WORKFLOW_PATH}:
             assert workflow["permissions"] == {"contents": "read"}
         elif path == CODEQL_WORKFLOW_PATH:
             assert workflow["permissions"] == {}
@@ -200,6 +203,12 @@ def test_codeql_workflow_contract() -> None:
     assert init_steps[0]["with"]["queries"] == "security-extended"
     assert analyze_steps[0]["with"]["category"] == "/language:python"
 
+    assert codeql["permissions"] == {
+        "actions": "read",
+        "contents": "read",
+        "security-events": "write",
+    }
+
 
 def test_ci_workflow_security_and_action_pinning_invariants() -> None:
     workflow_text = CI_WORKFLOW_PATH.read_text(encoding="utf-8")
@@ -248,6 +257,40 @@ def test_package_job_installs_built_wheel_and_smokes_outside_checkout() -> None:
     assert 'cd "$outside"' in step_runs
     assert 'venv/bin/cybercore" --help' in step_runs
     assert 'venv/bin/python" -m cybercore --help' in step_runs
+
+
+def test_staging_plan_workflow_is_manual_local_only_and_fail_closed() -> None:
+    workflow = _workflow(STAGING_WORKFLOW_PATH)
+    triggers = _triggers(workflow)
+    text = STAGING_WORKFLOW_PATH.read_text(encoding="utf-8").lower()
+    plan = _job_named(workflow, "plan")
+    inputs = triggers["workflow_dispatch"]["inputs"]
+
+    assert workflow["name"] == "Staging Plan"
+    assert set(triggers) == {"workflow_dispatch"}
+    assert workflow["permissions"] == {"contents": "read"}
+    assert set(workflow["jobs"]) == {"plan"}
+    assert plan["name"] == "staging-plan"
+    assert plan["runs-on"] == "ubuntu-24.04"
+    assert "environment" not in plan
+
+    assert inputs["mode"]["options"] == ["plan_only", "dry_run"]
+    assert inputs["mode"]["default"] == "plan_only"
+    assert inputs["target"]["options"] == ["interserver-shared-hosting-staging"]
+
+    assert "secrets." not in text
+    assert "staging_apply" not in text
+    assert "pull_request_target" not in text
+    assert re.search(r"\b(?:ssh|scp|sftp|rsync)\b", text) is None
+    assert "curl " not in text
+    assert "wget " not in text
+
+    uses = _uses_steps(STAGING_WORKFLOW_PATH)
+    assert {step["uses"].split("@", 1)[0] for step in uses} == {
+        "actions/checkout",
+        "actions/setup-python",
+        "actions/upload-artifact",
+    }
 
 
 def test_local_verification_entrypoint_is_non_mutating() -> None:
