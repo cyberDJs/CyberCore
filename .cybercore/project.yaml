@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: PR47 post-merge reconciliation active candidate
-  active_artifact: PR47-post-merge-state-reconciliation
-  branch: docs/post-pr47-reconciliation
+  milestone: WB-0030 Staging Readiness Gate active candidate
+  active_artifact: WB-0030
+  branch: feat/wb-0030-staging-readiness-gate
   pull_request: pending
-  last_verified_main: 09750d7c5b2e49b9b4006c1288391d6d5c6066d5
+  last_verified_main: dd389e87eb2684a4c90a816d35c0472e0b5e1fee
 
 status:
   ccl_specification: complete_draft
@@ -70,6 +70,8 @@ status:
   wb0029_staging_workflow_validator: merged_verified
   pr42_superseded_closed: true
   pr46_superseded_closed: true
+  pr48_post_merge_reconciliation: merged_verified
+  wb0030_staging_readiness_gate: active_candidate
 
 completed:
   - artifact: WB-0015
@@ -164,11 +166,14 @@ completed:
     pull_request: 47
     merge_commit: 09750d7c5b2e49b9b4006c1288391d6d5c6066d5
     verification: ci_94_codeql_91_manual_review_passed
+  - artifact: PR47-post-merge-state-reconciliation
+    pull_request: 48
+    merge_commit: dd389e87eb2684a4c90a816d35c0472e0b5e1fee
+    verification: ci_99_codeql_96_manual_review_passed
 
 next:
-  - reconcile PR47 post-merge state and close stale superseded PRs 42 and 46
-  - keep live staging deployment blocked until staging target identifiers, secret aliases, rollback, effect verifier, and fresh remote-write authorization are verified
-  - prepare the next non-production staging readiness slice without remote writes
+  - validate remote-write readiness evidence without reading or storing secrets
+  - keep live staging deployment blocked until all readiness statuses are VERIFIED and fresh operator authorization is APPROVED
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 
