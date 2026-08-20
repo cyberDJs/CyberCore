@@ -9,7 +9,7 @@ _Last updated: 2026-08-20 22:12 CEST_
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
 - Active branch: `docs/post-pr49-reconciliation`
-- Active pull request: pending — PR #49 post-merge state reconciliation and WB-0031 kickoff
+- Active pull request: #50 — PR #49 post-merge state reconciliation and WB-0031 kickoff
 - Active artifact: `WB-0031 — Staging Runtime Gate Preflight`
 - Active work block: `WB-0031 — Staging Runtime Gate Preflight`
 - Last verified `main`: `2de294bb3334e4194769f3b883d58a2e5e3a8ea5`
@@ -37,7 +37,7 @@ Continue the first safe CyberCore self-deployment loop for InterServer shared-ho
 
 - Work block: `WB-0031` active candidate
 - Branch: `docs/post-pr49-reconciliation`
-- Pull request: pending
+- Pull request: #50
 - WB-0028 foundation / PR #39: merged as `4f582583789346724813a2c515fe30450c173b0c`
 - ADR-0006 lifecycle status: Accepted
 - ADR-0006 decision date: 2026-08-20
@@ -150,7 +150,7 @@ It must define:
 
 ## Next action
 
-Open a post-PR49 reconciliation PR from `main@2de294bb3334e4194769f3b883d58a2e5e3a8ea5`. Stop at `READY_FOR_MERGE`. Do not perform any live remote write, provider mutation, production mutation, DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or plaintext-secret handling.
+Run hosted CI/CodeQL for PR #50 and stop at `READY_FOR_MERGE`. Do not perform any live remote write, provider mutation, production mutation, DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or plaintext-secret handling.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr49-post-merge-wb0031 -->
@@ -158,11 +158,11 @@ Open a post-PR49 reconciliation PR from `main@2de294bb3334e4194769f3b883d58a2e5e
 
 - Generated: `2026-08-20T22:12:00+02:00`
 - Branch: `docs/post-pr49-reconciliation`
-- Pull request: pending
+- Pull request: #50
 - Active artifact: `WB-0031`
 - Active work block: `WB-0031 — Staging Runtime Gate Preflight`
 - Last verified main: `2de294bb3334e4194769f3b883d58a2e5e3a8ea5`
-- Test evidence: hosted CI/CodeQL required on the PR before merge
+- Test evidence: hosted CI/CodeQL required on PR #50 before merge
 - Project Kernel: present
 - Project State: WB-0030 merged; WB-0031 active candidate; remote-write and production gates remain blocked
 <!-- CYBERCORE:CHECKPOINT:END -->
