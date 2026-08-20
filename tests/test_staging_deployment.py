@@ -38,7 +38,9 @@ def test_dry_run_fails_closed_on_unresolved_target() -> None:
         assess_target(_target(), mode="dry_run")
 
 
-@pytest.mark.parametrize("mode", ["staging_apply", "staging_apply_after_explicit_operator_approval"])
+@pytest.mark.parametrize(
+    "mode", ["staging_apply", "staging_apply_after_explicit_operator_approval"]
+)
 def test_remote_modes_are_never_authorized_in_this_slice(mode: str) -> None:
     with pytest.raises(StagingValidationError, match="not authorized"):
         assess_target(_target(), mode=mode)
