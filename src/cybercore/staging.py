@@ -50,7 +50,31 @@ REQUIRED_MANIFEST_TOKENS = (
     "operator_authorization_reference:",
 )
 
+REQUIRED_READINESS_TOKENS = (
+    "target_id: interserver-shared-hosting-staging",
+    "readiness_class: pre_remote_write_gate",
+    "remote_write_requested: false",
+    "remote_write_allowed: false",
+    "production_write_allowed: false",
+    "plaintext_secret_values_present: false",
+    "staging_url_status:",
+    "staging_path_status:",
+    "secret_alias_status:",
+    "rollback_status:",
+    "effect_verifier_status:",
+    "operator_authorization_status:",
+)
+
 ALLOWED_DEPLOY_MODES = ("plan_only", "dry_run")
+READINESS_APPROVED_VALUES = {"VERIFIED", "APPROVED"}
+READINESS_STATUS_KEYS = (
+    "staging_url_status",
+    "staging_path_status",
+    "secret_alias_status",
+    "rollback_status",
+    "effect_verifier_status",
+    "operator_authorization_status",
+)
 
 
 @dataclass(frozen=True)
@@ -97,6 +121,15 @@ def _extract_scalar(text: str, key: str) -> str | None:
         stripped = line.strip()
         if stripped.startswith(prefix):
             return stripped[len(prefix) :].strip().strip('"').strip("'")
+    return None
+
+
+def _extract_required_bool(text: str, key: str, expected: str) -> str | None:
+    value = _extract_scalar(text, key)
+    if value is None:
+        return f"readiness evidence missing {key}"
+    if value.lower() != expected:
+        return f"readiness evidence requires {key}: {expected}; got {value}"
     return None
 
 
@@ -152,6 +185,47 @@ def validate_manifest(path: Path) -> ValidationResult:
     auth_ref = _extract_scalar(text, "operator_authorization_reference")
     if auth_ref not in {"NOT_REQUIRED_FOR_PLAN_ONLY", "NOT_REQUIRED_FOR_DRY_RUN"}:
         errors.append("manifest must not claim remote-write authorization in WB-0029")
+
+    return ValidationResult(not errors, tuple(errors), tuple(warnings))
+
+
+def validate_remote_write_readiness(path: Path) -> ValidationResult:
+    text = _read(path)
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not text:
+        errors.append(f"missing remote-write readiness evidence: {path}")
+        return ValidationResult(False, tuple(errors))
+
+    for token in _missing_tokens(text, REQUIRED_READINESS_TOKENS):
+        errors.append(f"readiness evidence missing required token: {token}")
+
+    for literal in _find_denied_literals(text):
+        errors.append(f"readiness evidence contains denied literal pattern: {literal}")
+
+    for key, expected in (
+        ("remote_write_requested", "false"),
+        ("remote_write_allowed", "false"),
+        ("production_write_allowed", "false"),
+        ("plaintext_secret_values_present", "false"),
+    ):
+        error = _extract_required_bool(text, key, expected)
+        if error:
+            errors.append(error)
+
+    for key in READINESS_STATUS_KEYS:
+        value = _extract_scalar(text, key)
+        if value not in READINESS_APPROVED_VALUES:
+            errors.append(f"readiness gate not satisfied: {key} is {value or 'MISSING'}")
+
+    if "fresh_operator_authorization_required: true" not in text:
+        errors.append("readiness evidence must require fresh operator authorization")
+
+    if "safe_secret_aliases_only: true" not in text:
+        errors.append("readiness evidence must use safe secret aliases only")
+
+    if errors:
+        warnings.append("live staging remote write remains blocked")
 
     return ValidationResult(not errors, tuple(errors), tuple(warnings))
 
