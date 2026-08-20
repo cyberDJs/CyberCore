@@ -330,5 +330,11 @@ def test_remote_write_readiness_requires_exact_boolean_types(tmp_path: Path) -> 
     result = validate_remote_write_readiness(readiness)
 
     assert not result.ok
-    assert any("remote_write_allowed: False" in error and "expected bool" in error for error in result.errors)
-    assert any("safe_secret_aliases_only: True" in error and "expected bool" in error for error in result.errors)
+    assert any(
+        "remote_write_allowed: False" in error and "expected bool" in error
+        for error in result.errors
+    )
+    assert any(
+        "safe_secret_aliases_only: True" in error and "expected bool" in error
+        for error in result.errors
+    )
