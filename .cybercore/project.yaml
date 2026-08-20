@@ -25,9 +25,9 @@ canonical_sources:
 current:
   milestone: WB-0028 Self-Deployment Staging Loop v0 active
   active_artifact: WB-0028
-  branch: fix/adr-0006-post-merge-reconciliation
-  pull_request: 43
-  last_verified_main: 2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187
+  branch: docs/adr-0006-decision-readiness
+  pull_request: 44
+  last_verified_main: 4ca00fb7e1a6b618746afb2045e230a1763256e4
 
 status:
   ccl_specification: complete_draft
@@ -64,7 +64,8 @@ status:
   wb0028_self_deployment_staging_foundation: merged
   lg0001_sot_reconciler: merged_verified
   lg0002_trusted_source_ingest: merged_verified
-  self_deployment_staging_boundary_adr: proposed_adr_0006
+  pr43_adr_identifier_reconciliation: merged_verified
+  self_deployment_staging_boundary_adr: accepted_adr_0006
 
 completed:
   - artifact: WB-0015
@@ -147,11 +148,16 @@ completed:
     pull_request: 41
     merge_commit: 2cdfe5ffd1f6cd16e5a7a64cbc2c5f82c364e187
     verification: 244_passed_ci_codeql
+  - artifact: PR43-adr-identifier-and-post-merge-reconciliation
+    pull_request: 43
+    merge_commit: 4ca00fb7e1a6b618746afb2045e230a1763256e4
+    verification: ci_73_codeql_70_passed
 
 next:
-  - review proposed ADR-0006 for the staging-only self-deployment boundary
+  - merge PR #44 after exact-head CI/CodeQL and review pass
+  - reconcile post-merge state on a fresh branch from the resulting main
+  - implement the separately authorized disabled/manual staging workflow plus manifest/target-validator slice
   - keep live staging deployment blocked until staging target identifiers, secret aliases, rollback, and effect verifier are verified
-  - add the next staging workflow slice only after the target contract and authority gates are satisfied
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 
