@@ -65,7 +65,7 @@ status:
   lg0001_sot_reconciler: merged_verified
   lg0002_trusted_source_ingest: merged_verified
   pr43_adr_identifier_reconciliation: merged_verified
-  self_deployment_staging_boundary_adr: proposed_ready_for_decision
+  self_deployment_staging_boundary_adr: accepted_adr_0006
 
 completed:
   - artifact: WB-0015
@@ -154,9 +154,10 @@ completed:
     verification: ci_73_codeql_70_passed
 
 next:
-  - explicitly decide whether to accept proposed ADR-0006 staging-only self-deployment boundary
+  - merge PR #44 after exact-head CI/CodeQL and review pass
+  - reconcile post-merge state on a fresh branch from the resulting main
+  - implement the separately authorized disabled/manual staging workflow plus manifest/target-validator slice
   - keep live staging deployment blocked until staging target identifiers, secret aliases, rollback, and effect verifier are verified
-  - if ADR-0006 is accepted, separately authorize the next disabled/manual staging workflow and manifest-validator slice
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 
