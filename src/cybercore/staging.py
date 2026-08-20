@@ -125,6 +125,10 @@ EXPECTED_BLOCKED_UNTIL = {
     "operator_authorization_status": "APPROVED",
 }
 YAML_MERGE_TAG = "tag:yaml.org,2002:merge"
+STAGING_URL_SAFE_REFERENCE = "INTERSERVER_STAGING_URL_REFERENCE"
+STAGING_PATH_SAFE_REFERENCE = "INTERSERVER_STAGING_PATH_REFERENCE"
+ROLLBACK_METHOD = "immutable_release_directory_with_current_symlink_or_timestamped_backup"
+OPERATOR_AUTHORIZATION_REFERENCE = "OPERATOR_AUTHORIZATION_REFERENCE"
 
 
 @dataclass(frozen=True)
@@ -226,12 +230,6 @@ def _require_value(
             f"readiness evidence requires {key}: {expected}; got {value!r} "
             f"({type(value).__name__}, expected {type(expected).__name__})"
         )
-
-
-def _require_string(mapping: dict[str, object], key: str, errors: list[str]) -> None:
-    value = mapping.get(key)
-    if not isinstance(value, str) or not value.strip():
-        errors.append(f"readiness evidence requires non-empty string: {key}")
 
 
 def _require_string_set(
@@ -354,8 +352,15 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
         errors.append(f"missing remote-write readiness evidence: {path}")
         return ValidationResult(False, tuple(errors))
 
+    if "#" in text:
+        errors.append("readiness evidence forbids YAML comments")
+
     for literal in _find_denied_literals(text):
         errors.append(f"readiness evidence contains denied literal pattern: {literal}")
+
+    if errors:
+        warnings.append("live staging remote write remains blocked")
+        return ValidationResult(False, tuple(errors), tuple(warnings))
 
     try:
         node = yaml.compose(text, Loader=yaml.SafeLoader)
@@ -401,9 +406,19 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
     if identity is not None:
         _reject_unknown_keys(identity, READINESS_IDENTITY_KEYS, "staging_target_identity", errors)
         _require_value(identity, "staging_url_status", "VERIFIED", errors)
-        _require_string(identity, "staging_url_safe_reference", errors)
+        _require_value(
+            identity,
+            "staging_url_safe_reference",
+            STAGING_URL_SAFE_REFERENCE,
+            errors,
+        )
         _require_value(identity, "staging_path_status", "VERIFIED", errors)
-        _require_string(identity, "staging_path_safe_reference", errors)
+        _require_value(
+            identity,
+            "staging_path_safe_reference",
+            STAGING_PATH_SAFE_REFERENCE,
+            errors,
+        )
         _require_value(identity, "production_document_root_excluded", "VERIFIED", errors)
 
     secret_aliases = _require_mapping(document, "secret_alias_readiness", errors)
@@ -422,7 +437,7 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
     if rollback is not None:
         _reject_unknown_keys(rollback, READINESS_ROLLBACK_KEYS, "rollback_readiness", errors)
         _require_value(rollback, "rollback_status", "VERIFIED", errors)
-        _require_string(rollback, "rollback_method", errors)
+        _require_value(rollback, "rollback_method", ROLLBACK_METHOD, errors)
         _require_value(rollback, "rollback_tested", True, errors)
 
     verifier = _require_mapping(document, "effect_verifier_readiness", errors)
@@ -445,7 +460,12 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
             errors,
         )
         _require_value(authorization, "operator_authorization_status", "APPROVED", errors)
-        _require_string(authorization, "authorization_reference", errors)
+        _require_value(
+            authorization,
+            "authorization_reference",
+            OPERATOR_AUTHORIZATION_REFERENCE,
+            errors,
+        )
 
     _validate_blocked_until(document, errors)
 
