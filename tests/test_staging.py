@@ -168,13 +168,13 @@ def test_remote_write_readiness_rejects_duplicate_remote_write_override(
 ) -> None:
     readiness = tmp_path / "readiness.yaml"
     readiness.write_text(
-        _ready_readiness_text() + "\nremote_write_allowed: true\n", encoding="utf-8"
+        "remote_write_allowed: true\n" + _ready_readiness_text(), encoding="utf-8"
     )
 
     result = validate_remote_write_readiness(readiness)
 
     assert not result.ok
-    assert any("remote_write_allowed: False" in error for error in result.errors)
+    assert any("duplicate YAML key: remote_write_allowed" in error for error in result.errors)
 
 
 def test_remote_write_readiness_rejects_plaintext_secret_literals(tmp_path: Path) -> None:
@@ -210,3 +210,39 @@ def test_remote_write_readiness_requires_expected_secret_aliases(tmp_path: Path)
 
     assert not result.ok
     assert any("INTERSERVER_STAGING_HOST" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_unexpected_secret_aliases(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text().replace(
+            "    - INTERSERVER_STAGING_HOST\n",
+            "    - INTERSERVER_STAGING_HOST\n    - hunter2\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("unexpected required_aliases: hunter2" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_unexpected_effect_checks(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text().replace(
+            "    - receipt_is_stored_without_secrets\n",
+            "    - receipt_is_stored_without_secrets\n    - arbitrary_extra_check\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any(
+        "unexpected required_checks: arbitrary_extra_check" in error for error in result.errors
+    )
