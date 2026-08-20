@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0028 Self-Deployment Staging Loop v0 active
-  active_artifact: WB-0028
-  branch: docs/adr-0006-decision-readiness
-  pull_request: 44
-  last_verified_main: 4ca00fb7e1a6b618746afb2045e230a1763256e4
+  milestone: WB-0029 Disabled Manual Staging Workflow and Manifest Validator active candidate
+  active_artifact: WB-0029
+  branch: feat/wb-0029-staging-workflow-validator-v3
+  pull_request: pending
+  last_verified_main: 883abf1126c87c07c9a65f8cc59c3e2582048c92
 
 status:
   ccl_specification: complete_draft
@@ -65,7 +65,9 @@ status:
   lg0001_sot_reconciler: merged_verified
   lg0002_trusted_source_ingest: merged_verified
   pr43_adr_identifier_reconciliation: merged_verified
+  adr0006_decision_readiness: merged_verified
   self_deployment_staging_boundary_adr: accepted_adr_0006
+  staging_workflow_validator: active_candidate
 
 completed:
   - artifact: WB-0015
@@ -152,12 +154,15 @@ completed:
     pull_request: 43
     merge_commit: 4ca00fb7e1a6b618746afb2045e230a1763256e4
     verification: ci_73_codeql_70_passed
+  - artifact: ADR-0006-decision-readiness
+    pull_request: 44
+    merge_commit: 883abf1126c87c07c9a65f8cc59c3e2582048c92
+    verification: ci_codeql_passed
 
 next:
-  - merge PR #44 after exact-head CI/CodeQL and review pass
-  - reconcile post-merge state on a fresh branch from the resulting main
-  - implement the separately authorized disabled/manual staging workflow plus manifest/target-validator slice
-  - keep live staging deployment blocked until staging target identifiers, secret aliases, rollback, and effect verifier are verified
+  - validate InterServer staging target and manifest without secrets
+  - keep staging workflow manual and plan-only until first remote-write gate is separately approved
+  - add executable dry-run receipt evidence without connecting to InterServer
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 
