@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import yaml
 
 EXPECTED_TARGET_ID = "interserver-shared-hosting-staging"
+EXPECTED_PROVIDER = "InterServer"
 CANONICAL_REPOSITORY = "cyberDJs/CyberCore"
 ALLOWED_LOCAL_MODES = ("plan_only", "dry_run")
 REMOTE_MODES = {"staging_apply", "staging_apply_after_explicit_operator_approval"}
@@ -30,6 +31,30 @@ SENSITIVE_VALUE_KEYS = {
     "totp_seed",
 }
 APPROVED_SECRET_LOCATIONS = {"os_backed_secret_store", "approved_external_vault"}
+REQUIRED_PREFLIGHT = frozenset(
+    {
+        "verify_target_is_non_production",
+        "verify_target_path_is_not_production_document_root",
+        "verify_no_production_credentials_are_reused",
+        "verify_rollback_method",
+        "verify_effect_verifier",
+        "verify_operator_authorization_for_first_remote_write",
+    }
+)
+REQUIRED_EVIDENCE_FIELDS = frozenset(
+    {
+        "run_id",
+        "timestamp",
+        "repository",
+        "source_branch",
+        "source_commit",
+        "target_id",
+        "deploy_mode",
+        "verifier_result",
+        "rollback_mode",
+        "operator_authorization_reference",
+    }
+)
 
 
 class StagingValidationError(ValueError):
@@ -136,6 +161,18 @@ def _validate_secret_policy(target: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(unresolved)
 
 
+def _require_contract_members(
+    target: Mapping[str, Any],
+    *,
+    field: str,
+    required: frozenset[str],
+) -> None:
+    actual = set(_string_list(target.get(field), field))
+    missing = sorted(required - actual)
+    if missing:
+        raise StagingValidationError(f"{field} is missing required entries: {', '.join(missing)}")
+
+
 def assess_target(target: Mapping[str, Any], *, mode: str) -> TargetAssessment:
     if mode in REMOTE_MODES or mode not in ALLOWED_LOCAL_MODES:
         raise StagingValidationError(
@@ -145,10 +182,13 @@ def assess_target(target: Mapping[str, Any], *, mode: str) -> TargetAssessment:
     target_id = target.get("target_id")
     if target_id != EXPECTED_TARGET_ID:
         raise StagingValidationError(f"target_id must be {EXPECTED_TARGET_ID}")
+    if target.get("provider") != EXPECTED_PROVIDER:
+        raise StagingValidationError(f"provider must be {EXPECTED_PROVIDER}")
     if target.get("environment_class") != "staging":
         raise StagingValidationError("environment_class must be staging")
 
     production = _mapping(target.get("production_boundary"), "production_boundary")
+    production_domains = _string_list(production.get("production_domains"), "production_domains")
     if production.get("production_mutation_allowed") is not False:
         raise StagingValidationError("production mutation must remain denied")
     if production.get("production_credentials_allowed") is not False:
@@ -157,6 +197,8 @@ def assess_target(target: Mapping[str, Any], *, mode: str) -> TargetAssessment:
         raise StagingValidationError(
             "provider mutation without explicit approval must remain denied"
         )
+
+    _require_contract_members(target, field="required_preflight", required=REQUIRED_PREFLIGHT)
 
     gate_state = _mapping(target.get("current_gate_state"), "current_gate_state")
     if gate_state.get("live_staging_deploy") != "blocked":
@@ -176,17 +218,27 @@ def assess_target(target: Mapping[str, Any], *, mode: str) -> TargetAssessment:
             unresolved.append(f"staging_identity.{field}")
 
     domain_or_url = identity.get("domain_or_url")
-    production_domains = production.get("production_domains")
     if isinstance(domain_or_url, str) and not _is_unresolved(domain_or_url):
-        denied_hosts = {
-            _host(domain) for domain in _string_list(production_domains, "production_domains")
-        }
+        denied_hosts = {_host(domain) for domain in production_domains}
         if _host(domain_or_url) in denied_hosts:
             raise StagingValidationError("staging domain resolves to a denied production domain")
 
     rollback = _mapping(target.get("rollback"), "rollback")
+    if rollback.get("block_if_no_rollback_for_nontrivial_change") is not True:
+        raise StagingValidationError("rollback must block nontrivial changes when no rollback exists")
     if _is_unresolved(rollback.get("verified_mode")):
         unresolved.append("rollback.verified_mode")
+
+    evidence = _mapping(target.get("evidence"), "evidence")
+    if evidence.get("receipt_class") != "staging_deploy_receipt":
+        raise StagingValidationError("evidence receipt_class must remain staging_deploy_receipt")
+    if evidence.get("secret_values_allowed") is not False:
+        raise StagingValidationError("evidence must deny secret values")
+    _require_contract_members(
+        evidence,
+        field="required_fields",
+        required=REQUIRED_EVIDENCE_FIELDS,
+    )
 
     verifier = target.get("effect_verifier")
     if not isinstance(verifier, Mapping) or verifier.get("status") != "verified":
@@ -224,6 +276,13 @@ def _safe_relative_path(value: str, name: str) -> str:
     if path.is_absolute() or ".." in path.parts:
         raise StagingValidationError(f"{name} must be a safe relative path")
     return value
+
+
+def _validate_output_destination(output: Path, evidence_destination: str) -> None:
+    output_text = _safe_relative_path(output.as_posix(), "output")
+    evidence_text = _safe_relative_path(evidence_destination, "evidence_destination")
+    if PurePosixPath(output_text) != PurePosixPath(evidence_text):
+        raise StagingValidationError("output must match evidence_destination")
 
 
 def build_manifest(
@@ -291,6 +350,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             artifact_identity=args.artifact_identity,
             evidence_destination=args.evidence_destination,
         )
+        _validate_output_destination(args.output, args.evidence_destination)
     except (OSError, yaml.YAMLError, StagingValidationError) as exc:
         print(f"BLOCKED: {exc}")
         return 2
