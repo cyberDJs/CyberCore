@@ -155,7 +155,11 @@ def test_workflow_permissions_remain_minimal() -> None:
         jobs = workflow["jobs"]
         assert isinstance(jobs, dict)
 
-        if path in {CI_WORKFLOW_PATH, STAGING_DRY_RUN_WORKFLOW_PATH, STAGING_READINESS_WORKFLOW_PATH}:
+        if path in {
+            CI_WORKFLOW_PATH,
+            STAGING_DRY_RUN_WORKFLOW_PATH,
+            STAGING_READINESS_WORKFLOW_PATH,
+        }:
             assert workflow["permissions"] == {"contents": "read"}
         elif path == CODEQL_WORKFLOW_PATH:
             assert workflow["permissions"] == {}
