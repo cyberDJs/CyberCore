@@ -200,9 +200,7 @@ def _reject_unknown_keys(
     if non_string:
         errors.append(f"{context} contains non-string keys: {', '.join(non_string)}")
 
-    unexpected = sorted(
-        key for key in mapping if isinstance(key, str) and key not in allowed
-    )
+    unexpected = sorted(key for key in mapping if isinstance(key, str) and key not in allowed)
     if unexpected:
         errors.append(f"{context} contains unexpected keys: {', '.join(unexpected)}")
 
@@ -259,7 +257,9 @@ def _validate_blocked_until(document: dict[str, object], errors: list[str]) -> N
     seen: set[str] = set()
     for index, item in enumerate(value):
         if not isinstance(item, dict) or len(item) != 1:
-            errors.append(f"readiness evidence blocked_until item {index} must have exactly one key")
+            errors.append(
+                f"readiness evidence blocked_until item {index} must have exactly one key"
+            )
             continue
 
         key, status = next(iter(item.items()))
