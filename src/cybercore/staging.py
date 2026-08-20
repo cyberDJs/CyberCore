@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Iterable
 
 import yaml
+from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 
 
 DENIED_LITERAL_PATTERNS = (
@@ -121,6 +122,23 @@ def _extract_scalar(text: str, key: str) -> str | None:
     return None
 
 
+def _collect_duplicate_yaml_keys(node: Node, errors: list[str]) -> None:
+    if isinstance(node, MappingNode):
+        seen: set[str] = set()
+        for key_node, value_node in node.value:
+            if not isinstance(key_node, ScalarNode):
+                errors.append("readiness evidence mapping keys must be scalar values")
+            else:
+                key = key_node.value
+                if key in seen:
+                    errors.append(f"readiness evidence contains duplicate YAML key: {key}")
+                seen.add(key)
+            _collect_duplicate_yaml_keys(value_node, errors)
+    elif isinstance(node, SequenceNode):
+        for item in node.value:
+            _collect_duplicate_yaml_keys(item, errors)
+
+
 def _require_mapping(
     document: dict[str, object], key: str, errors: list[str]
 ) -> dict[str, object] | None:
@@ -146,9 +164,16 @@ def _require_string_set(
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         errors.append(f"readiness evidence requires string list: {key}")
         return
-    missing = sorted(required - set(value))
+
+    actual = set(value)
+    missing = sorted(required - actual)
+    unexpected = sorted(actual - required)
     if missing:
         errors.append(f"readiness evidence missing {key}: {', '.join(missing)}")
+    if unexpected:
+        errors.append(f"readiness evidence contains unexpected {key}: {', '.join(unexpected)}")
+    if len(value) != len(actual):
+        errors.append(f"readiness evidence contains duplicate values in {key}")
 
 
 def validate_target_contract(path: Path) -> ValidationResult:
@@ -217,6 +242,21 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
 
     for literal in _find_denied_literals(text):
         errors.append(f"readiness evidence contains denied literal pattern: {literal}")
+
+    try:
+        node = yaml.compose(text, Loader=yaml.SafeLoader)
+    except yaml.YAMLError as exc:
+        errors.append(f"readiness evidence is invalid YAML: {exc}")
+        return ValidationResult(False, tuple(errors))
+
+    if node is None:
+        errors.append("readiness evidence must not be empty")
+        return ValidationResult(False, tuple(errors))
+
+    _collect_duplicate_yaml_keys(node, errors)
+    if errors:
+        warnings.append("live staging remote write remains blocked")
+        return ValidationResult(False, tuple(errors), tuple(warnings))
 
     try:
         loaded = yaml.safe_load(text)
