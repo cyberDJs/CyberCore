@@ -167,9 +167,7 @@ def test_remote_write_readiness_rejects_duplicate_remote_write_override(
     tmp_path: Path,
 ) -> None:
     readiness = tmp_path / "readiness.yaml"
-    readiness.write_text(
-        "remote_write_allowed: true\n" + _ready_readiness_text(), encoding="utf-8"
-    )
+    readiness.write_text("remote_write_allowed: true\n" + _ready_readiness_text(), encoding="utf-8")
 
     result = validate_remote_write_readiness(readiness)
 
