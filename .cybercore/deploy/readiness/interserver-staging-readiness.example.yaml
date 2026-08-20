@@ -52,8 +52,3 @@ blocked_until:
   - rollback_status: VERIFIED
   - effect_verifier_status: VERIFIED
   - operator_authorization_status: APPROVED
-
-notes: >-
-  This file is intentionally not ready. It proves the gate fails closed until safe
-  target identity, secret aliases, rollback, effect verification, and fresh
-  operator authorization are all present without plaintext secret values.
