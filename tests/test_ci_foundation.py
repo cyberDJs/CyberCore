@@ -12,6 +12,7 @@ PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 CI_WORKFLOW_PATH = WORKFLOW_DIR / "ci.yml"
 CODEQL_WORKFLOW_PATH = WORKFLOW_DIR / "codeql.yml"
+STAGING_DRY_RUN_WORKFLOW_PATH = WORKFLOW_DIR / "staging-dry-run.yml"
 VERIFY_SCRIPT_PATH = REPO_ROOT / "scripts" / "verify.sh"
 ALLOWED_ACTIONS = {
     "actions/checkout",
@@ -115,7 +116,7 @@ def test_pyproject_configures_ruff_and_pyright_baselines() -> None:
 def test_all_workflows_parse_as_valid_yaml() -> None:
     paths = _workflow_paths()
 
-    assert paths == [CI_WORKFLOW_PATH, CODEQL_WORKFLOW_PATH]
+    assert paths == [CI_WORKFLOW_PATH, CODEQL_WORKFLOW_PATH, STAGING_DRY_RUN_WORKFLOW_PATH]
     for path in paths:
         workflow = _workflow(path)
         assert isinstance(workflow, dict)
@@ -148,7 +149,7 @@ def test_workflow_permissions_remain_minimal() -> None:
         jobs = workflow["jobs"]
         assert isinstance(jobs, dict)
 
-        if path == CI_WORKFLOW_PATH:
+        if path in {CI_WORKFLOW_PATH, STAGING_DRY_RUN_WORKFLOW_PATH}:
             assert workflow["permissions"] == {"contents": "read"}
         elif path == CODEQL_WORKFLOW_PATH:
             assert workflow["permissions"] == {}
@@ -223,6 +224,28 @@ def test_ci_workflow_security_and_action_pinning_invariants() -> None:
         }
         if ref.group(1) == "actions/checkout":
             assert step.get("with", {}).get("persist-credentials") is False
+
+
+def test_staging_dry_run_workflow_contract() -> None:
+    workflow_text = STAGING_DRY_RUN_WORKFLOW_PATH.read_text(encoding="utf-8")
+    workflow = _workflow(STAGING_DRY_RUN_WORKFLOW_PATH)
+    triggers = _triggers(workflow)
+    job = _job_named(workflow, "validate-plan-only")
+    step_runs = "\n".join(step.get("run", "") for step in job["steps"])
+
+    assert workflow["name"] == "Staging dry run"
+    assert set(triggers) == {"workflow_dispatch"}
+    assert triggers["workflow_dispatch"]["inputs"]["confirm"]["required"] is True
+    assert "DRY_RUN_ONLY" in workflow_text
+    assert job["if"] == "${{ inputs.confirm == 'DRY_RUN_ONLY' }}"
+    assert job["runs-on"] == "ubuntu-latest"
+    assert "scripts/validate_staging_plan.py" in step_runs
+    assert "remote_write=false" in step_runs
+    assert "production_write=false" in step_runs
+    assert "secrets_read=false" in step_runs
+    assert "rsync" not in workflow_text
+    assert "sftp" not in workflow_text.lower()
+    assert "scp" not in workflow_text.lower()
 
 
 def test_ci_workflow_defines_required_checks_and_python_matrix() -> None:

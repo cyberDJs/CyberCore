@@ -1,0 +1,32 @@
+version: 1
+
+run_id: WB0029-PLAN-EXAMPLE
+repository: cyberDJs/CyberCore
+source_branch: feat/wb-0029-staging-workflow-validator
+source_commit: TBD
+
+target_id: interserver-shared-hosting-staging
+deploy_mode: plan_only
+rollback_mode: no_remote_write
+
+effect_verifier:
+  mode: planned
+  required_before_remote_write: true
+  checks:
+    - staging_url_returns_success
+    - deployed_version_marker_matches_source_commit
+    - production_url_is_unchanged
+    - no_denied_path_is_touched
+    - receipt_is_stored_without_secrets
+
+operator_authorization_reference: NOT_REQUIRED_FOR_PLAN_ONLY
+
+secret_aliases_required:
+  - INTERSERVER_STAGING_HOST
+  - INTERSERVER_STAGING_USER
+  - INTERSERVER_STAGING_PORT
+  - INTERSERVER_STAGING_SSH_KEY_OR_SFTP_PASSWORD
+
+secret_values_allowed: false
+remote_write_allowed: false
+production_write_allowed: false
