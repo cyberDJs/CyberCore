@@ -16,6 +16,26 @@ MANIFEST = ROOT / ".cybercore/deploy/manifests/interserver-staging-plan-only.exa
 READINESS = ROOT / ".cybercore/deploy/readiness/interserver-staging-readiness.example.yaml"
 
 
+def _ready_readiness_text() -> str:
+    return (
+        READINESS.read_text(encoding="utf-8")
+        .replace("staging_url_status: UNKNOWN", "staging_url_status: VERIFIED")
+        .replace("staging_path_status: UNKNOWN", "staging_path_status: VERIFIED")
+        .replace(
+            "production_document_root_excluded: UNKNOWN",
+            "production_document_root_excluded: VERIFIED",
+        )
+        .replace("secret_alias_status: UNKNOWN", "secret_alias_status: VERIFIED")
+        .replace("rollback_status: UNKNOWN", "rollback_status: VERIFIED")
+        .replace("rollback_tested: false", "rollback_tested: true")
+        .replace("effect_verifier_status: UNKNOWN", "effect_verifier_status: VERIFIED")
+        .replace(
+            "operator_authorization_status: UNKNOWN",
+            "operator_authorization_status: APPROVED",
+        )
+    )
+
+
 def test_target_contract_is_fail_closed_and_non_secret() -> None:
     result = validate_target_contract(TARGET)
 
@@ -80,6 +100,53 @@ def test_remote_write_readiness_example_is_fail_closed() -> None:
     assert any("operator_authorization_status" in error for error in result.errors)
 
 
+def test_remote_write_readiness_can_be_ready_without_granting_remote_write(
+    tmp_path: Path,
+) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(_ready_readiness_text(), encoding="utf-8")
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert result.ok, result.as_text()
+    assert "remote_write_allowed: false" in readiness.read_text(encoding="utf-8")
+    assert "production_write_allowed: false" in readiness.read_text(encoding="utf-8")
+
+
+def test_remote_write_readiness_requires_operator_approval_not_verification(
+    tmp_path: Path,
+) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text().replace(
+            "operator_authorization_status: APPROVED",
+            "operator_authorization_status: VERIFIED",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("operator_authorization_status: APPROVED" in error for error in result.errors)
+
+
+def test_remote_write_readiness_requires_verified_target_statuses(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text().replace(
+            "staging_url_status: VERIFIED", "staging_url_status: APPROVED", 1
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("staging_url_status: VERIFIED" in error for error in result.errors)
+
+
 def test_remote_write_readiness_rejects_remote_write_claims(tmp_path: Path) -> None:
     readiness = tmp_path / "readiness.yaml"
     readiness.write_text(
@@ -92,8 +159,22 @@ def test_remote_write_readiness_rejects_remote_write_claims(tmp_path: Path) -> N
     result = validate_remote_write_readiness(readiness)
 
     assert not result.ok
-    assert any("remote_write_requested: false" in error for error in result.errors)
-    assert any("remote_write_allowed: false" in error for error in result.errors)
+    assert any("remote_write_requested: False" in error for error in result.errors)
+    assert any("remote_write_allowed: False" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_duplicate_remote_write_override(
+    tmp_path: Path,
+) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text() + "\nremote_write_allowed: true\n", encoding="utf-8"
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("remote_write_allowed: False" in error for error in result.errors)
 
 
 def test_remote_write_readiness_rejects_plaintext_secret_literals(tmp_path: Path) -> None:
@@ -106,3 +187,26 @@ def test_remote_write_readiness_rejects_plaintext_secret_literals(tmp_path: Path
 
     assert not result.ok
     assert any("denied literal" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_yaml_secret_value_fields(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(_ready_readiness_text() + "\npassword: bad\n", encoding="utf-8")
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("denied literal" in error for error in result.errors)
+
+
+def test_remote_write_readiness_requires_expected_secret_aliases(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text().replace("    - INTERSERVER_STAGING_HOST\n", "", 1),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("INTERSERVER_STAGING_HOST" in error for error in result.errors)
