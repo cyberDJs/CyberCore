@@ -114,4 +114,6 @@ def test_target_contract_rejects_excessive_anchor_free_yaml_nesting(tmp_path: Pa
     result = validate_target_contract(target)
 
     assert not result.ok
-    assert any("target contract exceeds safe YAML nesting depth" in error for error in result.errors)
+    assert any(
+        "target contract exceeds safe YAML nesting depth" in error for error in result.errors
+    )
