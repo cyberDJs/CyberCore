@@ -216,6 +216,15 @@ def _reject_yaml_metadata(text: str, errors: list[str]) -> None:
         errors.append(f"readiness evidence is invalid YAML: {exc}")
 
 
+def _reject_target_yaml_metadata(text: str, errors: list[str]) -> bool:
+    metadata_errors: list[str] = []
+    _reject_yaml_metadata(text, metadata_errors)
+    errors.extend(
+        error.replace("readiness evidence", "target contract") for error in metadata_errors
+    )
+    return not metadata_errors
+
+
 def _collect_duplicate_yaml_keys(node: Node, errors: list[str]) -> None:
     if isinstance(node, MappingNode):
         seen: set[str] = set()
@@ -374,6 +383,9 @@ def validate_target_contract(path: Path) -> ValidationResult:
 
     for literal in _find_denied_literals(text):
         errors.append(f"target contract contains denied literal pattern: {literal}")
+
+    if not _reject_target_yaml_metadata(text, errors):
+        return ValidationResult(False, tuple(errors))
 
     try:
         node = yaml.compose(text, Loader=yaml.SafeLoader)
