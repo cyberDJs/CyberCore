@@ -6,7 +6,18 @@ from typing import Iterable
 
 import yaml
 from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
-from yaml.tokens import AliasToken, AnchorToken, DirectiveToken
+from yaml.tokens import (
+    AliasToken,
+    AnchorToken,
+    BlockEndToken,
+    BlockMappingStartToken,
+    BlockSequenceStartToken,
+    DirectiveToken,
+    FlowMappingEndToken,
+    FlowMappingStartToken,
+    FlowSequenceEndToken,
+    FlowSequenceStartToken,
+)
 
 
 DENIED_LITERAL_PATTERNS = (
@@ -41,12 +52,23 @@ REQUIRED_TARGET_TOKENS = (
     "INTERSERVER_STAGING_SSH_KEY_OR_SFTP_PASSWORD",
     "verify_target_is_non_production",
     "verify_target_path_is_not_production_document_root",
+    "verify_deployment_protocol_and_target_capability",
     "verify_no_production_credentials_are_reused",
     "verify_rollback_method",
     "verify_effect_verifier",
     "verify_operator_authorization_for_first_remote_write",
     "live_staging_deploy: blocked",
 )
+
+REQUIRED_TARGET_PREFLIGHT_CHECKS = {
+    "verify_target_is_non_production",
+    "verify_target_path_is_not_production_document_root",
+    "verify_deployment_protocol_and_target_capability",
+    "verify_no_production_credentials_are_reused",
+    "verify_rollback_method",
+    "verify_effect_verifier",
+    "verify_operator_authorization_for_first_remote_write",
+}
 
 REQUIRED_MANIFEST_TOKENS = (
     "run_id:",
@@ -61,6 +83,7 @@ REQUIRED_MANIFEST_TOKENS = (
 )
 
 ALLOWED_DEPLOY_MODES = ("plan_only", "dry_run")
+ALLOWED_DEPLOYMENT_PROTOCOLS = {"SFTP", "SSH"}
 REQUIRED_STAGING_SECRET_ALIASES = {
     "INTERSERVER_STAGING_HOST",
     "INTERSERVER_STAGING_USER",
@@ -85,6 +108,7 @@ READINESS_TOP_LEVEL_KEYS = {
     "safe_secret_aliases_only",
     "fresh_operator_authorization_required",
     "staging_target_identity",
+    "deployment_capability_readiness",
     "secret_alias_readiness",
     "rollback_readiness",
     "effect_verifier_readiness",
@@ -97,6 +121,14 @@ READINESS_IDENTITY_KEYS = {
     "staging_path_status",
     "staging_path_safe_reference",
     "production_document_root_excluded",
+}
+READINESS_DEPLOYMENT_CAPABILITY_KEYS = {
+    "deployment_protocol_status",
+    "deployment_protocol",
+    "target_capability_status",
+    "target_capability_reference",
+    "capability_evidence_secret_values_recorded",
+    "capability_evidence_remote_write_performed",
 }
 READINESS_SECRET_ALIAS_KEYS = {
     "secret_alias_status",
@@ -120,14 +152,25 @@ READINESS_AUTHORIZATION_KEYS = {
 EXPECTED_BLOCKED_UNTIL = {
     "staging_url_status": "VERIFIED",
     "staging_path_status": "VERIFIED",
+    "deployment_protocol_status": "VERIFIED",
+    "target_capability_status": "VERIFIED",
     "secret_alias_status": "VERIFIED",
     "rollback_status": "VERIFIED",
     "effect_verifier_status": "VERIFIED",
     "operator_authorization_status": "APPROVED",
 }
 YAML_MERGE_TAG = "tag:yaml.org,2002:merge"
+MAX_YAML_NESTING_DEPTH = 64
+YAML_NESTING_START_TOKENS = (
+    BlockMappingStartToken,
+    BlockSequenceStartToken,
+    FlowMappingStartToken,
+    FlowSequenceStartToken,
+)
+YAML_NESTING_END_TOKENS = (BlockEndToken, FlowMappingEndToken, FlowSequenceEndToken)
 STAGING_URL_SAFE_REFERENCE = "INTERSERVER_STAGING_URL_REFERENCE"
 STAGING_PATH_SAFE_REFERENCE = "INTERSERVER_STAGING_PATH_REFERENCE"
+TARGET_CAPABILITY_REFERENCE = "INTERSERVER_STAGING_TARGET_CAPABILITY_REFERENCE"
 ROLLBACK_METHOD = "immutable_release_directory_with_current_symlink_or_timestamped_backup"
 OPERATOR_AUTHORIZATION_REFERENCE = "OPERATOR_AUTHORIZATION_REFERENCE"
 
@@ -180,16 +223,38 @@ def _extract_scalar(text: str, key: str) -> str | None:
 
 
 def _reject_yaml_metadata(text: str, errors: list[str]) -> None:
+    nesting_depth = 0
     try:
         for token in yaml.scan(text, Loader=yaml.SafeLoader):
+            if isinstance(token, YAML_NESTING_START_TOKENS):
+                nesting_depth += 1
+                if nesting_depth > MAX_YAML_NESTING_DEPTH:
+                    errors.append(
+                        f"readiness evidence exceeds safe YAML nesting depth ({MAX_YAML_NESTING_DEPTH})"
+                    )
+                    return
+            elif isinstance(token, YAML_NESTING_END_TOKENS):
+                nesting_depth = max(0, nesting_depth - 1)
+
             if isinstance(token, AnchorToken):
                 errors.append("readiness evidence forbids YAML anchors")
             elif isinstance(token, AliasToken):
                 errors.append("readiness evidence forbids YAML aliases")
             elif isinstance(token, DirectiveToken):
                 errors.append("readiness evidence forbids YAML directives")
+    except RecursionError:
+        errors.append("readiness evidence exceeds safe YAML nesting depth")
     except yaml.YAMLError as exc:
         errors.append(f"readiness evidence is invalid YAML: {exc}")
+
+
+def _reject_target_yaml_metadata(text: str, errors: list[str]) -> bool:
+    metadata_errors: list[str] = []
+    _reject_yaml_metadata(text, metadata_errors)
+    errors.extend(
+        error.replace("readiness evidence", "target contract") for error in metadata_errors
+    )
+    return not metadata_errors
 
 
 def _collect_duplicate_yaml_keys(node: Node, errors: list[str]) -> None:
@@ -211,6 +276,14 @@ def _collect_duplicate_yaml_keys(node: Node, errors: list[str]) -> None:
     elif isinstance(node, SequenceNode):
         for item in node.value:
             _collect_duplicate_yaml_keys(item, errors)
+
+
+def _collect_target_yaml_structure_errors(node: Node, errors: list[str]) -> None:
+    structural_errors: list[str] = []
+    _collect_duplicate_yaml_keys(node, structural_errors)
+    errors.extend(
+        error.replace("readiness evidence", "target contract") for error in structural_errors
+    )
 
 
 def _reject_unknown_keys(
@@ -246,6 +319,15 @@ def _require_value(
         )
 
 
+def _require_allowed_string(
+    mapping: dict[str, object], key: str, allowed: set[str], errors: list[str]
+) -> None:
+    value = mapping.get(key)
+    if not isinstance(value, str) or value not in allowed:
+        expected = ", ".join(sorted(allowed))
+        errors.append(f"readiness evidence requires {key} to be one of: {expected}; got {value!r}")
+
+
 def _require_string_set(
     mapping: dict[str, object], key: str, required: set[str], errors: list[str]
 ) -> None:
@@ -263,6 +345,25 @@ def _require_string_set(
         errors.append(f"readiness evidence contains unexpected {key}: {', '.join(unexpected)}")
     if len(value) != len(actual):
         errors.append(f"readiness evidence contains duplicate values in {key}")
+
+
+def _validate_target_required_preflight(document: dict[str, object], errors: list[str]) -> None:
+    value = document.get("required_preflight")
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        errors.append("target contract requires string list: required_preflight")
+        return
+
+    actual = set(value)
+    missing = sorted(REQUIRED_TARGET_PREFLIGHT_CHECKS - actual)
+    unexpected = sorted(actual - REQUIRED_TARGET_PREFLIGHT_CHECKS)
+    if missing:
+        errors.append(f"target contract required_preflight missing checks: {', '.join(missing)}")
+    if unexpected:
+        errors.append(
+            f"target contract required_preflight contains unexpected checks: {', '.join(unexpected)}"
+        )
+    if len(value) != len(actual):
+        errors.append("target contract required_preflight contains duplicate checks")
 
 
 def _validate_blocked_until(document: dict[str, object], errors: list[str]) -> None:
@@ -314,6 +415,40 @@ def validate_target_contract(path: Path) -> ValidationResult:
 
     for literal in _find_denied_literals(text):
         errors.append(f"target contract contains denied literal pattern: {literal}")
+
+    if not _reject_target_yaml_metadata(text, errors):
+        return ValidationResult(False, tuple(errors))
+
+    try:
+        node = yaml.compose(text, Loader=yaml.SafeLoader)
+    except RecursionError:
+        errors.append("target contract exceeds safe YAML nesting depth")
+        return ValidationResult(False, tuple(errors))
+    except yaml.YAMLError as exc:
+        errors.append(f"target contract is invalid YAML: {exc}")
+        node = None
+
+    if node is not None:
+        try:
+            _collect_target_yaml_structure_errors(node, errors)
+        except RecursionError:
+            errors.append("target contract exceeds safe YAML nesting depth")
+            return ValidationResult(False, tuple(errors))
+
+    try:
+        loaded = yaml.safe_load(text)
+    except RecursionError:
+        errors.append("target contract exceeds safe YAML nesting depth")
+        return ValidationResult(False, tuple(errors))
+    except yaml.YAMLError as exc:
+        if not any(error.startswith("target contract is invalid YAML:") for error in errors):
+            errors.append(f"target contract is invalid YAML: {exc}")
+        loaded = None
+
+    if not isinstance(loaded, dict):
+        errors.append("target contract must be a mapping")
+    else:
+        _validate_target_required_preflight(loaded, errors)
 
     if "eimyherrer.com" not in text:
         errors.append("target contract must explicitly name production domain boundary")
@@ -435,6 +570,41 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
             errors,
         )
         _require_value(identity, "production_document_root_excluded", "VERIFIED", errors)
+
+    capability = _require_mapping(document, "deployment_capability_readiness", errors)
+    if capability is not None:
+        _reject_unknown_keys(
+            capability,
+            READINESS_DEPLOYMENT_CAPABILITY_KEYS,
+            "deployment_capability_readiness",
+            errors,
+        )
+        _require_value(capability, "deployment_protocol_status", "VERIFIED", errors)
+        _require_allowed_string(
+            capability,
+            "deployment_protocol",
+            ALLOWED_DEPLOYMENT_PROTOCOLS,
+            errors,
+        )
+        _require_value(capability, "target_capability_status", "VERIFIED", errors)
+        _require_value(
+            capability,
+            "target_capability_reference",
+            TARGET_CAPABILITY_REFERENCE,
+            errors,
+        )
+        _require_value(
+            capability,
+            "capability_evidence_secret_values_recorded",
+            False,
+            errors,
+        )
+        _require_value(
+            capability,
+            "capability_evidence_remote_write_performed",
+            False,
+            errors,
+        )
 
     secret_aliases = _require_mapping(document, "secret_alias_readiness", errors)
     if secret_aliases is not None:

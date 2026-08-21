@@ -17,6 +17,14 @@ staging_target_identity:
   staging_path_safe_reference: TBD_NON_PRODUCTION_STAGING_PATH
   production_document_root_excluded: UNKNOWN
 
+deployment_capability_readiness:
+  deployment_protocol_status: UNKNOWN
+  deployment_protocol: UNVERIFIED
+  target_capability_status: UNKNOWN
+  target_capability_reference: INTERSERVER_STAGING_TARGET_CAPABILITY_REFERENCE
+  capability_evidence_secret_values_recorded: false
+  capability_evidence_remote_write_performed: false
+
 secret_alias_readiness:
   secret_alias_status: UNKNOWN
   required_aliases:
@@ -48,6 +56,8 @@ operator_authorization:
 blocked_until:
   - staging_url_status: VERIFIED
   - staging_path_status: VERIFIED
+  - deployment_protocol_status: VERIFIED
+  - target_capability_status: VERIFIED
   - secret_alias_status: VERIFIED
   - rollback_status: VERIFIED
   - effect_verifier_status: VERIFIED
