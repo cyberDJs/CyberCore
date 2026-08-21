@@ -73,6 +73,7 @@ status:
   pr48_post_merge_reconciliation: merged_verified
   wb0030_staging_readiness_gate: merged_verified
   wb0031_staging_runtime_gate_preflight: active_candidate
+  staging_deployment_protocol_capability: unknown_until_verified
 
 completed:
   - artifact: WB-0015
@@ -125,7 +126,7 @@ completed:
     verification: 218_passed
   - artifact: WB-0027
     pull_request: 34
-    merge_commit: 94cb1998274e31e9ce3314f59d2e0ae290bc40cc
+    merge_commit: 94cb1998274e31e9ce3310590c8f21be5e24ec2c0e
     verification: 221_passed
   - artifact: WB-0027-post-merge-state-reconciliation
     pull_request: 35
@@ -179,7 +180,7 @@ completed:
 next:
   - reconcile PR49 post-merge state from main@2de294bb3334e4194769f3b883d58a2e5e3a8ea5
   - define WB-0031 staging runtime gate preflight without InterServer remote write or plaintext secrets
-  - keep live staging deployment blocked until all readiness statuses are VERIFIED and fresh operator authorization is APPROVED
+  - keep live staging deployment blocked until all readiness statuses are VERIFIED, deployment protocol and target capability are VERIFIED, and fresh operator authorization is APPROVED
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 
