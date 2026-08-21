@@ -310,7 +310,9 @@ def _validate_target_required_preflight(document: dict[str, object], errors: lis
     if missing:
         errors.append(f"target contract required_preflight missing checks: {', '.join(missing)}")
     if unexpected:
-        errors.append(f"target contract required_preflight contains unexpected checks: {', '.join(unexpected)}")
+        errors.append(
+            f"target contract required_preflight contains unexpected checks: {', '.join(unexpected)}"
+        )
     if len(value) != len(actual):
         errors.append("target contract required_preflight contains duplicate checks")
 
