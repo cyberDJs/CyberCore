@@ -12,7 +12,7 @@ Active candidate.
 
 ## Goal
 
-Prepare the evidence, authorization, rollback, and verification requirements for a future first live staging remote-write work block without performing any remote write.
+Prepare the evidence, authorization, rollback, deployment-capability, and verification requirements for a future first live staging remote-write work block without performing any remote write.
 
 ## Scope
 
@@ -21,6 +21,7 @@ Allowed:
 - non-secret documentation;
 - state and audit evidence;
 - closed checklist for staging target identity evidence;
+- closed checklist for deployment protocol and target-capability evidence;
 - closed checklist for secret alias readiness evidence without secret values;
 - rollback proof requirements;
 - effect-verifier proof requirements;
@@ -35,6 +36,7 @@ Out of scope:
 - DNS, mail, billing, VPS, WordPress, Nextcloud, or provider mutation;
 - reading, storing, printing, or transmitting plaintext secrets;
 - creating or changing GitHub Environment secrets;
+- treating target metadata as proof that a deployment protocol/capability has been verified;
 - treating aliases or documentation as proof that a secret value exists.
 
 ## Required evidence shape
@@ -44,11 +46,12 @@ A future remote-write request must have safe evidence for:
 1. staging URL identity;
 2. staging filesystem path identity;
 3. production document root exclusion;
-4. required secret aliases present without value disclosure;
-5. rollback method and rollback test status;
-6. effect verifier checks;
-7. fresh operator authorization reference;
-8. stop-line acknowledgement for production and provider mutation.
+4. deployment protocol/method and staging target capability verified for the intended staging-only operation;
+5. required secret aliases present without value disclosure;
+6. rollback method and rollback test status;
+7. effect verifier checks;
+8. fresh operator authorization reference;
+9. stop-line acknowledgement for production and provider mutation.
 
 ## Exit criteria
 
@@ -56,7 +59,7 @@ This work block can stop at `READY_FOR_MERGE` when:
 
 - PR #49 post-merge state is reconciled;
 - `WB-0031` is recorded as the active candidate;
-- the new preflight requirements remain non-secret and non-mutating;
+- the new preflight requirements include deployment protocol/target capability and remain non-secret and non-mutating;
 - hosted CI and CodeQL pass on the exact head;
 - manual review passes;
 - no unresolved review threads remain.
