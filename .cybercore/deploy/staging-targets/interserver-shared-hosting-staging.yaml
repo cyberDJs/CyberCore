@@ -44,6 +44,7 @@ secret_policy:
 required_preflight:
   - verify_target_is_non_production
   - verify_target_path_is_not_production_document_root
+  - verify_deployment_protocol_and_target_capability
   - verify_no_production_credentials_are_reused
   - verify_rollback_method
   - verify_effect_verifier
@@ -74,5 +75,5 @@ evidence:
 current_gate_state:
   live_staging_deploy: blocked
   reason: >-
-    Staging URL, staging path, deployment method, secret aliases, rollback method,
-    and effect verifier are not yet verified.
+    Staging URL, staging path, deployment protocol, target capability, secret aliases,
+    rollback method, and effect verifier are not yet verified.
