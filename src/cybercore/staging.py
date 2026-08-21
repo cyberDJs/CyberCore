@@ -240,7 +240,9 @@ def _collect_duplicate_yaml_keys(node: Node, errors: list[str]) -> None:
 def _collect_target_yaml_structure_errors(node: Node, errors: list[str]) -> None:
     structural_errors: list[str] = []
     _collect_duplicate_yaml_keys(node, structural_errors)
-    errors.extend(error.replace("readiness evidence", "target contract") for error in structural_errors)
+    errors.extend(
+        error.replace("readiness evidence", "target contract") for error in structural_errors
+    )
 
 
 def _reject_unknown_keys(
