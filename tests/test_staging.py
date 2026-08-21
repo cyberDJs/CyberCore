@@ -186,7 +186,9 @@ def test_remote_write_readiness_requires_deployment_capability_mapping(tmp_path:
     result = validate_remote_write_readiness(readiness)
 
     assert not result.ok
-    assert any("requires mapping: deployment_capability_readiness" in error for error in result.errors)
+    assert any(
+        "requires mapping: deployment_capability_readiness" in error for error in result.errors
+    )
 
 
 def test_remote_write_readiness_requires_verified_deployment_capability_statuses(
@@ -242,8 +244,12 @@ def test_remote_write_readiness_rejects_capability_secret_or_remote_write_claims
     result = validate_remote_write_readiness(readiness)
 
     assert not result.ok
-    assert any("capability_evidence_secret_values_recorded: False" in error for error in result.errors)
-    assert any("capability_evidence_remote_write_performed: False" in error for error in result.errors)
+    assert any(
+        "capability_evidence_secret_values_recorded: False" in error for error in result.errors
+    )
+    assert any(
+        "capability_evidence_remote_write_performed: False" in error for error in result.errors
+    )
 
 
 def test_remote_write_readiness_rejects_unknown_capability_fields(tmp_path: Path) -> None:
@@ -483,8 +489,7 @@ def test_remote_write_readiness_requires_exact_boolean_types(tmp_path: Path) -> 
         for error in result.errors
     )
     assert any(
-        "capability_evidence_remote_write_performed: False" in error
-        and "expected bool" in error
+        "capability_evidence_remote_write_performed: False" in error and "expected bool" in error
         for error in result.errors
     )
 
