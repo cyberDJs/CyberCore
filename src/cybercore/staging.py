@@ -266,9 +266,7 @@ def _require_allowed_string(
     value = mapping.get(key)
     if not isinstance(value, str) or value not in allowed:
         expected = ", ".join(sorted(allowed))
-        errors.append(
-            f"readiness evidence requires {key} to be one of: {expected}; got {value!r}"
-        )
+        errors.append(f"readiness evidence requires {key} to be one of: {expected}; got {value!r}")
 
 
 def _require_string_set(
