@@ -89,3 +89,17 @@ def test_target_contract_rejects_yaml_merge_key_for_preflight(tmp_path: Path) ->
 
     assert not result.ok
     assert any("forbids YAML merge" in error for error in result.errors)
+
+
+def test_target_contract_rejects_recursive_yaml_alias_before_structure_walk(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "target.yaml"
+    text = TARGET.read_text(encoding="utf-8") + "\nrecursive: &loop {child: *loop}\n"
+    target.write_text(text, encoding="utf-8")
+
+    result = validate_target_contract(target)
+
+    assert not result.ok
+    assert any("target contract forbids YAML anchors" in error for error in result.errors)
+    assert any("target contract forbids YAML aliases" in error for error in result.errors)
