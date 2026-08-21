@@ -237,6 +237,12 @@ def _collect_duplicate_yaml_keys(node: Node, errors: list[str]) -> None:
             _collect_duplicate_yaml_keys(item, errors)
 
 
+def _collect_target_yaml_structure_errors(node: Node, errors: list[str]) -> None:
+    structural_errors: list[str] = []
+    _collect_duplicate_yaml_keys(node, structural_errors)
+    errors.extend(error.replace("readiness evidence", "target contract") for error in structural_errors)
+
+
 def _reject_unknown_keys(
     mapping: dict[str, object], allowed: set[str], context: str, errors: list[str]
 ) -> None:
@@ -368,9 +374,19 @@ def validate_target_contract(path: Path) -> ValidationResult:
         errors.append(f"target contract contains denied literal pattern: {literal}")
 
     try:
-        loaded = yaml.safe_load(text)
+        node = yaml.compose(text, Loader=yaml.SafeLoader)
     except yaml.YAMLError as exc:
         errors.append(f"target contract is invalid YAML: {exc}")
+        node = None
+
+    if node is not None:
+        _collect_target_yaml_structure_errors(node, errors)
+
+    try:
+        loaded = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        if not any(error.startswith("target contract is invalid YAML:") for error in errors):
+            errors.append(f"target contract is invalid YAML: {exc}")
         loaded = None
 
     if not isinstance(loaded, dict):
