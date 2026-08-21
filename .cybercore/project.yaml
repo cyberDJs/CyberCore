@@ -126,7 +126,7 @@ completed:
     verification: 218_passed
   - artifact: WB-0027
     pull_request: 34
-    merge_commit: 94cb1998274e31e9ce3310590c8f21be5e24ec2c0e
+    merge_commit: 94cb1998274e31e9ce3314f59d2e0ae290bc40cc
     verification: 221_passed
   - artifact: WB-0027-post-merge-state-reconciliation
     pull_request: 35
