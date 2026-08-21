@@ -103,3 +103,15 @@ def test_target_contract_rejects_recursive_yaml_alias_before_structure_walk(
     assert not result.ok
     assert any("target contract forbids YAML anchors" in error for error in result.errors)
     assert any("target contract forbids YAML aliases" in error for error in result.errors)
+
+
+def test_target_contract_rejects_excessive_anchor_free_yaml_nesting(tmp_path: Path) -> None:
+    target = tmp_path / "target.yaml"
+    nested_value = "[" * 1200 + "0" + "]" * 1200
+    text = TARGET.read_text(encoding="utf-8") + f"\ndeep: {nested_value}\n"
+    target.write_text(text, encoding="utf-8")
+
+    result = validate_target_contract(target)
+
+    assert not result.ok
+    assert any("target contract exceeds safe YAML nesting depth" in error for error in result.errors)
