@@ -33,6 +33,12 @@ def _ready_readiness_text() -> str:
             "production_document_root_excluded: UNKNOWN",
             "production_document_root_excluded: VERIFIED",
         )
+        .replace(
+            "deployment_protocol_status: UNKNOWN",
+            "deployment_protocol_status: VERIFIED",
+        )
+        .replace("deployment_protocol: UNVERIFIED", "deployment_protocol: SFTP")
+        .replace("target_capability_status: UNKNOWN", "target_capability_status: VERIFIED")
         .replace("secret_alias_status: UNKNOWN", "secret_alias_status: VERIFIED")
         .replace("rollback_status: UNKNOWN", "rollback_status: VERIFIED")
         .replace("rollback_tested: false", "rollback_tested: true")
@@ -109,6 +115,8 @@ def test_remote_write_readiness_example_is_fail_closed() -> None:
     assert not result.ok
     assert "live staging remote write remains blocked" in result.warnings
     assert any("staging_url_status" in error for error in result.errors)
+    assert any("deployment_protocol_status" in error for error in result.errors)
+    assert any("target_capability_status" in error for error in result.errors)
     assert any("operator_authorization_status" in error for error in result.errors)
 
 
@@ -121,8 +129,11 @@ def test_remote_write_readiness_can_be_ready_without_granting_remote_write(
     result = validate_remote_write_readiness(readiness)
 
     assert result.ok, result.as_text()
-    assert "remote_write_allowed: false" in readiness.read_text(encoding="utf-8")
-    assert "production_write_allowed: false" in readiness.read_text(encoding="utf-8")
+    text = readiness.read_text(encoding="utf-8")
+    assert "remote_write_requested: false" in text
+    assert "remote_write_allowed: false" in text
+    assert "production_write_allowed: false" in text
+    assert "capability_evidence_remote_write_performed: false" in text
 
 
 def test_remote_write_readiness_requires_operator_approval_not_verification(
@@ -157,6 +168,122 @@ def test_remote_write_readiness_requires_verified_target_statuses(tmp_path: Path
 
     assert not result.ok
     assert any("staging_url_status: VERIFIED" in error for error in result.errors)
+
+
+def test_remote_write_readiness_requires_deployment_capability_mapping(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    block = """deployment_capability_readiness:
+  deployment_protocol_status: VERIFIED
+  deployment_protocol: SFTP
+  target_capability_status: VERIFIED
+  target_capability_reference: INTERSERVER_STAGING_TARGET_CAPABILITY_REFERENCE
+  capability_evidence_secret_values_recorded: false
+  capability_evidence_remote_write_performed: false
+
+"""
+    readiness.write_text(_ready_readiness_text().replace(block, "", 1), encoding="utf-8")
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("requires mapping: deployment_capability_readiness" in error for error in result.errors)
+
+
+def test_remote_write_readiness_requires_verified_deployment_capability_statuses(
+    tmp_path: Path,
+) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text()
+        .replace("deployment_protocol_status: VERIFIED", "deployment_protocol_status: UNKNOWN", 1)
+        .replace("target_capability_status: VERIFIED", "target_capability_status: UNKNOWN", 1),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("deployment_protocol_status: VERIFIED" in error for error in result.errors)
+    assert any("target_capability_status: VERIFIED" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_unapproved_deployment_protocol(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text().replace("deployment_protocol: SFTP", "deployment_protocol: FTP", 1),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("deployment_protocol to be one of" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_capability_secret_or_remote_write_claims(
+    tmp_path: Path,
+) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text()
+        .replace(
+            "capability_evidence_secret_values_recorded: false",
+            "capability_evidence_secret_values_recorded: true",
+            1,
+        )
+        .replace(
+            "capability_evidence_remote_write_performed: false",
+            "capability_evidence_remote_write_performed: true",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any("capability_evidence_secret_values_recorded: False" in error for error in result.errors)
+    assert any("capability_evidence_remote_write_performed: False" in error for error in result.errors)
+
+
+def test_remote_write_readiness_rejects_unknown_capability_fields(tmp_path: Path) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text().replace(
+            "  deployment_protocol_status: VERIFIED\n",
+            "  deployment_protocol_status: VERIFIED\n  credential: hunter2\n",
+            1,
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any(
+        "deployment_capability_readiness contains unexpected keys: credential" in error
+        for error in result.errors
+    )
+
+
+def test_remote_write_readiness_requires_capability_blocked_until_entries(
+    tmp_path: Path,
+) -> None:
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(
+        _ready_readiness_text()
+        .replace("  - deployment_protocol_status: VERIFIED\n", "", 1)
+        .replace("  - target_capability_status: VERIFIED\n", "", 1),
+        encoding="utf-8",
+    )
+
+    result = validate_remote_write_readiness(readiness)
+
+    assert not result.ok
+    assert any(
+        "blocked_until missing keys: deployment_protocol_status, target_capability_status" in error
+        for error in result.errors
+    )
 
 
 def test_remote_write_readiness_rejects_remote_write_claims(tmp_path: Path) -> None:
@@ -335,7 +462,12 @@ def test_remote_write_readiness_requires_exact_boolean_types(tmp_path: Path) -> 
     readiness.write_text(
         _ready_readiness_text()
         .replace("remote_write_allowed: false", "remote_write_allowed: 0", 1)
-        .replace("safe_secret_aliases_only: true", "safe_secret_aliases_only: 1", 1),
+        .replace("safe_secret_aliases_only: true", "safe_secret_aliases_only: 1", 1)
+        .replace(
+            "capability_evidence_remote_write_performed: false",
+            "capability_evidence_remote_write_performed: 0",
+            1,
+        ),
         encoding="utf-8",
     )
 
@@ -348,6 +480,11 @@ def test_remote_write_readiness_requires_exact_boolean_types(tmp_path: Path) -> 
     )
     assert any(
         "safe_secret_aliases_only: True" in error and "expected bool" in error
+        for error in result.errors
+    )
+    assert any(
+        "capability_evidence_remote_write_performed: False" in error
+        and "expected bool" in error
         for error in result.errors
     )
 
@@ -373,6 +510,11 @@ def test_remote_write_readiness_constrains_safe_reference_strings(tmp_path: Path
             "staging_path_safe_reference: INTERSERVER_STAGING_PATH_REFERENCE",
             "staging_path_safe_reference: production write approved",
             "staging_path_safe_reference",
+        ),
+        (
+            "target_capability_reference: INTERSERVER_STAGING_TARGET_CAPABILITY_REFERENCE",
+            "target_capability_reference: production write approved",
+            "target_capability_reference",
         ),
         (
             "rollback_method: immutable_release_directory_with_current_symlink_or_timestamped_backup",
