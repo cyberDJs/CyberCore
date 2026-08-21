@@ -41,6 +41,7 @@ REQUIRED_TARGET_TOKENS = (
     "INTERSERVER_STAGING_SSH_KEY_OR_SFTP_PASSWORD",
     "verify_target_is_non_production",
     "verify_target_path_is_not_production_document_root",
+    "verify_deployment_protocol_and_target_capability",
     "verify_no_production_credentials_are_reused",
     "verify_rollback_method",
     "verify_effect_verifier",
@@ -61,6 +62,7 @@ REQUIRED_MANIFEST_TOKENS = (
 )
 
 ALLOWED_DEPLOY_MODES = ("plan_only", "dry_run")
+ALLOWED_DEPLOYMENT_PROTOCOLS = {"SFTP", "SSH"}
 REQUIRED_STAGING_SECRET_ALIASES = {
     "INTERSERVER_STAGING_HOST",
     "INTERSERVER_STAGING_USER",
@@ -85,6 +87,7 @@ READINESS_TOP_LEVEL_KEYS = {
     "safe_secret_aliases_only",
     "fresh_operator_authorization_required",
     "staging_target_identity",
+    "deployment_capability_readiness",
     "secret_alias_readiness",
     "rollback_readiness",
     "effect_verifier_readiness",
@@ -97,6 +100,14 @@ READINESS_IDENTITY_KEYS = {
     "staging_path_status",
     "staging_path_safe_reference",
     "production_document_root_excluded",
+}
+READINESS_DEPLOYMENT_CAPABILITY_KEYS = {
+    "deployment_protocol_status",
+    "deployment_protocol",
+    "target_capability_status",
+    "target_capability_reference",
+    "capability_evidence_secret_values_recorded",
+    "capability_evidence_remote_write_performed",
 }
 READINESS_SECRET_ALIAS_KEYS = {
     "secret_alias_status",
@@ -120,6 +131,8 @@ READINESS_AUTHORIZATION_KEYS = {
 EXPECTED_BLOCKED_UNTIL = {
     "staging_url_status": "VERIFIED",
     "staging_path_status": "VERIFIED",
+    "deployment_protocol_status": "VERIFIED",
+    "target_capability_status": "VERIFIED",
     "secret_alias_status": "VERIFIED",
     "rollback_status": "VERIFIED",
     "effect_verifier_status": "VERIFIED",
@@ -128,6 +141,7 @@ EXPECTED_BLOCKED_UNTIL = {
 YAML_MERGE_TAG = "tag:yaml.org,2002:merge"
 STAGING_URL_SAFE_REFERENCE = "INTERSERVER_STAGING_URL_REFERENCE"
 STAGING_PATH_SAFE_REFERENCE = "INTERSERVER_STAGING_PATH_REFERENCE"
+TARGET_CAPABILITY_REFERENCE = "INTERSERVER_STAGING_TARGET_CAPABILITY_REFERENCE"
 ROLLBACK_METHOD = "immutable_release_directory_with_current_symlink_or_timestamped_backup"
 OPERATOR_AUTHORIZATION_REFERENCE = "OPERATOR_AUTHORIZATION_REFERENCE"
 
@@ -243,6 +257,17 @@ def _require_value(
         errors.append(
             f"readiness evidence requires {key}: {expected}; got {value!r} "
             f"({type(value).__name__}, expected {type(expected).__name__})"
+        )
+
+
+def _require_allowed_string(
+    mapping: dict[str, object], key: str, allowed: set[str], errors: list[str]
+) -> None:
+    value = mapping.get(key)
+    if not isinstance(value, str) or value not in allowed:
+        expected = ", ".join(sorted(allowed))
+        errors.append(
+            f"readiness evidence requires {key} to be one of: {expected}; got {value!r}"
         )
 
 
@@ -435,6 +460,41 @@ def validate_remote_write_readiness(path: Path) -> ValidationResult:
             errors,
         )
         _require_value(identity, "production_document_root_excluded", "VERIFIED", errors)
+
+    capability = _require_mapping(document, "deployment_capability_readiness", errors)
+    if capability is not None:
+        _reject_unknown_keys(
+            capability,
+            READINESS_DEPLOYMENT_CAPABILITY_KEYS,
+            "deployment_capability_readiness",
+            errors,
+        )
+        _require_value(capability, "deployment_protocol_status", "VERIFIED", errors)
+        _require_allowed_string(
+            capability,
+            "deployment_protocol",
+            ALLOWED_DEPLOYMENT_PROTOCOLS,
+            errors,
+        )
+        _require_value(capability, "target_capability_status", "VERIFIED", errors)
+        _require_value(
+            capability,
+            "target_capability_reference",
+            TARGET_CAPABILITY_REFERENCE,
+            errors,
+        )
+        _require_value(
+            capability,
+            "capability_evidence_secret_values_recorded",
+            False,
+            errors,
+        )
+        _require_value(
+            capability,
+            "capability_evidence_remote_write_performed",
+            False,
+            errors,
+        )
 
     secret_aliases = _require_mapping(document, "secret_alias_readiness", errors)
     if secret_aliases is not None:
