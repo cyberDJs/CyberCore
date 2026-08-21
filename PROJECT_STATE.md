@@ -29,7 +29,7 @@ Continue the first safe CyberCore self-deployment loop for InterServer shared-ho
 
 1. preserve accepted ADR-0006 staging-only boundary;
 2. treat `WB-0030` as the canonical fail-closed readiness gate;
-3. prepare `WB-0031` as a non-remote-write preflight for target identity, secret alias readiness, rollback proof, effect-verifier proof, and operator authorization references;
+3. prepare `WB-0031` as a non-remote-write preflight for target identity, deployment protocol/target capability, secret alias readiness, rollback proof, effect-verifier proof, and operator authorization references;
 4. keep `staging_apply` blocked unless a later work block verifies all runtime gates and receives fresh explicit remote-write authorization;
 5. use LG-0001/LG-0002 as read-only source-of-truth orchestration support, not as mutation authority.
 
@@ -46,7 +46,7 @@ Continue the first safe CyberCore self-deployment loop for InterServer shared-ho
 - WB-0029 / PR #47: merged as `09750d7c5b2e49b9b4006c1288391d6d5c6066d5`
 - PR #48 post-merge reconciliation: merged as `dd389e87eb2684a4c90a816d35c0472e0b5e1fee`
 - WB-0030 / PR #49: merged as `2de294bb3334e4194769f3b883d58a2e5e3a8ea5`
-- Live InterServer staging deployment: blocked until target gates and fresh explicit remote-write authorization pass
+- Live InterServer staging deployment: blocked until target identity, deployment capability, secret, rollback, effect-verifier, and fresh explicit authorization gates pass
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
 - GitHub `main`: canonical product state
@@ -73,9 +73,9 @@ The current self-deployment work is staging-only.
 Allowed in WB-0031:
 
 - non-secret preflight documentation;
-- closed evidence requirements for target identity, secret aliases, rollback, effect verifier, and operator authorization references;
+- closed evidence requirements for target identity, deployment protocol/target capability, secret aliases, rollback, effect verifier, and operator authorization references;
 - checks that define what must be true before a later remote-write request can be considered;
-- docs/state/audit updates only;
+- local non-mutating tests or validators plus docs/state/audit updates;
 - no-remote-write planning artifacts.
 
 Blocked without separate explicit approval:
@@ -85,6 +85,7 @@ Blocked without separate explicit approval:
 - live InterServer remote write;
 - reading or storing plaintext secrets;
 - creating, changing, or reading GitHub Environment secret values;
+- treating target metadata as proof that deployment protocol/capability has been verified;
 - executing `staging_apply` or equivalent remote mutation without all runtime gates and fresh explicit operator authorization.
 
 ## Recent completed state changes
@@ -137,6 +138,7 @@ This work block prepares the evidence and authorization shape for a future first
 It must define:
 
 - how staging URL and staging path identity can be verified without touching production;
+- how the deployment protocol/method and staging target capability will be verified before `staging_apply` without treating target metadata as proof;
 - how secret aliases can be verified without reading or storing secret values;
 - how rollback readiness will be proven before any write;
 - how effect verification will prove staging changed and production did not;
@@ -146,7 +148,7 @@ It must define:
 
 - Six high-severity transitive `npm audit` findings remain deferred security debt in the isolated visual documentation toolchain.
 - InterServer exposed API key and 2FA/TOTP rotation status remains unresolved until verified by a human-approved MOP with no secret values in ordinary evidence stores.
-- WB-0031 does not resolve those blockers; it keeps live staging deploy blocked behind target, secret, rollback, effect verifier, and fresh authorization gates.
+- WB-0031 does not resolve those blockers; it keeps live staging deploy blocked behind target identity, deployment capability, secret, rollback, effect-verifier, and fresh authorization gates.
 
 ## Next action
 
