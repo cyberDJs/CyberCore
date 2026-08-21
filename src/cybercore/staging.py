@@ -49,6 +49,16 @@ REQUIRED_TARGET_TOKENS = (
     "live_staging_deploy: blocked",
 )
 
+REQUIRED_TARGET_PREFLIGHT_CHECKS = {
+    "verify_target_is_non_production",
+    "verify_target_path_is_not_production_document_root",
+    "verify_deployment_protocol_and_target_capability",
+    "verify_no_production_credentials_are_reused",
+    "verify_rollback_method",
+    "verify_effect_verifier",
+    "verify_operator_authorization_for_first_remote_write",
+}
+
 REQUIRED_MANIFEST_TOKENS = (
     "run_id:",
     "repository:",
@@ -288,6 +298,23 @@ def _require_string_set(
         errors.append(f"readiness evidence contains duplicate values in {key}")
 
 
+def _validate_target_required_preflight(document: dict[str, object], errors: list[str]) -> None:
+    value = document.get("required_preflight")
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        errors.append("target contract requires string list: required_preflight")
+        return
+
+    actual = set(value)
+    missing = sorted(REQUIRED_TARGET_PREFLIGHT_CHECKS - actual)
+    unexpected = sorted(actual - REQUIRED_TARGET_PREFLIGHT_CHECKS)
+    if missing:
+        errors.append(f"target contract required_preflight missing checks: {', '.join(missing)}")
+    if unexpected:
+        errors.append(f"target contract required_preflight contains unexpected checks: {', '.join(unexpected)}")
+    if len(value) != len(actual):
+        errors.append("target contract required_preflight contains duplicate checks")
+
+
 def _validate_blocked_until(document: dict[str, object], errors: list[str]) -> None:
     value = document.get("blocked_until")
     if not isinstance(value, list):
@@ -337,6 +364,17 @@ def validate_target_contract(path: Path) -> ValidationResult:
 
     for literal in _find_denied_literals(text):
         errors.append(f"target contract contains denied literal pattern: {literal}")
+
+    try:
+        loaded = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        errors.append(f"target contract is invalid YAML: {exc}")
+        loaded = None
+
+    if not isinstance(loaded, dict):
+        errors.append("target contract must be a mapping")
+    else:
+        _validate_target_required_preflight(loaded, errors)
 
     if "eimyherrer.com" not in text:
         errors.append("target contract must explicitly name production domain boundary")
