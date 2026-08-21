@@ -6,7 +6,18 @@ from typing import Iterable
 
 import yaml
 from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
-from yaml.tokens import AliasToken, AnchorToken, DirectiveToken
+from yaml.tokens import (
+    AliasToken,
+    AnchorToken,
+    BlockEndToken,
+    BlockMappingStartToken,
+    BlockSequenceStartToken,
+    DirectiveToken,
+    FlowMappingEndToken,
+    FlowMappingStartToken,
+    FlowSequenceEndToken,
+    FlowSequenceStartToken,
+)
 
 
 DENIED_LITERAL_PATTERNS = (
@@ -149,6 +160,14 @@ EXPECTED_BLOCKED_UNTIL = {
     "operator_authorization_status": "APPROVED",
 }
 YAML_MERGE_TAG = "tag:yaml.org,2002:merge"
+MAX_YAML_NESTING_DEPTH = 64
+YAML_NESTING_START_TOKENS = (
+    BlockMappingStartToken,
+    BlockSequenceStartToken,
+    FlowMappingStartToken,
+    FlowSequenceStartToken,
+)
+YAML_NESTING_END_TOKENS = (BlockEndToken, FlowMappingEndToken, FlowSequenceEndToken)
 STAGING_URL_SAFE_REFERENCE = "INTERSERVER_STAGING_URL_REFERENCE"
 STAGING_PATH_SAFE_REFERENCE = "INTERSERVER_STAGING_PATH_REFERENCE"
 TARGET_CAPABILITY_REFERENCE = "INTERSERVER_STAGING_TARGET_CAPABILITY_REFERENCE"
@@ -204,14 +223,27 @@ def _extract_scalar(text: str, key: str) -> str | None:
 
 
 def _reject_yaml_metadata(text: str, errors: list[str]) -> None:
+    nesting_depth = 0
     try:
         for token in yaml.scan(text, Loader=yaml.SafeLoader):
+            if isinstance(token, YAML_NESTING_START_TOKENS):
+                nesting_depth += 1
+                if nesting_depth > MAX_YAML_NESTING_DEPTH:
+                    errors.append(
+                        f"readiness evidence exceeds safe YAML nesting depth ({MAX_YAML_NESTING_DEPTH})"
+                    )
+                    return
+            elif isinstance(token, YAML_NESTING_END_TOKENS):
+                nesting_depth = max(0, nesting_depth - 1)
+
             if isinstance(token, AnchorToken):
                 errors.append("readiness evidence forbids YAML anchors")
             elif isinstance(token, AliasToken):
                 errors.append("readiness evidence forbids YAML aliases")
             elif isinstance(token, DirectiveToken):
                 errors.append("readiness evidence forbids YAML directives")
+    except RecursionError:
+        errors.append("readiness evidence exceeds safe YAML nesting depth")
     except yaml.YAMLError as exc:
         errors.append(f"readiness evidence is invalid YAML: {exc}")
 
@@ -389,15 +421,25 @@ def validate_target_contract(path: Path) -> ValidationResult:
 
     try:
         node = yaml.compose(text, Loader=yaml.SafeLoader)
+    except RecursionError:
+        errors.append("target contract exceeds safe YAML nesting depth")
+        return ValidationResult(False, tuple(errors))
     except yaml.YAMLError as exc:
         errors.append(f"target contract is invalid YAML: {exc}")
         node = None
 
     if node is not None:
-        _collect_target_yaml_structure_errors(node, errors)
+        try:
+            _collect_target_yaml_structure_errors(node, errors)
+        except RecursionError:
+            errors.append("target contract exceeds safe YAML nesting depth")
+            return ValidationResult(False, tuple(errors))
 
     try:
         loaded = yaml.safe_load(text)
+    except RecursionError:
+        errors.append("target contract exceeds safe YAML nesting depth")
+        return ValidationResult(False, tuple(errors))
     except yaml.YAMLError as exc:
         if not any(error.startswith("target contract is invalid YAML:") for error in errors):
             errors.append(f"target contract is invalid YAML: {exc}")
