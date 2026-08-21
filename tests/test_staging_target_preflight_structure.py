@@ -26,8 +26,7 @@ def test_target_contract_requires_capability_check_inside_required_preflight(
 
     assert not result.ok
     assert any(
-        f"required_preflight missing checks: {CAPABILITY_CHECK}" in error
-        for error in result.errors
+        f"required_preflight missing checks: {CAPABILITY_CHECK}" in error for error in result.errors
     )
 
 
