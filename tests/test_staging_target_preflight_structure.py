@@ -61,3 +61,31 @@ def test_target_contract_rejects_duplicate_required_preflight_check(tmp_path: Pa
 
     assert not result.ok
     assert any("required_preflight contains duplicate checks" in error for error in result.errors)
+
+
+def test_target_contract_rejects_duplicate_required_preflight_mapping(tmp_path: Path) -> None:
+    target = tmp_path / "target.yaml"
+    text = TARGET.read_text(encoding="utf-8").replace(
+        "required_preflight:\n",
+        "required_preflight:\n  - verify_unapproved_remote_write\nrequired_preflight:\n",
+        1,
+    )
+    target.write_text(text, encoding="utf-8")
+
+    result = validate_target_contract(target)
+
+    assert not result.ok
+    assert any("duplicate YAML key: required_preflight" in error for error in result.errors)
+
+
+def test_target_contract_rejects_yaml_merge_key_for_preflight(tmp_path: Path) -> None:
+    target = tmp_path / "target.yaml"
+    text = "<<: {required_preflight: [verify_unapproved_remote_write]}\n" + TARGET.read_text(
+        encoding="utf-8"
+    )
+    target.write_text(text, encoding="utf-8")
+
+    result = validate_target_contract(target)
+
+    assert not result.ok
+    assert any("forbids YAML merge" in error for error in result.errors)
