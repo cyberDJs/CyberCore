@@ -92,6 +92,18 @@ DENIED_LITERAL_PATTERNS = (
     "recovery_code:",
 )
 
+PLACEHOLDER_REFERENCES = {
+    "TBD",
+    "UNKNOWN",
+    "UNVERIFIED",
+    "REQUIRED_BEFORE_REMOTE_WRITE",
+    "OPERATOR_AUTHORIZATION_REFERENCE",
+    "WB0034_DEPLOYMENT_PROTOCOL_READ_ONLY_VERIFICATION_REQUIRED",
+    "WB0034_DEPLOY_IDENTITY_SCOPE_VERIFICATION_REQUIRED",
+    "WB0034_ARTIFACT_HASHES_REQUIRED",
+    "WB0034_EFFECT_VERIFIER_IMPLEMENTATION_REQUIRED",
+}
+
 
 @dataclass(frozen=True)
 class FirstWriteReadinessResult:
@@ -279,6 +291,84 @@ def _validate_blocked_until(document: dict[str, object], errors: list[str]) -> N
         errors.append(f"blocked_until missing keys: {', '.join(missing)}")
 
 
+def _is_full_commit_sha(value: object) -> bool:
+    if not isinstance(value, str) or len(value) != 40:
+        return False
+    return all(character in "0123456789abcdef" for character in value.lower())
+
+
+def _has_evidence_reference(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    reference = value.strip()
+    if len(reference) < 8:
+        return False
+    upper = reference.upper()
+    if upper in PLACEHOLDER_REFERENCES:
+        return False
+    return not any(marker in upper for marker in ("TBD", "UNKNOWN", "UNVERIFIED", "REQUIRED"))
+
+
+def _append_supporting_evidence_blockers(
+    capability: dict[str, object] | None,
+    source: dict[str, object] | None,
+    rollback: dict[str, object] | None,
+    verifier: dict[str, object] | None,
+    authorization: dict[str, object] | None,
+    blockers: list[str],
+) -> None:
+    if capability is not None:
+        if capability.get("deployment_protocol_status") == "VERIFIED":
+            if capability.get("deployment_protocol") not in {"SFTP", "SSH"}:
+                blockers.append(
+                    "deployment_protocol_status VERIFIED requires deployment_protocol SFTP or SSH"
+                )
+        if capability.get("target_capability_status") == "VERIFIED" and not _has_evidence_reference(
+            capability.get("target_capability_reference")
+        ):
+            blockers.append(
+                "target_capability_status VERIFIED requires non-placeholder capability evidence"
+            )
+        if capability.get("deploy_identity_scope_status") == "VERIFIED" and not _has_evidence_reference(
+            capability.get("deploy_identity_scope_reference")
+        ):
+            blockers.append(
+                "deploy_identity_scope_status VERIFIED requires non-placeholder scope evidence"
+            )
+
+    if source is not None:
+        if source.get("source_commit_status") == "PINNED" and not _is_full_commit_sha(
+            source.get("source_commit_reference")
+        ):
+            blockers.append("source_commit_status PINNED requires an exact 40-character commit SHA")
+        if source.get("artifact_hashes_status") == "VERIFIED" and not _has_evidence_reference(
+            source.get("artifact_hashes_reference")
+        ):
+            blockers.append(
+                "artifact_hashes_status VERIFIED requires non-placeholder artifact hash evidence"
+            )
+
+    if rollback is not None:
+        if rollback.get("rollback_status") == "VERIFIED" and rollback.get("rollback_tested") is not True:
+            blockers.append("rollback_status VERIFIED requires rollback_tested: true")
+
+    if verifier is not None:
+        if verifier.get("effect_verifier_status") == "VERIFIED" and not _has_evidence_reference(
+            verifier.get("effect_verifier_reference")
+        ):
+            blockers.append(
+                "effect_verifier_status VERIFIED requires non-placeholder verifier evidence"
+            )
+
+    if authorization is not None:
+        if authorization.get("operator_authorization_status") == "APPROVED" and not _has_evidence_reference(
+            authorization.get("authorization_reference")
+        ):
+            blockers.append(
+                "operator_authorization_status APPROVED requires a fresh non-placeholder authorization reference"
+            )
+
+
 def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
     errors: list[str] = []
     blockers: list[str] = []
@@ -355,6 +445,7 @@ def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
                 "source_commit_status",
                 "source_commit_reference",
                 "artifact_hashes_status",
+                "artifact_hashes_reference",
             },
             "source_artifact_readiness",
             errors,
@@ -396,7 +487,7 @@ def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
     if verifier is not None:
         _reject_unknown_keys(
             verifier,
-            {"effect_verifier_status", "required_checks"},
+            {"effect_verifier_status", "effect_verifier_reference", "required_checks"},
             "effect_verifier_readiness",
             errors,
         )
@@ -430,6 +521,15 @@ def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
             actual = mapping.get(key) if mapping is not None else None
             if actual != expected:
                 blockers.append(f"{key} must become {expected}; current={actual!r}")
+
+        _append_supporting_evidence_blockers(
+            capability,
+            source,
+            rollback,
+            verifier,
+            authorization,
+            blockers,
+        )
 
     schema_ok = not errors
     ready = schema_ok and not blockers
