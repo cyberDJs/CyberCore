@@ -2,10 +2,11 @@
 
 ## Status
 
-`AUTHORIZED_FOR_PREP_AND_BOUNDED_APPLY`
+`VERIFIED`
 
 Date: 2026-08-22
 Provider: InterServer shared hosting
+Authoritative DNS: Cloudflare
 Parent discovery: `WB-0032 — InterServer Staging Capability Discovery`
 Target service: `website_id=1439764`, primary hostname `eimyherrer.com`
 
@@ -13,36 +14,27 @@ Target service: `website_id=1439764`, primary hostname `eimyherrer.com`
 
 Create one isolated, explicitly non-production staging target under the existing InterServer shared-hosting service so WB-0032 can resume capability discovery without inspecting or modifying the production document root.
 
-Preferred target identity:
+Verified target identity:
 
 - hostname: `staging.eimyherrer.com`
-- DirectAdmin owner: the existing user that owns `eimyherrer.com`
-- document root: a dedicated directory below the account's `~/domains/` tree and outside the production `eimyherrer.com/public_html` tree, preferably the DirectAdmin default for new subdomains (`~/domains/staging.eimyherrer.com/public_html`) when the target server supports it
+- DirectAdmin owner: existing owner of `eimyherrer.com`
+- document root: `/domains/staging.eimyherrer.com/public_html`
+- public origin: `162.250.126.107`
+- DNS mode: Cloudflare authoritative, DNS only for staging
 
-## Authorization
+## Authorization history
 
-On 2026-08-22 the operator explicitly continued from the WB-0032 staging-identity blocker with: `ok, pojd na to` after the proposed next step was stated as creating an isolated InterServer staging target without touching production `eimyherrer.com`.
+On 2026-08-22 the operator explicitly continued from the WB-0032 staging-identity blocker with `ok, pojd na to` after the proposed next step was stated as creating an isolated InterServer staging target without touching production `eimyherrer.com`.
 
-This work block interprets that authorization narrowly as permission to:
+The operator subsequently granted separate explicit authorization for:
 
-- inspect the minimum existing webhosting / DirectAdmin metadata required to identify the correct account and API surface;
-- create exactly one staging subdomain/virtual-host identity `staging.eimyherrer.com` on the existing `website_id=1439764` service;
-- create only the minimum corresponding DNS record when DirectAdmin/provider behavior requires it for that staging hostname;
-- create the staging document-root directory only as a direct consequence of the DirectAdmin subdomain-creation operation;
-- verify the new staging target non-destructively.
+- creation of the single Cloudflare DNS A record `staging.eimyherrer.com -> 162.250.126.107` as DNS only;
+- creation of a dedicated Cloudflare ACME token for `eimyherrer.com` and storage in DirectAdmin as `CLOUDFLARE_DNS_API_TOKEN`;
+- one manual wildcard certificate renewal for `eimyherrer.com` + `*.eimyherrer.com` through DirectAdmin using the configured Cloudflare ACME DNS provider.
 
-Not authorized:
+These authorizations remain bounded to the actions above and do not authorize application deployment, production mutation, unrelated DNS changes, or PR merge.
 
-- modifying, deleting, moving, copying, reading application contents from, or traversing the production document root;
-- modifying production application files, databases, mail, WordPress, Nextcloud, DNS records unrelated to the new staging hostname, or the apex/www production records;
-- ordering a new paid InterServer webhosting service;
-- deploying CyberCore or any application content into staging;
-- creating or rotating persistent credentials;
-- creating a temporary/one-time DirectAdmin login key unless separately and explicitly authorized;
-- changing ownership, chmod/chown, package/service configuration, PHP configuration, SSL policy, mail routing, billing, VPS state, or registrar settings;
-- merging this branch or any PR into `main` without a separate operator approval.
-
-## Current evidence
+## Verified evidence
 
 WB-0032 established after a one-time separately authorized API-key rotation:
 
@@ -51,51 +43,78 @@ WB-0032 established after a one-time separately authorized API-key rotation:
 - both independently returned exactly one active webhosting service: `website_id=1439764`, `website_hostname=eimyherrer.com`;
 - no remote content write was performed during WB-0032 discovery.
 
-The InterServer MCP capability inventory shows that `addWebsite` would place a new paid webhosting order and generate invoices. WB-0033 therefore explicitly forbids using `addWebsite`.
+WB-0033 subsequently verified:
 
-DirectAdmin documentation identifies user-level subdomain creation as the appropriate operation on an existing hosting account. The server-specific `/static/swagger.json` MUST be inspected before selecting a new JSON `/api/...` endpoint. If no suitable new API operation exists, documented legacy `CMD_API_SUBDOMAINS` / `CMD_SUBDOMAIN` may be considered only after exact target-server capability review.
+- DirectAdmin user-level subdomain creation succeeded using `/CMD_SUBDOMAIN`;
+- `staging.eimyherrer.com` was absent before creation and present afterward;
+- observed document root is `/domains/staging.eimyherrer.com/public_html`;
+- production document root was not inspected or mutated;
+- no new paid InterServer webhosting service was ordered;
+- Cloudflare is authoritative DNS for `eimyherrer.com`;
+- the staging A record resolves publicly to `162.250.126.107`;
+- staging remains `proxied=false` / DNS only;
+- HTTP returns 200 from the InterServer origin;
+- HTTPS returns 200 with successful certificate verification;
+- DirectAdmin exposes and stores the Cloudflare ACME DNS provider configuration;
+- a dedicated zone-scoped Cloudflare DNS token is stored in DirectAdmin without secret-value persistence in evidence;
+- one manual wildcard renewal completed successfully through DirectAdmin + Cloudflare DNS-01 + Let's Encrypt;
+- renewed certificate covers `eimyherrer.com` and `*.eimyherrer.com` and is valid through 2026-11-20;
+- post-renewal `https://staging.eimyherrer.com` remains HTTP 200 with TLS verification success.
 
-## Preflight
+Automatic unattended renewal remains configured but has not yet been historically observed during a future scheduled renewal cycle.
+
+## Safety boundary
+
+The following remain not authorized by WB-0033:
+
+- modifying, deleting, moving, copying, reading application contents from, or traversing the production document root;
+- modifying production application files, databases, mail, WordPress, Nextcloud, unrelated DNS records, apex or `www` production records;
+- ordering a new paid InterServer webhosting service;
+- deploying CyberCore or any application content into staging;
+- creating or rotating additional credentials outside the separately authorized ACME token action;
+- creating a temporary/one-time DirectAdmin login key;
+- changing ownership, chmod/chown, package/service configuration, PHP configuration, mail routing, billing, VPS state, or registrar settings;
+- merging this branch or PR without separate operator approval.
+
+## Preflight result
 
 ### VERIFY-A — technical
 
-Before mutation, prove all of the following:
+PASS:
 
 1. `website_id=1439764` is active and maps to `eimyherrer.com`.
-2. The control panel type is DirectAdmin.
-3. The exact DirectAdmin server/port and user identity are known without exposing a password or session token.
-4. The target server's `/static/swagger.json` has been fetched and the exact subdomain-create operation selected, or the documented legacy endpoint has been selected only because the new API lacks the capability.
-5. `staging.eimyherrer.com` does not already exist in the DirectAdmin account.
-6. The proposed document root is outside the production `eimyherrer.com/public_html` tree.
-7. No paid service order is involved.
-8. A deterministic post-create verification and rollback operation are known.
+2. Control panel is DirectAdmin.
+3. DirectAdmin server and user identity were established without secret disclosure.
+4. Target-server API behavior was inspected before apply.
+5. `staging.eimyherrer.com` was proven absent before creation.
+6. Resulting document root is isolated from production `eimyherrer.com/public_html`.
+7. No paid service order was involved.
+8. Deterministic post-create verification and rollback scope were known.
 
 ### VERIFY-B — safety / optimization
 
-Before mutation, prove all of the following:
+PASS:
 
-1. The change is exactly one staging hostname.
-2. No production path content will be inspected or changed.
-3. No unrelated DNS record will be changed.
-4. No persistent credential will be created, rotated, reset, or disclosed.
-5. If the only available DirectAdmin access path requires creating a temporary login key, stop with `BLOCKED` and request a separate bounded authorization.
-6. Raw provider payloads, session URLs, passwords, cookies, API keys, and login keys are not persisted in GitHub/chat/evidence.
-7. Rollback is limited to deleting the new staging subdomain/DNS artifacts created by this work block; production artifacts are never rollback targets.
+1. Exactly one staging hostname was created.
+2. Production path content was not inspected or changed.
+3. Only the separately authorized staging DNS record was created; unrelated DNS was not changed.
+4. No credential values were persisted in GitHub/chat/evidence.
+5. No temporary DirectAdmin login key was created.
+6. Raw passwords, cookies, API keys, tokens, session URLs, and login keys were not persisted in evidence.
+7. Rollback scope remains limited to artifacts created specifically for this staging target.
 
-Both VERIFY-A and VERIFY-B must be `PASS` before apply.
+## Applied changes
 
-## Apply plan
+1. Created DirectAdmin staging identity `staging.eimyherrer.com`.
+2. Verified isolated document root `/domains/staging.eimyherrer.com/public_html`.
+3. Created Cloudflare A record `staging.eimyherrer.com -> 162.250.126.107`, DNS only.
+4. Verified public DNS resolution.
+5. Verified HTTP and HTTPS reachability.
+6. Configured DirectAdmin Cloudflare ACME DNS provider with a dedicated zone-scoped token.
+7. Performed one explicitly authorized manual wildcard renewal.
+8. Verified new Let's Encrypt wildcard certificate and staging HTTPS after renewal.
 
-Preferred apply sequence:
-
-1. Read InterServer service metadata for `website_id=1439764`; sanitize evidence.
-2. Fetch target DirectAdmin `/static/swagger.json` read-only.
-3. Read the existing subdomain list for `eimyherrer.com` and assert `staging` absent.
-4. Resolve an already-existing approved DirectAdmin authentication path. If none exists, stop `BLOCKED`; do not manufacture credentials.
-5. Create `staging.eimyherrer.com` using the server-supported user-level DirectAdmin API.
-6. Ensure the resulting document root is isolated from `eimyherrer.com/public_html`; prefer DirectAdmin's current separate-subdomain default path when available.
-7. Verify the subdomain exists and resolve only the new staging hostname's DNS/HTTP metadata needed for effect verification.
-8. Record receipt with `production_content_accessed=false` and `application_deploy_performed=false`.
+No CyberCore/application content was deployed.
 
 ## Rollback
 
@@ -104,29 +123,33 @@ Rollback trigger:
 - wrong hostname;
 - document root resolves inside the production public document root;
 - unexpected DNS mutation;
-- control-panel operation affects any unrelated domain;
+- control-panel operation affects an unrelated domain;
 - verification cannot prove isolation.
 
 Rollback action:
 
-- remove only the newly created `staging.eimyherrer.com` subdomain and any DNS record created specifically for it;
+- remove only the newly created `staging.eimyherrer.com` subdomain and the DNS record created specifically for it;
 - do not delete or modify any production domain/path/record;
-- verify the staging artifacts are absent afterward.
+- separately remove the dedicated ACME provider credential only if the Cloudflare-backed wildcard renewal integration is intentionally retired;
+- verify staging artifacts are absent afterward.
 
 If rollback scope is ambiguous, stop and preserve state for manual review rather than deleting anything.
 
 ## Success criteria
 
-WB-0033 reaches `VERIFIED` only when evidence proves:
+PASS:
 
 - `staging.eimyherrer.com` exists on the existing InterServer shared-hosting account;
 - it has a dedicated document root outside `eimyherrer.com/public_html`;
 - no new paid hosting service was ordered;
 - production application content was not accessed or mutated;
-- no persistent credential was created or rotated;
-- the staging hostname can be identified independently enough for WB-0032 to resume read-only capability discovery;
+- the staging hostname resolves through the authoritative Cloudflare zone;
+- HTTP and HTTPS are externally reachable;
+- wildcard TLS issuance through DirectAdmin + Cloudflare DNS-01 is verified end-to-end;
 - no CyberCore/application deployment has occurred.
 
 ## Current terminal state
 
-`ACTIVE — PREP/READ-ONLY PREFLIGHT`
+`VERIFIED`
+
+WB-0033 has established the isolated InterServer staging target and the external Cloudflare DNS/TLS integration required for WB-0032 to continue capability discovery and for a later separately authorized staging deployment work block to proceed.
