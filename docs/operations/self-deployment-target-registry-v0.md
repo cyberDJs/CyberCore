@@ -66,6 +66,14 @@ WB-0033 moved the target out of `DRAFT` by verifying the real staging hostname, 
 
 WB-0034 must not advance to `CAPABILITY_VERIFIED` until the actual first-write deployment protocol and target write behavior are verified without performing the write.
 
+The first-write candidate is intentionally one unique direct-child directory:
+
+```text
+cybercore-canary-<run_id>/
+```
+
+This avoids a separate canary parent-directory mutation. The future runner must reject an existing or symlink destination and re-verify that the destination parent resolves exactly to the canonical staging root immediately before creation.
+
 Remaining blockers:
 
 - SFTP/SSH deployment protocol verification;
@@ -73,7 +81,7 @@ Remaining blockers:
 - secret-alias readiness without value disclosure;
 - rollback execution semantics;
 - effect verifier implementation/dry run;
-- exact deploy source commit;
+- exact deploy source commit and artifact hashes;
 - fresh explicit operator authorization for the first remote write.
 
 The target remains fail-closed for `staging_apply`.
