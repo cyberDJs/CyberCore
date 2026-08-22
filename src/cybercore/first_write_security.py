@@ -3,10 +3,9 @@ from __future__ import annotations
 import re
 
 
-PRIVATE_KEY_MARKERS = (
-    "BEGIN OPENSSH PRIVATE KEY",
-    "BEGIN RSA PRIVATE KEY",
-    "BEGIN PRIVATE KEY",
+PRIVATE_KEY_HEADER_RE = re.compile(
+    r"-----BEGIN (?:[A-Z0-9][A-Z0-9 -]* )?PRIVATE KEY(?: BLOCK)?-----",
+    re.IGNORECASE,
 )
 
 SENSITIVE_ASSIGNMENT_RE = re.compile(
@@ -28,10 +27,8 @@ def scan_first_write_yaml_text(text: str, label: str) -> tuple[str, ...]:
     if "#" in text:
         errors.append(f"{label} forbids YAML comments")
 
-    upper = text.upper()
-    for marker in PRIVATE_KEY_MARKERS:
-        if marker in upper:
-            errors.append(f"{label} contains private-key material")
+    if PRIVATE_KEY_HEADER_RE.search(text):
+        errors.append(f"{label} contains private-key material")
 
     if SENSITIVE_ASSIGNMENT_RE.search(text):
         errors.append(f"{label} contains a credential-like assignment")
