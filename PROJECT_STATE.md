@@ -85,7 +85,7 @@ Allowed in WB-0032 Phase A / PR #52:
 - a written separate authority gate for a later read-only provider discovery;
 - no-remote-write planning artifacts.
 
-Blocked in PR #52 without separate explicit approval:
+Blocked unconditionally in PR #52:
 
 - any live InterServer connection, including read-only SSH/SFTP/API/DirectAdmin capability probes;
 - production deployment;
@@ -95,9 +95,9 @@ Blocked in PR #52 without separate explicit approval:
 - creating, changing, or reading GitHub Environment secret values;
 - credential rotation;
 - treating target metadata, aliases, documentation, or synthetic evidence as proof that real provider capability exists;
-- executing `staging_apply` or equivalent remote mutation without all runtime gates and fresh explicit operator authorization.
+- executing `staging_apply` or equivalent remote mutation.
 
-A later WB-0032 Phase B may perform only separately authorized read-only/non-mutating discovery. That future authorization is not implied by ADR-0006, PR #51, PR #52, or this state document.
+No approval may broaden PR #52 itself beyond this repository-only Phase A scope. A later WB-0032 Phase B is a separate execution step and may begin only after a fresh explicit authorization for read-only/non-mutating discovery. Phase B cannot authorize upload, overwrite, deletion, chmod/chown, symlink creation, credential rotation, provider configuration changes, staging remote write, or production access.
 
 ## Recent completed state changes
 
