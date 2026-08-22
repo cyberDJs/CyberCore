@@ -91,6 +91,8 @@ authorization:
   artifacts:
     - index.html
     - cybercore-version.json
+  protocol: SFTP
+  deploy_identity_scope_reference: {SCOPE_REF}
   rollback_permitted: true
 secret_values_present: false
 """
@@ -176,7 +178,7 @@ def test_hash_bound_evidence_bundle_can_clear_component_readiness(tmp_path: Path
 def test_evidence_bundle_hash_mismatch_blocks_readiness(tmp_path: Path) -> None:
     readiness, evidence = _write_bound_readiness(tmp_path)
     evidence.write_text(
-        _evidence_text().replace("protocol: SFTP", "protocol: SSH"), encoding="utf-8"
+        _evidence_text().replace("protocol: SFTP", "protocol: SSH", 1), encoding="utf-8"
     )
 
     result = validate_first_write_readiness(readiness)
