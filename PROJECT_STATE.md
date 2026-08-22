@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-22 14:49 CEST_
+_Last updated: 2026-08-22 15:00 CEST_
 
 ## Source of truth
 
@@ -13,7 +13,7 @@ _Last updated: 2026-08-22 14:49 CEST_
 - Active artifact: `WB-0034 — First Staging Deployment Preflight`
 - Active work block: `WB-0034 — First Staging Deployment Preflight`
 - Last verified `main`: `d74497eb0730a0d112cbf7957593f23cb35b5e71`
-- Governance rule: provider mutation, secret mutation, staging apply, and production mutation authority remains reserved to explicit Jan Kočí authorization
+- Governance rule: provider mutation, secret mutation, staging apply, and production mutation authority remains reserved to explicit operator authorization
 - CI policy: GitHub Actions verification is required before merge
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
@@ -39,7 +39,7 @@ That merge establishes the verified InterServer staging runtime baseline:
 
 PR #54 did **not** deploy CyberCore/application content to staging and did not grant staging application remote-write authority.
 
-The active slice is now PR #55 / WB-0034. It prepares the first real CyberCore staging write up to the final human approval gate while keeping all remote writes blocked.
+The active slice is PR #55 / WB-0034. It prepares the first real CyberCore staging write up to the final human approval gate while keeping all remote writes blocked.
 
 ## Active objective
 
@@ -47,13 +47,13 @@ Prepare a minimal, fail-closed first staging deployment:
 
 1. preserve ADR-0006 staging-only boundary;
 2. treat WB-0033 as the canonical verified staging target baseline;
-3. use a unique no-overwrite canary path rather than overwriting the staging root;
+3. use one unique direct-child no-overwrite canary directory beneath the staging root;
 4. deploy only two future canary files: `index.html` and `cybercore-version.json`;
 5. verify the real deployment protocol before any write;
 6. verify least-privilege deploy identity/credential scope before any write;
 7. verify secret-alias readiness without reading or recording values;
-8. define and dry-run the effect verifier and rollback semantics;
-9. pin an exact source commit after WB-0034 merge;
+8. validate rollback and effect-verifier semantics without production application reads;
+9. pin an exact source commit and artifact hashes after WB-0034 merge;
 10. obtain fresh explicit first staging remote-write authorization before `staging_apply`.
 
 ## Current status
@@ -62,7 +62,7 @@ Prepare a minimal, fail-closed first staging deployment:
 - Branch: `wb-0034-first-staging-deployment-preflight`
 - Pull request: #55, draft
 - PR #54 / WB-0033: merged as `d74497eb0730a0d112cbf7957593f23cb35b5e71`
-- PR #54 verification: CI #211 PASS, CodeQL #208 PASS, fresh Codex exact-head review with no major issues, all review threads resolved
+- PR #54 verification: CI #211 PASS, CodeQL #208 PASS, clean fresh Codex exact-head review, all review threads resolved
 - Staging target identity: VERIFIED
 - Staging URL: `https://staging.eimyherrer.com`
 - Staging document root: `/home/eimyherr/domains/staging.eimyherrer.com/public_html`
@@ -74,16 +74,19 @@ Prepare a minimal, fail-closed first staging deployment:
 - Staging HTTP/HTTPS: VERIFIED
 - DirectAdmin Cloudflare ACME path: VERIFIED
 - Wildcard manual renewal: VERIFIED
-- Standing unattended renewal authority: granted only for the existing wildcard certificate and existing DirectAdmin -> Cloudflare path
+- Standing unattended renewal authority: existing wildcard/existing integration only
 - First-write artifact plan: static two-file canary
+- First-write destination: one direct-child `cybercore-canary-<run_id>/` directory
 - First-write overwrite: forbidden
-- First-write symlink promotion: not part of first cycle
+- Existing/symlink destination: reject
+- First-write symlink promotion: forbidden
+- WB-0034 dedicated readiness schema/validator: IMPLEMENTED
 - Deployment protocol for first write: UNKNOWN / read-only verification required
 - Deploy identity scope: UNKNOWN / must be verified before first write
 - Secret-alias readiness: UNKNOWN
 - Rollback runtime readiness: UNKNOWN
 - Effect verifier runtime readiness: UNKNOWN
-- Exact live source commit: pending after WB-0034 merge
+- Exact live source commit and artifact hashes: pending after WB-0034 merge
 - First staging remote-write authorization: NOT GRANTED
 - `remote_write_requested`: false
 - `remote_write_allowed`: false
@@ -97,14 +100,14 @@ The first live staging write is intentionally smaller than a full CyberCore appl
 Planned destination:
 
 ```text
-/home/eimyherr/domains/staging.eimyherrer.com/public_html/cybercore-canary/<run_id>/
+/home/eimyherr/domains/staging.eimyherrer.com/public_html/cybercore-canary-<run_id>/
 ```
 
 Planned public URLs:
 
 ```text
-https://staging.eimyherrer.com/cybercore-canary/<run_id>/
-https://staging.eimyherrer.com/cybercore-canary/<run_id>/cybercore-version.json
+https://staging.eimyherrer.com/cybercore-canary-<run_id>/
+https://staging.eimyherrer.com/cybercore-canary-<run_id>/cybercore-version.json
 ```
 
 Planned artifacts:
@@ -114,7 +117,9 @@ index.html
 cybercore-version.json
 ```
 
-The live operation, if later authorized, must fail if the run directory already exists. It must not overwrite the staging root, create a promotion symlink, or touch production.
+The destination is directly beneath the canonical staging root; no separate canary parent directory is created. The live operation, if later authorized, must fail if the destination exists or is a symlink, re-verify that the destination parent resolves to the canonical staging root immediately before creation, and must not overwrite the staging root, create a promotion symlink, or touch production.
+
+Production safety verification uses the already-verified production/staging path boundary plus destination allowlisting and write-scope evidence. WB-0034 does not authorize production application content reads or production URL fetches for comparison.
 
 ## Secret-handling boundary
 
@@ -146,6 +151,7 @@ Allowed in PR #55 / WB-0034 without further provider authorization:
 - repository documentation and state reconciliation;
 - plan-only manifest creation;
 - non-secret target-registry reconciliation;
+- repository validator/test implementation;
 - local/dry-run validation;
 - read-only planning and review;
 - recording known target identity and remaining unknowns.
@@ -198,7 +204,9 @@ Earlier merged artifact history remains canonical in Git history and the structu
 
 PR #55 prepares the first remote staging write without performing it.
 
-The intended first-write scope is a unique no-overwrite `cybercore-canary/<run_id>/` directory containing only two non-secret files. The design deliberately avoids a full application rollout and avoids symlink promotion during the first cycle.
+The intended first-write scope is one unique no-overwrite `cybercore-canary-<run_id>/` direct-child directory containing only two non-secret files. The design deliberately avoids a full application rollout, a separate canary parent-directory mutation, and symlink promotion during the first cycle.
+
+A dedicated WB-0034 readiness validator now models the actual first-write blockers and replaces the incompatible assumption that a production URL must be fetched after deployment.
 
 Before the final approval request, WB-0034 must establish:
 
@@ -207,7 +215,7 @@ Before the final approval request, WB-0034 must establish:
 - secret-alias readiness;
 - rollback semantics;
 - effect verifier readiness;
-- exact source commit and run id.
+- exact source commit, artifact hashes, and run id.
 
 If any of these cannot be verified safely, the first write remains blocked.
 
@@ -221,20 +229,20 @@ If any of these cannot be verified safely, the first write remains blocked.
 
 ## Next action
 
-1. Let PR #55 run CI and CodeQL and request fresh Codex review.
-2. Repair any valid repository finding.
-3. Perform only the separately permitted read-only checks needed to establish deployment protocol and deploy-identity scope.
+1. Complete exact-head CI, CodeQL, and fresh Codex re-review after the WB-0034 hardening changes.
+2. Repair any remaining valid repository finding.
+3. Obtain separate authority before any live InterServer read-only deployment-protocol/identity-scope probe required by this work block.
 4. Verify secret aliases without exposing values.
 5. Dry-run the two-file canary build/manifest/verifier locally.
 6. Merge WB-0034 only after separate merge approval.
 7. Pin the resulting exact `main` commit and assemble the final first-write authorization packet.
-8. Do not execute the remote write until Jan Kočí explicitly authorizes that exact packet.
+8. Do not execute the remote write until the operator explicitly authorizes that exact packet.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr55-wb0034-first-staging-deployment-preflight -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-22T14:49:00+02:00`
+- Generated: `2026-08-22T15:00:00+02:00`
 - Branch: `wb-0034-first-staging-deployment-preflight`
 - Pull request: #55
 - Active artifact: `WB-0034`
@@ -242,7 +250,8 @@ If any of these cannot be verified safely, the first write remains blocked.
 - Last verified main: `d74497eb0730a0d112cbf7957593f23cb35b5e71`
 - WB-0033 / PR #54: merged and canonical
 - Staging target identity: VERIFIED
-- First-write artifact plan: static two-file canary
+- First-write artifact plan: static two-file direct-child canary
+- WB-0034 readiness schema/validator: IMPLEMENTED
 - First-write deployment protocol: UNKNOWN
 - Deploy identity scope: UNKNOWN
 - Secret-alias readiness: UNKNOWN
