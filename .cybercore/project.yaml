@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0032 InterServer Staging Capability Discovery Phase B preflight active
-  active_artifact: WB-0032
-  branch: docs/wb-0032-phase-b-preflight
-  pull_request: 53
-  last_verified_main: 304f4234e4f52c2375d904b45d1ed0c4fe31511c
+  milestone: WB-0033 InterServer isolated staging target verified; PR54 merge authorized
+  active_artifact: WB-0033
+  branch: wb-0033-interserver-isolated-staging-target
+  pull_request: 54
+  last_verified_main: 70346d63ba2b17df17085797e963bb9dbd692282
 
 status:
   ccl_specification: complete_draft
@@ -76,12 +76,23 @@ status:
   wb0031_staging_runtime_gate_preflight: merged_verified
   pr51_wb0031_runtime_gate_preflight: merged_verified
   pr52_wb0032_definition_kickoff: merged_verified
-  wb0032_interserver_staging_capability_discovery: phase_b_preflight_active
+  pr53_wb0032_phase_b_preflight: merged_verified
+  wb0032_interserver_staging_capability_discovery: completed_with_verified_runtime_baseline
   interserver_live_read_only_discovery_authorized: true
   interserver_live_read_only_discovery_authority: jan_koci_2026_08_22
-  interserver_live_provider_capability: unknown_until_verified
-  staging_deployment_protocol_capability: unknown_until_verified
-  staging_remote_write_allowed: false
+  interserver_live_provider_capability: verified
+  staging_target_identity: verified
+  staging_document_root_isolation: verified
+  cloudflare_authoritative_dns: verified
+  staging_dns_record: verified
+  staging_http_https: verified
+  directadmin_cloudflare_acme: verified
+  wildcard_manual_renewal: verified
+  wildcard_unattended_renewal_authorized: true
+  wb0033_interserver_isolated_staging_target: verified_merge_authorized
+  wb0033_bounded_provider_mutations: verified
+  pr54_merge_authorization: granted_2026_08_22
+  staging_application_remote_write_allowed: false
   production_write_allowed: false
 
 completed:
@@ -197,14 +208,19 @@ completed:
     pull_request: 52
     merge_commit: 304f4234e4f52c2375d904b45d1ed0c4fe31511c
     verification: ci_176_codeql_173_codex_no_major_issues_manual_review_passed
+  - artifact: WB-0032-phase-b-documentation-preflight
+    pull_request: 53
+    merge_commit: 70346d63ba2b17df17085797e963bb9dbd692282
+    verification: ci_codeql_codex_passed
 
 next:
-  - complete PR53 WB-0032 Phase B documentation-preflight reconciliation and exact-head verification
-  - keep actual provider capability UNKNOWN until observed through the authorized read-only procedure
-  - begin live discovery only through the explicit semantic allowlist and abort on target, mutability, or response-sensitivity ambiguity
-  - establish real staging target identity, deployment capability, secret-alias readiness, rollback capability, effect-verifier capability, and credential-rotation operational state without remote write or secret disclosure
-  - keep live staging deployment blocked until all readiness statuses are VERIFIED and a later fresh Jan Kočí remote-write authorization is APPROVED
-  - prohibit production mutation until a separate production MOP and explicit Jan Kočí approval exist
+  - run exact-head CI, CodeQL, and Codex review for PR54 after canonical-state reconciliation
+  - resolve any valid exact-head finding without broadening provider or production authority
+  - if exact head remains mergeable and all gates are green, execute the already-authorized squash merge of PR54 using the expected head SHA
+  - after merge, treat WB0033 as the canonical verified staging-target baseline
+  - keep staging application deployment blocked until a later work block receives fresh explicit Jan Kočí remote-write authorization
+  - keep production application mutation prohibited without a separate production MOP and explicit Jan Kočí approval
+  - preserve Cloudflare as authoritative DNS and DirectAdmin as hosting/SSL control plane
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 
 rules:
