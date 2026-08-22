@@ -16,7 +16,7 @@ Definition active. Provider-contact execution is **not authorized** by this docu
 
 Convert the remaining InterServer staging unknowns into safe, non-secret, evidence-backed runtime facts before the first remote write.
 
-WB-0032 is a **discovery** work block. It must not mutate the provider, staging content, production content, DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or any other production/provider state.
+WB-0032 is a **discovery** work block. It must not mutate the provider, staging content, production content, DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, credentials, or any other production/provider state.
 
 ## Two-phase execution model
 
@@ -29,13 +29,13 @@ The kickoff PR may only:
 - keep all real provider facts `UNKNOWN_UNTIL_VERIFIED` until observed;
 - define the separate authority gate required before any live InterServer contact.
 
-Phase A performs **no InterServer connection** and handles **no secret values**.
+Phase A performs **no InterServer connection** and handles **no secret values**. No approval may broaden the kickoff PR beyond this repository-only scope.
 
 ### Phase B — live read-only capability discovery
 
 Phase B may begin only after a fresh explicit operator authorization that names the target/provider scope and confirms read-only discovery.
 
-A Phase B authorization must not be interpreted as authority for `staging_apply`, upload, file creation, file modification, credential rotation, provider setting changes, or production mutation.
+A Phase B authorization must not be interpreted as authority for `staging_apply`, upload, file creation, file modification, credential rotation, provider setting changes, or production mutation. No approval may broaden WB-0032 into a mutating work block.
 
 ## Runtime questions to resolve
 
@@ -66,7 +66,7 @@ The later read-only discovery must establish evidence for all of the following w
    - checks capable of proving production was not changed.
 6. **Credential-rotation operational state**
    - record only non-secret state such as `unknown`, `verified`, dates, aliases, owner, or safe fingerprint/hash where appropriate;
-   - rotation itself is out of scope unless separately authorized.
+   - credential rotation itself is outside WB-0032 and cannot be added to Phase B; any future rotation requires a separate work block or procedure plus its own explicit authorization.
 
 ## Evidence contract
 
@@ -100,16 +100,17 @@ Before the first live InterServer contact, a fresh explicit operator authorizati
 - secret handling: aliases/references only in ordinary evidence; values remain inside approved secret storage/runtime handling;
 - stop condition: abort on ambiguity about staging-vs-production identity or command mutability.
 
-No authorization from PR #51, ADR-0006, or this kickoff PR satisfies this Phase B gate.
+No authorization from PR #51, ADR-0006, or the WB-0032 kickoff PR satisfies this Phase B gate. A Phase B authorization may enable only the read-only discovery described here; it cannot authorize mutation.
 
 ## Safety invariants
 
-Throughout WB-0032 until a later separately approved work block:
+Throughout WB-0032:
 
 - `remote_write_requested: false`;
 - `remote_write_allowed: false`;
 - `production_write_allowed: false`;
 - `staging_apply` remains blocked;
+- credential rotation remains outside the work block;
 - real provider capability remains `UNKNOWN_UNTIL_VERIFIED` until observed under the approved Phase B procedure;
 - target metadata, documentation, aliases, and synthetic tests are not proof of live provider capability.
 
@@ -124,7 +125,7 @@ WB-0032 can be considered complete only when:
 - required secret aliases are evidenced as ready without secret disclosure;
 - rollback capability is evidenced;
 - effect-verifier capability is evidenced;
-- credential-rotation operational state is recorded safely;
+- credential-rotation operational state is recorded safely without performing rotation;
 - all evidence states explicitly record that no remote write occurred and no secret values were stored;
 - a later `staging_apply` work block remains separately gated by fresh explicit operator authorization.
 
