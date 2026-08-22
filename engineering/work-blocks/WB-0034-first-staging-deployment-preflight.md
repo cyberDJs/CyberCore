@@ -147,7 +147,7 @@ Production safety is proven by the verified staging/production path boundary plu
 
 `PENDING_AFTER_WB0034_MERGE`
 
-The first live manifest must pin an exact `main` commit. `TBD`, branch-only identity, or moving refs are not acceptable for `staging_apply`.
+The final runtime manifest, readiness artifact, sanitized evidence bundle, and deployment runner checkout must all bind to one exact `main` commit. `TBD`, branch-only identity, arbitrary 40-hex strings, mismatched commit values, or moving refs are not acceptable for the final packet.
 
 ### G8 — explicit first remote-write authorization
 
@@ -155,18 +155,37 @@ The first live manifest must pin an exact `main` commit. `TBD`, branch-only iden
 
 WB-0034 preparation does not authorize the remote write. A later approval must name the exact source commit, run id, protocol, deploy identity/scope, target path, two-file artifact, and rollback scope.
 
-## Machine-validatable readiness contract
+### G9 — hash-bound supporting evidence
 
-WB-0034 uses a dedicated schema so the new first-write gate does not silently overload the legacy WB-0029 readiness validator.
+`DESIGN_IMPLEMENTED; RUNTIME_EVIDENCE_PENDING`
 
-Canonical files:
+Readiness status labels are not sufficient evidence. A final READY decision requires a sanitized evidence bundle whose SHA-256 is recorded in the readiness artifact. The bundle must bind the exact source commit, run id, destination, two artifact hashes, deployment protocol, capability/scope references, verifier evidence, authorization reference, and rollback permission.
+
+The combined packet validator must prove the evidence digest and cross-document bindings before it can return READY.
+
+## Machine-validatable first-write contract
+
+WB-0034 uses dedicated validators so the first-write gate does not silently overload the legacy WB-0029 staging readiness contract.
+
+Canonical implementation files include:
 
 - `.cybercore/deploy/readiness/interserver-staging-readiness.wb0034.yaml`;
+- `.cybercore/deploy/manifests/interserver-staging-wb0034-plan.yaml`;
 - `src/cybercore/first_write.py`;
+- `src/cybercore/first_write_manifest.py`;
+- `src/cybercore/first_write_evidence.py`;
+- `src/cybercore/first_write_packet.py`;
+- `src/cybercore/first_write_security.py`;
 - `scripts/validate_wb0034_readiness.py`;
-- `tests/test_wb0034_readiness.py`.
+- `scripts/validate_wb0034_manifest.py`;
+- `scripts/validate_wb0034_packet.py`;
+- regression tests under `tests/test_wb0034_*.py`.
 
-The validator must accept the current artifact as schema-valid but `BLOCKED`, and it must be able to transition to `READY` once every declared blocker reaches its required status. `remote_write_requested`, `remote_write_allowed`, and `production_write_allowed` remain false even when the approval packet becomes complete; execution remains a separate authority boundary.
+The current repository artifacts remain plan-only and BLOCKED. The readiness validator may become READY only when its status fields are supported by a valid hash-bound evidence bundle. The final remote-write authorization packet has a stricter combined gate: populated manifest and readiness data, the hash-bound evidence bundle, and the checked-out repository `HEAD` must agree on the exact source commit, while run id, destination, artifact set, authorization reference, and rollback permission must remain consistently bound.
+
+The WB-0034 machine YAML artifacts are intentionally comment-free and raw-text scanned before parsing. Credential-like assignments, private-key material, credential-bearing URLs, YAML comments, duplicate keys, unsupported structures, and secret values fail closed.
+
+`remote_write_requested`, `remote_write_allowed`, and `production_write_allowed` remain false even when a final approval packet becomes complete; execution remains a separate authority boundary.
 
 No change in this work block may weaken the invariant:
 
@@ -180,17 +199,20 @@ production_write_allowed: false
 
 Before requesting the first staging-write authorization, the handoff must contain:
 
-- exact source commit;
+- exact checked-out `main` source commit;
 - exact run id;
 - verified deployment protocol;
 - deploy identity safe reference and scope result;
 - secret-alias readiness result without values;
-- exact destination directory;
-- exact two-file artifact list;
+- exact direct-child destination directory;
+- exact two-file artifact list and hashes;
+- sanitized hash-bound evidence bundle reference and digest;
 - verifier commands/URLs;
 - rollback action limited to that run directory;
+- fresh authorization reference bound to commit/run/destination/artifacts/rollback;
 - expected evidence receipt fields;
-- explicit stop conditions.
+- explicit stop conditions;
+- passing `validate_wb0034_packet.py` result from the exact checked-out source commit.
 
 ## Out of scope
 
@@ -210,12 +232,13 @@ WB-0034 preflight is complete when:
 - PR #54 is reconciled as merged into canonical state;
 - the target registry reflects the verified WB-0033 staging identity;
 - a plan-only first-write manifest exists;
-- the dedicated WB-0034 readiness artifact/schema is internally consistent and regression-tested;
-- current readiness evidence records verified target identity and all remaining blockers without overclaim;
+- dedicated WB-0034 manifest, readiness, evidence, raw-secret, and combined packet validators are internally consistent and regression-tested;
+- arbitrary status labels, arbitrary evidence references, mismatched or nonexistent source SHAs, cross-document commit/run/destination/artifact mismatches, and secret-bearing comments/credential URLs fail closed;
+- current readiness evidence records verified target identity and all remaining runtime blockers without overclaim;
 - exact mutation and rollback scope are documented;
 - symlink/ancestor escape and parent-directory ambiguity are eliminated from the first-write design;
-- CI and CodeQL pass;
+- CI and CodeQL pass on the exact PR head;
 - fresh Codex review finds no valid unresolved issue;
 - remote write remains blocked.
 
-A subsequent execution step may proceed only after the remaining runtime gates are verified and Jan Kočí grants fresh explicit first staging remote-write authorization.
+A subsequent execution step may proceed only after the remaining runtime gates are verified and the operator grants fresh explicit first staging remote-write authorization.
