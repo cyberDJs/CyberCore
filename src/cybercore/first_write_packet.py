@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 import hashlib
+import json
+import os
 from pathlib import Path
+import stat
 import subprocess
 from typing import cast
 
@@ -17,6 +21,15 @@ from cybercore.first_write_manifest import validate_first_write_manifest
 
 
 EXPECTED_ARTIFACTS = {"index.html", "cybercore-version.json"}
+EXPECTED_VERSION_KEYS = {
+    "repository",
+    "commit",
+    "branch",
+    "built_at",
+    "environment",
+    "run_id",
+}
+MAX_CANARY_ARTIFACT_BYTES = 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -90,52 +103,181 @@ def _git_main_commit(repository_root: Path, errors: list[str]) -> str | None:
     return None
 
 
-def _sha256_file(path: Path, errors: list[str]) -> str | None:
-    digest = hashlib.sha256()
-    try:
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-    except OSError as exc:
-        errors.append(f"cannot hash deployment artifact {path.name}: {exc}")
+def _open_artifact_directory_no_follow(artifact_dir: Path, errors: list[str]) -> int | None:
+    if os.name != "posix" or not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
+        errors.append("secure artifact path validation requires POSIX O_DIRECTORY and O_NOFOLLOW")
         return None
-    return digest.hexdigest()
 
+    absolute = Path(os.path.abspath(os.fspath(artifact_dir)))
+    if not absolute.is_absolute() or absolute.anchor != "/":
+        errors.append("deployment artifact directory must resolve to an absolute POSIX path")
+        return None
 
-def _local_artifact_hashes(artifact_dir: Path, errors: list[str]) -> dict[str, str]:
-    if artifact_dir.is_symlink():
-        errors.append("deployment artifact directory must not be a symlink")
-        return {}
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    current_fd: int | None = None
     try:
-        root = artifact_dir.resolve(strict=True)
-    except (FileNotFoundError, OSError) as exc:
-        errors.append(f"cannot resolve deployment artifact directory: {exc}")
-        return {}
-    if not root.is_dir():
-        errors.append("deployment artifact path must resolve to a directory")
-        return {}
+        current_fd = os.open("/", directory_flags)
+        for component in absolute.parts[1:]:
+            next_fd = os.open(component, directory_flags, dir_fd=current_fd)
+            os.close(current_fd)
+            current_fd = next_fd
+    except OSError as exc:
+        if current_fd is not None:
+            os.close(current_fd)
+        errors.append(
+            "deployment artifact directory contains a symlink, missing path, or invalid "
+            f"directory component: {exc}"
+        )
+        return None
+    return current_fd
+
+
+def _read_artifact_no_follow(
+    directory_fd: int,
+    name: str,
+    errors: list[str],
+) -> tuple[str, bytes] | None:
+    file_fd: int | None = None
+    try:
+        file_fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory_fd)
+        metadata = os.fstat(file_fd)
+        if not stat.S_ISREG(metadata.st_mode):
+            errors.append(f"deployment artifact is not a regular file: {name}")
+            return None
+        if metadata.st_size > MAX_CANARY_ARTIFACT_BYTES:
+            errors.append(f"deployment artifact exceeds size limit: {name}")
+            return None
+
+        digest = hashlib.sha256()
+        data = bytearray()
+        while True:
+            chunk = os.read(file_fd, 64 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+            data.extend(chunk)
+            if len(data) > MAX_CANARY_ARTIFACT_BYTES:
+                errors.append(f"deployment artifact exceeds size limit while reading: {name}")
+                return None
+        return digest.hexdigest(), bytes(data)
+    except OSError as exc:
+        errors.append(f"cannot open deployment artifact without following links {name}: {exc}")
+        return None
+    finally:
+        if file_fd is not None:
+            os.close(file_fd)
+
+
+def _local_artifacts(
+    artifact_dir: Path,
+    errors: list[str],
+) -> tuple[dict[str, str], bytes | None]:
+    directory_fd = _open_artifact_directory_no_follow(artifact_dir, errors)
+    if directory_fd is None:
+        return {}, None
 
     hashes: dict[str, str] = {}
-    for name in sorted(EXPECTED_ARTIFACTS):
-        candidate = root / name
-        if candidate.is_symlink():
-            errors.append(f"deployment artifact must not be a symlink: {name}")
-            continue
+    version_bytes: bytes | None = None
+    try:
         try:
-            resolved = candidate.resolve(strict=True)
-        except (FileNotFoundError, OSError) as exc:
-            errors.append(f"cannot resolve deployment artifact {name}: {exc}")
-            continue
-        if resolved.parent != root:
-            errors.append(f"deployment artifact escapes the approved artifact directory: {name}")
-            continue
-        if not resolved.is_file():
-            errors.append(f"deployment artifact is not a regular file: {name}")
-            continue
-        digest = _sha256_file(resolved, errors)
-        if digest is not None:
+            entries = set(os.listdir(directory_fd))
+        except OSError as exc:
+            errors.append(f"cannot list deployment artifact directory: {exc}")
+            return {}, None
+
+        missing = sorted(EXPECTED_ARTIFACTS - entries)
+        unexpected = sorted(entries - EXPECTED_ARTIFACTS)
+        if missing:
+            errors.append(f"deployment artifact directory is missing: {', '.join(missing)}")
+        if unexpected:
+            errors.append(
+                "deployment artifact directory contains unexpected entries: "
+                + ", ".join(unexpected)
+            )
+
+        for name in sorted(EXPECTED_ARTIFACTS):
+            result = _read_artifact_no_follow(directory_fd, name, errors)
+            if result is None:
+                continue
+            digest, data = result
             hashes[name] = digest
-    return hashes
+            if name == "cybercore-version.json":
+                version_bytes = data
+    finally:
+        os.close(directory_fd)
+
+    return hashes, version_bytes
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _validate_version_marker(
+    raw_bytes: bytes,
+    *,
+    expected_commit: str,
+    expected_run_id: str,
+    errors: list[str],
+) -> None:
+    try:
+        text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        errors.append("cybercore-version.json must be UTF-8")
+        return
+
+    try:
+        loaded = json.loads(text, object_pairs_hook=_unique_json_object)
+    except (json.JSONDecodeError, ValueError) as exc:
+        errors.append(f"cybercore-version.json is invalid or ambiguous JSON: {exc}")
+        return
+
+    if not isinstance(loaded, dict):
+        errors.append("cybercore-version.json must contain one JSON object")
+        return
+    marker = cast(dict[object, object], loaded)
+    if any(not isinstance(key, str) for key in marker):
+        errors.append("cybercore-version.json contains non-string keys")
+        return
+    document = cast(dict[str, object], marker)
+
+    actual_keys = set(document)
+    if actual_keys != EXPECTED_VERSION_KEYS:
+        missing = sorted(EXPECTED_VERSION_KEYS - actual_keys)
+        unexpected = sorted(actual_keys - EXPECTED_VERSION_KEYS)
+        if missing:
+            errors.append(f"cybercore-version.json is missing keys: {', '.join(missing)}")
+        if unexpected:
+            errors.append(f"cybercore-version.json contains unexpected keys: {', '.join(unexpected)}")
+
+    expected_values = {
+        "repository": "cyberDJs/CyberCore",
+        "commit": expected_commit,
+        "branch": "main",
+        "environment": "interserver-shared-hosting-staging",
+        "run_id": expected_run_id,
+    }
+    for key, expected in expected_values.items():
+        actual = document.get(key)
+        if actual != expected:
+            errors.append(f"cybercore-version.json {key} must equal {expected!r}; got {actual!r}")
+
+    built_at = document.get("built_at")
+    if not isinstance(built_at, str) or not built_at.strip():
+        errors.append("cybercore-version.json built_at must be a UTC timestamp string")
+        return
+    try:
+        timestamp = datetime.fromisoformat(built_at.replace("Z", "+00:00"))
+    except ValueError:
+        errors.append("cybercore-version.json built_at must be a valid ISO-8601 timestamp")
+        return
+    if timestamp.tzinfo is None or timestamp.utcoffset() != timedelta(0):
+        errors.append("cybercore-version.json built_at must use UTC")
 
 
 def validate_first_write_packet(
@@ -231,7 +373,7 @@ def validate_first_write_packet(
         errors.append("evidence and manifest authorization references must match")
 
     evidence_hashes = dict(evidence.artifact_hashes)
-    local_hashes = _local_artifact_hashes(artifact_dir, errors)
+    local_hashes, version_bytes = _local_artifacts(artifact_dir, errors)
     for name in sorted(EXPECTED_ARTIFACTS):
         expected_digest = evidence_hashes.get(name)
         actual_digest = local_hashes.get(name)
@@ -239,5 +381,16 @@ def validate_first_write_packet(
             errors.append(f"evidence is missing deployment artifact digest: {name}")
         elif actual_digest is not None and actual_digest != expected_digest:
             errors.append(f"deployment artifact digest mismatch: {name}")
+
+    if version_bytes is not None:
+        if evidence.run_id is None:
+            errors.append("evidence run_id is unavailable for version-marker validation")
+        else:
+            _validate_version_marker(
+                version_bytes,
+                expected_commit=head,
+                expected_run_id=evidence.run_id,
+                errors=errors,
+            )
 
     return FirstWritePacketResult(not errors, tuple(errors))
