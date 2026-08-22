@@ -13,8 +13,8 @@ Permitted probe classes:
 
 - InterServer REST API read-only probes;
 - InterServer MCP read-only discovery only after the exact exposed tool schema and read-only scope are inspected;
-- DirectAdmin read-only API probes;
-- SSH/SFTP read-only inspection when needed to verify target identity or filesystem capability.
+- DirectAdmin read-only API probes only after each exact endpoint passes the semantic mutability and response-sensitivity review defined below and is explicitly added to the allowlist;
+- SSH/SFTP read-only inspection when needed to verify staging target identity or staging filesystem capability.
 
 Explicitly prohibited:
 
@@ -26,10 +26,10 @@ Explicitly prohibited:
 - provider configuration changes;
 - credential creation, rotation, reset, or replacement;
 - staging remote write / `staging_apply`;
-- production access or production mutation;
+- production access or production mutation, including production filesystem metadata inspection;
 - secret-value persistence in GitHub, chat, Drive, Slack, CASER documents, or ordinary evidence.
 
-Stop immediately if staging-vs-production identity is ambiguous or if the mutability of a proposed probe is unclear.
+Stop immediately if staging-vs-production identity is ambiguous or if the mutability or response sensitivity of a proposed probe is unclear.
 
 ## Documentation basis
 
@@ -43,13 +43,15 @@ The discovery procedure is based on the current provider and control-panel docum
 
 The InterServer management API currently documents API version `0.9.0`, REST base path `/apiv2`, `X-API-KEY` authentication as the preferred API-key mode, and session authentication as an alternative. The InterServer MCP server also reports version `0.9.0` and supports a private authenticated endpoint with scoped access.
 
-DirectAdmin documents a newer JSON `/api/...` API and a legacy `/CMD_API_...` API. New JSON endpoints should be preferred. Each DirectAdmin server exposes the API shape it actually supports at `/static/swagger.json`.
+DirectAdmin documents a newer JSON `/api/...` API and a legacy `/CMD_API_...` API. New JSON endpoints should be preferred only after exact endpoint review. Each DirectAdmin server exposes the API shape it actually supports at `/static/swagger.json`.
 
 ## Critical safety observation
 
 **HTTP method alone is not a safety boundary.**
 
 InterServer documents multiple `GET` endpoints that can trigger side effects, such as service restart, backup creation, welcome-email resend, logout, or other actions. Therefore WB-0032 uses an explicit semantic allowlist and does **not** assume that every `GET` request is non-mutating.
+
+Response sensitivity is a separate gate from mutability. A non-mutating endpoint remains blocked when its response may expose credential, session, private account, or unrelated production material and the response surface cannot be bounded before invocation.
 
 Any endpoint not explicitly allowed below is blocked until separately reviewed and added to this document.
 
@@ -103,7 +105,7 @@ Purpose:
 
 The current InterServer documentation describes `GET /apiv2/websites/{id}` as returning **full configuration and status detail**. Because that response surface has not yet been proven free of credential, session, auto-login, or other secret-like material, the detail endpoint is **not** part of the initial allowlist.
 
-`GET /apiv2/websites/{id}` may be added later only after an independent schema/response-surface review proves that the required fields can be read without exposing secret/session material. If that cannot be proven, record the detail capability as `BLOCKED` and continue with safer provider/DirectAdmin/SSH metadata sources where possible.
+`GET /apiv2/websites/{id}` may be added later only after an independent schema/response-surface review proves that the required fields can be read without exposing secret/session material. If that cannot be proven, record the detail capability as `BLOCKED` and continue with safer provider/DirectAdmin/staging-only SSH metadata sources where possible.
 
 ### Step 3 — optional network identity read
 
@@ -136,32 +138,38 @@ Do not call:
 
 Use DirectAdmin only after Step 2 has identified the intended InterServer webhosting service and the target control-panel identity is unambiguous.
 
-Preferred approach:
+Initial DirectAdmin allowlist:
 
-1. use an existing DirectAdmin credential or already-approved credential alias;
-2. read `/static/swagger.json` from the exact DirectAdmin server to discover the API actually supported there;
-3. prefer documented `/api/...` JSON endpoints;
-4. use legacy `/CMD_API_...` endpoints only where the required read operation is missing from the new API.
+- `GET /static/swagger.json` on the exact target DirectAdmin server, solely to discover the API shape exposed by that server.
 
-Known legacy read fallback:
+No other DirectAdmin endpoint is initially authorized merely because it is present in Swagger, uses `GET`, or appears in provider documentation.
 
-- `CMD_API_SHOW_DOMAINS` — list domains owned by the current DirectAdmin user.
+For every additional DirectAdmin operation required by Phase B:
+
+1. identify the exact method and path from the target server's `/static/swagger.json` or, only if necessary, the documented legacy API;
+2. review that exact operation for side effects/mutability;
+3. review its documented response fields for credential, session, personal, production, or unrelated account data;
+4. define the minimum fields that may enter sanitized evidence;
+5. add the exact method/path to this semantic allowlist before invoking it;
+6. if either mutability or response sensitivity remains ambiguous, record the capability `BLOCKED` or `UNKNOWN` and do not call it.
+
+A documented legacy candidate such as `CMD_API_SHOW_DOMAINS` is **not automatically allowed**. It may be used only after the same per-endpoint review and explicit allowlist addition. Legacy `/CMD_API_...` endpoints remain fallback-only when the required read capability is absent from the reviewed new `/api/...` surface.
 
 Do **not** generate a temporary DirectAdmin login key with `da api-url` during WB-0032 Phase B; generating a new access credential is outside the authorized non-mutating discovery scope.
 
-Do not use undocumented GUI-debug endpoints for production automation. If a required capability is absent from the server's Swagger specification and legacy documented API, record it as unavailable/unknown rather than inventing an endpoint.
+Do not use undocumented GUI-debug endpoints. If a required capability is absent from the server's Swagger specification and documented legacy API, record it as unavailable/unknown rather than inventing an endpoint.
 
 ### Step 5 — staging filesystem identity
 
-If InterServer and DirectAdmin metadata cannot prove the staging document root, perform the minimum SSH/SFTP read-only inspection needed to answer it.
+If InterServer and already-allowed DirectAdmin metadata cannot prove the staging document root, perform the minimum SSH/SFTP read-only inspection needed on the **staging scope only**.
 
-Permitted SSH command classes:
+Permitted SSH command classes, scoped only to staging identity/path discovery:
 
 - identity/current-directory inspection, e.g. `id`, `pwd`;
-- filesystem metadata inspection, e.g. `stat`;
-- path resolution without mutation, e.g. `readlink`;
-- existence/type tests that do not create files;
-- narrowly scoped directory-name listing when necessary.
+- staging filesystem metadata inspection, e.g. `stat` on an already identified staging candidate path;
+- staging path resolution without mutation, e.g. `readlink` on an already identified staging candidate path;
+- existence/type tests on staging paths that do not create files;
+- narrowly scoped staging directory-name listing when necessary.
 
 Blocked remote command classes:
 
@@ -171,9 +179,12 @@ Blocked remote command classes:
 - `ln`;
 - package/service/configuration operations;
 - database writes;
-- any shell command whose side effects are not understood.
+- any shell command whose side effects are not understood;
+- `stat`, `readlink`, listing, traversal, content read, or any other inspection of a production path.
 
-The goal is to prove a concrete non-production staging path and independently establish that it does not overlap the production document root. Production content itself must not be traversed or read; only the minimum safe metadata needed to exclude path overlap may be retained.
+The goal is to prove a concrete non-production staging path. Production exclusion must be established only by comparing the observed staging identity/path against **previously approved canonical production-path evidence** that already exists outside this Phase B probe. Phase B must not inspect production to manufacture that evidence.
+
+If sufficiently authoritative pre-existing production-path evidence is unavailable, stale, or ambiguous, set `production_overlap_excluded: blocked` and stop the relevant exit criterion. Do not access production. Resolving that gap would require a separate production-read scope and explicit authorization.
 
 ### Step 6 — deployment capability without deployment
 
@@ -181,15 +192,15 @@ Evidence only:
 
 - SSH available: `true|false|unknown`;
 - SFTP available: `true|false|unknown`;
-- rsync executable/usable in the account context: `true|false|unknown`;
-- DirectAdmin file/API capability relevant to future deployment: `true|false|unknown`;
+- rsync executable/usable in the staging account context: `true|false|unknown`;
+- DirectAdmin file/API capability relevant to future staging deployment: `true|false|unknown`;
 - least-privilege deploy identity scope: `verified|blocked|unknown`.
 
 No upload or synthetic write test is allowed in WB-0032.
 
 ### Step 7 — rollback and effect-verifier capability
 
-Determine without mutation whether the hosting environment can support a later safe deployment design.
+Determine without mutation whether the **staging environment** can support a later safe deployment design.
 
 Record:
 
@@ -199,9 +210,9 @@ Record:
 - no-overwrite new-path release feasible: `true|false|unknown`;
 - staging health URL or equivalent verifier: `verified|blocked|unknown`;
 - version/commit marker verification strategy: `verified|blocked|unknown`;
-- production non-change verification strategy: `verified|blocked|unknown`.
+- production non-change verification strategy: `verified|blocked|unknown`, but only when it can rely on previously approved evidence or external non-production observations without production access.
 
-Do not create a symlink, backup, release directory, marker file, or health endpoint during discovery.
+Do not create a symlink, backup, release directory, marker file, or health endpoint during discovery. Do not inspect production to construct or test the production non-change verifier during WB-0032.
 
 ## Evidence schema
 
@@ -249,7 +260,8 @@ Raw API/provider responses must be sanitized before entering ordinary evidence i
 Return `BLOCKED` immediately when any of the following occurs:
 
 - the service cannot be tied unambiguously to InterServer staging;
-- staging path may equal or overlap a production document root;
+- staging path may equal or overlap a production document root and this cannot be excluded from pre-existing approved production-path evidence;
+- proving production exclusion would require new production access;
 - the only available authentication path requires creating/rotating/resetting a credential;
 - a proposed endpoint has undocumented or ambiguous side effects;
 - a proposed endpoint may return secret/session material and its response surface cannot be bounded before invocation;
@@ -262,7 +274,7 @@ Return `BLOCKED` immediately when any of the following occurs:
 Phase B reaches `VERIFIED` only after safe evidence establishes:
 
 1. exact non-production staging service identity;
-2. exact non-production staging path/document-root identity and production exclusion;
+2. exact non-production staging path/document-root identity and production exclusion using pre-existing approved production-path evidence, without new production access;
 3. actual deployment protocol capabilities;
 4. least-privilege credential/identity readiness without disclosure;
 5. rollback capability;
