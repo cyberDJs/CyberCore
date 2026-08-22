@@ -42,7 +42,34 @@ def _init_repo(tmp_path: Path) -> tuple[Path, str]:
     return repo, _run_git(repo, "rev-parse", "HEAD")
 
 
-def _evidence_text(source_commit: str) -> str:
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _write_artifacts(repo: Path, source_commit: str) -> tuple[Path, dict[str, str]]:
+    artifact_dir = repo / "build" / "wb0034"
+    artifact_dir.mkdir(parents=True)
+    (artifact_dir / "index.html").write_text(
+        "<!doctype html><title>CyberCore canary</title>\n",
+        encoding="utf-8",
+    )
+    (artifact_dir / "cybercore-version.json").write_text(
+        f'{{"commit":"{source_commit}","run_id":"{RUN_ID}"}}\n',
+        encoding="utf-8",
+    )
+    return artifact_dir, {
+        "index.html": _sha256(artifact_dir / "index.html"),
+        "cybercore-version.json": _sha256(artifact_dir / "cybercore-version.json"),
+    }
+
+
+def _evidence_text(
+    source_commit: str,
+    artifact_hashes: dict[str, str],
+    *,
+    authorization_protocol: str = "SFTP",
+    authorization_scope: str = SCOPE_REF,
+) -> str:
     return f"""version: 1
 evidence_class: wb0034_first_write
 target_id: interserver-shared-hosting-staging
@@ -50,8 +77,8 @@ source_commit: {source_commit}
 run_id: {RUN_ID}
 destination: {DESTINATION}
 artifacts:
-  index.html: {"a" * 64}
-  cybercore-version.json: {"b" * 64}
+  index.html: {artifact_hashes["index.html"]}
+  cybercore-version.json: {artifact_hashes["cybercore-version.json"]}
 deployment:
   protocol: SFTP
   target_capability_reference: {CAPABILITY_REF}
@@ -74,6 +101,8 @@ authorization:
   artifacts:
     - index.html
     - cybercore-version.json
+  protocol: {authorization_protocol}
+  deploy_identity_scope_reference: {authorization_scope}
   rollback_permitted: true
 secret_values_present: false
 """
@@ -135,7 +164,13 @@ def _readiness_text(source_commit: str, digest: str) -> str:
     )
 
 
-def _write_packet(repo: Path, source_commit: str) -> tuple[Path, Path, Path]:
+def _write_packet(
+    repo: Path,
+    source_commit: str,
+    *,
+    authorization_protocol: str = "SFTP",
+    authorization_scope: str = SCOPE_REF,
+) -> tuple[Path, Path, Path, Path]:
     deploy = repo / ".cybercore/deploy"
     manifests = deploy / "manifests"
     readiness_dir = deploy / "readiness"
@@ -144,44 +179,69 @@ def _write_packet(repo: Path, source_commit: str) -> tuple[Path, Path, Path]:
     readiness_dir.mkdir(parents=True)
     evidence_dir.mkdir(parents=True)
 
+    artifact_dir, artifact_hashes = _write_artifacts(repo, source_commit)
+
     evidence = evidence_dir / "wb0034-first-write.yaml"
-    evidence.write_text(_evidence_text(source_commit), encoding="utf-8")
+    evidence.write_text(
+        _evidence_text(
+            source_commit,
+            artifact_hashes,
+            authorization_protocol=authorization_protocol,
+            authorization_scope=authorization_scope,
+        ),
+        encoding="utf-8",
+    )
     digest = hashlib.sha256(evidence.read_bytes()).hexdigest()
 
     manifest = manifests / "wb0034-final.yaml"
     manifest.write_text(_manifest_text(source_commit), encoding="utf-8")
     readiness = readiness_dir / "wb0034-final.yaml"
     readiness.write_text(_readiness_text(source_commit, digest), encoding="utf-8")
-    return manifest, readiness, evidence
+    return manifest, readiness, evidence, artifact_dir
 
 
-def test_final_packet_passes_only_when_all_artifacts_bind_to_repo_head(tmp_path: Path) -> None:
+def test_final_packet_passes_only_when_all_artifacts_bind_to_main_head(tmp_path: Path) -> None:
     repo, head = _init_repo(tmp_path)
-    manifest, readiness, _ = _write_packet(repo, head)
+    manifest, readiness, _, artifact_dir = _write_packet(repo, head)
 
-    result = validate_first_write_packet(manifest, readiness, repo)
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
 
     assert result.ready, result.as_text()
 
 
 def test_final_packet_rejects_syntactically_valid_but_non_head_commit(tmp_path: Path) -> None:
     repo, head = _init_repo(tmp_path)
-    manifest, readiness, _ = _write_packet(repo, head)
+    manifest, readiness, _, artifact_dir = _write_packet(repo, head)
     other_sha = "f" * 40
     manifest.write_text(
         manifest.read_text(encoding="utf-8").replace(head, other_sha),
         encoding="utf-8",
     )
 
-    result = validate_first_write_packet(manifest, readiness, repo)
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
 
     assert not result.ready
     assert any("checked-out repository HEAD" in error for error in result.errors)
 
 
+def test_final_packet_rejects_feature_branch_head_even_when_packet_matches_it(tmp_path: Path) -> None:
+    repo, _ = _init_repo(tmp_path)
+    _run_git(repo, "switch", "-c", "feature")
+    (repo / "source.txt").write_text("feature deployment source\n", encoding="utf-8")
+    _run_git(repo, "add", "source.txt")
+    _run_git(repo, "commit", "-m", "feature source")
+    feature_head = _run_git(repo, "rev-parse", "HEAD")
+    manifest, readiness, _, artifact_dir = _write_packet(repo, feature_head)
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert any("trusted main commit" in error for error in result.errors)
+
+
 def test_final_packet_rejects_manifest_evidence_run_id_mismatch(tmp_path: Path) -> None:
     repo, head = _init_repo(tmp_path)
-    manifest, readiness, _ = _write_packet(repo, head)
+    manifest, readiness, _, artifact_dir = _write_packet(repo, head)
     manifest.write_text(
         manifest.read_text(encoding="utf-8")
         .replace(f"run_id: {RUN_ID}", "run_id: 20260822T183501Z-d4e5f6")
@@ -189,7 +249,60 @@ def test_final_packet_rejects_manifest_evidence_run_id_mismatch(tmp_path: Path) 
         encoding="utf-8",
     )
 
-    result = validate_first_write_packet(manifest, readiness, repo)
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
 
     assert not result.ready
     assert any("run_id" in error for error in result.errors)
+
+
+def test_final_packet_rejects_authorization_protocol_mismatch(tmp_path: Path) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(
+        repo,
+        head,
+        authorization_protocol="SSH",
+    )
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert any("authorization protocol" in error for error in result.errors)
+
+
+def test_final_packet_rejects_authorization_identity_scope_mismatch(tmp_path: Path) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(
+        repo,
+        head,
+        authorization_scope="evidence:wb0034:deploy-identity-scope:other",
+    )
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert any("authorization deploy identity scope" in error for error in result.errors)
+
+
+def test_final_packet_rejects_local_artifact_tampering(tmp_path: Path) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(repo, head)
+    (artifact_dir / "index.html").write_text("tampered\n", encoding="utf-8")
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert any("artifact digest mismatch: index.html" in error for error in result.errors)
+
+
+def test_final_packet_rejects_symlinked_local_artifact(tmp_path: Path) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(repo, head)
+    target = artifact_dir / "real-index.html"
+    target.write_text("replacement\n", encoding="utf-8")
+    (artifact_dir / "index.html").unlink()
+    (artifact_dir / "index.html").symlink_to(target.name)
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert any("must not be a symlink: index.html" in error for error in result.errors)
