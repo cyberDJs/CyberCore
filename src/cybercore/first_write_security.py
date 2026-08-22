@@ -14,9 +14,7 @@ SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"secret(?:_value)?|credential|access[_-]?token|refresh[_-]?token)\s*[:=]\s*\S+"
 )
 
-CREDENTIAL_URL_RE = re.compile(
-    r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:[^@\s/]+@"
-)
+CREDENTIAL_URL_RE = re.compile(r"\b[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:[^@\s/]+@")
 
 
 def scan_first_write_yaml_text(text: str, label: str) -> tuple[str, ...]:
