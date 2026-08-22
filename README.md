@@ -176,7 +176,7 @@ Useful ways to help right now:
 
 ## Support CyberCore
 
-CyberCore is developed in public as an open-source reference platform. Financial support is now available through the project's verified Ko-fi page.
+CyberCore is developed in public as an open-source reference platform. The project has a Ko-fi support page configured for financial support.
 
 <p align="center">
   <a href="https://ko-fi.com/cybercorestack"><strong>♡ Support CyberCore on Ko-fi</strong></a>
@@ -198,7 +198,7 @@ You can also support the project without money:
 - 🛠️ **Contribute** code, documentation, provider adapters, or operational patterns.
 - 🤝 **Partner** on a real-world, sanitized infrastructure use case.
 
-The repository's native Sponsor button is wired through [`.github/FUNDING.yml`](.github/FUNDING.yml) to the Ko-fi funding endpoint. Additional funding providers will be added only when their destinations are verified.
+After this change reaches the default branch, GitHub's native Sponsor button is configured through [`.github/FUNDING.yml`](.github/FUNDING.yml) to point to the Ko-fi support page. Additional funding providers will be added only after their destinations are explicitly configured and reviewed.
 
 ## Maintainer & partnerships
 
