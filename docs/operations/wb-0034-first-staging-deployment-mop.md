@@ -36,6 +36,8 @@ No parent canary directory is required and no other files are in scope.
 }
 ```
 
+The marker schema is exact: missing fields, additional fields, duplicate JSON keys, invalid JSON, a non-UTC `built_at`, or any value that does not match the final packet keeps the gate BLOCKED.
+
 ## Preconditions
 
 All must be true before an authorization request is considered complete:
@@ -54,6 +56,8 @@ All must be true before an authorization request is considered complete:
 12. Fresh explicit operator authorization names the exact commit, run id, protocol, deploy-identity scope reference, destination, artifact list, and rollback permission.
 13. A sanitized WB-0034 evidence bundle exists, is bound into readiness by SHA-256, and contains the same source commit, run id, destination, exact artifact hashes, protocol/scope evidence, verifier evidence, and authorization binding.
 14. The final manifest, readiness document, evidence bundle, trusted `main` commit, checked-out repository `HEAD`, and exact local deployment artifacts all agree; the manifest/evidence authorization, run id, destination, artifact set, protocol, deploy-identity scope, and rollback permission also match.
+15. The local artifact directory is traversed component-by-component without following symlinks, contains exactly the two approved files, and both files are opened relative to that pinned directory without following links.
+16. The exact bytes of `cybercore-version.json` that are hashed for deployment pass strict marker-schema validation and bind repository, trusted-main commit, branch, UTC build time, environment, and run id to the final packet.
 
 ## Machine-artifact disclosure rule
 
@@ -67,7 +71,12 @@ This is stricter than ordinary YAML authoring by design: approval-packet data mu
 
 - refresh/resolve the trusted `main` ref and require checked-out repository `HEAD` to equal that exact commit;
 - generate the local two-file canary artifact in a dedicated artifact directory;
-- compute SHA-256 hashes from those exact two local files;
+- open the local artifact directory from the filesystem root one component at a time using no-follow directory semantics; reject any symlinked/missing/invalid ancestor or final directory component;
+- require that artifact directory to contain exactly `index.html` and `cybercore-version.json` and no additional entries;
+- open both artifact files relative to the already-open directory descriptor with no-follow semantics and require regular files;
+- compute SHA-256 from the exact bytes read through those file descriptors;
+- parse those exact `cybercore-version.json` bytes as strict UTF-8 JSON with duplicate-key rejection;
+- require the marker's exact six-field schema and require `repository=cyberDJs/CyberCore`, `commit=<trusted-main-HEAD>`, `branch=main`, `environment=interserver-shared-hosting-staging`, `run_id=<approved-run-id>`, and a valid UTC `built_at` timestamp;
 - choose the concrete run id and direct-child destination `cybercore-canary-<run_id>/`;
 - populate a runtime copy of the WB-0034 manifest with the concrete run id, destination, exact source commit, and fresh authorization reference;
 - populate the readiness document only from the collected evidence;
@@ -79,7 +88,8 @@ This is stricter than ordinary YAML authoring by design: approval-packet data mu
 - run the authoritative combined final gate with `scripts/validate_wb0034_packet.py --repo-root <checked-out-main> --artifact-dir <exact-two-file-artifact-dir>`;
 - require the combined gate to prove that `HEAD` equals the trusted `main` commit and that manifest/readiness/evidence source commits equal that same commit;
 - require the evidence bundle digest to match readiness and its internal authorization to bind source commit, run id, destination, artifact set, protocol, deploy-identity scope, and rollback permission;
-- require each evidence artifact SHA-256 to match the bytes of the exact local `index.html` and `cybercore-version.json` that the deployment runner will upload;
+- require each evidence artifact SHA-256 to match the exact no-follow-read local bytes that the deployment runner will upload;
+- require marker semantics to match the same final packet, not merely its recorded digest;
 - require manifest, readiness, and evidence authorization references to match;
 - confirm target URL/path from canonical state;
 - confirm deployment protocol and credential scope evidence;
@@ -89,7 +99,7 @@ This is stricter than ordinary YAML authoring by design: approval-packet data mu
 - confirm there is no intermediate destination component below the staging root;
 - record the sanitized preflight receipt.
 
-The legacy target validator and the standalone manifest/readiness validators are necessary component checks but are not sufficient for a final first-write authorization packet. The combined WB-0034 packet validator is the authoritative final preflight gate because it binds the packet to trusted `main`, the checked-out source commit, the exact local artifact bytes, and the hash-bound evidence bundle.
+The legacy target validator and the standalone manifest/readiness validators are necessary component checks but are not sufficient for a final first-write authorization packet. The combined WB-0034 packet validator is the authoritative final preflight gate because it binds the packet to trusted `main`, the checked-out source commit, the exact no-follow-read local artifact bytes, strict version-marker semantics, and the hash-bound evidence bundle.
 
 Any failure stops the procedure.
 
@@ -105,7 +115,7 @@ Only after fresh authorization and a passing final packet:
 6. reject any symlink encountered from the canonical staging root downward;
 7. immediately before creation, re-resolve the parent and require it to remain the canonical staging root;
 8. create only that one unique directory with fail-if-exists semantics;
-9. upload only `index.html` and `cybercore-version.json` with no-overwrite semantics;
+9. upload only the already-validated `index.html` and `cybercore-version.json` bytes with no-overwrite semantics;
 10. disconnect;
 11. run effect verification;
 12. create a sanitized evidence receipt.
@@ -118,7 +128,10 @@ The verifier must independently confirm:
 
 - `https://staging.eimyherrer.com/cybercore-canary-<run_id>/` returns success;
 - `https://staging.eimyherrer.com/cybercore-canary-<run_id>/cybercore-version.json` is reachable;
+- marker `repository` equals `cyberDJs/CyberCore`;
 - marker `commit` equals the exact approved source commit;
+- marker `branch` equals `main`;
+- marker `built_at` is a valid UTC timestamp;
 - marker `environment` equals `interserver-shared-hosting-staging`;
 - marker `run_id` equals the approved run id;
 - evidence shows only the approved direct-child staging destination was written;
@@ -159,8 +172,11 @@ Stop before mutation if any of these is true:
 - source commit is not exact or differs anywhere in manifest/readiness/evidence/checked-out `HEAD`;
 - run id, destination, artifact set, authorization reference, protocol, deploy-identity scope, or rollback permission differ across the final packet;
 - evidence-bundle SHA-256 does not match the readiness binding;
-- any evidence artifact digest differs from the exact local file that would be uploaded;
-- either local deployment artifact is missing, substituted, or a symlink;
+- any evidence artifact digest differs from the exact local file bytes that would be uploaded;
+- any local artifact-directory component is a symlink or cannot be opened with no-follow directory semantics;
+- the local artifact directory contains anything other than the exact two approved files;
+- either local deployment artifact is missing, substituted, symlinked, non-regular, or cannot be opened relative to the pinned artifact directory without following links;
+- `cybercore-version.json` is invalid/ambiguous JSON, has missing or additional keys, contains a non-UTC build timestamp, or disagrees with the final packet on repository/commit/branch/environment/run id;
 - target path differs from canonical staging path;
 - no-overwrite behavior cannot be guaranteed;
 - rollback scope is ambiguous;
