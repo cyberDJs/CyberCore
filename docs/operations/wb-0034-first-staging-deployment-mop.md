@@ -40,7 +40,7 @@ No parent canary directory is required and no other files are in scope.
 
 All must be true before an authorization request is considered complete:
 
-1. PR/WB-0034 is merged and the deployment runner is checked out at the exact `main` source commit.
+1. PR/WB-0034 is merged, the trusted `main` ref has been refreshed, and the deployment runner's checked-out `HEAD` equals that exact `main` commit.
 2. Deployment protocol is verified read-only as SFTP or SSH/SFTP.
 3. Deploy identity scope is verified and does not unintentionally permit automated writes to the production document root.
 4. Required secret aliases are present in approved secret storage without value disclosure.
@@ -51,33 +51,35 @@ All must be true before an authorization request is considered complete:
 9. The runner is configured no-overwrite/fail-if-exists.
 10. The effect verifier is ready.
 11. Rollback scope is exactly the created run directory and rollback permission is explicit.
-12. Fresh explicit operator authorization names the exact commit, run id, protocol, identity scope, destination, artifact list, and rollback permission.
-13. A sanitized WB-0034 evidence bundle exists, is bound into readiness by SHA-256, and contains the same source commit, run id, destination, artifact hashes, protocol/scope evidence, verifier evidence, and authorization binding.
-14. The final manifest, readiness document, evidence bundle, and checked-out repository `HEAD` all agree on the exact source commit; the manifest/evidence authorization, run id, destination, and artifact set also match.
+12. Fresh explicit operator authorization names the exact commit, run id, protocol, deploy-identity scope reference, destination, artifact list, and rollback permission.
+13. A sanitized WB-0034 evidence bundle exists, is bound into readiness by SHA-256, and contains the same source commit, run id, destination, exact artifact hashes, protocol/scope evidence, verifier evidence, and authorization binding.
+14. The final manifest, readiness document, evidence bundle, trusted `main` commit, checked-out repository `HEAD`, and exact local deployment artifacts all agree; the manifest/evidence authorization, run id, destination, artifact set, protocol, deploy-identity scope, and rollback permission also match.
 
 ## Machine-artifact disclosure rule
 
-WB-0034 manifest, readiness, and evidence YAML are deterministic machine artifacts and are intentionally comment-free. Their raw text is scanned before YAML parsing. The validators reject YAML comments, credential-like assignments, private-key material, and credential-bearing URLs such as `scheme://user:password@host`.
+WB-0034 manifest, readiness, and evidence YAML are deterministic machine artifacts and are intentionally comment-free. Their raw text is scanned before YAML parsing. The validators reject YAML comments, credential-like assignments, the broader PEM/private-key header family including EC/DSA/PGP/encrypted key forms, and credential-bearing URLs such as `scheme://user:password@host`.
 
-This is stricter than ordinary YAML authoring by design: approval-packet data must not contain hidden comment-only credentials or secret-bearing URL forms.
+This is stricter than ordinary YAML authoring by design: approval-packet data must not contain hidden comment-only credentials or secret-bearing URL/key forms.
 
 ## Planned execution sequence
 
 ### Phase A — final preflight, no remote write
 
-- resolve exact `main` source commit from the deployment runner's checked-out repository `HEAD`;
-- generate the local two-file canary artifact;
-- compute local SHA-256 hashes;
+- refresh/resolve the trusted `main` ref and require checked-out repository `HEAD` to equal that exact commit;
+- generate the local two-file canary artifact in a dedicated artifact directory;
+- compute SHA-256 hashes from those exact two local files;
 - choose the concrete run id and direct-child destination `cybercore-canary-<run_id>/`;
 - populate a runtime copy of the WB-0034 manifest with the concrete run id, destination, exact source commit, and fresh authorization reference;
 - populate the readiness document only from the collected evidence;
 - create the sanitized WB-0034 evidence bundle and bind it into readiness with its exact SHA-256 digest;
+- bind the authorization record to the same protocol and deploy-identity scope reference carried by deployment evidence;
 - validate the legacy staging target contract with `scripts/validate_staging_plan.py`;
 - validate the WB-0034 plan/template boundary with `scripts/validate_wb0034_manifest.py`;
 - validate the WB-0034 readiness component with `scripts/validate_wb0034_readiness.py`;
-- run the authoritative combined final gate with `scripts/validate_wb0034_packet.py --repo-root <checked-out-main>`;
-- require the combined gate to prove that manifest and readiness source commits equal the checked-out repository `HEAD`;
-- require the evidence bundle digest to match readiness and its internal authorization to bind source commit, run id, destination, artifact set, and rollback permission;
+- run the authoritative combined final gate with `scripts/validate_wb0034_packet.py --repo-root <checked-out-main> --artifact-dir <exact-two-file-artifact-dir>`;
+- require the combined gate to prove that `HEAD` equals the trusted `main` commit and that manifest/readiness/evidence source commits equal that same commit;
+- require the evidence bundle digest to match readiness and its internal authorization to bind source commit, run id, destination, artifact set, protocol, deploy-identity scope, and rollback permission;
+- require each evidence artifact SHA-256 to match the bytes of the exact local `index.html` and `cybercore-version.json` that the deployment runner will upload;
 - require manifest, readiness, and evidence authorization references to match;
 - confirm target URL/path from canonical state;
 - confirm deployment protocol and credential scope evidence;
@@ -87,7 +89,7 @@ This is stricter than ordinary YAML authoring by design: approval-packet data mu
 - confirm there is no intermediate destination component below the staging root;
 - record the sanitized preflight receipt.
 
-The legacy target validator and the standalone manifest/readiness validators are necessary component checks but are not sufficient for a final first-write authorization packet. The combined WB-0034 packet validator is the authoritative final preflight gate because it binds the packet to the checked-out source commit and cross-checks the manifest, readiness document, and hash-bound evidence bundle.
+The legacy target validator and the standalone manifest/readiness validators are necessary component checks but are not sufficient for a final first-write authorization packet. The combined WB-0034 packet validator is the authoritative final preflight gate because it binds the packet to trusted `main`, the checked-out source commit, the exact local artifact bytes, and the hash-bound evidence bundle.
 
 Any failure stops the procedure.
 
@@ -148,17 +150,21 @@ Stop before mutation if any of these is true:
 
 - protocol is not verified;
 - deployment user/credential scope is ambiguous;
+- authorization protocol or deploy-identity scope differs from deployment evidence;
 - a production-wide credential would be reused without an explicit risk decision;
 - candidate destination already exists;
 - any destination component below the canonical staging root is a symlink;
 - candidate parent does not resolve exactly to the canonical staging root immediately before creation;
+- checked-out `HEAD` differs from the trusted `main` commit;
 - source commit is not exact or differs anywhere in manifest/readiness/evidence/checked-out `HEAD`;
-- run id, destination, artifact set, authorization reference, or rollback permission differ across the final packet;
+- run id, destination, artifact set, authorization reference, protocol, deploy-identity scope, or rollback permission differ across the final packet;
 - evidence-bundle SHA-256 does not match the readiness binding;
+- any evidence artifact digest differs from the exact local file that would be uploaded;
+- either local deployment artifact is missing, substituted, or a symlink;
 - target path differs from canonical staging path;
 - no-overwrite behavior cannot be guaranteed;
 - rollback scope is ambiguous;
-- secret values would be exposed in machine artifacts, comments, URLs, logs, or evidence;
+- secret values would be exposed in machine artifacts, comments, URLs, private-key blocks, logs, or evidence;
 - any command or endpoint may mutate outside the approved staging run directory.
 
 Stop after mutation and do not broaden scope if verification fails. Use only the separately authorized rollback action or preserve state for manual review.
