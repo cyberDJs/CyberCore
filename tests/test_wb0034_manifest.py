@@ -158,8 +158,7 @@ def test_manifest_rejects_plaintext_secret_assignment(tmp_path: Path) -> None:
 def test_manifest_rejects_secret_bearing_yaml_comment(tmp_path: Path) -> None:
     path = tmp_path / "manifest.yaml"
     path.write_text(
-        MANIFEST.read_text(encoding="utf-8")
-        + "\n# credential https://alice:hunter2@example.com\n",
+        MANIFEST.read_text(encoding="utf-8") + "\n# credential https://alice:hunter2@example.com\n",
         encoding="utf-8",
     )
 
