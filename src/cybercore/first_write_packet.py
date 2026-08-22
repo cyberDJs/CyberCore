@@ -8,12 +8,14 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+import tempfile
 from typing import cast
 
 import yaml
 
 from cybercore.first_write import validate_first_write_readiness
 from cybercore.first_write_evidence import (
+    FirstWriteEvidenceResult,
     resolve_evidence_bundle_path,
     validate_first_write_evidence,
 )
@@ -30,12 +32,38 @@ EXPECTED_VERSION_KEYS = {
     "run_id",
 }
 MAX_CANARY_ARTIFACT_BYTES = 1024 * 1024
+MAX_PACKET_DOCUMENT_BYTES = 2 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class ValidatedFirstWriteArtifact:
+    name: str
+    sha256: str
+    content: bytes
+
+
+@dataclass(frozen=True)
+class FirstWriteUploadInput:
+    source_commit: str
+    run_id: str
+    destination: str
+    protocol: str
+    deploy_identity_scope_reference: str
+    authorization_reference: str
+    artifacts: tuple[ValidatedFirstWriteArtifact, ...]
+
+    def artifact_bytes(self, name: str) -> bytes:
+        for artifact in self.artifacts:
+            if artifact.name == name:
+                return artifact.content
+        raise KeyError(name)
 
 
 @dataclass(frozen=True)
 class FirstWritePacketResult:
     ready: bool
     errors: tuple[str, ...]
+    upload_input: FirstWriteUploadInput | None = None
 
     def as_text(self) -> str:
         lines = [f"wb0034 final preflight packet: {'READY' if self.ready else 'BLOCKED'}"]
@@ -45,11 +73,32 @@ class FirstWritePacketResult:
         return "\n".join(lines)
 
 
-def _load_mapping(path: Path, label: str, errors: list[str]) -> dict[str, object] | None:
+def _read_document_once(path: Path, label: str, errors: list[str]) -> bytes | None:
     try:
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, UnicodeDecodeError, yaml.YAMLError) as exc:
-        errors.append(f"cannot load {label}: {exc}")
+        with path.open("rb") as handle:
+            data = handle.read(MAX_PACKET_DOCUMENT_BYTES + 1)
+    except OSError as exc:
+        errors.append(f"cannot read {label}: {exc}")
+        return None
+    if len(data) > MAX_PACKET_DOCUMENT_BYTES:
+        errors.append(f"{label} exceeds packet document size limit")
+        return None
+    return data
+
+
+def _decode_document(raw_bytes: bytes, label: str, errors: list[str]) -> str | None:
+    try:
+        return raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        errors.append(f"{label} must be UTF-8")
+        return None
+
+
+def _parse_mapping_text(text: str, label: str, errors: list[str]) -> dict[str, object] | None:
+    try:
+        loaded = yaml.safe_load(text)
+    except (RecursionError, yaml.YAMLError) as exc:
+        errors.append(f"cannot parse {label}: {exc}")
         return None
     if not isinstance(loaded, dict):
         errors.append(f"{label} must be a YAML mapping")
@@ -168,45 +217,52 @@ def _read_artifact_no_follow(
             os.close(file_fd)
 
 
+def _check_artifact_entries(entries: set[str], label: str, errors: list[str]) -> None:
+    missing = sorted(EXPECTED_ARTIFACTS - entries)
+    unexpected = sorted(entries - EXPECTED_ARTIFACTS)
+    if missing:
+        errors.append(f"deployment artifact directory {label} is missing: {', '.join(missing)}")
+    if unexpected:
+        errors.append(
+            f"deployment artifact directory {label} contains unexpected entries: "
+            + ", ".join(unexpected)
+        )
+
+
 def _local_artifacts(
     artifact_dir: Path,
     errors: list[str],
-) -> tuple[dict[str, str], bytes | None]:
+) -> dict[str, tuple[str, bytes]]:
     directory_fd = _open_artifact_directory_no_follow(artifact_dir, errors)
     if directory_fd is None:
-        return {}, None
+        return {}
 
-    hashes: dict[str, str] = {}
-    version_bytes: bytes | None = None
+    artifacts: dict[str, tuple[str, bytes]] = {}
     try:
         try:
-            entries = set(os.listdir(directory_fd))
+            before_entries = set(os.listdir(directory_fd))
         except OSError as exc:
-            errors.append(f"cannot list deployment artifact directory: {exc}")
-            return {}, None
-
-        missing = sorted(EXPECTED_ARTIFACTS - entries)
-        unexpected = sorted(entries - EXPECTED_ARTIFACTS)
-        if missing:
-            errors.append(f"deployment artifact directory is missing: {', '.join(missing)}")
-        if unexpected:
-            errors.append(
-                "deployment artifact directory contains unexpected entries: "
-                + ", ".join(unexpected)
-            )
+            errors.append(f"cannot list deployment artifact directory before reads: {exc}")
+            return {}
+        _check_artifact_entries(before_entries, "before reads", errors)
 
         for name in sorted(EXPECTED_ARTIFACTS):
             result = _read_artifact_no_follow(directory_fd, name, errors)
-            if result is None:
-                continue
-            digest, data = result
-            hashes[name] = digest
-            if name == "cybercore-version.json":
-                version_bytes = data
+            if result is not None:
+                artifacts[name] = result
+
+        try:
+            after_entries = set(os.listdir(directory_fd))
+        except OSError as exc:
+            errors.append(f"cannot list deployment artifact directory after reads: {exc}")
+            return artifacts
+        _check_artifact_entries(after_entries, "after reads", errors)
+        if after_entries != before_entries:
+            errors.append("deployment artifact directory changed during validation")
     finally:
         os.close(directory_fd)
 
-    return hashes, version_bytes
+    return artifacts
 
 
 def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -282,6 +338,173 @@ def _validate_version_marker(
         errors.append("cybercore-version.json built_at must use UTC")
 
 
+def _snapshot_evidence_path(
+    snapshot_readiness: Path,
+    evidence_reference: object,
+    snapshot_root: Path,
+    errors: list[str],
+) -> Path | None:
+    if not isinstance(evidence_reference, str) or not evidence_reference.strip():
+        errors.append("final packet evidence bundle reference is invalid")
+        return None
+    candidate = (snapshot_readiness.parent / evidence_reference).resolve()
+    try:
+        candidate.relative_to(snapshot_root.resolve())
+    except ValueError:
+        errors.append("final packet evidence snapshot escapes the private packet snapshot")
+        return None
+    if candidate.suffix not in {".yaml", ".yml"}:
+        errors.append("final packet evidence snapshot must be YAML")
+        return None
+    return candidate
+
+
+def _validate_private_packet_snapshot(
+    manifest_bytes: bytes,
+    readiness_bytes: bytes,
+    evidence_bytes: bytes,
+    evidence_reference: object,
+    evidence_sha: object,
+    errors: list[str],
+) -> FirstWriteEvidenceResult | None:
+    with tempfile.TemporaryDirectory(prefix="cybercore-wb0034-") as temporary:
+        snapshot_root = Path(temporary) / "deploy"
+        manifest_snapshot = snapshot_root / "manifests" / "manifest.yaml"
+        readiness_snapshot = snapshot_root / "readiness" / "readiness.yaml"
+        manifest_snapshot.parent.mkdir(parents=True)
+        readiness_snapshot.parent.mkdir(parents=True)
+
+        evidence_snapshot = _snapshot_evidence_path(
+            readiness_snapshot,
+            evidence_reference,
+            snapshot_root,
+            errors,
+        )
+        if evidence_snapshot is None:
+            return None
+        evidence_snapshot.parent.mkdir(parents=True, exist_ok=True)
+
+        manifest_snapshot.write_bytes(manifest_bytes)
+        readiness_snapshot.write_bytes(readiness_bytes)
+        evidence_snapshot.write_bytes(evidence_bytes)
+        for snapshot in (manifest_snapshot, readiness_snapshot, evidence_snapshot):
+            snapshot.chmod(0o400)
+
+        manifest_result = validate_first_write_manifest(manifest_snapshot, final_preflight=True)
+        if not manifest_result.ok:
+            errors.extend(f"manifest: {error}" for error in manifest_result.errors)
+
+        readiness_result = validate_first_write_readiness(readiness_snapshot)
+        if not readiness_result.schema_ok:
+            errors.extend(f"readiness schema: {error}" for error in readiness_result.errors)
+        if readiness_result.schema_ok and not readiness_result.ready:
+            errors.extend(f"readiness: {blocker}" for blocker in readiness_result.blockers)
+
+        expected_sha = evidence_sha if isinstance(evidence_sha, str) else None
+        if expected_sha is None:
+            errors.append("final packet evidence bundle sha256 is missing")
+        evidence = validate_first_write_evidence(
+            evidence_snapshot,
+            expected_sha256=expected_sha,
+        )
+        if not evidence.ok:
+            errors.extend(f"evidence: {error}" for error in evidence.errors)
+
+        snapshots = (
+            (manifest_snapshot, manifest_bytes, "manifest"),
+            (readiness_snapshot, readiness_bytes, "readiness"),
+            (evidence_snapshot, evidence_bytes, "evidence bundle"),
+        )
+        for snapshot, expected, label in snapshots:
+            try:
+                observed = snapshot.read_bytes()
+            except OSError as exc:
+                errors.append(f"cannot verify private {label} snapshot integrity: {exc}")
+                continue
+            if observed != expected:
+                errors.append(f"private {label} snapshot changed during validation")
+
+        return evidence
+
+
+def _capture_packet_documents(
+    manifest_path: Path,
+    readiness_path: Path,
+    errors: list[str],
+) -> tuple[dict[str, object], dict[str, object], FirstWriteEvidenceResult | None] | None:
+    manifest_bytes = _read_document_once(manifest_path, "manifest", errors)
+    readiness_bytes = _read_document_once(readiness_path, "readiness", errors)
+    if manifest_bytes is None or readiness_bytes is None:
+        return None
+
+    manifest_text = _decode_document(manifest_bytes, "manifest", errors)
+    readiness_text = _decode_document(readiness_bytes, "readiness", errors)
+    if manifest_text is None or readiness_text is None:
+        return None
+
+    manifest = _parse_mapping_text(manifest_text, "manifest", errors)
+    readiness = _parse_mapping_text(readiness_text, "readiness", errors)
+    if manifest is None or readiness is None:
+        return None
+
+    evidence_reference = readiness.get("evidence_bundle_reference")
+    evidence_sha = readiness.get("evidence_bundle_sha256")
+    evidence_path = resolve_evidence_bundle_path(readiness_path, evidence_reference)
+    if evidence_path is None:
+        errors.append("final packet evidence bundle reference is invalid")
+        return None
+
+    evidence_bytes = _read_document_once(evidence_path, "evidence bundle", errors)
+    if evidence_bytes is None:
+        return None
+
+    evidence = _validate_private_packet_snapshot(
+        manifest_bytes,
+        readiness_bytes,
+        evidence_bytes,
+        evidence_reference,
+        evidence_sha,
+        errors,
+    )
+    return manifest, readiness, evidence
+
+
+def _build_upload_input(
+    evidence: FirstWriteEvidenceResult,
+    artifacts: dict[str, tuple[str, bytes]],
+    errors: list[str],
+) -> FirstWriteUploadInput | None:
+    required = {
+        "source_commit": evidence.source_commit,
+        "run_id": evidence.run_id,
+        "destination": evidence.destination,
+        "protocol": evidence.protocol,
+        "deploy_identity_scope_reference": evidence.deploy_identity_scope_reference,
+        "authorization_reference": evidence.authorization_reference,
+    }
+    missing = sorted(key for key, value in required.items() if not isinstance(value, str))
+    if missing:
+        errors.append(f"validated upload input is missing fields: {', '.join(missing)}")
+        return None
+    if set(artifacts) != EXPECTED_ARTIFACTS:
+        errors.append("validated upload input does not contain the exact two approved artifacts")
+        return None
+
+    sealed_artifacts = tuple(
+        ValidatedFirstWriteArtifact(name=name, sha256=artifacts[name][0], content=artifacts[name][1])
+        for name in sorted(EXPECTED_ARTIFACTS)
+    )
+    return FirstWriteUploadInput(
+        source_commit=cast(str, required["source_commit"]),
+        run_id=cast(str, required["run_id"]),
+        destination=cast(str, required["destination"]),
+        protocol=cast(str, required["protocol"]),
+        deploy_identity_scope_reference=cast(str, required["deploy_identity_scope_reference"]),
+        authorization_reference=cast(str, required["authorization_reference"]),
+        artifacts=sealed_artifacts,
+    )
+
+
 def validate_first_write_packet(
     manifest_path: Path,
     readiness_path: Path,
@@ -290,24 +513,15 @@ def validate_first_write_packet(
 ) -> FirstWritePacketResult:
     errors: list[str] = []
 
-    manifest_result = validate_first_write_manifest(manifest_path, final_preflight=True)
-    if not manifest_result.ok:
-        errors.extend(f"manifest: {error}" for error in manifest_result.errors)
+    captured = _capture_packet_documents(manifest_path, readiness_path, errors)
+    if captured is None:
+        return FirstWritePacketResult(False, tuple(errors))
+    manifest, readiness, evidence = captured
 
-    readiness_result = validate_first_write_readiness(readiness_path)
-    if not readiness_result.schema_ok:
-        errors.extend(f"readiness schema: {error}" for error in readiness_result.errors)
-    if readiness_result.schema_ok and not readiness_result.ready:
-        errors.extend(f"readiness: {blocker}" for blocker in readiness_result.blockers)
-
-    manifest = _load_mapping(manifest_path, "manifest", errors)
-    readiness = _load_mapping(readiness_path, "readiness", errors)
     head = _git_head(repository_root, errors)
     main_commit = _git_main_commit(repository_root, errors)
-
-    if manifest is None or readiness is None or head is None or main_commit is None:
+    if head is None or main_commit is None:
         return FirstWritePacketResult(False, tuple(errors))
-
     if head != main_commit:
         errors.append("repository HEAD must equal the trusted main commit before final preflight")
 
@@ -346,19 +560,7 @@ def validate_first_write_packet(
     if manifest_auth != readiness_auth:
         errors.append("manifest and readiness must use the same operator authorization reference")
 
-    evidence_reference = readiness.get("evidence_bundle_reference")
-    evidence_sha = readiness.get("evidence_bundle_sha256")
-    evidence_path = resolve_evidence_bundle_path(readiness_path, evidence_reference)
-    if evidence_path is None:
-        errors.append("final packet evidence bundle reference is invalid")
-        return FirstWritePacketResult(False, tuple(errors))
-    if not isinstance(evidence_sha, str):
-        errors.append("final packet evidence bundle sha256 is missing")
-        return FirstWritePacketResult(False, tuple(errors))
-
-    evidence = validate_first_write_evidence(evidence_path, expected_sha256=evidence_sha)
-    if not evidence.ok:
-        errors.extend(f"evidence: {error}" for error in evidence.errors)
+    if evidence is None or not evidence.ok:
         return FirstWritePacketResult(False, tuple(errors))
 
     if evidence.source_commit != head:
@@ -375,24 +577,30 @@ def validate_first_write_packet(
         errors.append("evidence and manifest authorization references must match")
 
     evidence_hashes = dict(evidence.artifact_hashes)
-    local_hashes, version_bytes = _local_artifacts(artifact_dir, errors)
+    local_artifacts = _local_artifacts(artifact_dir, errors)
     for name in sorted(EXPECTED_ARTIFACTS):
         expected_digest = evidence_hashes.get(name)
-        actual_digest = local_hashes.get(name)
+        actual = local_artifacts.get(name)
+        actual_digest = actual[0] if actual is not None else None
         if expected_digest is None:
             errors.append(f"evidence is missing deployment artifact digest: {name}")
         elif actual_digest is not None and actual_digest != expected_digest:
             errors.append(f"deployment artifact digest mismatch: {name}")
 
-    if version_bytes is not None:
+    version_artifact = local_artifacts.get("cybercore-version.json")
+    if version_artifact is not None:
         if evidence.run_id is None:
             errors.append("evidence run_id is unavailable for version-marker validation")
         else:
             _validate_version_marker(
-                version_bytes,
+                version_artifact[1],
                 expected_commit=head,
                 expected_run_id=evidence.run_id,
                 errors=errors,
             )
 
-    return FirstWritePacketResult(not errors, tuple(errors))
+    upload_input: FirstWriteUploadInput | None = None
+    if not errors:
+        upload_input = _build_upload_input(evidence, local_artifacts, errors)
+    ready = not errors and upload_input is not None
+    return FirstWritePacketResult(ready, tuple(errors), upload_input)
