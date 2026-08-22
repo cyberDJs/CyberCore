@@ -18,6 +18,15 @@
   <a href="PROJECT_STATE.md"><img src="https://img.shields.io/badge/status-reference%20implementation-0b7285" alt="Reference implementation"></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/cyberDJs/CyberCore">
+    <img src="assets/brand/cybercore-repo-qr.svg" width="180" alt="Scan from your phone to open the CyberCore repository on GitHub">
+  </a>
+</p>
+<p align="center">
+  <sub>Scan from your phone to open <strong>github.com/cyberDJs/CyberCore</strong></sub>
+</p>
+
 ---
 
 ## Why CyberCore exists
