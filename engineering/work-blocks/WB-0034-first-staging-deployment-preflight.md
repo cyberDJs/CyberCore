@@ -78,7 +78,7 @@ A later explicit first-write authorization may allow only:
 5. perform no chmod/chown, symlink, package/service, PHP, DNS, mail, billing, DirectAdmin, Cloudflare, VPS, WordPress, Nextcloud, registrar, or production mutation;
 6. if rollback is explicitly included in the same authorization, remove only the directory created for that run after verifying its exact path.
 
-If path resolution, credential scope, protocol behavior, or rollback scope is ambiguous, abort before the first remote write.
+If path resolution, credential scope, protocol behavior, source identity, artifact identity, or rollback scope is ambiguous, abort before the first remote write.
 
 ## Required gates before authorization request
 
@@ -143,17 +143,21 @@ Required checks:
 
 Production safety is proven by the verified staging/production path boundary plus destination allowlisting and write-scope evidence. WB-0034 does not grant production application-content reads or production URL fetches merely to compare state.
 
-### G7 — exact source commit
+### G7 — exact trusted-main source commit
 
 `PENDING_AFTER_WB0034_MERGE`
 
-The final runtime manifest, readiness artifact, sanitized evidence bundle, and deployment runner checkout must all bind to one exact `main` commit. `TBD`, branch-only identity, arbitrary 40-hex strings, mismatched commit values, or moving refs are not acceptable for the final packet.
+The final runtime manifest, readiness artifact, sanitized evidence bundle, deployment runner checkout, and trusted `main` ref must all bind to one exact commit. The combined final gate prefers fetched `origin/main` and falls back only to local `main` when no remote-tracking ref exists. `HEAD` must equal that trusted main commit.
+
+`TBD`, branch-only identity, arbitrary 40-hex strings, feature-branch `HEAD`, mismatched commit values, or moving refs are not acceptable for the final packet.
 
 ### G8 — explicit first remote-write authorization
 
 `NOT_GRANTED`
 
 WB-0034 preparation does not authorize the remote write. A later approval must name the exact source commit, run id, protocol, deploy identity/scope, target path, two-file artifact, and rollback scope.
+
+The authorization record inside the evidence bundle must repeat the approved protocol and deploy-identity scope reference and must match deployment evidence exactly.
 
 ### G9 — hash-bound supporting evidence
 
@@ -162,6 +166,14 @@ WB-0034 preparation does not authorize the remote write. A later approval must n
 Readiness status labels are not sufficient evidence. A final READY decision requires a sanitized evidence bundle whose SHA-256 is recorded in the readiness artifact. The bundle must bind the exact source commit, run id, destination, two artifact hashes, deployment protocol, capability/scope references, verifier evidence, authorization reference, and rollback permission.
 
 The combined packet validator must prove the evidence digest and cross-document bindings before it can return READY.
+
+### G10 — exact local artifact bytes
+
+`DESIGN_IMPLEMENTED; RUNTIME_ARTIFACTS_PENDING`
+
+The two SHA-256 values in evidence are not accepted merely because they are syntactically valid. The combined final packet gate requires an explicit local artifact directory, rejects symlinked artifact paths, hashes the exact `index.html` and `cybercore-version.json` bytes that would be uploaded, and requires those digests to equal the evidence bundle.
+
+A fabricated digest, substituted file, missing file, or symlinked local artifact keeps the packet BLOCKED.
 
 ## Machine-validatable first-write contract
 
@@ -181,9 +193,9 @@ Canonical implementation files include:
 - `scripts/validate_wb0034_packet.py`;
 - regression tests under `tests/test_wb0034_*.py`.
 
-The current repository artifacts remain plan-only and BLOCKED. The readiness validator may become READY only when its status fields are supported by a valid hash-bound evidence bundle. The final remote-write authorization packet has a stricter combined gate: populated manifest and readiness data, the hash-bound evidence bundle, and the checked-out repository `HEAD` must agree on the exact source commit, while run id, destination, artifact set, authorization reference, and rollback permission must remain consistently bound.
+The current repository artifacts remain plan-only and BLOCKED. The readiness validator may become READY only when its status fields are supported by a valid hash-bound evidence bundle. The final remote-write authorization packet has a stricter combined gate: populated manifest/readiness data, the hash-bound evidence bundle, trusted `main`, checked-out repository `HEAD`, and exact local artifact bytes must agree. Run id, destination, artifact set, artifact digests, authorization reference, protocol, deploy-identity scope, and rollback permission must remain consistently bound.
 
-The WB-0034 machine YAML artifacts are intentionally comment-free and raw-text scanned before parsing. Credential-like assignments, private-key material, credential-bearing URLs, YAML comments, duplicate keys, unsupported structures, and secret values fail closed.
+The WB-0034 machine YAML artifacts are intentionally comment-free and raw-text scanned before parsing. Credential-like assignments, credential-bearing URLs, YAML comments, duplicate keys, unsupported structures, secret values, and the broader private-key PEM/header family including EC, DSA, PGP, encrypted, OpenSSH, RSA, and generic private-key forms fail closed.
 
 `remote_write_requested`, `remote_write_allowed`, and `production_write_allowed` remain false even when a final approval packet becomes complete; execution remains a separate authority boundary.
 
@@ -199,20 +211,20 @@ production_write_allowed: false
 
 Before requesting the first staging-write authorization, the handoff must contain:
 
-- exact checked-out `main` source commit;
+- exact trusted-`main` source commit and proof checked-out `HEAD` equals it;
 - exact run id;
 - verified deployment protocol;
 - deploy identity safe reference and scope result;
 - secret-alias readiness result without values;
 - exact direct-child destination directory;
-- exact two-file artifact list and hashes;
+- exact two-file artifact list and SHA-256 values computed from the local files to be uploaded;
 - sanitized hash-bound evidence bundle reference and digest;
 - verifier commands/URLs;
 - rollback action limited to that run directory;
-- fresh authorization reference bound to commit/run/destination/artifacts/rollback;
+- fresh authorization reference bound to commit/run/destination/artifacts/protocol/deploy-scope/rollback;
 - expected evidence receipt fields;
 - explicit stop conditions;
-- passing `validate_wb0034_packet.py` result from the exact checked-out source commit.
+- passing `validate_wb0034_packet.py --artifact-dir <exact-artifact-dir>` result from the exact checked-out trusted-main source commit.
 
 ## Out of scope
 
@@ -233,7 +245,7 @@ WB-0034 preflight is complete when:
 - the target registry reflects the verified WB-0033 staging identity;
 - a plan-only first-write manifest exists;
 - dedicated WB-0034 manifest, readiness, evidence, raw-secret, and combined packet validators are internally consistent and regression-tested;
-- arbitrary status labels, arbitrary evidence references, mismatched or nonexistent source SHAs, cross-document commit/run/destination/artifact mismatches, and secret-bearing comments/credential URLs fail closed;
+- arbitrary status labels, arbitrary evidence references, mismatched/nonexistent source SHAs, feature-branch HEAD, cross-document commit/run/destination/artifact mismatches, fabricated artifact digests, protocol/scope authorization mismatches, broader private-key headers, and secret-bearing comments/credential URLs fail closed;
 - current readiness evidence records verified target identity and all remaining runtime blockers without overclaim;
 - exact mutation and rollback scope are documented;
 - symlink/ancestor escape and parent-directory ambiguity are eliminated from the first-write design;
