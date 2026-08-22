@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 import subprocess
 
@@ -17,6 +18,7 @@ SCOPE_REF = "evidence:wb0034:deploy-identity-scope:20260822"
 ARTIFACT_REF = "evidence:wb0034:artifact-sha256:20260822"
 VERIFIER_REF = "evidence:wb0034:effect-verifier:20260822"
 AUTH_REF = "approval:wb0034:20260822T183500Z"
+BUILT_AT = "2026-08-22T18:35:00Z"
 
 
 def _run_git(repo: Path, *args: str) -> str:
@@ -46,15 +48,36 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _write_artifacts(repo: Path, source_commit: str) -> tuple[Path, dict[str, str]]:
+def _write_artifacts(
+    repo: Path,
+    source_commit: str,
+    *,
+    marker_overrides: dict[str, object] | None = None,
+    marker_drop_keys: set[str] | None = None,
+) -> tuple[Path, dict[str, str]]:
     artifact_dir = repo / "build" / "wb0034"
     artifact_dir.mkdir(parents=True)
     (artifact_dir / "index.html").write_text(
         "<!doctype html><title>CyberCore canary</title>\n",
         encoding="utf-8",
     )
+
+    marker: dict[str, object] = {
+        "repository": "cyberDJs/CyberCore",
+        "commit": source_commit,
+        "branch": "main",
+        "built_at": BUILT_AT,
+        "environment": "interserver-shared-hosting-staging",
+        "run_id": RUN_ID,
+    }
+    if marker_overrides:
+        marker.update(marker_overrides)
+    if marker_drop_keys:
+        for key in marker_drop_keys:
+            marker.pop(key, None)
+
     (artifact_dir / "cybercore-version.json").write_text(
-        f'{{"commit":"{source_commit}","run_id":"{RUN_ID}"}}\n',
+        json.dumps(marker, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
     return artifact_dir, {
@@ -170,6 +193,8 @@ def _write_packet(
     *,
     authorization_protocol: str = "SFTP",
     authorization_scope: str = SCOPE_REF,
+    marker_overrides: dict[str, object] | None = None,
+    marker_drop_keys: set[str] | None = None,
 ) -> tuple[Path, Path, Path, Path]:
     deploy = repo / ".cybercore/deploy"
     manifests = deploy / "manifests"
@@ -179,7 +204,12 @@ def _write_packet(
     readiness_dir.mkdir(parents=True)
     evidence_dir.mkdir(parents=True)
 
-    artifact_dir, artifact_hashes = _write_artifacts(repo, source_commit)
+    artifact_dir, artifact_hashes = _write_artifacts(
+        repo,
+        source_commit,
+        marker_overrides=marker_overrides,
+        marker_drop_keys=marker_drop_keys,
+    )
 
     evidence = evidence_dir / "wb0034-first-write.yaml"
     evidence.write_text(
@@ -307,4 +337,84 @@ def test_final_packet_rejects_symlinked_local_artifact(tmp_path: Path) -> None:
     result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
 
     assert not result.ready
-    assert any("must not be a symlink: index.html" in error for error in result.errors)
+    assert any(
+        "without following links index.html" in error or "unexpected entries" in error
+        for error in result.errors
+    )
+
+
+def test_final_packet_rejects_symlinked_artifact_directory_ancestor(tmp_path: Path) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(repo, head)
+    real_build = repo / "real-build"
+    (repo / "build").rename(real_build)
+    (repo / "build").symlink_to(real_build.name, target_is_directory=True)
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert any("artifact directory contains a symlink" in error for error in result.errors)
+
+
+def test_final_packet_rejects_version_marker_commit_mismatch_with_matching_digest(
+    tmp_path: Path,
+) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(
+        repo,
+        head,
+        marker_overrides={"commit": "f" * 40},
+    )
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert any("cybercore-version.json commit" in error for error in result.errors)
+
+
+def test_final_packet_rejects_version_marker_run_id_mismatch_with_matching_digest(
+    tmp_path: Path,
+) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(
+        repo,
+        head,
+        marker_overrides={"run_id": "20260822T183501Z-d4e5f6"},
+    )
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert any("cybercore-version.json run_id" in error for error in result.errors)
+
+
+def test_final_packet_rejects_version_marker_environment_mismatch_with_matching_digest(
+    tmp_path: Path,
+) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(
+        repo,
+        head,
+        marker_overrides={"environment": "production"},
+    )
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert any("cybercore-version.json environment" in error for error in result.errors)
+
+
+def test_final_packet_rejects_incomplete_version_marker_schema_with_matching_digest(
+    tmp_path: Path,
+) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(
+        repo,
+        head,
+        marker_drop_keys={"environment"},
+    )
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert any("cybercore-version.json is missing keys" in error for error in result.errors)
