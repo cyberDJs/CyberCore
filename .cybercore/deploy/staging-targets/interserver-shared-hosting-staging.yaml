@@ -23,7 +23,7 @@ staging_identity:
   authoritative_dns: Cloudflare
   dns_proxy_mode: dns_only
   document_root_non_overlap_verified: true
-  deployment_user_scope: UNVERIFIED_BEFORE_FIRST_REMOTE_WRITE
+  deployment_user_scope: staging_path_only_pending_verification
   capability_status: TARGET_IDENTITY_VERIFIED_DEPLOY_PROTOCOL_PENDING
 
 allowed_modes:
