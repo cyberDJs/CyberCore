@@ -34,14 +34,18 @@ Primary provider/control-panel documentation reviewed before execution:
 
 - The modern REST/OpenAPI API should be preferred over legacy SOAP for new CyberCore integration.
 - API-key authentication uses the `X-API-KEY` header; session authentication is also documented.
-- InterServer now exposes an authenticated MCP interface suitable for AI/tool integration and documents read-only scopes.
-- For webhosting discovery, the minimally required documented REST reads are `GET /websites` and `GET /websites/{id}`; `GET /websites/{id}/reverse_dns` is an optional identity corroboration read.
+- InterServer now exposes an authenticated MCP interface suitable for AI/tool integration and documents scoped access.
+- `GET /websites` is the minimal authenticated REST read required to enumerate candidate owned webhosting services.
+- `GET /websites/{id}/reverse_dns` is an optional read-only identity corroboration endpoint after the candidate service is unambiguous.
+- `GET /websites/{id}` is documented as returning **full configuration and status detail**. Its response surface has not yet been proven free of secret/session material, so it is blocked from the initial Phase B allowlist pending an independent schema/response-surface review.
 
 ### Important safety finding
 
 HTTP verb is not a sufficient policy classifier.
 
 InterServer documents several `GET` endpoints that can cause side effects, including lifecycle, backup, welcome-email, or session-related operations in different service categories. WB-0032 therefore must use an explicit semantic allowlist instead of `GET == safe` logic.
+
+Response sensitivity is also a separate gate from mutability: a non-mutating endpoint remains blocked if its response may expose credential/session material and that response surface cannot be bounded before invocation.
 
 ### DirectAdmin layer
 
@@ -54,16 +58,23 @@ InterServer documents several `GET` endpoints that can cause side effects, inclu
 ## Resulting Phase B strategy
 
 1. public API reachability/capability metadata;
-2. authenticated InterServer webhosting service identification;
-3. DirectAdmin server API-shape discovery and domain identity;
-4. minimal SSH/SFTP metadata inspection only if necessary to prove the staging document root;
-5. record deployment-protocol, least-privilege identity, rollback, and effect-verifier capability without any remote write.
+2. authenticated `GET /websites` candidate-service identification only;
+3. response-surface review before any full-detail InterServer endpoint;
+4. DirectAdmin server API-shape discovery and domain identity;
+5. minimal SSH/SFTP metadata inspection only if necessary to prove the staging document root;
+6. record deployment-protocol, least-privilege identity, rollback, and effect-verifier capability without any remote write.
+
+## Runtime attempt during preflight
+
+A public `GET /apiv2/ping` execution was attempted from the isolated runner after documentation review. The runner could not resolve `my.interserver.net` (DNS/network unavailable), so no provider response was observed. This is a runtime-capability failure, not evidence about InterServer availability.
+
+The result remains `UNKNOWN_UNTIL_VERIFIED`; no PASS is inferred from documentation and no FAIL is inferred from the isolated runner's network limitation.
 
 ## Current evidence state
 
 - InterServer documentation: reviewed.
 - Phase B authority: granted.
-- Live authenticated provider capability: `UNKNOWN_UNTIL_VERIFIED`.
+- Live provider capability: `UNKNOWN_UNTIL_VERIFIED`.
 - Exact staging target identity: `UNKNOWN_UNTIL_VERIFIED`.
 - Exact staging document root: `UNKNOWN_UNTIL_VERIFIED`.
 - Secret readiness: `UNKNOWN_UNTIL_VERIFIED`.
