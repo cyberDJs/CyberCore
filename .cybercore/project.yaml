@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0031 Staging Runtime Gate Preflight implementation active
-  active_artifact: WB-0031
-  branch: feat/wb-0031-runtime-gate-preflight
-  pull_request: 51
-  last_verified_main: 4a1374cbef7d142f8386ea7774208effc05d54ec
+  milestone: WB-0032 InterServer Staging Capability Discovery definition active
+  active_artifact: WB-0032
+  branch: docs/wb-0032-capability-discovery
+  pull_request: 52
+  last_verified_main: d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684
 
 status:
   ccl_specification: complete_draft
@@ -73,8 +73,13 @@ status:
   pr48_post_merge_reconciliation: merged_verified
   wb0030_staging_readiness_gate: merged_verified
   pr50_post_merge_reconciliation_and_wb0031_kickoff: merged_verified
-  wb0031_staging_runtime_gate_preflight: implementation_active
+  wb0031_staging_runtime_gate_preflight: merged_verified
+  pr51_wb0031_runtime_gate_preflight: merged_verified
+  wb0032_interserver_staging_capability_discovery: definition_active
+  interserver_live_read_only_discovery_authorized: false
   staging_deployment_protocol_capability: unknown_until_verified
+  staging_remote_write_allowed: false
+  production_write_allowed: false
 
 completed:
   - artifact: WB-0015
@@ -181,11 +186,16 @@ completed:
     pull_request: 50
     merge_commit: 4a1374cbef7d142f8386ea7774208effc05d54ec
     verification: ci_143_codeql_140_codex_no_major_issues_manual_review_passed
+  - artifact: WB-0031-staging-runtime-gate-preflight
+    pull_request: 51
+    merge_commit: d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684
+    verification: ci_166_codeql_163_codex_no_major_issues_manual_review_passed
 
 next:
-  - implement WB-0031 deployment protocol and target capability gate in PR51 without InterServer remote write or plaintext secrets
-  - keep live staging deployment blocked until all readiness statuses are VERIFIED, deployment protocol and target capability are VERIFIED, and fresh operator authorization is APPROVED
-  - require a separate later authority gate before any InterServer connection or staging_apply attempt
+  - complete PR52 repository-only reconciliation and WB-0032 definition; do not contact InterServer in this PR
+  - require a fresh explicit operator authorization before any WB-0032 Phase B live read-only InterServer discovery
+  - during a later authorized Phase B, establish real target identity, deployment capability, secret-alias readiness, rollback capability, effect-verifier capability, and credential-rotation operational state without remote write or secret disclosure
+  - keep live staging deployment blocked until all readiness statuses are VERIFIED and a later fresh remote-write authorization is APPROVED
   - prohibit production mutation until a separate production MOP and explicit approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 
