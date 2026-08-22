@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-21 20:52 CEST_
+_Last updated: 2026-08-22 02:08 CEST_
 
 ## Source of truth
 
@@ -8,37 +8,39 @@ _Last updated: 2026-08-21 20:52 CEST_
 - Stable branch: `main`
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Active branch: `feat/wb-0031-runtime-gate-preflight`
-- Active pull request: #51 — WB-0031 runtime gate preflight implementation
-- Active artifact: `WB-0031 — Staging Runtime Gate Preflight`
-- Active work block: `WB-0031 — Staging Runtime Gate Preflight`
-- Last verified `main`: `4a1374cbef7d142f8386ea7774208effc05d54ec`
+- Active branch: `docs/wb-0032-capability-discovery`
+- Active pull request: #52 — PR51 reconciliation and WB-0032 kickoff
+- Active artifact: `WB-0032 — InterServer Staging Capability Discovery`
+- Active work block: `WB-0032 — InterServer Staging Capability Discovery`
+- Last verified `main`: `d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684`
 - Governance rule: no production mutation without explicit human approval
 - CI policy: GitHub Actions verification is required before merge
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
 ## Current milestone
 
-PR #50 reconciled PR #49 and started `WB-0031 — Staging Runtime Gate Preflight`; it merged into canonical `main` as `4a1374cbef7d142f8386ea7774208effc05d54ec`.
+PR #51 implemented `WB-0031 — Staging Runtime Gate Preflight` and was squash-merged into canonical `main` as `d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684`.
 
-The active slice is PR #51, which implements the WB-0031 deployment-protocol / target-capability gate inside the existing fail-closed readiness validator. This slice remains local and non-mutating: it does not contact InterServer, read secret values, perform a staging remote write, or authorize production/provider mutation.
+The active slice is PR #52. It reconciles canonical state after PR #51 and defines `WB-0032 — InterServer Staging Capability Discovery`. This kickoff slice is repository-only: it does not contact InterServer, read secret values, perform a staging remote write, or authorize production/provider mutation.
 
 ## Active objective
 
 Continue the first safe CyberCore self-deployment loop for InterServer shared-hosting staging:
 
 1. preserve accepted ADR-0006 staging-only boundary;
-2. treat `WB-0030` as the canonical fail-closed readiness foundation;
-3. implement `WB-0031` as a closed non-secret gate for target identity, deployment protocol/target capability, secret alias readiness, rollback proof, effect-verifier proof, and operator authorization references;
-4. keep `remote_write_requested`, `remote_write_allowed`, and `production_write_allowed` false in this work block;
-5. keep `staging_apply` blocked unless a later work block verifies all runtime gates and receives fresh explicit remote-write authorization;
-6. use LG-0001/LG-0002 as read-only source-of-truth orchestration support, not as mutation authority.
+2. treat `WB-0030` and merged `WB-0031` as the canonical fail-closed readiness/preflight foundation;
+3. define `WB-0032` as the work block that will convert the remaining InterServer runtime unknowns into safe evidence;
+4. keep PR #52 / WB-0032 Phase A repository-only with no live provider contact;
+5. require a fresh explicit operator authorization before WB-0032 Phase B performs any live read-only InterServer capability discovery;
+6. keep `remote_write_requested`, `remote_write_allowed`, and `production_write_allowed` false throughout WB-0032;
+7. keep `staging_apply` blocked until a later work block verifies all runtime gates and receives fresh explicit remote-write authorization;
+8. use LG-0001/LG-0002 as read-only source-of-truth orchestration support, not as mutation authority.
 
 ## Current status
 
-- Work block: `WB-0031` implementation active
-- Branch: `feat/wb-0031-runtime-gate-preflight`
-- Pull request: #51
+- Work block: `WB-0032` definition/kickoff active
+- Branch: `docs/wb-0032-capability-discovery`
+- Pull request: #52
 - WB-0028 foundation / PR #39: merged as `4f582583789346724813a2c515fe30450c173b0c`
 - ADR-0006 lifecycle status: Accepted
 - ADR-0006 decision date: 2026-08-20
@@ -48,8 +50,10 @@ Continue the first safe CyberCore self-deployment loop for InterServer shared-ho
 - PR #48 post-merge reconciliation: merged as `dd389e87eb2684a4c90a816d35c0472e0b5e1fee`
 - WB-0030 / PR #49: merged as `2de294bb3334e4194769f3b883d58a2e5e3a8ea5`
 - PR #50 post-merge reconciliation / WB-0031 kickoff: merged as `4a1374cbef7d142f8386ea7774208effc05d54ec`
-- Deployment protocol/target capability: still `UNKNOWN_UNTIL_VERIFIED`; PR #51 validates the evidence shape, not the real provider capability
-- Live InterServer staging deployment: blocked until target identity, deployment protocol/capability, secret, rollback, effect-verifier, and fresh explicit authorization gates pass
+- WB-0031 / PR #51: merged as `d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684`
+- Deployment protocol/target capability: still `UNKNOWN_UNTIL_VERIFIED`; WB-0031 validates evidence shape, not the real provider capability
+- Live InterServer capability discovery: blocked until a separate fresh read-only operator authorization is granted
+- Live InterServer staging deployment: blocked until target identity, deployment protocol/capability, secret, rollback, effect-verifier, and fresh explicit remote-write authorization gates pass
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
 - GitHub `main`: canonical product state
@@ -73,24 +77,27 @@ Actual replacement or deployment secrets may only be placed in an OS-backed secr
 
 The current self-deployment work is staging-only.
 
-Allowed in WB-0031 / PR #51:
+Allowed in WB-0032 Phase A / PR #52:
 
-- closed non-secret readiness evidence for deployment protocol and target capability;
-- local validation logic that fails closed when capability evidence is missing, unknown, unexpected, wrong-typed, or claims secret-value capture / remote write;
-- tests for those fail-closed conditions;
-- target-contract, work-block, state, and audit updates;
-- no-remote-write validation artifacts.
+- post-merge reconciliation for PR #51;
+- non-secret work-block definition, project state, and audit evidence;
+- explicit discovery questions for target identity, deployment capability, secret-alias readiness, rollback, effect verification, and credential-rotation operational state;
+- a written separate authority gate for a later read-only provider discovery;
+- no-remote-write planning artifacts.
 
-Blocked without separate explicit approval:
+Blocked in PR #52 without separate explicit approval:
 
+- any live InterServer connection, including read-only SSH/SFTP/API/DirectAdmin capability probes;
 - production deployment;
 - DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or provider mutation;
-- any live InterServer connection used to verify or mutate the target;
 - live InterServer staging remote write;
-- reading or storing plaintext secrets;
+- reading or storing plaintext secrets in ordinary evidence channels;
 - creating, changing, or reading GitHub Environment secret values;
-- treating target metadata as proof that deployment protocol/capability has been verified;
+- credential rotation;
+- treating target metadata, aliases, documentation, or synthetic evidence as proof that real provider capability exists;
 - executing `staging_apply` or equivalent remote mutation without all runtime gates and fresh explicit operator authorization.
+
+A later WB-0032 Phase B may perform only separately authorized read-only/non-mutating discovery. That future authorization is not implied by ADR-0006, PR #51, PR #52, or this state document.
 
 ## Recent completed state changes
 
@@ -152,43 +159,66 @@ Verification recorded in the merge commit:
 - all review threads resolved;
 - manual AI review PASS.
 
+### PR #51 — WB-0031 staging runtime gate preflight
+
+Merged into `main` as:
+
+```text
+d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684
+```
+
+Delivered the local fail-closed deployment-protocol / target-capability preflight, closed evidence semantics, hardened target YAML parsing, regression coverage for duplicate/merge/anchor/alias/recursion/depth bypasses, and preserved the invariant that a local readiness PASS grants no remote-write authority.
+
+Verification recorded in the merge commit:
+
+- exact head `aa02ea82b7e86f851b60386b1d07f97d149912f8`;
+- CI #166 PASS;
+- CodeQL #163 PASS;
+- fresh Codex adversarial review: no major issues;
+- all review threads resolved;
+- manual AI review PASS.
+
 ## Current work block
 
-### WB-0031 — Staging Runtime Gate Preflight
+### WB-0032 — InterServer Staging Capability Discovery
 
-PR #51 implements the local fail-closed portion of this work block. The readiness document now has a dedicated `deployment_capability_readiness` mapping and the validator requires:
+PR #52 defines WB-0032 and reconciles PR #51. The work block separates repository-only kickoff from later live read-only discovery.
 
-- `deployment_protocol_status: VERIFIED`;
-- an explicitly allowlisted deployment protocol value;
-- `target_capability_status: VERIFIED`;
-- a fixed safe target-capability evidence reference;
-- `capability_evidence_secret_values_recorded: false`;
-- `capability_evidence_remote_write_performed: false`;
-- matching deployment-protocol and target-capability entries in `blocked_until`.
+The later discovery must establish real evidence for:
 
-The example remains intentionally blocked. Tests may construct a synthetic fully verified evidence document to prove the local validator can become ready while `remote_write_requested`, `remote_write_allowed`, and `production_write_allowed` remain false. This is not evidence that the real InterServer capability is verified and is not authority to connect or deploy.
+- non-production staging URL/domain identity;
+- staging path/document-root identity and production exclusion;
+- available deployment protocol(s) and target capability;
+- least-privilege deployment-user scope;
+- required secret-alias readiness without value disclosure;
+- rollback capability;
+- effect-verifier capability;
+- credential-rotation operational state without credential values.
+
+Before the first live InterServer contact, WB-0032 requires a fresh explicit authorization naming the InterServer staging scope and read-only/non-mutating access. Upload, overwrite, delete, chmod/chown, symlink creation, credential rotation, provider configuration change, and production access remain prohibited.
 
 ## Security follow-up
 
 - Six high-severity transitive `npm audit` findings remain deferred security debt in the isolated visual documentation toolchain.
 - Provider credential-rotation verification remains an unresolved operational blocker until handled by a separately approved procedure without secret values in ordinary evidence stores.
-- WB-0031 does not resolve those blockers; it keeps live staging deploy blocked behind target identity, deployment capability, secret, rollback, effect-verifier, and fresh authorization gates.
+- WB-0032 may record credential-rotation operational state during an approved read-only discovery, but does not authorize rotation itself.
+- Live staging deploy remains blocked behind target identity, deployment capability, secret readiness, rollback, effect-verifier, and fresh remote-write authorization gates.
 
 ## Next action
 
-Run exact-head hosted CI/CodeQL and fresh adversarial review for PR #51. Repair valid findings and stop at `READY_FOR_MERGE`. Do not perform any InterServer connection, live remote write, provider mutation, production mutation, DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or plaintext-secret handling.
+Run exact-head hosted CI/CodeQL and fresh adversarial review for PR #52. Repair valid findings and stop at `READY_FOR_MERGE`. Do not perform any InterServer connection, live remote write, provider mutation, production mutation, DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, credential rotation, or plaintext-secret handling.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr51-wb0031-runtime-gate-preflight -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr52-wb0032-capability-discovery -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-21T20:52:00+02:00`
-- Branch: `feat/wb-0031-runtime-gate-preflight`
-- Pull request: #51
-- Active artifact: `WB-0031`
-- Active work block: `WB-0031 — Staging Runtime Gate Preflight`
-- Last verified main: `4a1374cbef7d142f8386ea7774208effc05d54ec`
+- Generated: `2026-08-22T02:08:00+02:00`
+- Branch: `docs/wb-0032-capability-discovery`
+- Pull request: #52
+- Active artifact: `WB-0032`
+- Active work block: `WB-0032 — InterServer Staging Capability Discovery`
+- Last verified main: `d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684`
 - Test evidence: exact-head hosted CI/CodeQL and fresh review required before Ready for Review
 - Project Kernel: present
-- Project State: PR #50 merged; WB-0031 implementation active in PR #51; InterServer remote-write and production gates remain blocked
+- Project State: PR #51 merged; WB-0032 definition/kickoff active in PR #52; live InterServer discovery requires separate explicit read-only authorization; remote-write and production gates remain blocked
 <!-- CYBERCORE:CHECKPOINT:END -->
