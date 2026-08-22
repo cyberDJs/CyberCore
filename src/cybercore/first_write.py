@@ -382,15 +382,19 @@ def _append_bound_evidence_blockers(
     if not _has_evidence_reference(reference):
         blockers.append("readiness requires a non-placeholder evidence bundle reference")
         return
-    if not isinstance(digest, str) or len(digest) != 64 or not all(
-        character in "0123456789abcdef" for character in digest.lower()
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or not all(character in "0123456789abcdef" for character in digest.lower())
     ):
         blockers.append("readiness requires an exact evidence bundle sha256")
         return
 
     evidence_path = resolve_evidence_bundle_path(path, reference)
     if evidence_path is None:
-        blockers.append("evidence bundle reference must resolve inside the deployment evidence directory")
+        blockers.append(
+            "evidence bundle reference must resolve inside the deployment evidence directory"
+        )
         return
 
     evidence = validate_first_write_evidence(evidence_path, expected_sha256=digest)
@@ -399,13 +403,17 @@ def _append_bound_evidence_blockers(
         return
 
     if source is None or evidence.source_commit != source.get("source_commit_reference"):
-        blockers.append("evidence bundle source_commit must equal readiness source_commit_reference")
+        blockers.append(
+            "evidence bundle source_commit must equal readiness source_commit_reference"
+        )
     if capability is None or evidence.protocol != capability.get("deployment_protocol"):
         blockers.append("evidence bundle protocol must equal readiness deployment_protocol")
     if capability is None or evidence.target_capability_reference != capability.get(
         "target_capability_reference"
     ):
-        blockers.append("evidence bundle capability reference must equal readiness capability reference")
+        blockers.append(
+            "evidence bundle capability reference must equal readiness capability reference"
+        )
     if capability is None or evidence.deploy_identity_scope_reference != capability.get(
         "deploy_identity_scope_reference"
     ):
@@ -413,7 +421,9 @@ def _append_bound_evidence_blockers(
     if verifier is None or evidence.effect_verifier_reference != verifier.get(
         "effect_verifier_reference"
     ):
-        blockers.append("evidence bundle verifier reference must equal readiness verifier reference")
+        blockers.append(
+            "evidence bundle verifier reference must equal readiness verifier reference"
+        )
     if authorization is None or evidence.authorization_reference != authorization.get(
         "authorization_reference"
     ):
