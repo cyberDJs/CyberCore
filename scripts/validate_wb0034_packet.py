@@ -8,7 +8,13 @@ from cybercore.first_write_packet import validate_first_write_packet
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate the WB-0034 final first-write packet")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Validate the WB-0034 final first-write packet. This CLI is diagnostic only; "
+            "a future uploader must consume the validated in-process upload_input bytes "
+            "instead of reopening artifact paths."
+        )
+    )
     parser.add_argument(
         "--manifest",
         default=".cybercore/deploy/manifests/interserver-staging-wb0034-plan.yaml",
@@ -27,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--artifact-dir",
         required=True,
-        help="Directory containing the exact index.html and cybercore-version.json to upload",
+        help="Directory containing the exact index.html and cybercore-version.json to seal",
     )
     args = parser.parse_args(argv)
 
@@ -38,6 +44,11 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.artifact_dir),
     )
     print(result.as_text())
+    if result.ready:
+        print(
+            "diagnostic only: validated artifact bytes are sealed in this process; "
+            "this CLI does not authorize or perform an upload"
+        )
     return 0 if result.ready else 1
 
 
