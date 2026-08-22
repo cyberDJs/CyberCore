@@ -147,7 +147,7 @@ A fresh Codex review of exact head `82b90ca2ee7097d3959a2d4bfd0eeb60a2d9729d` re
 - Pyright: PASS
 - package build/wheel smoke: PASS
 
-The operator then explicitly authorized finalization and merge of PR #54. Final documentation-only reconciliation commits made after that review require the repository's exact-head gates to be rechecked before executing the approved merge.
+The operator then explicitly authorized finalization and merge of PR #54. Final documentation-only reconciliation commits made after that review do not broaden provider scope, but they change the PR head; therefore exact-head CI, CodeQL, and Codex gates must pass again before executing the approved merge.
 
 ## Safety assertions
 
@@ -163,6 +163,6 @@ The operator then explicitly authorized finalization and merge of PR #54. Final 
 
 ## Final status
 
-`VERIFIED — MERGE AUTHORIZED, EXACT-HEAD RECHECK REQUIRED AFTER FINAL DOC RECONCILIATION`
+`VERIFIED — MERGE AUTHORIZED; FINAL EXACT-HEAD GATES PENDING`
 
-The isolated staging target is externally resolvable, serves HTTP/HTTPS successfully, has a verified wildcard ACME path through DirectAdmin with Cloudflare as authoritative DNS, and is proven path-isolated from production without production application-content access.
+The isolated staging target is externally resolvable, serves HTTP/HTTPS successfully, has a verified wildcard ACME path through DirectAdmin with Cloudflare as authoritative DNS, and is proven path-isolated from production without production application-content access. The approved repository merge remains fail-closed until final exact-head CI, CodeQL, and Codex checks pass.
