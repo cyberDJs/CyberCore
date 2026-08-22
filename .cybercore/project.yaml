@@ -94,7 +94,9 @@ status:
   wb0033_bounded_provider_mutations: verified
   wb0034_first_staging_deployment_preflight: active_remote_write_blocked
   pr55_wb0034_first_staging_deployment_preflight: active_draft
+  first_write_readiness_schema: implemented
   first_write_artifact_plan: static_two_file_canary
+  first_write_destination_shape: direct_child_unique_directory
   first_write_overwrite_allowed: false
   first_write_symlink_promotion_allowed: false
   first_write_deployment_protocol_status: unknown
@@ -118,7 +120,7 @@ completed:
     verification: 23_passed
   - artifact: WB-0017
     pull_request: 21
-    merge_commit: d21e3bc3875f05e5b8bb00fee4dfd5f438da33
+    merge_commit: d21e3bc3875bf298939585958c90167fa36dd76c
     verification: 46_passed
   - artifact: WB-0018
     pull_request: 22
