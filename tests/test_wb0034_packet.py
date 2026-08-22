@@ -224,7 +224,9 @@ def test_final_packet_rejects_syntactically_valid_but_non_head_commit(tmp_path: 
     assert any("checked-out repository HEAD" in error for error in result.errors)
 
 
-def test_final_packet_rejects_feature_branch_head_even_when_packet_matches_it(tmp_path: Path) -> None:
+def test_final_packet_rejects_feature_branch_head_even_when_packet_matches_it(
+    tmp_path: Path,
+) -> None:
     repo, _ = _init_repo(tmp_path)
     _run_git(repo, "switch", "-c", "feature")
     (repo / "source.txt").write_text("feature deployment source\n", encoding="utf-8")
