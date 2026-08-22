@@ -253,7 +253,9 @@ def _validate_version_marker(
         if missing:
             errors.append(f"cybercore-version.json is missing keys: {', '.join(missing)}")
         if unexpected:
-            errors.append(f"cybercore-version.json contains unexpected keys: {', '.join(unexpected)}")
+            errors.append(
+                f"cybercore-version.json contains unexpected keys: {', '.join(unexpected)}"
+            )
 
     expected_values = {
         "repository": "cyberDJs/CyberCore",
