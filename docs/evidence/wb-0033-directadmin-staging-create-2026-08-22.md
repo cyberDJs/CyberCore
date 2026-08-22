@@ -10,7 +10,7 @@ Authoritative DNS: Cloudflare
 
 `VERIFIED`
 
-Observed runtime facts from the operator-executed guarded apply and subsequent DNS/TLS/path verification:
+Observed runtime facts from the operator-executed guarded apply and subsequent DNS/TLS verification:
 
 - DirectAdmin server: `vda7600.is.cc:2222`
 - DirectAdmin user: `eimyherr`
@@ -21,8 +21,8 @@ Observed runtime facts from the operator-executed guarded apply and subsequent D
 - create response: HTTP 200
 - target existed before: no
 - target present on readback: yes
-- staging document root: `/home/eimyherr/domains/staging.eimyherrer.com/public_html`
-- production document-root metadata: `/home/eimyherr/domains/eimyherrer.com/public_html`
+- requested staging document root: `/domains/staging.eimyherrer.com/public_html`
+- normalized staging document root: `/home/eimyherr/domains/staging.eimyherrer.com/public_html`
 - production application content read: no
 - production content mutated: no
 - application deployed: no
@@ -113,31 +113,41 @@ Post-renewal staging verification:
 
 This proves the current DirectAdmin -> Cloudflare DNS API -> Let's Encrypt DNS-01 wildcard issuance path end-to-end.
 
-The operator subsequently granted explicit standing authorization for future unattended automatic renewals of the same `eimyherrer.com` + `*.eimyherrer.com` certificate through the already configured DirectAdmin -> Cloudflare ACME integration. This standing authority does not extend to unrelated DNS changes, additional credential mutation, application deployment, or other production mutation.
+## Production/staging non-overlap verification
 
-A future scheduled unattended renewal has not yet been historically observed.
+After Codex identified that the earlier evidence did not contain canonical production-path metadata, the operator separately authorized a narrowly scoped read-only DirectAdmin document-root metadata read for `eimyherrer.com`, explicitly without reading production application content.
 
-## Production document-root path verification
-
-After separate explicit authorization for a narrowly bounded production metadata read, the operator called DirectAdmin:
-
-- endpoint: `CMD_API_DOMAIN?action=document_root&json=yes`
-- permitted data: production document-root path metadata only
-- directory listing performed: no
-- production traversal performed: no
-- production `stat` performed: no
-- production file/content read performed: no
-
-Sanitized observed values:
+Observed DirectAdmin metadata:
 
 - production document root: `/home/eimyherr/domains/eimyherrer.com/public_html`
 - staging document root: `/home/eimyherr/domains/staging.eimyherrer.com/public_html`
 - same path: false
 - staging inside production: false
 - production inside staging: false
-- production content read: false
+- production application content read: false
 
-The normalized path comparison therefore proves staging/production document-root non-overlap without reading production application content.
+This closes the production-overlap evidence gap without traversing or reading production application files.
+
+## Standing ACME renewal authorization
+
+The operator separately granted standing authorization for future unattended automatic renewal of the existing `eimyherrer.com` + `*.eimyherrer.com` certificate through the existing DirectAdmin -> Cloudflare ACME integration.
+
+This standing authority is limited to renewal of that same certificate identity through the existing provider path. It does not authorize unrelated DNS changes, new certificate identities, provider changes, additional credential mutation, or application/production mutation.
+
+## Review verification
+
+Codex first reviewed exact head `fc410957e61c1c62a0fd59d1802c2302d93e2c41` and raised two P1 governance findings plus one P2 handoff finding. The operator supplied the missing bounded authorizations/evidence, the branch was reconciled, and the prior review threads were resolved.
+
+A fresh Codex review of exact head `82b90ca2ee7097d3959a2d4bfd0eeb60a2d9729d` reported no major issues. On that head:
+
+- CI #190: PASS
+- CodeQL #187: PASS
+- Python 3.11/3.12/3.13/3.14: PASS
+- Ruff lint/format: PASS
+- Pyright: PASS
+- package build/wheel smoke: PASS
+
+The operator then explicitly authorized finalization and merge of PR #54. Final documentation-only reconciliation commits made after that review require the repository's exact-head gates to be rechecked before executing the approved merge.
 
 ## Safety assertions
 
@@ -145,16 +155,14 @@ The normalized path comparison therefore proves staging/production document-root
 - session cookie values recorded: false
 - login URL value recorded: false
 - Cloudflare token values recorded: false
-- production document-root path metadata read: true, separately authorized
 - production application content read: false
 - production content mutated: false
 - unrelated DNS records mutated: false
 - application deployed: false
 - new paid hosting service ordered: false
-- future unattended renewal standing authorization recorded: true
 
 ## Final status
 
-`VERIFIED`
+`VERIFIED — MERGE AUTHORIZED, EXACT-HEAD RECHECK REQUIRED AFTER FINAL DOC RECONCILIATION`
 
-The isolated staging target is externally resolvable, serves HTTP/HTTPS successfully, has proven document-root non-overlap with production, and has a verified plus explicitly authorized ongoing wildcard ACME path through DirectAdmin with Cloudflare as authoritative DNS.
+The isolated staging target is externally resolvable, serves HTTP/HTTPS successfully, has a verified wildcard ACME path through DirectAdmin with Cloudflare as authoritative DNS, and is proven path-isolated from production without production application-content access.
