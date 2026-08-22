@@ -31,6 +31,7 @@ source_artifact_readiness:
   source_commit_status: UNKNOWN
   source_commit_reference: TBD
   artifact_hashes_status: UNKNOWN
+  artifact_hashes_reference: WB0034_ARTIFACT_HASHES_REQUIRED
 
 secret_alias_readiness:
   secret_alias_status: UNKNOWN
@@ -49,6 +50,7 @@ rollback_readiness:
 
 effect_verifier_readiness:
   effect_verifier_status: UNKNOWN
+  effect_verifier_reference: WB0034_EFFECT_VERIFIER_IMPLEMENTATION_REQUIRED
   required_checks:
     - staging_url_returns_success
     - deployed_version_marker_matches_source_commit
