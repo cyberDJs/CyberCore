@@ -329,7 +329,9 @@ def _append_supporting_evidence_blockers(
             blockers.append(
                 "target_capability_status VERIFIED requires non-placeholder capability evidence"
             )
-        if capability.get("deploy_identity_scope_status") == "VERIFIED" and not _has_evidence_reference(
+        if capability.get(
+            "deploy_identity_scope_status"
+        ) == "VERIFIED" and not _has_evidence_reference(
             capability.get("deploy_identity_scope_reference")
         ):
             blockers.append(
@@ -349,7 +351,10 @@ def _append_supporting_evidence_blockers(
             )
 
     if rollback is not None:
-        if rollback.get("rollback_status") == "VERIFIED" and rollback.get("rollback_tested") is not True:
+        if (
+            rollback.get("rollback_status") == "VERIFIED"
+            and rollback.get("rollback_tested") is not True
+        ):
             blockers.append("rollback_status VERIFIED requires rollback_tested: true")
 
     if verifier is not None:
@@ -361,7 +366,9 @@ def _append_supporting_evidence_blockers(
             )
 
     if authorization is not None:
-        if authorization.get("operator_authorization_status") == "APPROVED" and not _has_evidence_reference(
+        if authorization.get(
+            "operator_authorization_status"
+        ) == "APPROVED" and not _has_evidence_reference(
             authorization.get("authorization_reference")
         ):
             blockers.append(
