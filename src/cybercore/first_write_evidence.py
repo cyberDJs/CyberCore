@@ -60,6 +60,7 @@ class FirstWriteEvidenceResult:
     deploy_identity_scope_reference: str | None = None
     effect_verifier_reference: str | None = None
     authorization_reference: str | None = None
+    artifact_hashes: tuple[tuple[str, str], ...] = ()
 
     def as_text(self) -> str:
         lines = [f"wb0034 evidence bundle: {'PASS' if self.ok else 'FAIL'}"]
@@ -230,6 +231,7 @@ def validate_first_write_evidence(
 
     artifacts_value = document.get("artifacts")
     artifacts: set[str] = set()
+    artifact_hashes: dict[str, str] = {}
     if not isinstance(artifacts_value, dict):
         errors.append("evidence requires mapping: artifacts")
     else:
@@ -246,6 +248,8 @@ def validate_first_write_evidence(
             for name, value in artifact_map.items():
                 if not isinstance(value, str) or not HEX64_RE.fullmatch(value):
                     errors.append(f"evidence artifact hash for {name} must be sha256 hex")
+                else:
+                    artifact_hashes[name] = value.lower()
 
     deployment = _require_mapping(document, "deployment", errors)
     protocol_value: str | None = None
@@ -323,6 +327,8 @@ def validate_first_write_evidence(
                 "run_id",
                 "destination",
                 "artifacts",
+                "protocol",
+                "deploy_identity_scope_reference",
                 "rollback_permitted",
             },
             "authorization evidence",
@@ -345,6 +351,21 @@ def validate_first_write_evidence(
         )
         if auth_artifacts != EXPECTED_ARTIFACTS:
             errors.append("authorization artifacts must equal the approved two-file artifact set")
+
+        auth_protocol = authorization.get("protocol")
+        if auth_protocol not in {"SFTP", "SSH"}:
+            errors.append("authorization protocol must be SFTP or SSH")
+        elif auth_protocol != protocol_value:
+            errors.append("authorization protocol must equal deployment evidence protocol")
+
+        auth_scope_ref = authorization.get("deploy_identity_scope_reference")
+        if not _non_placeholder_reference(auth_scope_ref):
+            errors.append("authorization requires a non-placeholder deploy identity scope reference")
+        elif auth_scope_ref != deploy_identity_scope_reference:
+            errors.append(
+                "authorization deploy identity scope must equal deployment evidence scope"
+            )
+
         _require_value(authorization, "rollback_permitted", True, errors)
 
     return FirstWriteEvidenceResult(
@@ -360,4 +381,5 @@ def validate_first_write_evidence(
         deploy_identity_scope_reference,
         effect_verifier_reference,
         authorization_reference,
+        tuple(sorted(artifact_hashes.items())),
     )
