@@ -22,7 +22,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--repo-root",
         default=".",
-        help="Repository root whose HEAD is the exact deployment source commit",
+        help="Repository root whose HEAD must equal the trusted main commit",
+    )
+    parser.add_argument(
+        "--artifact-dir",
+        required=True,
+        help="Directory containing the exact index.html and cybercore-version.json to upload",
     )
     args = parser.parse_args(argv)
 
@@ -30,6 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.manifest),
         Path(args.readiness),
         Path(args.repo_root),
+        Path(args.artifact_dir),
     )
     print(result.as_text())
     return 0 if result.ready else 1
