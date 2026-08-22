@@ -60,8 +60,10 @@ All must be true before an authorization request is considered complete:
 - resolve exact `main` source commit;
 - generate local two-file canary artifact;
 - compute local hashes;
-- validate the plan-only manifest;
+- validate the legacy staging target contract with `scripts/validate_staging_plan.py`;
+- separately validate the WB-0034 authority/destination/artifact boundary with `scripts/validate_wb0034_manifest.py`;
 - validate the WB-0034 readiness artifact with `scripts/validate_wb0034_readiness.py`;
+- require readiness supporting evidence to match its status labels: exact source SHA, verified protocol, capability/scope evidence, tested rollback, verifier evidence, artifact-hash evidence, and fresh authorization reference;
 - confirm target URL/path from canonical state;
 - confirm deployment protocol and credential scope evidence;
 - confirm secret aliases exist without printing values;
@@ -70,6 +72,8 @@ All must be true before an authorization request is considered complete:
 - inspect the candidate destination without following links and require it to be absent;
 - confirm there is no intermediate destination component below the staging root;
 - record preflight receipt.
+
+The legacy target validator is not sufficient by itself to validate the WB-0034 manifest. The dedicated WB-0034 manifest validator must also pass and must reject any change that grants remote/production write authority, changes the direct-child destination pattern, or changes the two-file artifact set.
 
 Any failure stops the procedure.
 
