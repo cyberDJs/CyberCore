@@ -12,7 +12,7 @@ Jan Kočí explicitly authorized WB-0032 Phase B for **InterServer staging only*
 Permitted probe classes:
 
 - InterServer REST API read-only probes;
-- InterServer MCP read-only discovery when a compatible authenticated client is available;
+- InterServer MCP read-only discovery only after the exact exposed tool schema and read-only scope are inspected;
 - DirectAdmin read-only API probes;
 - SSH/SFTP read-only inspection when needed to verify target identity or filesystem capability.
 
@@ -88,26 +88,26 @@ Purpose:
 
 No authentication is required for these probes according to the current API documentation.
 
-### Step 2 — identify the owned webhosting service
+### Step 2 — identify candidate owned webhosting service
 
-Allowed authenticated operations:
+Initial allowed authenticated operation:
 
 - `GET /apiv2/websites`
-- `GET /apiv2/websites/{id}`
 
 Purpose:
 
-- identify the exact InterServer webhosting service ID;
-- record service status;
-- record provider hostname/IP/control-panel metadata only where non-secret;
-- identify the hosting username only if it is required for target verification and safe to retain;
-- establish which service corresponds to the intended staging scope.
+- enumerate only the caller's webhosting services;
+- identify candidate InterServer webhosting service IDs;
+- record only the minimum non-secret service status, hostname/IP/control-panel metadata required to select the intended staging service;
+- avoid unrelated account, billing, mail, domain-registration, VPS, server, or other service records.
 
-Do not query unrelated account, billing, mail, domain-registration, VPS, server, or other service records unless a later discovery question requires them.
+The current InterServer documentation describes `GET /apiv2/websites/{id}` as returning **full configuration and status detail**. Because that response surface has not yet been proven free of credential, session, auto-login, or other secret-like material, the detail endpoint is **not** part of the initial allowlist.
+
+`GET /apiv2/websites/{id}` may be added later only after an independent schema/response-surface review proves that the required fields can be read without exposing secret/session material. If that cannot be proven, record the detail capability as `BLOCKED` and continue with safer provider/DirectAdmin/SSH metadata sources where possible.
 
 ### Step 3 — optional network identity read
 
-Allowed only if needed:
+Allowed only after Step 2 identifies an unambiguous candidate staging service ID:
 
 - `GET /apiv2/websites/{id}/reverse_dns`
 
@@ -123,6 +123,7 @@ Do not call:
 - `/account/apikey`;
 - `/account/password`;
 - `/account/sshkey`;
+- `/websites/{id}` until its full response surface is independently proven safe for this work block;
 - `/websites/{id}/welcome_email`;
 - `/websites/{id}/login` because it creates a one-time authenticated control-panel login capability;
 - `/websites/{id}/migration`;
@@ -172,7 +173,7 @@ Blocked remote command classes:
 - database writes;
 - any shell command whose side effects are not understood.
 
-The goal is to prove a concrete non-production staging path and independently establish that it does not overlap the production document root.
+The goal is to prove a concrete non-production staging path and independently establish that it does not overlap the production document root. Production content itself must not be traversed or read; only the minimum safe metadata needed to exclude path overlap may be retained.
 
 ### Step 6 — deployment capability without deployment
 
@@ -241,7 +242,7 @@ remote_write_performed: false
 secret_values_recorded: false
 ```
 
-Raw API/provider responses must be sanitized before entering ordinary evidence if they contain personal, billing, credential, session, or unrelated account data.
+Raw API/provider responses must be sanitized before entering ordinary evidence if they contain personal, billing, credential, session, or unrelated account data. If a response surface cannot be safely bounded before invocation, that endpoint remains blocked rather than relying on post-hoc redaction.
 
 ## Stop conditions
 
@@ -251,6 +252,7 @@ Return `BLOCKED` immediately when any of the following occurs:
 - staging path may equal or overlap a production document root;
 - the only available authentication path requires creating/rotating/resetting a credential;
 - a proposed endpoint has undocumented or ambiguous side effects;
+- a proposed endpoint may return secret/session material and its response surface cannot be bounded before invocation;
 - an API response exposes secret material that cannot be safely redacted before evidence capture;
 - required capability can only be verified by performing a remote write;
 - provider behavior conflicts with the reviewed documentation.
