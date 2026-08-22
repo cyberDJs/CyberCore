@@ -360,7 +360,9 @@ def validate_first_write_evidence(
 
         auth_scope_ref = authorization.get("deploy_identity_scope_reference")
         if not _non_placeholder_reference(auth_scope_ref):
-            errors.append("authorization requires a non-placeholder deploy identity scope reference")
+            errors.append(
+                "authorization requires a non-placeholder deploy identity scope reference"
+            )
         elif auth_scope_ref != deploy_identity_scope_reference:
             errors.append(
                 "authorization deploy identity scope must equal deployment evidence scope"
