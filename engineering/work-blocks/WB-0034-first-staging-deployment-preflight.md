@@ -56,14 +56,16 @@ https://staging.eimyherrer.com/cybercore-canary-<run_id>/
 https://staging.eimyherrer.com/cybercore-canary-<run_id>/cybercore-version.json
 ```
 
-The version marker must contain only non-secret deployment identity:
+The version marker must contain exactly this non-secret deployment identity:
 
-- repository;
-- exact source commit;
-- source branch;
-- build timestamp;
+- repository `cyberDJs/CyberCore`;
+- exact trusted-main source commit;
+- source branch `main`;
+- valid UTC build timestamp;
 - environment id `interserver-shared-hosting-staging`;
-- run id.
+- exact approved run id.
+
+The combined final packet gate validates the marker semantics from the exact local bytes that are hashed for deployment. A matching hash is not sufficient when the marker content is wrong.
 
 The first write must be **no-overwrite**. It must not replace the staging document-root index, an existing release, or any production path.
 
@@ -78,7 +80,7 @@ A later explicit first-write authorization may allow only:
 5. perform no chmod/chown, symlink, package/service, PHP, DNS, mail, billing, DirectAdmin, Cloudflare, VPS, WordPress, Nextcloud, registrar, or production mutation;
 6. if rollback is explicitly included in the same authorization, remove only the directory created for that run after verifying its exact path.
 
-If path resolution, credential scope, protocol behavior, source identity, artifact identity, or rollback scope is ambiguous, abort before the first remote write.
+If path resolution, credential scope, protocol behavior, source identity, artifact identity, marker identity, or rollback scope is ambiguous, abort before the first remote write.
 
 ## Required gates before authorization request
 
@@ -135,7 +137,7 @@ No symlink promotion is used in the first cycle. This avoids assuming shared-hos
 Required checks:
 
 - staging canary URL returns HTTP success;
-- `cybercore-version.json` exists and its commit equals the approved manifest commit;
+- `cybercore-version.json` exists and its exact schema/values match the approved packet;
 - path-resolution and runner evidence prove writes were constrained to the exact approved staging destination;
 - no denied path was touched;
 - no denied provider/DNS/credential mutation occurred;
@@ -167,13 +169,28 @@ Readiness status labels are not sufficient evidence. A final READY decision requ
 
 The combined packet validator must prove the evidence digest and cross-document bindings before it can return READY.
 
-### G10 — exact local artifact bytes
+### G10 — exact local artifact bytes and path identity
 
 `DESIGN_IMPLEMENTED; RUNTIME_ARTIFACTS_PENDING`
 
-The two SHA-256 values in evidence are not accepted merely because they are syntactically valid. The combined final packet gate requires an explicit local artifact directory, rejects symlinked artifact paths, hashes the exact `index.html` and `cybercore-version.json` bytes that would be uploaded, and requires those digests to equal the evidence bundle.
+The two SHA-256 values in evidence are not accepted merely because they are syntactically valid. The combined final packet gate requires an explicit local artifact directory, opens its path component-by-component with POSIX no-follow directory semantics, requires exactly the two approved entries, opens both files relative to the pinned directory descriptor with no-follow semantics, and hashes those exact bytes.
 
-A fabricated digest, substituted file, missing file, or symlinked local artifact keeps the packet BLOCKED.
+A fabricated digest, substituted file, missing file, extra artifact, final-component symlink, or symlinked artifact-directory ancestor keeps the packet BLOCKED.
+
+### G11 — version-marker semantic binding
+
+`DESIGN_IMPLEMENTED; RUNTIME_MARKER_PENDING`
+
+`cybercore-version.json` is validated from the same bytes that are hashed for the upload. It must be valid UTF-8 JSON with no duplicate keys, contain exactly `repository`, `commit`, `branch`, `built_at`, `environment`, and `run_id`, and bind them to:
+
+- `repository: cyberDJs/CyberCore`;
+- the exact checked-out trusted-main commit;
+- `branch: main`;
+- a valid UTC `built_at` timestamp;
+- `environment: interserver-shared-hosting-staging`;
+- the exact evidence/authorization run id.
+
+A semantically wrong marker cannot become READY merely by recording its matching SHA-256 in evidence.
 
 ## Machine-validatable first-write contract
 
@@ -193,7 +210,7 @@ Canonical implementation files include:
 - `scripts/validate_wb0034_packet.py`;
 - regression tests under `tests/test_wb0034_*.py`.
 
-The current repository artifacts remain plan-only and BLOCKED. The readiness validator may become READY only when its status fields are supported by a valid hash-bound evidence bundle. The final remote-write authorization packet has a stricter combined gate: populated manifest/readiness data, the hash-bound evidence bundle, trusted `main`, checked-out repository `HEAD`, and exact local artifact bytes must agree. Run id, destination, artifact set, artifact digests, authorization reference, protocol, deploy-identity scope, and rollback permission must remain consistently bound.
+The current repository artifacts remain plan-only and BLOCKED. The readiness validator may become READY only when its status fields are supported by a valid hash-bound evidence bundle. The final remote-write authorization packet has a stricter combined gate: populated manifest/readiness data, the hash-bound evidence bundle, trusted `main`, checked-out repository `HEAD`, exact local artifact bytes/path identity, and strict marker semantics must agree. Run id, destination, artifact set, artifact digests, authorization reference, protocol, deploy-identity scope, and rollback permission must remain consistently bound.
 
 The WB-0034 machine YAML artifacts are intentionally comment-free and raw-text scanned before parsing. Credential-like assignments, credential-bearing URLs, YAML comments, duplicate keys, unsupported structures, secret values, and the broader private-key PEM/header family including EC, DSA, PGP, encrypted, OpenSSH, RSA, and generic private-key forms fail closed.
 
@@ -217,7 +234,8 @@ Before requesting the first staging-write authorization, the handoff must contai
 - deploy identity safe reference and scope result;
 - secret-alias readiness result without values;
 - exact direct-child destination directory;
-- exact two-file artifact list and SHA-256 values computed from the local files to be uploaded;
+- exact two-file artifact list and SHA-256 values computed from the no-follow-read local files to be uploaded;
+- strict `cybercore-version.json` marker-validation result from those same bytes;
 - sanitized hash-bound evidence bundle reference and digest;
 - verifier commands/URLs;
 - rollback action limited to that run directory;
@@ -246,6 +264,9 @@ WB-0034 preflight is complete when:
 - a plan-only first-write manifest exists;
 - dedicated WB-0034 manifest, readiness, evidence, raw-secret, and combined packet validators are internally consistent and regression-tested;
 - arbitrary status labels, arbitrary evidence references, mismatched/nonexistent source SHAs, feature-branch HEAD, cross-document commit/run/destination/artifact mismatches, fabricated artifact digests, protocol/scope authorization mismatches, broader private-key headers, and secret-bearing comments/credential URLs fail closed;
+- local artifact final-component and ancestor symlink substitution fail closed;
+- the artifact directory is constrained to the exact approved two-file set;
+- marker commit/run/environment/schema mismatches fail even when their updated digest is consistently recorded in evidence;
 - current readiness evidence records verified target identity and all remaining runtime blockers without overclaim;
 - exact mutation and rollback scope are documented;
 - symlink/ancestor escape and parent-directory ambiguity are eliminated from the first-write design;
