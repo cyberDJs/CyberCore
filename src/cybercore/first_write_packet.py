@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 import subprocess
 from typing import cast
@@ -47,33 +48,101 @@ def _load_mapping(path: Path, label: str, errors: list[str]) -> dict[str, object
     return cast(dict[str, object], raw)
 
 
-def _git_head(repository_root: Path, errors: list[str]) -> str | None:
+def _is_commit_sha(value: str) -> bool:
+    return len(value) == 40 and all(character in "0123456789abcdef" for character in value)
+
+
+def _git_rev_parse(repository_root: Path, ref: str) -> str | None:
     try:
         completed = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "rev-parse", "--verify", ref],
             cwd=repository_root,
             check=False,
             capture_output=True,
             text=True,
             timeout=10,
         )
-    except (OSError, subprocess.SubprocessError) as exc:
-        errors.append(f"cannot resolve repository HEAD: {exc}")
+    except (OSError, subprocess.SubprocessError):
         return None
     if completed.returncode != 0:
-        errors.append("cannot resolve repository HEAD")
         return None
-    head = completed.stdout.strip().lower()
-    if len(head) != 40 or not all(character in "0123456789abcdef" for character in head):
-        errors.append("repository HEAD is not an exact 40-character commit SHA")
+    commit = completed.stdout.strip().lower()
+    if not _is_commit_sha(commit):
         return None
+    return commit
+
+
+def _git_head(repository_root: Path, errors: list[str]) -> str | None:
+    head = _git_rev_parse(repository_root, "HEAD^{commit}")
+    if head is None:
+        errors.append("cannot resolve repository HEAD to an exact commit")
     return head
+
+
+def _git_main_commit(repository_root: Path, errors: list[str]) -> str | None:
+    # Prefer the fetched remote-tracking ref when available. A local-only
+    # repository (including unit-test fixtures) may fall back to refs/heads/main.
+    for ref in ("refs/remotes/origin/main^{commit}", "refs/heads/main^{commit}"):
+        commit = _git_rev_parse(repository_root, ref)
+        if commit is not None:
+            return commit
+    errors.append("cannot resolve trusted main commit from origin/main or local main")
+    return None
+
+
+def _sha256_file(path: Path, errors: list[str]) -> str | None:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        errors.append(f"cannot hash deployment artifact {path.name}: {exc}")
+        return None
+    return digest.hexdigest()
+
+
+def _local_artifact_hashes(artifact_dir: Path, errors: list[str]) -> dict[str, str]:
+    if artifact_dir.is_symlink():
+        errors.append("deployment artifact directory must not be a symlink")
+        return {}
+    try:
+        root = artifact_dir.resolve(strict=True)
+    except (FileNotFoundError, OSError) as exc:
+        errors.append(f"cannot resolve deployment artifact directory: {exc}")
+        return {}
+    if not root.is_dir():
+        errors.append("deployment artifact path must resolve to a directory")
+        return {}
+
+    hashes: dict[str, str] = {}
+    for name in sorted(EXPECTED_ARTIFACTS):
+        candidate = root / name
+        if candidate.is_symlink():
+            errors.append(f"deployment artifact must not be a symlink: {name}")
+            continue
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (FileNotFoundError, OSError) as exc:
+            errors.append(f"cannot resolve deployment artifact {name}: {exc}")
+            continue
+        if resolved.parent != root:
+            errors.append(f"deployment artifact escapes the approved artifact directory: {name}")
+            continue
+        if not resolved.is_file():
+            errors.append(f"deployment artifact is not a regular file: {name}")
+            continue
+        digest = _sha256_file(resolved, errors)
+        if digest is not None:
+            hashes[name] = digest
+    return hashes
 
 
 def validate_first_write_packet(
     manifest_path: Path,
     readiness_path: Path,
     repository_root: Path,
+    artifact_dir: Path,
 ) -> FirstWritePacketResult:
     errors: list[str] = []
 
@@ -90,9 +159,13 @@ def validate_first_write_packet(
     manifest = _load_mapping(manifest_path, "manifest", errors)
     readiness = _load_mapping(readiness_path, "readiness", errors)
     head = _git_head(repository_root, errors)
+    main_commit = _git_main_commit(repository_root, errors)
 
-    if manifest is None or readiness is None or head is None:
+    if manifest is None or readiness is None or head is None or main_commit is None:
         return FirstWritePacketResult(False, tuple(errors))
+
+    if head != main_commit:
+        errors.append("repository HEAD must equal the trusted main commit before final preflight")
 
     source_readiness_value = readiness.get("source_artifact_readiness")
     authorization_value = readiness.get("operator_authorization")
@@ -156,5 +229,15 @@ def validate_first_write_packet(
         errors.append("evidence and manifest artifact sets must match")
     if evidence.authorization_reference != manifest_auth:
         errors.append("evidence and manifest authorization references must match")
+
+    evidence_hashes = dict(evidence.artifact_hashes)
+    local_hashes = _local_artifact_hashes(artifact_dir, errors)
+    for name in sorted(EXPECTED_ARTIFACTS):
+        expected_digest = evidence_hashes.get(name)
+        actual_digest = local_hashes.get(name)
+        if expected_digest is None:
+            errors.append(f"evidence is missing deployment artifact digest: {name}")
+        elif actual_digest is not None and actual_digest != expected_digest:
+            errors.append(f"deployment artifact digest mismatch: {name}")
 
     return FirstWritePacketResult(not errors, tuple(errors))
