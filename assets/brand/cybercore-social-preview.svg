@@ -1,41 +1,73 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
   <title id="title">CyberCore social preview</title>
-  <desc id="desc">CyberCore v0.1 foundation release social preview image.</desc>
+  <desc id="desc">CyberCore Infrastructure Intelligence Platform social preview.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#07111f"/>
       <stop offset="0.58" stop-color="#0b1830"/>
       <stop offset="1" stop-color="#16122f"/>
     </linearGradient>
-    <linearGradient id="mark-gradient" x1="410" y1="142" x2="590" y2="322" gradientUnits="userSpaceOnUse">
+    <linearGradient id="mark-gradient" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#16f2d2"/>
       <stop offset="0.52" stop-color="#5f7cff"/>
       <stop offset="1" stop-color="#ff4fd8"/>
     </linearGradient>
+    <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#16f2d2"/>
+      <stop offset="0.5" stop-color="#5f7cff"/>
+      <stop offset="1" stop-color="#ff4fd8"/>
+    </linearGradient>
   </defs>
+
   <rect width="1280" height="640" fill="url(#bg)"/>
-  <path d="M88 500h1096" stroke="#25395f" stroke-width="2"/>
-  <path d="M88 140h1096" stroke="#25395f" stroke-width="2"/>
-  <path d="M964 140v360M1048 140v360M1132 140v360" stroke="#152844" stroke-width="2"/>
-  <g transform="translate(112 144)">
-    <path d="M120 0 226 60v120l-106 60-106-60V60z" fill="#0e1b2e" stroke="#25395f" stroke-width="10"/>
-    <path d="M120 28 202 75v90l-82 47-82-47V75z" fill="none" stroke="url(#mark-gradient)" stroke-width="10" stroke-linejoin="round"/>
-    <circle cx="120" cy="120" r="42" fill="#101f34" stroke="#16f2d2" stroke-width="10"/>
-    <path d="M120 58v62l54 32M66 152l54-32" fill="none" stroke="#d7f8ff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="120" cy="58" r="15" fill="#16f2d2"/>
-    <circle cx="66" cy="152" r="15" fill="#ff4fd8"/>
-    <circle cx="174" cy="152" r="15" fill="#5f7cff"/>
-    <circle cx="120" cy="120" r="15" fill="#f7fbff"/>
+  <rect x="42" y="42" width="1196" height="556" rx="28" fill="none" stroke="#25395f" stroke-width="2"/>
+
+  <g opacity="0.28" stroke="#25395f" fill="none">
+    <path d="M1010 78l118 68v136l-118 68-118-68V146z" stroke-width="2"/>
+    <path d="M1115 292l78 45v90l-78 45-78-45v-90z" stroke-width="2"/>
+    <circle cx="1010" cy="214" r="9" fill="#16f2d2" stroke="none"/>
+    <circle cx="1115" cy="382" r="9" fill="#ff4fd8" stroke="none"/>
+    <path d="M1017 221l92 153" stroke="url(#flow)" stroke-width="3"/>
   </g>
-  <g transform="translate(410 178)">
-    <text x="0" y="78" fill="#f7fbff" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="86" font-weight="850">CyberCore</text>
-    <text x="4" y="142" fill="#16f2d2" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="34" font-weight="700">Foundation Release v0.1</text>
-    <text x="4" y="204" fill="#c7d7ee" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="32" font-weight="500">Infrastructure Context &amp; Intelligence Platform</text>
-    <text x="4" y="254" fill="#93a9c9" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="24" font-weight="500">Reality -> Evidence -> Knowledge -> Confidence -> Controlled Automation</text>
+
+  <g transform="translate(92 92)">
+    <path d="M104 0 196 52v104l-92 52-92-52V52z" fill="#0e1b2e" stroke="#25395f" stroke-width="9"/>
+    <path d="M104 24 174 64v80l-70 40-70-40V64z" fill="none" stroke="url(#mark-gradient)" stroke-width="9" stroke-linejoin="round"/>
+    <circle cx="104" cy="104" r="36" fill="#101f34" stroke="#16f2d2" stroke-width="9"/>
+    <path d="M104 52v52l46 27M58 131l46-27" fill="none" stroke="#d7f8ff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="104" cy="52" r="13" fill="#16f2d2"/>
+    <circle cx="58" cy="131" r="13" fill="#ff4fd8"/>
+    <circle cx="150" cy="131" r="13" fill="#5f7cff"/>
+    <circle cx="104" cy="104" r="13" fill="#f7fbff"/>
   </g>
-  <g fill="none" stroke-linecap="round" stroke-width="8">
-    <path d="M944 420h148" stroke="#16f2d2"/>
-    <path d="M1008 372h164" stroke="#5f7cff"/>
-    <path d="M884 468h252" stroke="#ff4fd8"/>
+
+  <g transform="translate(352 105)" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <text x="0" y="28" fill="#16f2d2" font-size="18" font-weight="800" letter-spacing="3">OPEN SOURCE · REFERENCE IMPLEMENTATION</text>
+    <text x="0" y="118" fill="#f7fbff" font-size="88" font-weight="850" letter-spacing="-3">CyberCore</text>
+    <text x="3" y="174" fill="#c7d7ee" font-size="34" font-weight="700">Infrastructure Intelligence Platform</text>
+    <text x="3" y="231" fill="#93a9c9" font-size="25" font-weight="500">Evidence-first operations. Human-governed change.</text>
   </g>
+
+  <g transform="translate(92 388)" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <text x="0" y="0" fill="#93a9c9" font-size="16" font-weight="750" letter-spacing="2">OPERATING MODEL</text>
+    <text x="0" y="46" fill="#f7fbff" font-size="25" font-weight="700">Reality</text>
+    <text x="92" y="46" fill="#5f7cff" font-size="25" font-weight="700">→</text>
+    <text x="126" y="46" fill="#f7fbff" font-size="25" font-weight="700">Evidence</text>
+    <text x="244" y="46" fill="#5f7cff" font-size="25" font-weight="700">→</text>
+    <text x="278" y="46" fill="#f7fbff" font-size="25" font-weight="700">Knowledge</text>
+    <text x="418" y="46" fill="#5f7cff" font-size="25" font-weight="700">→</text>
+    <text x="452" y="46" fill="#f7fbff" font-size="25" font-weight="700">Decision</text>
+    <text x="558" y="46" fill="#5f7cff" font-size="25" font-weight="700">→</text>
+    <text x="592" y="46" fill="#f7fbff" font-size="25" font-weight="700">Approval</text>
+    <text x="704" y="46" fill="#5f7cff" font-size="25" font-weight="700">→</text>
+    <text x="738" y="46" fill="#f7fbff" font-size="25" font-weight="700">Execution</text>
+    <text x="862" y="46" fill="#5f7cff" font-size="25" font-weight="700">→</text>
+    <text x="896" y="46" fill="#f7fbff" font-size="25" font-weight="700">Verification</text>
+
+    <rect x="0" y="88" width="1090" height="66" rx="15" fill="#0e1b2e" stroke="#25395f"/>
+    <circle cx="34" cy="121" r="7" fill="#16f2d2"/>
+    <text x="55" y="127" fill="#c7d7ee" font-size="18" font-weight="650">Traceable · Verifiable · Provider-neutral · Human authority before consequential mutation</text>
+  </g>
+
+  <path d="M92 565h1096" stroke="url(#flow)" stroke-width="4" stroke-linecap="round" opacity="0.76"/>
 </svg>

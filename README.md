@@ -1,11 +1,5 @@
 <p align="center">
-  <img src="assets/brand/cybercore-logo.svg" width="420" alt="CyberCore — Infrastructure Intelligence Platform">
-</p>
-
-<h1 align="center">Infrastructure intelligence for systems that need to stay explainable.</h1>
-
-<p align="center">
-  CyberCore turns operational reality into traceable evidence, governed decisions, and controlled action — with humans retaining authority over meaningful change.
+  <img src="assets/brand/cybercore-readme-hero.svg" width="100%" alt="CyberCore — Infrastructure Intelligence Platform. Evidence-first operations, governed decisions, controlled action.">
 </p>
 
 <p align="center">
@@ -64,6 +58,10 @@ Reality
 The result is not “AI with root access.” It is an evidence-first control model where automation remains accountable to context, policy, verification, and explicit authority.
 
 ## What makes CyberCore different
+
+<p align="center">
+  <img src="assets/brand/cybercore-capability-map.svg" width="100%" alt="CyberCore capability map: context, evidence, confidence, memory, curiosity, Sentinel, provider boundaries, and governed execution.">
+</p>
 
 | | Capability | What it means |
 |---|---|---|
