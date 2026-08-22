@@ -107,7 +107,9 @@ def validate_first_write_packet(
     if manifest_commit != head:
         errors.append("manifest source_commit must equal the checked-out repository HEAD")
     if readiness_commit != head:
-        errors.append("readiness source_commit_reference must equal the checked-out repository HEAD")
+        errors.append(
+            "readiness source_commit_reference must equal the checked-out repository HEAD"
+        )
     if manifest_commit != readiness_commit:
         errors.append("manifest and readiness must name the same source commit")
 
