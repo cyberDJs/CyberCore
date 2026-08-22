@@ -193,10 +193,10 @@ completed:
 
 next:
   - complete PR52 repository-only reconciliation and WB-0032 definition; do not contact InterServer in this PR
-  - require a fresh explicit operator authorization before any WB-0032 Phase B live read-only InterServer discovery
+  - require a fresh explicit Jan Kočí authorization before any WB-0032 Phase B live read-only InterServer discovery
   - during a later authorized Phase B, establish real target identity, deployment capability, secret-alias readiness, rollback capability, effect-verifier capability, and credential-rotation operational state without remote write or secret disclosure
-  - keep live staging deployment blocked until all readiness statuses are VERIFIED and a later fresh remote-write authorization is APPROVED
-  - prohibit production mutation until a separate production MOP and explicit approval exist
+  - keep live staging deployment blocked until all readiness statuses are VERIFIED and a later fresh Jan Kočí remote-write authorization is APPROVED
+  - prohibit production mutation until a separate production MOP and explicit Jan Kočí approval exist
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
 
 rules:
