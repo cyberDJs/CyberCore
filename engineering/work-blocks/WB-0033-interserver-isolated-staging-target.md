@@ -36,9 +36,9 @@ The operator subsequently granted separate explicit authorization for:
 - a narrowly scoped read-only DirectAdmin document-root metadata read for `eimyherrer.com`, without traversing or reading production application content;
 - standing authorization for future unattended automatic renewal of the existing `eimyherrer.com` + `*.eimyherrer.com` certificate through the existing DirectAdmin -> Cloudflare ACME path.
 
-The standing ACME authorization is limited to renewal of that existing certificate using the existing integration. It does not authorize unrelated DNS changes, new certificate identities, provider changes, additional credential mutation, application deployment, production application-content access/mutation, or PR merge.
+The standing ACME authorization is limited to renewal of that existing certificate using the existing integration. It does not authorize unrelated DNS changes, new certificate identities, provider changes, additional credential mutation, application deployment, or production application-content access/mutation.
 
-The operator separately authorized finalization and merge of PR #54 into `main` after exact-head CI, CodeQL, and Codex review gates passed.
+The operator separately authorized finalization and merge of PR #54 into `main` after exact-head CI, CodeQL, and Codex review gates pass.
 
 ## Verified evidence
 
@@ -80,16 +80,17 @@ Codex first reviewed exact head `fc410957e61c1c62a0fd59d1802c2302d93e2c41` and r
 
 All three findings were addressed. A fresh Codex review on exact head `82b90ca2ee7097d3959a2d4bfd0eeb60a2d9729d` reported no major issues.
 
-Exact-head repository gates on `82b90ca2ee7097d3959a2d4bfd0eeb60a2d9729d`:
+That reviewed head passed:
 
-- CI #190: PASS;
-- Python 3.11/3.12/3.13/3.14: PASS;
-- Ruff lint/format: PASS;
-- Pyright: PASS;
-- package build and wheel smoke: PASS;
-- CodeQL #187: PASS;
-- Codex re-review: no major issues;
-- unresolved prior findings: 0.
+- CI #190;
+- Python 3.11/3.12/3.13/3.14;
+- Ruff lint/format;
+- Pyright;
+- package build and wheel smoke;
+- CodeQL #187;
+- Codex re-review with no major issues.
+
+After the operator explicitly authorized finalization and merge, documentation-only reconciliation commits were added to record that authority and align the evidence/work-block terminal state. Those final documentation commits do not broaden provider scope, but they do change the PR head, so exact-head CI, CodeQL, and Codex gates must pass again before the approved merge is executed.
 
 ## Safety boundary
 
@@ -179,11 +180,10 @@ PASS:
 - HTTP and HTTPS are externally reachable;
 - wildcard TLS issuance through DirectAdmin + Cloudflare DNS-01 is verified end-to-end;
 - future unattended renewal of that same certificate has explicit standing authorization;
-- no CyberCore/application deployment has occurred;
-- exact-head CI, CodeQL, and Codex review gates passed before merge authorization.
+- no CyberCore/application deployment has occurred.
 
 ## Current terminal state
 
-`VERIFIED — READY_FOR_MERGE`
+`VERIFIED — MERGE AUTHORIZED; FINAL EXACT-HEAD GATES PENDING`
 
-WB-0033 has established the isolated InterServer staging target and the external Cloudflare DNS/TLS integration required for WB-0032 to continue capability discovery and for a later separately authorized staging deployment work block to proceed.
+WB-0033 has established the isolated InterServer staging target and the external Cloudflare DNS/TLS integration required for WB-0032 to continue capability discovery and for a later separately authorized staging deployment work block to proceed. The repository merge is authorized but remains fail-closed until final exact-head CI, CodeQL, and Codex gates are green.
