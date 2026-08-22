@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import cast
 
 import yaml
@@ -18,6 +19,8 @@ from yaml.tokens import (
     FlowSequenceEndToken,
     FlowSequenceStartToken,
 )
+
+from cybercore.first_write_security import scan_first_write_yaml_text
 
 
 MAX_YAML_NESTING_DEPTH = 64
@@ -65,20 +68,8 @@ EXPECTED_EFFECT_CHECKS = {
     "no_denied_path_is_touched",
     "receipt_is_stored_without_secrets",
 }
-DENIED_LITERAL_PATTERNS = (
-    "BEGIN OPENSSH PRIVATE KEY",
-    "BEGIN RSA PRIVATE KEY",
-    "BEGIN PRIVATE KEY",
-    "password=",
-    "password:",
-    "api_key=",
-    "api_key:",
-    "api_token:",
-    "private_key:",
-    "secret_value:",
-    "totp_seed:",
-    "recovery_code:",
-)
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$")
+PLACEHOLDER_MARKERS = ("TBD", "UNKNOWN", "UNVERIFIED", "REQUIRED", "PLACEHOLDER")
 
 
 @dataclass(frozen=True)
@@ -120,10 +111,7 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
         errors.append(f"missing WB-0034 manifest: {path}")
         return None
 
-    lowered = text.lower()
-    for pattern in DENIED_LITERAL_PATTERNS:
-        if pattern.lower() in lowered:
-            errors.append(f"manifest contains denied literal pattern: {pattern}")
+    errors.extend(scan_first_write_yaml_text(text, "manifest"))
 
     depth = 0
     try:
@@ -218,7 +206,18 @@ def _is_full_commit_sha(value: object) -> bool:
     return all(character in "0123456789abcdef" for character in value.lower())
 
 
-def validate_first_write_manifest(path: Path) -> FirstWriteManifestResult:
+def _is_fresh_reference(value: object) -> bool:
+    if not isinstance(value, str) or len(value.strip()) < 8:
+        return False
+    upper = value.upper()
+    return not any(marker in upper for marker in PLACEHOLDER_MARKERS)
+
+
+def validate_first_write_manifest(
+    path: Path,
+    *,
+    final_preflight: bool = False,
+) -> FirstWriteManifestResult:
     errors: list[str] = []
     document = _load_document(path, errors)
     if document is None:
@@ -226,24 +225,49 @@ def validate_first_write_manifest(path: Path) -> FirstWriteManifestResult:
 
     _reject_unknown_keys(document, EXPECTED_TOP_LEVEL_KEYS, "manifest", errors)
     _require_value(document, "version", 1, errors)
-    _require_value(document, "run_id", "WB0034-FIRST-STAGING-WRITE-PLAN", errors)
     _require_value(document, "repository", "cyberDJs/CyberCore", errors)
     _require_value(document, "source_branch", "main", errors)
 
+    run_id = document.get("run_id")
     source_commit = document.get("source_commit")
-    if source_commit != "TBD" and not _is_full_commit_sha(source_commit):
-        errors.append("manifest source_commit must be TBD or an exact 40-character commit SHA")
+    authorization_reference = document.get("operator_authorization_reference")
+    destination = document.get("planned_remote_destination")
+
+    if final_preflight:
+        if not isinstance(run_id, str) or not RUN_ID_RE.fullmatch(run_id):
+            errors.append("final manifest run_id must be a non-placeholder safe identifier")
+        if run_id == "WB0034-FIRST-STAGING-WRITE-PLAN":
+            errors.append("final manifest run_id must not use the plan placeholder")
+        if not _is_full_commit_sha(source_commit):
+            errors.append("final manifest source_commit must be an exact 40-character commit SHA")
+        if not _is_fresh_reference(authorization_reference):
+            errors.append("final manifest requires a fresh operator authorization reference")
+        if isinstance(run_id, str):
+            expected_destination = f"cybercore-canary-{run_id}/"
+            if destination != expected_destination:
+                errors.append(
+                    "final manifest destination must be the direct-child canary bound to run_id"
+                )
+    else:
+        _require_value(document, "run_id", "WB0034-FIRST-STAGING-WRITE-PLAN", errors)
+        if source_commit != "TBD" and not _is_full_commit_sha(source_commit):
+            errors.append("manifest source_commit must be TBD or an exact 40-character commit SHA")
+        _require_value(
+            document,
+            "operator_authorization_reference",
+            "NOT_REQUIRED_FOR_PLAN_ONLY",
+            errors,
+        )
+        _require_value(
+            document,
+            "planned_remote_destination",
+            "cybercore-canary-<run_id>/",
+            errors,
+        )
 
     _require_value(document, "target_id", "interserver-shared-hosting-staging", errors)
     _require_value(document, "deploy_mode", "plan_only", errors)
     _require_value(document, "rollback_mode", "no_remote_write", errors)
-    _require_value(
-        document,
-        "operator_authorization_reference",
-        "NOT_REQUIRED_FOR_PLAN_ONLY",
-        errors,
-    )
-    _require_value(document, "planned_remote_destination", "cybercore-canary-<run_id>/", errors)
     _require_value(
         document,
         "planned_rollback_mode_after_authorization",
