@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-22 04:48 CEST_
+_Last updated: 2026-08-22 14:16 CEST_
 
 ## Source of truth
 
@@ -8,43 +8,43 @@ _Last updated: 2026-08-22 04:48 CEST_
 - Stable branch: `main`
 - Canonical product state: GitHub `main`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Active branch: `docs/wb-0032-phase-b-preflight`
-- Active pull request: #53 — WB-0032 Phase B documentation/preflight
-- Active artifact: `WB-0032 — InterServer Staging Capability Discovery`
-- Active work block: `WB-0032 — InterServer Staging Capability Discovery`
-- Last verified `main`: `304f4234e4f52c2375d904b45d1ed0c4fe31511c`
+- Active branch: `wb-0033-interserver-isolated-staging-target`
+- Active pull request: #54 — WB-0033 isolated InterServer staging target
+- Active artifact: `WB-0033 — InterServer Isolated Staging Target`
+- Active work block: `WB-0033 — InterServer Isolated Staging Target`
+- Last verified `main`: `70346d63ba2b17df17085797e963bb9dbd692282`
 - Governance rule: provider mutation, secret mutation, staging-apply, and production mutation authority remains reserved to explicit Jan Kočí authorization
 - CI policy: GitHub Actions verification is required before merge
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
 ## Current milestone
 
-PR #52 defined `WB-0032 — InterServer Staging Capability Discovery`, reconciled PR #51, and was squash-merged into canonical `main` as `304f4234e4f52c2375d904b45d1ed0c4fe31511c`.
+PR #53 completed the authorized WB-0032 Phase B read-only InterServer discovery preparation and was squash-merged into canonical `main` as `70346d63ba2b17df17085797e963bb9dbd692282`.
 
-Jan Kočí subsequently granted the separate WB-0032 Phase B authority required by the canonical work block: **InterServer staging only, read-only/non-mutating capability discovery**, including read-only SSH/SFTP/DirectAdmin/provider probes as needed. Upload, overwrite, deletion, chmod/chown, symlink creation, provider configuration changes, credential creation/rotation/reset, staging remote write, and production access remain prohibited.
+The subsequent WB-0033 slice moved from read-only discovery to a separately authorized, tightly bounded provider mutation required to establish an isolated staging target. The operator separately authorized creation of the DirectAdmin staging subdomain, one Cloudflare DNS-only A record, a dedicated Cloudflare ACME token stored in DirectAdmin, one manual wildcard renewal, a read-only production document-root metadata check, and standing unattended renewal authority for the existing `eimyherrer.com` + `*.eimyherrer.com` certificate through the existing DirectAdmin -> Cloudflare integration.
 
-The active slice is PR #53. It turns that authority into an explicit fail-closed discovery procedure based on current InterServer and DirectAdmin documentation before authenticated provider contact.
+PR #54 records the resulting verified runtime evidence and canonical-state reconciliation. The operator has explicitly authorized finalization and squash merge of PR #54, but merge remains fail-closed until the current exact head passes CI, CodeQL, and fresh Codex review with no unresolved valid finding.
 
 ## Active objective
 
 Continue the first safe CyberCore self-deployment loop for InterServer shared-hosting staging:
 
 1. preserve accepted ADR-0006 staging-only boundary;
-2. treat merged WB-0030 and WB-0031 as the canonical fail-closed readiness/runtime-preflight foundation;
-3. treat merged PR #52 as the canonical WB-0032 definition and authority boundary;
-4. execute WB-0032 Phase B only within Jan Kočí's current read-only/non-mutating authorization;
-5. use an explicit semantic endpoint/command allowlist rather than assuming `GET == safe`;
-6. independently gate response sensitivity so a non-mutating endpoint is still blocked when it may expose secret/session material;
-7. keep real provider capability `UNKNOWN_UNTIL_VERIFIED` until observed from a network-capable, credential-safe runtime;
-8. keep `remote_write_requested`, `remote_write_allowed`, and `production_write_allowed` false throughout WB-0032;
-9. keep `staging_apply` blocked until a later work block verifies all runtime gates and receives fresh explicit Jan Kočí remote-write authorization;
-10. use LG-0001/LG-0002 as read-only source-of-truth orchestration support, not mutation authority.
+2. treat merged WB-0030, WB-0031, and PR #53/WB-0032 Phase B preparation as the canonical fail-closed readiness/discovery foundation;
+3. establish WB-0033 as the verified runtime identity for the isolated InterServer staging target;
+4. preserve Cloudflare as authoritative DNS and DirectAdmin as hosting/SSL control plane without introducing a second public DNS source of truth;
+5. preserve the verified staging/production document-root non-overlap without reading production application content;
+6. preserve the bounded DirectAdmin -> Cloudflare DNS-01 -> Let's Encrypt wildcard renewal path and the operator's standing authority only for unattended renewal of the existing wildcard certificate;
+7. keep `staging_apply` / application deployment blocked until a later work block receives fresh explicit remote-write authorization;
+8. keep production application write authority false;
+9. keep secret values out of GitHub, Drive, chat, Slack, CASER documents, and ordinary evidence;
+10. complete PR #54 exact-head gates and execute only the already-authorized squash merge if all gates remain green.
 
 ## Current status
 
-- Work block: `WB-0032` Phase B documentation/preflight active
-- Branch: `docs/wb-0032-phase-b-preflight`
-- Pull request: #53
+- Work block: `WB-0033` verified; PR #54 finalization/merge gate active
+- Branch: `wb-0033-interserver-isolated-staging-target`
+- Pull request: #54
 - WB-0028 foundation / PR #39: merged as `4f582583789346724813a2c515fe30450c173b0c`
 - ADR-0006 lifecycle status: Accepted
 - ADR-0006 decision date: 2026-08-20
@@ -56,19 +56,31 @@ Continue the first safe CyberCore self-deployment loop for InterServer shared-ho
 - PR #50 post-merge reconciliation / WB-0031 kickoff: merged as `4a1374cbef7d142f8386ea7774208effc05d54ec`
 - WB-0031 / PR #51: merged as `d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684`
 - WB-0032 definition/kickoff / PR #52: merged as `304f4234e4f52c2375d904b45d1ed0c4fe31511c`
-- WB-0032 Phase B read-only authority: granted by Jan Kočí on 2026-08-22
-- InterServer REST/OpenAPI documentation: reviewed
-- InterServer MCP documentation: reviewed
-- DirectAdmin API documentation: reviewed
-- Deployment protocol/target capability: `UNKNOWN_UNTIL_VERIFIED`
-- Exact staging service/path identity: `UNKNOWN_UNTIL_VERIFIED`
-- Live InterServer discovery: authorized, but no authenticated provider response has yet been observed in this execution environment
-- Isolated-runner public `/apiv2/ping` attempt: runner DNS/network unavailable; this is not evidence that InterServer is down
-- Live InterServer staging deployment: blocked until target identity, deployment protocol/capability, secret readiness, rollback, effect-verifier, and fresh explicit Jan Kočí remote-write authorization gates pass
-- Provider/DirectAdmin/SSH/DNS/mail/billing mutation: none
-- Remote staging writes: none
-- Production access/mutation: none
+- WB-0032 Phase B preflight / PR #53: merged as `70346d63ba2b17df17085797e963bb9dbd692282`
+- InterServer shared-hosting service identity: VERIFIED, `website_id=1439764`, primary hostname `eimyherrer.com`
+- DirectAdmin control plane: VERIFIED
+- Staging hostname: VERIFIED, `staging.eimyherrer.com`
+- Staging document root: VERIFIED, `/home/eimyherr/domains/staging.eimyherrer.com/public_html`
+- Production document-root metadata: VERIFIED by separately authorized read-only metadata call, `/home/eimyherr/domains/eimyherrer.com/public_html`
+- Normalized path overlap: `same_path=false`, `staging_inside_production=false`, `production_inside_staging=false`
+- Production application content read: false
+- Cloudflare authoritative DNS: VERIFIED
+- Staging DNS record: VERIFIED, `A staging.eimyherrer.com -> 162.250.126.107`, DNS only / `proxied=false`
+- Staging HTTP: VERIFIED, HTTP 200 from InterServer origin
+- Staging HTTPS/TLS: VERIFIED, HTTP 200 with TLS verification success
+- DirectAdmin Cloudflare ACME provider: VERIFIED configured
+- Dedicated Cloudflare ACME token: stored in DirectAdmin; secret value not recorded in ordinary evidence
+- Manual wildcard renewal: VERIFIED end-to-end through DirectAdmin + Cloudflare DNS-01 + Let's Encrypt
+- Wildcard SANs: `eimyherrer.com`, `*.eimyherrer.com`
+- Current wildcard validity: through 2026-11-20
+- Standing unattended ACME renewal authority: explicitly granted for that same wildcard certificate through the existing integration only
+- Bounded provider/DNS mutations occurred under separate explicit approvals; unrelated DNS/mail/billing/VPS/application changes did not occur
+- New paid hosting service ordered: false
+- Application deployed to staging: false
+- Staging application remote write allowed: false
+- Production application write allowed: false
 - Secret values stored in ordinary evidence: none
+- PR #54 squash merge authority: explicitly granted by the operator on 2026-08-22
 - GitHub `main`: canonical product state
 - Google Drive CASER-E: evidence/archive/collaboration layer only, not canonical product state
 
@@ -84,44 +96,37 @@ Plaintext secrets are denied in:
 - CASER documents;
 - ordinary evidence logs.
 
-Existing credentials may be consumed only inside an approved runtime/secret-handling path needed for the authorized read-only probe. Evidence may record only safe references, aliases, provider names, scopes, timestamps, fingerprints/hashes where safe, owner/status fields, and verification state.
+Existing credentials may be consumed only inside an approved runtime/secret-handling path needed for an authorized operation. Evidence may record only safe references, aliases, provider names, scopes, timestamps, fingerprints/hashes where safe, owner/status fields, and verification state.
+
+The dedicated Cloudflare ACME token is persisted only in DirectAdmin's provider configuration for the authorized DNS-01 integration. Its value is not stored in repository evidence. Standing authority applies only to unattended renewal of the existing `eimyherrer.com` + `*.eimyherrer.com` certificate through the existing DirectAdmin -> Cloudflare path and does not authorize unrelated DNS, credential, mail, hosting, or production changes.
 
 If an endpoint's response surface may expose credential/session material and cannot be bounded before invocation, the endpoint remains blocked rather than relying on post-hoc redaction.
 
 ## Self-deployment boundary
 
-The current self-deployment work is staging-only.
+The current self-deployment work remains staging-only.
 
-Allowed in WB-0032 Phase B under the current Jan Kočí authority:
+Verified and completed within WB-0033 under separate explicit approvals:
 
-- current InterServer/DirectAdmin documentation inspection;
-- `GET /apiv2/ping` and `GET /apiv2/info` public probes;
-- authenticated `GET /apiv2/websites` to enumerate owned webhosting candidates;
-- `GET /apiv2/websites/{id}/reverse_dns` only after an unambiguous candidate staging service is identified;
-- InterServer MCP discovery only after the exact tool schema and read-only scope are inspected;
-- target DirectAdmin `/static/swagger.json` inspection after target identity is established;
-- documented read-only DirectAdmin API calls, preferring `/api/...`, with `CMD_API_SHOW_DOMAINS` as a documented legacy fallback where needed;
-- minimal SSH/SFTP read-only metadata inspection only when needed to prove the staging document root and production-path exclusion;
-- non-secret capability/evidence recording.
+- create the single DirectAdmin staging identity `staging.eimyherrer.com` on the existing shared-hosting account;
+- create the single Cloudflare DNS-only A record for staging;
+- store one dedicated zone-scoped Cloudflare ACME token in DirectAdmin;
+- perform one manual wildcard renewal;
+- read only production document-root path metadata required to prove non-overlap;
+- authorize future unattended renewal only for the existing wildcard certificate through the existing DirectAdmin -> Cloudflare integration.
 
-Blocked throughout WB-0032:
+Still blocked unless a later separate authority is granted:
 
-- any `POST`, `PATCH`, `PUT`, or `DELETE` InterServer API operation;
-- any endpoint or command with unclear mutability;
-- `GET /apiv2/websites/{id}` until its full response surface is independently proven free of secret/session material for the intended use;
-- auto-login/session generation such as `/websites/{id}/login`;
-- welcome-email resend endpoints;
-- backup creation/download operations unless separately re-reviewed and explicitly needed for metadata only;
-- production deployment or production content traversal/read;
-- DNS, mail, billing, DirectAdmin, VPS, WordPress, Nextcloud, or provider mutation;
-- live InterServer staging remote write;
-- upload, overwrite, delete, mkdir/touch/cp/mv/rm, chmod/chown, symlink creation/replacement;
+- staging application deployment / `staging_apply`;
+- upload, overwrite, delete, mkdir/touch/cp/mv/rm, chmod/chown, symlink creation/replacement in staging application content;
+- production application deployment or production content traversal/read;
+- unrelated DNS changes, including apex, `www`, MX, TXT, mail records, or proxy-mode changes;
+- mail, billing, VPS, WordPress, Nextcloud, registrar, package/service, PHP, ownership, or permission mutation;
+- creation/changing/rotation/reset of credentials other than the already completed separately authorized ACME token action;
 - reading or storing plaintext secrets in ordinary evidence channels;
-- creating/changing/rotating/resetting credentials;
-- treating documentation, aliases, synthetic tests, or failed local networking as proof of real provider capability;
-- executing `staging_apply` or equivalent remote mutation.
+- any broader production/provider mutation not covered by a new explicit operator approval.
 
-Phase B authority cannot authorize mutation. A later staging-write work block requires a fresh, separate Jan Kočí remote-write authorization.
+WB-0033 does not itself grant application remote-write authority. A later staging-deployment work block requires a fresh, separate Jan Kočí remote-write authorization.
 
 ## Recent completed state changes
 
@@ -221,53 +226,71 @@ Verification recorded before merge:
 - all review threads resolved;
 - manual AI review PASS.
 
+### PR #53 — WB-0032 Phase B documentation/preflight
+
+Merged into `main` as:
+
+```text
+70346d63ba2b17df17085797e963bb9dbd692282
+```
+
+Converted the separately authorized read-only/non-mutating InterServer staging discovery authority into an explicit fail-closed provider procedure and preserved mutation boundaries until separate approvals were granted later in WB-0033.
+
 ## Current work block
 
-### WB-0032 — InterServer Staging Capability Discovery
+### WB-0033 — InterServer Isolated Staging Target
 
-PR #53 is the active documentation/preflight slice for the separately authorized Phase B.
+PR #54 is the active terminal-evidence and canonical-state slice.
 
-The read-only discovery must establish real evidence for:
+WB-0033 has established verified runtime evidence for:
 
-- non-production staging URL/domain identity;
-- staging path/document-root identity and production exclusion without production-content traversal;
-- available deployment protocol(s) and target capability;
-- least-privilege deployment-user scope;
-- required secret-alias readiness without value disclosure in evidence;
-- rollback capability;
-- effect-verifier capability;
-- credential-rotation operational state without performing rotation.
+- existing InterServer shared-hosting service identity;
+- isolated DirectAdmin staging hostname and document root;
+- separately authorized read-only production document-root path metadata and proven non-overlap;
+- Cloudflare authoritative DNS and a DNS-only staging A record;
+- external HTTP/HTTPS reachability;
+- DirectAdmin Cloudflare ACME provider configuration;
+- successful manual wildcard renewal through Cloudflare DNS-01;
+- bounded standing authority for future unattended renewal of the existing wildcard certificate.
 
-The current authorization permits the bounded read-only discovery but cannot be interpreted as authority for `staging_apply`, upload, file creation/modification, credential rotation, provider setting changes, or production access.
+No CyberCore/application content has been deployed to staging. No production application content was read or mutated. Application remote write remains blocked.
+
+The operator explicitly authorized finalization and squash merge of PR #54. That merge must still use exact-head verification and must not proceed if CI, CodeQL, Codex review, mergeability, or review-thread state becomes non-green.
 
 ## Security follow-up
 
 - Six high-severity transitive `npm audit` findings remain deferred security debt in the isolated visual documentation toolchain.
-- Provider credential-rotation verification remains an unresolved operational blocker until handled by a separately approved procedure without secret values in ordinary evidence stores.
-- WB-0032 may record credential-rotation operational state during the approved read-only discovery, but does not authorize rotation itself.
-- Live staging deploy remains blocked behind target identity, deployment capability, secret readiness, rollback, effect-verifier, and fresh Jan Kočí remote-write authorization gates.
+- Monitor the wildcard certificate lifecycle and treat future unattended renewal as verified operational behavior only after a scheduled cycle is actually observed; standing authority already exists for that exact renewal path.
+- The dedicated Cloudflare ACME token should remain least-privilege and zone-scoped; do not broaden it to unrelated zones or use a Global API Key without a separately justified change.
+- Live staging application deploy remains blocked behind a fresh explicit remote-write authorization despite the now-verified target identity, DNS, TLS, and ACME path.
 
 ## Next action
 
-Complete exact-head CI/CodeQL and adversarial review for PR #53. Repair valid findings. Then run the authorized Phase B discovery from a network-capable runtime with an existing approved credential path, following the explicit semantic allowlist and response-sensitivity gate. Keep all real provider fields `UNKNOWN_UNTIL_VERIFIED` until observed.
+Run exact-head CI, CodeQL, and adversarial Codex review for the canonical-state reconciliation on PR #54. Repair any valid finding. If the exact head remains mergeable and all gates are green, execute the already-authorized squash merge of PR #54 into `main` using the expected head SHA.
 
-Do not perform any staging write, production access/mutation, provider mutation, credential creation/rotation/reset, or plaintext-secret persistence.
+After merge, treat WB-0033 as the canonical verified staging-target baseline. Any actual CyberCore/application deployment to `staging.eimyherrer.com` must be opened as a later work block and requires fresh explicit staging remote-write authorization.
+
+Do not broaden the existing approvals into unrelated provider, DNS, credential, application, or production mutation.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr53-wb0032-phase-b-preflight -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr54-wb0033-isolated-staging-target -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-22T04:48:00+02:00`
-- Branch: `docs/wb-0032-phase-b-preflight`
-- Pull request: #53
-- Active artifact: `WB-0032`
-- Active work block: `WB-0032 — InterServer Staging Capability Discovery`
-- Last verified main: `304f4234e4f52c2375d904b45d1ed0c4fe31511c`
-- Phase B authority: explicit Jan Kočí read-only/non-mutating InterServer staging discovery authorization granted
-- Provider capability: `UNKNOWN_UNTIL_VERIFIED`
-- Remote write allowed: false
-- Production write allowed: false
+- Generated: `2026-08-22T14:16:00+02:00`
+- Branch: `wb-0033-interserver-isolated-staging-target`
+- Pull request: #54
+- Active artifact: `WB-0033`
+- Active work block: `WB-0033 — InterServer Isolated Staging Target`
+- Last verified main: `70346d63ba2b17df17085797e963bb9dbd692282`
+- Staging target identity: VERIFIED
+- Cloudflare authoritative DNS / staging A record: VERIFIED
+- DirectAdmin -> Cloudflare ACME wildcard path: VERIFIED
+- Production/staging document-root non-overlap: VERIFIED by bounded read-only metadata
+- Standing wildcard unattended-renewal authority: granted for existing certificate/path only
+- Staging application remote write allowed: false
+- Production application write allowed: false
 - Secret values recorded: false
+- PR #54 merge authority: explicitly granted; exact-head gates still required
 - Project Kernel: present
-- Project State: PR #52 merged; PR #53 active; WB-0032 Phase B authorized and preflighted; live provider evidence still pending a network-capable approved runtime
+- Project State: WB-0033 verified; PR #54 finalization/merge gate active; application deployment remains blocked
 <!-- CYBERCORE:CHECKPOINT:END -->
