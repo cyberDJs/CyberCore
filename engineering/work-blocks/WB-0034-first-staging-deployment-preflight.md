@@ -42,18 +42,18 @@ WB-0033 did not deploy CyberCore/application content.
 
 The first staging mutation should be the smallest independently verifiable CyberCore canary, not a full application rollout.
 
-Planned artifact:
+The first write uses one unique directory directly beneath the verified staging document root so there is no separate parent-directory mutation:
 
 ```text
-cybercore-canary/<run_id>/index.html
-cybercore-canary/<run_id>/cybercore-version.json
+cybercore-canary-<run_id>/index.html
+cybercore-canary-<run_id>/cybercore-version.json
 ```
 
-Planned public verifier path:
+Planned public verifier paths:
 
 ```text
-https://staging.eimyherrer.com/cybercore-canary/<run_id>/
-https://staging.eimyherrer.com/cybercore-canary/<run_id>/cybercore-version.json
+https://staging.eimyherrer.com/cybercore-canary-<run_id>/
+https://staging.eimyherrer.com/cybercore-canary-<run_id>/cybercore-version.json
 ```
 
 The version marker must contain only non-secret deployment identity:
@@ -71,11 +71,12 @@ The first write must be **no-overwrite**. It must not replace the staging docume
 
 A later explicit first-write authorization may allow only:
 
-1. create one unique directory below `.../public_html/cybercore-canary/<run_id>/`;
+1. create one direct-child directory `.../public_html/cybercore-canary-<run_id>/`;
 2. upload exactly `index.html` and `cybercore-version.json` into that directory;
 3. perform no overwrite outside that unique directory;
-4. perform no chmod/chown, symlink, package/service, PHP, DNS, mail, billing, DirectAdmin, Cloudflare, VPS, WordPress, Nextcloud, registrar, or production mutation;
-5. if rollback is explicitly included in the same authorization, remove only the directory created for that run after verifying its exact path.
+4. reject an existing or symlinked destination and re-verify that its parent resolves to the canonical staging root immediately before creation;
+5. perform no chmod/chown, symlink, package/service, PHP, DNS, mail, billing, DirectAdmin, Cloudflare, VPS, WordPress, Nextcloud, registrar, or production mutation;
+6. if rollback is explicitly included in the same authorization, remove only the directory created for that run after verifying its exact path.
 
 If path resolution, credential scope, protocol behavior, or rollback scope is ambiguous, abort before the first remote write.
 
@@ -123,7 +124,7 @@ Only alias presence/readiness may be recorded. Secret values remain outside repo
 
 `PLAN_DEFINED; RUNTIME_VERIFICATION_PENDING`
 
-Primary first-write rollback is intentionally simple: because the deployment is no-overwrite into a unique directory, rollback is deletion of only that exact run directory if and only if deletion is included in the future authorization.
+Primary first-write rollback is intentionally simple: because the deployment is no-overwrite into a unique direct-child directory, rollback is deletion of only that exact run directory if and only if deletion is included in the future authorization.
 
 No symlink promotion is used in the first cycle. This avoids assuming shared-hosting symlink semantics before they are verified.
 
@@ -135,12 +136,12 @@ Required checks:
 
 - staging canary URL returns HTTP success;
 - `cybercore-version.json` exists and its commit equals the approved manifest commit;
-- runner/evidence proves writes were constrained to the unique staging canary directory;
-- production path was never opened for write;
+- path-resolution and runner evidence prove writes were constrained to the exact approved staging destination;
+- no denied path was touched;
 - no denied provider/DNS/credential mutation occurred;
 - receipt contains no secret values.
 
-The production no-change check is path/effect-boundary based; WB-0034 does not grant production application-content reads merely to compare content.
+Production safety is proven by the verified staging/production path boundary plus destination allowlisting and write-scope evidence. WB-0034 does not grant production application-content reads or production URL fetches merely to compare state.
 
 ### G7 — exact source commit
 
@@ -154,11 +155,20 @@ The first live manifest must pin an exact `main` commit. `TBD`, branch-only iden
 
 WB-0034 preparation does not authorize the remote write. A later approval must name the exact source commit, run id, protocol, deploy identity/scope, target path, two-file artifact, and rollback scope.
 
-## Plan-only artifact
+## Machine-validatable readiness contract
 
-WB-0034 adds a plan-only manifest and current readiness evidence. Existing validators must continue to reject `staging_apply` in this PR.
+WB-0034 uses a dedicated schema so the new first-write gate does not silently overload the legacy WB-0029 readiness validator.
 
-No change in this work block may weaken the current invariant:
+Canonical files:
+
+- `.cybercore/deploy/readiness/interserver-staging-readiness.wb0034.yaml`;
+- `src/cybercore/first_write.py`;
+- `scripts/validate_wb0034_readiness.py`;
+- `tests/test_wb0034_readiness.py`.
+
+The validator must accept the current artifact as schema-valid but `BLOCKED`, and it must be able to transition to `READY` once every declared blocker reaches its required status. `remote_write_requested`, `remote_write_allowed`, and `production_write_allowed` remain false even when the approval packet becomes complete; execution remains a separate authority boundary.
+
+No change in this work block may weaken the invariant:
 
 ```text
 remote_write_requested: false
@@ -200,8 +210,10 @@ WB-0034 preflight is complete when:
 - PR #54 is reconciled as merged into canonical state;
 - the target registry reflects the verified WB-0033 staging identity;
 - a plan-only first-write manifest exists;
+- the dedicated WB-0034 readiness artifact/schema is internally consistent and regression-tested;
 - current readiness evidence records verified target identity and all remaining blockers without overclaim;
 - exact mutation and rollback scope are documented;
+- symlink/ancestor escape and parent-directory ambiguity are eliminated from the first-write design;
 - CI and CodeQL pass;
 - fresh Codex review finds no valid unresolved issue;
 - remote write remains blocked.
