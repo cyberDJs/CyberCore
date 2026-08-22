@@ -240,7 +240,9 @@ def validate_first_write_evidence(
             artifact_map = cast(dict[str, object], raw_artifacts)
             artifacts = set(artifact_map)
             if artifacts != EXPECTED_ARTIFACTS:
-                errors.append("evidence artifacts must be exactly index.html and cybercore-version.json")
+                errors.append(
+                    "evidence artifacts must be exactly index.html and cybercore-version.json"
+                )
             for name, value in artifact_map.items():
                 if not isinstance(value, str) or not HEX64_RE.fullmatch(value):
                     errors.append(f"evidence artifact hash for {name} must be sha256 hex")
@@ -338,7 +340,9 @@ def validate_first_write_evidence(
             errors.append("authorization run_id must equal evidence run_id")
         if authorization.get("destination") != destination_value:
             errors.append("authorization destination must equal evidence destination")
-        auth_artifacts = _string_set(authorization.get("artifacts"), errors, "authorization.artifacts")
+        auth_artifacts = _string_set(
+            authorization.get("artifacts"), errors, "authorization.artifacts"
+        )
         if auth_artifacts != EXPECTED_ARTIFACTS:
             errors.append("authorization artifacts must equal the approved two-file artifact set")
         _require_value(authorization, "rollback_permitted", True, errors)
