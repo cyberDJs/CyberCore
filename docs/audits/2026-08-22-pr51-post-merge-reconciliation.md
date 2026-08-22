@@ -35,7 +35,7 @@ The target YAML parser was hardened against duplicate mapping ambiguity, merge s
 
 No InterServer connection, secret-value handling, staging remote write, provider mutation, or production mutation was performed by PR #51 or by this reconciliation.
 
-The following remain blocked pending later explicit authority and evidence:
+The following remain blocked pending later explicit Jan Kočí authority and evidence:
 
 - live InterServer capability discovery;
 - `staging_apply` or equivalent remote write;
@@ -49,4 +49,4 @@ The next work block is defined as:
 
 `WB-0032 — InterServer Staging Capability Discovery`
 
-Its kickoff is repository-only. The first live InterServer contact requires a separate fresh explicit operator authorization and must be read-only/non-mutating.
+Its kickoff is repository-only. The first live InterServer contact requires a separate fresh explicit authorization from Jan Kočí and must be read-only/non-mutating.
