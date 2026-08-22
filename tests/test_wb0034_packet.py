@@ -50,8 +50,8 @@ source_commit: {source_commit}
 run_id: {RUN_ID}
 destination: {DESTINATION}
 artifacts:
-  index.html: {'a' * 64}
-  cybercore-version.json: {'b' * 64}
+  index.html: {"a" * 64}
+  cybercore-version.json: {"b" * 64}
 deployment:
   protocol: SFTP
   target_capability_reference: {CAPABILITY_REF}
