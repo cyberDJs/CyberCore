@@ -134,6 +134,25 @@ def _git_rev_parse(repository_root: Path, ref: str) -> str | None:
     return commit
 
 
+def _git_ref_exists(repository_root: Path, ref: str) -> bool | None:
+    try:
+        completed = subprocess.run(
+            ["git", "show-ref", "--verify", "--quiet", ref],
+            cwd=repository_root,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode == 0:
+        return True
+    if completed.returncode == 1:
+        return False
+    return None
+
+
 def _git_head(repository_root: Path, errors: list[str]) -> str | None:
     head = _git_rev_parse(repository_root, "HEAD^{commit}")
     if head is None:
@@ -142,14 +161,26 @@ def _git_head(repository_root: Path, errors: list[str]) -> str | None:
 
 
 def _git_main_commit(repository_root: Path, errors: list[str]) -> str | None:
-    # Prefer the fetched remote-tracking ref when available. A local-only
-    # repository (including unit-test fixtures) may fall back to refs/heads/main.
-    for ref in ("refs/remotes/origin/main^{commit}", "refs/heads/main^{commit}"):
-        commit = _git_rev_parse(repository_root, ref)
-        if commit is not None:
-            return commit
-    errors.append("cannot resolve trusted main commit from origin/main or local main")
-    return None
+    # A fetched origin/main is authoritative when the ref exists. If that ref
+    # is corrupt or cannot resolve to a commit, fail closed rather than falling
+    # back to a potentially attacker-controlled local main branch.
+    remote_ref = "refs/remotes/origin/main"
+    remote_exists = _git_ref_exists(repository_root, remote_ref)
+    if remote_exists is None:
+        errors.append("cannot verify fetched origin/main ref state")
+        return None
+    if remote_exists:
+        remote_commit = _git_rev_parse(repository_root, f"{remote_ref}^{{commit}}")
+        if remote_commit is None:
+            errors.append("fetched origin/main exists but cannot resolve to an exact commit")
+            return None
+        return remote_commit
+
+    local_commit = _git_rev_parse(repository_root, "refs/heads/main^{commit}")
+    if local_commit is None:
+        errors.append("cannot resolve trusted main commit from local main")
+        return None
+    return local_commit
 
 
 def _open_artifact_directory_no_follow(artifact_dir: Path, errors: list[str]) -> int | None:
