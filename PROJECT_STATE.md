@@ -1,6 +1,6 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-22 02:08 CEST_
+_Last updated: 2026-08-22 02:26 CEST_
 
 ## Source of truth
 
@@ -13,7 +13,7 @@ _Last updated: 2026-08-22 02:08 CEST_
 - Active artifact: `WB-0032 — InterServer Staging Capability Discovery`
 - Active work block: `WB-0032 — InterServer Staging Capability Discovery`
 - Last verified `main`: `d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684`
-- Governance rule: no production mutation without explicit human approval
+- Governance rule: provider, secret, staging-apply, and production mutation authority remains reserved to explicit Jan Kočí authorization
 - CI policy: GitHub Actions verification is required before merge
 - CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
 
@@ -31,9 +31,9 @@ Continue the first safe CyberCore self-deployment loop for InterServer shared-ho
 2. treat `WB-0030` and merged `WB-0031` as the canonical fail-closed readiness/preflight foundation;
 3. define `WB-0032` as the work block that will convert the remaining InterServer runtime unknowns into safe evidence;
 4. keep PR #52 / WB-0032 Phase A repository-only with no live provider contact;
-5. require a fresh explicit operator authorization before WB-0032 Phase B performs any live read-only InterServer capability discovery;
+5. require a fresh explicit authorization from Jan Kočí before WB-0032 Phase B performs any live read-only InterServer capability discovery;
 6. keep `remote_write_requested`, `remote_write_allowed`, and `production_write_allowed` false throughout WB-0032;
-7. keep `staging_apply` blocked until a later work block verifies all runtime gates and receives fresh explicit remote-write authorization;
+7. keep `staging_apply` blocked until a later work block verifies all runtime gates and receives fresh explicit Jan Kočí remote-write authorization;
 8. use LG-0001/LG-0002 as read-only source-of-truth orchestration support, not as mutation authority.
 
 ## Current status
@@ -52,8 +52,8 @@ Continue the first safe CyberCore self-deployment loop for InterServer shared-ho
 - PR #50 post-merge reconciliation / WB-0031 kickoff: merged as `4a1374cbef7d142f8386ea7774208effc05d54ec`
 - WB-0031 / PR #51: merged as `d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684`
 - Deployment protocol/target capability: still `UNKNOWN_UNTIL_VERIFIED`; WB-0031 validates evidence shape, not the real provider capability
-- Live InterServer capability discovery: blocked until a separate fresh read-only operator authorization is granted
-- Live InterServer staging deployment: blocked until target identity, deployment protocol/capability, secret, rollback, effect-verifier, and fresh explicit remote-write authorization gates pass
+- Live InterServer capability discovery: blocked until a separate fresh read-only authorization from Jan Kočí is granted
+- Live InterServer staging deployment: blocked until target identity, deployment protocol/capability, secret, rollback, effect-verifier, and fresh explicit Jan Kočí remote-write authorization gates pass
 - Production/provider/DirectAdmin/SSH/DNS/mail/billing changes: none
 - Secret values stored: none
 - GitHub `main`: canonical product state
@@ -71,7 +71,7 @@ Plaintext secrets are denied in:
 - CASER documents;
 - ordinary evidence logs.
 
-Actual replacement or deployment secrets may only be placed in an OS-backed secret store or an approved external vault after explicit approval. Evidence may record only safe references, aliases, provider names, scopes, timestamps, fingerprints/hashes where safe, owner/status fields, and verification state.
+Actual replacement or deployment secrets may only be placed in an OS-backed secret store or an approved external vault after explicit Jan Kočí authorization. Evidence may record only safe references, aliases, provider names, scopes, timestamps, fingerprints/hashes where safe, owner/status fields, and verification state.
 
 ## Self-deployment boundary
 
@@ -97,7 +97,7 @@ Blocked unconditionally in PR #52:
 - treating target metadata, aliases, documentation, or synthetic evidence as proof that real provider capability exists;
 - executing `staging_apply` or equivalent remote mutation.
 
-No approval may broaden PR #52 itself beyond this repository-only Phase A scope. A later WB-0032 Phase B is a separate execution step and may begin only after a fresh explicit authorization for read-only/non-mutating discovery. Phase B cannot authorize upload, overwrite, deletion, chmod/chown, symlink creation, credential rotation, provider configuration changes, staging remote write, or production access.
+No approval may broaden PR #52 itself beyond this repository-only Phase A scope. A later WB-0032 Phase B is a separate execution step and may begin only after a fresh explicit authorization from Jan Kočí for read-only/non-mutating discovery. Phase B cannot authorize upload, overwrite, deletion, chmod/chown, symlink creation, credential rotation, provider configuration changes, staging remote write, or production access.
 
 ## Recent completed state changes
 
@@ -195,14 +195,14 @@ The later discovery must establish real evidence for:
 - effect-verifier capability;
 - credential-rotation operational state without credential values.
 
-Before the first live InterServer contact, WB-0032 requires a fresh explicit authorization naming the InterServer staging scope and read-only/non-mutating access. Upload, overwrite, delete, chmod/chown, symlink creation, credential rotation, provider configuration change, and production access remain prohibited.
+Before the first live InterServer contact, WB-0032 requires a fresh explicit authorization from Jan Kočí naming the InterServer staging scope and read-only/non-mutating access. Upload, overwrite, delete, chmod/chown, symlink creation, credential rotation, provider configuration change, and production access remain prohibited.
 
 ## Security follow-up
 
 - Six high-severity transitive `npm audit` findings remain deferred security debt in the isolated visual documentation toolchain.
 - Provider credential-rotation verification remains an unresolved operational blocker until handled by a separately approved procedure without secret values in ordinary evidence stores.
 - WB-0032 may record credential-rotation operational state during an approved read-only discovery, but does not authorize rotation itself.
-- Live staging deploy remains blocked behind target identity, deployment capability, secret readiness, rollback, effect-verifier, and fresh remote-write authorization gates.
+- Live staging deploy remains blocked behind target identity, deployment capability, secret readiness, rollback, effect-verifier, and fresh Jan Kočí remote-write authorization gates.
 
 ## Next action
 
@@ -212,7 +212,7 @@ Run exact-head hosted CI/CodeQL and fresh adversarial review for PR #52. Repair 
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr52-wb0032-capability-discovery -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-22T02:08:00+02:00`
+- Generated: `2026-08-22T02:26:00+02:00`
 - Branch: `docs/wb-0032-capability-discovery`
 - Pull request: #52
 - Active artifact: `WB-0032`
@@ -220,5 +220,5 @@ Run exact-head hosted CI/CodeQL and fresh adversarial review for PR #52. Repair 
 - Last verified main: `d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684`
 - Test evidence: exact-head hosted CI/CodeQL and fresh review required before Ready for Review
 - Project Kernel: present
-- Project State: PR #51 merged; WB-0032 definition/kickoff active in PR #52; live InterServer discovery requires separate explicit read-only authorization; remote-write and production gates remain blocked
+- Project State: PR #51 merged; WB-0032 definition/kickoff active in PR #52; live InterServer discovery requires separate explicit Jan Kočí read-only authorization; remote-write and production gates remain blocked
 <!-- CYBERCORE:CHECKPOINT:END -->
