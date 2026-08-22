@@ -65,7 +65,7 @@ The version marker must contain exactly this non-secret deployment identity:
 - environment id `interserver-shared-hosting-staging`;
 - exact approved run id.
 
-The combined final packet gate validates the marker semantics from the exact local bytes that are hashed for deployment. A matching hash is not sufficient when the marker content is wrong.
+The combined final packet gate validates the marker semantics from the exact local bytes that are hashed and sealed for deployment. A matching hash is not sufficient when the marker content is wrong.
 
 The first write must be **no-overwrite**. It must not replace the staging document-root index, an existing release, or any production path.
 
@@ -74,13 +74,13 @@ The first write must be **no-overwrite**. It must not replace the staging docume
 A later explicit first-write authorization may allow only:
 
 1. create one direct-child directory `.../public_html/cybercore-canary-<run_id>/`;
-2. upload exactly `index.html` and `cybercore-version.json` into that directory;
+2. upload exactly `index.html` and `cybercore-version.json` from the sealed in-process upload input returned by final validation;
 3. perform no overwrite outside that unique directory;
 4. reject an existing or symlinked destination and re-verify that its parent resolves to the canonical staging root immediately before creation;
 5. perform no chmod/chown, symlink, package/service, PHP, DNS, mail, billing, DirectAdmin, Cloudflare, VPS, WordPress, Nextcloud, registrar, or production mutation;
 6. if rollback is explicitly included in the same authorization, remove only the directory created for that run after verifying its exact path.
 
-If path resolution, credential scope, protocol behavior, source identity, artifact identity, marker identity, or rollback scope is ambiguous, abort before the first remote write.
+If path resolution, credential scope, protocol behavior, source identity, packet snapshot identity, artifact identity, marker identity, or rollback scope is ambiguous, abort before the first remote write.
 
 ## Required gates before authorization request
 
@@ -139,6 +139,7 @@ Required checks:
 - staging canary URL returns HTTP success;
 - `cybercore-version.json` exists and its exact schema/values match the approved packet;
 - path-resolution and runner evidence prove writes were constrained to the exact approved staging destination;
+- uploaded hashes equal the hashes from the validated sealed upload input;
 - no denied path was touched;
 - no denied provider/DNS/credential mutation occurred;
 - receipt contains no secret values.
@@ -173,15 +174,15 @@ The combined packet validator must prove the evidence digest and cross-document 
 
 `DESIGN_IMPLEMENTED; RUNTIME_ARTIFACTS_PENDING`
 
-The two SHA-256 values in evidence are not accepted merely because they are syntactically valid. The combined final packet gate requires an explicit local artifact directory, opens its path component-by-component with POSIX no-follow directory semantics, requires exactly the two approved entries, opens both files relative to the pinned directory descriptor with no-follow semantics, and hashes those exact bytes.
+The two SHA-256 values in evidence are not accepted merely because they are syntactically valid. The combined final packet gate requires an explicit local artifact directory, opens its path component-by-component with POSIX no-follow directory semantics, requires exactly the two approved entries before and after reads, opens both files relative to the pinned directory descriptor with no-follow semantics, and retains the exact immutable bytes that were hashed.
 
-A fabricated digest, substituted file, missing file, extra artifact, final-component symlink, or symlinked artifact-directory ancestor keeps the packet BLOCKED.
+A fabricated digest, substituted file, missing file, extra artifact, concurrent directory-content change, final-component symlink, or symlinked artifact-directory ancestor keeps the packet BLOCKED.
 
 ### G11 — version-marker semantic binding
 
 `DESIGN_IMPLEMENTED; RUNTIME_MARKER_PENDING`
 
-`cybercore-version.json` is validated from the same bytes that are hashed for the upload. It must be valid UTF-8 JSON with no duplicate keys, contain exactly `repository`, `commit`, `branch`, `built_at`, `environment`, and `run_id`, and bind them to:
+`cybercore-version.json` is validated from the same bytes that are hashed and sealed for the upload. It must be valid UTF-8 JSON with no duplicate keys, contain exactly `repository`, `commit`, `branch`, `built_at`, `environment`, and `run_id`, and bind them to:
 
 - `repository: cyberDJs/CyberCore`;
 - the exact checked-out trusted-main commit;
@@ -191,6 +192,22 @@ A fabricated digest, substituted file, missing file, extra artifact, final-compo
 - the exact evidence/authorization run id.
 
 A semantically wrong marker cannot become READY merely by recording its matching SHA-256 in evidence.
+
+### G12 — immutable packet-document snapshot
+
+`DESIGN_IMPLEMENTED; RUNTIME_PACKET_PENDING`
+
+The combined final gate captures manifest and readiness from their source paths once, derives and captures the bounded evidence document once, and validates a private temporary snapshot containing those exact bytes. Combined cross-document checks use the already-captured mappings instead of reopening the original paths.
+
+If the source manifest/readiness/evidence paths are replaced after capture, the validated packet and future upload input remain bound to the captured snapshot rather than the replacement. Snapshot bytes are rechecked for integrity after validator execution.
+
+### G13 — sealed in-process upload handoff
+
+`DESIGN_IMPLEMENTED; UPLOADER_NOT_IMPLEMENTED`
+
+A READY packet now returns `FirstWriteUploadInput`, containing the exact validated source commit, run id, destination, protocol, deploy-identity scope reference, authorization reference, artifact hashes, and immutable artifact byte payloads.
+
+A future Phase-B uploader must call the packet validator in the same process immediately before the approved remote write and upload only those retained bytes. Reopening artifact paths after preflight is forbidden. The standalone `validate_wb0034_packet.py` CLI is diagnostic/operator evidence only; because a process exit discards the sealed bytes, CLI success alone cannot become the upload handoff.
 
 ## Machine-validatable first-write contract
 
@@ -210,7 +227,7 @@ Canonical implementation files include:
 - `scripts/validate_wb0034_packet.py`;
 - regression tests under `tests/test_wb0034_*.py`.
 
-The current repository artifacts remain plan-only and BLOCKED. The readiness validator may become READY only when its status fields are supported by a valid hash-bound evidence bundle. The final remote-write authorization packet has a stricter combined gate: populated manifest/readiness data, the hash-bound evidence bundle, trusted `main`, checked-out repository `HEAD`, exact local artifact bytes/path identity, and strict marker semantics must agree. Run id, destination, artifact set, artifact digests, authorization reference, protocol, deploy-identity scope, and rollback permission must remain consistently bound.
+The current repository artifacts remain plan-only and BLOCKED. The readiness validator may become READY only when its status fields are supported by a valid hash-bound evidence bundle. The final remote-write authorization packet has a stricter combined gate: one immutable packet snapshot, trusted `main`, checked-out repository `HEAD`, exact local artifact bytes/path identity, strict marker semantics, and consistent authorization/evidence bindings must agree. Run id, destination, artifact set, artifact digests, authorization reference, protocol, deploy-identity scope, and rollback permission remain consistently bound.
 
 The WB-0034 machine YAML artifacts are intentionally comment-free and raw-text scanned before parsing. Credential-like assignments, credential-bearing URLs, YAML comments, duplicate keys, unsupported structures, secret values, and the broader private-key PEM/header family including EC, DSA, PGP, encrypted, OpenSSH, RSA, and generic private-key forms fail closed.
 
@@ -234,7 +251,9 @@ Before requesting the first staging-write authorization, the handoff must contai
 - deploy identity safe reference and scope result;
 - secret-alias readiness result without values;
 - exact direct-child destination directory;
-- exact two-file artifact list and SHA-256 values computed from the no-follow-read local files to be uploaded;
+- immutable snapshot identity for manifest/readiness/evidence captured during final validation;
+- exact two-file artifact list and SHA-256 values computed from the no-follow-read local bytes to be uploaded;
+- proof the pinned artifact directory contained exactly the approved two entries before and after reads;
 - strict `cybercore-version.json` marker-validation result from those same bytes;
 - sanitized hash-bound evidence bundle reference and digest;
 - verifier commands/URLs;
@@ -242,11 +261,13 @@ Before requesting the first staging-write authorization, the handoff must contai
 - fresh authorization reference bound to commit/run/destination/artifacts/protocol/deploy-scope/rollback;
 - expected evidence receipt fields;
 - explicit stop conditions;
-- passing `validate_wb0034_packet.py --artifact-dir <exact-artifact-dir>` result from the exact checked-out trusted-main source commit.
+- diagnostic CLI result if desired for operator evidence;
+- and, for actual Phase B, a READY in-process packet result whose non-null `upload_input` is consumed directly without reopening source paths.
 
 ## Out of scope
 
 - executing the first remote write;
+- implementing the Phase-B uploader in this work block;
 - deploying the full CyberCore service/application stack;
 - production deployment or production application-content access;
 - creating or rotating deployment credentials;
@@ -265,8 +286,10 @@ WB-0034 preflight is complete when:
 - dedicated WB-0034 manifest, readiness, evidence, raw-secret, and combined packet validators are internally consistent and regression-tested;
 - arbitrary status labels, arbitrary evidence references, mismatched/nonexistent source SHAs, feature-branch HEAD, cross-document commit/run/destination/artifact mismatches, fabricated artifact digests, protocol/scope authorization mismatches, broader private-key headers, and secret-bearing comments/credential URLs fail closed;
 - local artifact final-component and ancestor symlink substitution fail closed;
-- the artifact directory is constrained to the exact approved two-file set;
+- the artifact directory is constrained to the exact approved two-file set before and after reads and concurrent directory-content change fails closed;
 - marker commit/run/environment/schema mismatches fail even when their updated digest is consistently recorded in evidence;
+- replacement of original packet-document paths after capture cannot change the already-validated snapshot or sealed upload input;
+- a READY result retains the immutable validated artifact bytes and deployment identity needed by a future same-process uploader;
 - current readiness evidence records verified target identity and all remaining runtime blockers without overclaim;
 - exact mutation and rollback scope are documented;
 - symlink/ancestor escape and parent-directory ambiguity are eliminated from the first-write design;
@@ -274,4 +297,4 @@ WB-0034 preflight is complete when:
 - fresh Codex review finds no valid unresolved issue;
 - remote write remains blocked.
 
-A subsequent execution step may proceed only after the remaining runtime gates are verified and the operator grants fresh explicit first staging remote-write authorization.
+A subsequent execution step may proceed only after the remaining runtime gates are verified, a same-process Phase-B uploader consumes the sealed validated input without reopening local sources, and the operator grants fresh explicit first staging remote-write authorization.
