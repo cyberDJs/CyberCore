@@ -312,7 +312,9 @@ def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
             errors,
         )
         _require_value(identity, "staging_url_status", "VERIFIED", errors)
-        _require_value(identity, "staging_url_safe_reference", "INTERSERVER_STAGING_URL_REFERENCE", errors)
+        _require_value(
+            identity, "staging_url_safe_reference", "INTERSERVER_STAGING_URL_REFERENCE", errors
+        )
         _require_value(identity, "staging_path_status", "VERIFIED", errors)
         _require_value(
             identity,
@@ -362,7 +364,12 @@ def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
     if secrets is not None:
         _reject_unknown_keys(
             secrets,
-            {"secret_alias_status", "required_aliases", "secret_values_recorded", "secret_values_read"},
+            {
+                "secret_alias_status",
+                "required_aliases",
+                "secret_values_recorded",
+                "secret_values_read",
+            },
             "secret_alias_readiness",
             errors,
         )
