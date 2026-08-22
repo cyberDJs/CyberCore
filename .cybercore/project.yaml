@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0033 InterServer isolated staging target verified; PR54 merge authorized
-  active_artifact: WB-0033
-  branch: wb-0033-interserver-isolated-staging-target
-  pull_request: 54
-  last_verified_main: 70346d63ba2b17df17085797e963bb9dbd692282
+  milestone: WB-0034 first InterServer staging deployment preflight active
+  active_artifact: WB-0034
+  branch: wb-0034-first-staging-deployment-preflight
+  pull_request: 55
+  last_verified_main: d74497eb0730a0d112cbf7957593f23cb35b5e71
 
 status:
   ccl_specification: complete_draft
@@ -89,9 +89,21 @@ status:
   directadmin_cloudflare_acme: verified
   wildcard_manual_renewal: verified
   wildcard_unattended_renewal_authorized: true
-  wb0033_interserver_isolated_staging_target: verified_merge_authorized
+  pr54_wb0033_isolated_staging_target: merged_verified
+  wb0033_interserver_isolated_staging_target: verified_merged
   wb0033_bounded_provider_mutations: verified
-  pr54_merge_authorization: granted_2026_08_22
+  wb0034_first_staging_deployment_preflight: active_remote_write_blocked
+  pr55_wb0034_first_staging_deployment_preflight: active_draft
+  first_write_artifact_plan: static_two_file_canary
+  first_write_overwrite_allowed: false
+  first_write_symlink_promotion_allowed: false
+  first_write_deployment_protocol_status: unknown
+  first_write_deploy_identity_scope_status: unknown
+  first_write_secret_alias_readiness: unknown
+  first_write_rollback_runtime_status: unknown
+  first_write_effect_verifier_status: unknown
+  first_write_operator_authorization_status: not_granted
+  staging_remote_write_requested: false
   staging_application_remote_write_allowed: false
   production_write_allowed: false
 
@@ -106,7 +118,7 @@ completed:
     verification: 23_passed
   - artifact: WB-0017
     pull_request: 21
-    merge_commit: d21e3bc3875bf298939585958c90167fa36dd76c
+    merge_commit: d21e3bc3875f05e5b8bb00fee4dfd5f438da33
     verification: 46_passed
   - artifact: WB-0018
     pull_request: 22
@@ -212,13 +224,19 @@ completed:
     pull_request: 53
     merge_commit: 70346d63ba2b17df17085797e963bb9dbd692282
     verification: ci_codeql_codex_passed
+  - artifact: WB-0033-interserver-isolated-staging-target
+    pull_request: 54
+    merge_commit: d74497eb0730a0d112cbf7957593f23cb35b5e71
+    verification: ci_211_codeql_208_codex_no_major_issues
 
 next:
-  - run exact-head CI, CodeQL, and Codex review for PR54 after canonical-state reconciliation
-  - resolve any valid exact-head finding without broadening provider or production authority
-  - if exact head remains mergeable and all gates are green, execute the already-authorized squash merge of PR54 using the expected head SHA
-  - after merge, treat WB0033 as the canonical verified staging-target baseline
-  - keep staging application deployment blocked until a later work block receives fresh explicit Jan Kočí remote-write authorization
+  - complete PR55 WB0034 repository-only preflight and exact-head CI/CodeQL/Codex review
+  - verify first-write deployment protocol read-only; do not perform remote write
+  - verify least-privilege deploy identity and credential scope; do not create or rotate credentials without separate approval
+  - verify secret-alias readiness without reading or recording values
+  - dry-run the no-overwrite two-file canary plan and effect verifier locally
+  - pin the exact main source commit after WB0034 merge
+  - request fresh explicit first staging remote-write authorization with exact commit, run id, protocol, identity scope, destination, artifact list, and rollback scope
   - keep production application mutation prohibited without a separate production MOP and explicit Jan Kočí approval
   - preserve Cloudflare as authoritative DNS and DirectAdmin as hosting/SSL control plane
   - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
