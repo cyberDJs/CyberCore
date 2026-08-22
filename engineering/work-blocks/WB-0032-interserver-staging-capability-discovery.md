@@ -33,7 +33,7 @@ Phase A performs **no InterServer connection** and handles **no secret values**.
 
 ### Phase B — live read-only capability discovery
 
-Phase B may begin only after a fresh explicit operator authorization that names the target/provider scope and confirms read-only discovery.
+Phase B may begin only after a fresh explicit authorization from **Jan Kočí** that names the target/provider scope and confirms read-only discovery.
 
 A Phase B authorization must not be interpreted as authority for `staging_apply`, upload, file creation, file modification, credential rotation, provider setting changes, or production mutation. No approval may broaden WB-0032 into a mutating work block.
 
@@ -80,7 +80,7 @@ Evidence produced by Phase B may contain only non-secret facts such as:
 - secret aliases and presence/readiness status only;
 - safe fingerprints/hashes where appropriate;
 - timestamps;
-- operator authorization reference;
+- Jan Kočí authorization reference;
 - rollback capability result;
 - verifier capability result;
 - commands/actions performed in sanitized form;
@@ -90,7 +90,7 @@ Evidence must not contain passwords, private keys, API tokens, cookies, TOTP see
 
 ## Read-only authority boundary
 
-Before the first live InterServer contact, a fresh explicit operator authorization must specify:
+Before the first live InterServer contact, a fresh explicit authorization from **Jan Kočí** must specify:
 
 - provider/target: InterServer staging only;
 - purpose: capability discovery;
@@ -100,7 +100,7 @@ Before the first live InterServer contact, a fresh explicit operator authorizati
 - secret handling: aliases/references only in ordinary evidence; values remain inside approved secret storage/runtime handling;
 - stop condition: abort on ambiguity about staging-vs-production identity or command mutability.
 
-No authorization from PR #51, ADR-0006, or the WB-0032 kickoff PR satisfies this Phase B gate. A Phase B authorization may enable only the read-only discovery described here; it cannot authorize mutation.
+No authorization from PR #51, ADR-0006, or the WB-0032 kickoff PR satisfies this Phase B gate. Only a fresh explicit authorization from Jan Kočí may enable the read-only discovery described here; it cannot authorize mutation.
 
 ## Safety invariants
 
@@ -120,13 +120,13 @@ WB-0032 can be considered complete only when:
 
 - PR #51 is reconciled as merged into canonical `main@d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684`;
 - this work block is canonical and its authority boundary is explicit;
-- a separately authorized read-only discovery has established the real non-production target identity;
+- a read-only discovery separately authorized by Jan Kočí has established the real non-production target identity;
 - deployment protocol and target capability are evidenced without remote write;
 - required secret aliases are evidenced as ready without secret disclosure;
 - rollback capability is evidenced;
 - effect-verifier capability is evidenced;
 - credential-rotation operational state is recorded safely without performing rotation;
 - all evidence states explicitly record that no remote write occurred and no secret values were stored;
-- a later `staging_apply` work block remains separately gated by fresh explicit operator authorization.
+- a later `staging_apply` work block remains separately gated by fresh explicit Jan Kočí authorization.
 
 The kickoff PR for WB-0032 stops before Phase B and therefore does not by itself satisfy these exit criteria.
