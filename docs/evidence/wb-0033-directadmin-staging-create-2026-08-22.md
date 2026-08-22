@@ -10,7 +10,7 @@ Authoritative DNS: Cloudflare
 
 `VERIFIED`
 
-Observed runtime facts from the operator-executed guarded apply and subsequent DNS/TLS verification:
+Observed runtime facts from the operator-executed guarded apply and subsequent DNS/TLS/path verification:
 
 - DirectAdmin server: `vda7600.is.cc:2222`
 - DirectAdmin user: `eimyherr`
@@ -21,9 +21,9 @@ Observed runtime facts from the operator-executed guarded apply and subsequent D
 - create response: HTTP 200
 - target existed before: no
 - target present on readback: yes
-- requested document root: `/domains/staging.eimyherrer.com/public_html`
-- observed target document root: `/domains/staging.eimyherrer.com/public_html`
-- production document root inspected: no
+- staging document root: `/home/eimyherr/domains/staging.eimyherrer.com/public_html`
+- production document-root metadata: `/home/eimyherr/domains/eimyherrer.com/public_html`
+- production application content read: no
 - production content mutated: no
 - application deployed: no
 - DirectAdmin session logout: HTTP 200
@@ -113,7 +113,31 @@ Post-renewal staging verification:
 
 This proves the current DirectAdmin -> Cloudflare DNS API -> Let's Encrypt DNS-01 wildcard issuance path end-to-end.
 
-Automatic unattended renewal remains configured but has not yet been historically observed on a future scheduled renewal cycle.
+The operator subsequently granted explicit standing authorization for future unattended automatic renewals of the same `eimyherrer.com` + `*.eimyherrer.com` certificate through the already configured DirectAdmin -> Cloudflare ACME integration. This standing authority does not extend to unrelated DNS changes, additional credential mutation, application deployment, or other production mutation.
+
+A future scheduled unattended renewal has not yet been historically observed.
+
+## Production document-root path verification
+
+After separate explicit authorization for a narrowly bounded production metadata read, the operator called DirectAdmin:
+
+- endpoint: `CMD_API_DOMAIN?action=document_root&json=yes`
+- permitted data: production document-root path metadata only
+- directory listing performed: no
+- production traversal performed: no
+- production `stat` performed: no
+- production file/content read performed: no
+
+Sanitized observed values:
+
+- production document root: `/home/eimyherr/domains/eimyherrer.com/public_html`
+- staging document root: `/home/eimyherr/domains/staging.eimyherrer.com/public_html`
+- same path: false
+- staging inside production: false
+- production inside staging: false
+- production content read: false
+
+The normalized path comparison therefore proves staging/production document-root non-overlap without reading production application content.
 
 ## Safety assertions
 
@@ -121,14 +145,16 @@ Automatic unattended renewal remains configured but has not yet been historicall
 - session cookie values recorded: false
 - login URL value recorded: false
 - Cloudflare token values recorded: false
-- production document root inspected: false
+- production document-root path metadata read: true, separately authorized
+- production application content read: false
 - production content mutated: false
 - unrelated DNS records mutated: false
 - application deployed: false
 - new paid hosting service ordered: false
+- future unattended renewal standing authorization recorded: true
 
 ## Final status
 
 `VERIFIED`
 
-The isolated staging target is externally resolvable, serves HTTP/HTTPS successfully, and has a verified wildcard ACME path through DirectAdmin with Cloudflare as authoritative DNS.
+The isolated staging target is externally resolvable, serves HTTP/HTTPS successfully, has proven document-root non-overlap with production, and has a verified plus explicitly authorized ongoing wildcard ACME path through DirectAdmin with Cloudflare as authoritative DNS.
