@@ -5,6 +5,9 @@ import json
 from pathlib import Path
 import subprocess
 
+import pytest
+
+from cybercore import first_write_packet as first_write_packet_module
 from cybercore.first_write_packet import validate_first_write_packet
 
 
@@ -237,6 +240,100 @@ def test_final_packet_passes_only_when_all_artifacts_bind_to_main_head(tmp_path:
     result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
 
     assert result.ready, result.as_text()
+    assert result.upload_input is not None
+
+
+def test_ready_packet_carries_immutable_validated_upload_bytes(tmp_path: Path) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(repo, head)
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert result.ready, result.as_text()
+    assert result.upload_input is not None
+    sealed_index = result.upload_input.artifact_bytes("index.html")
+    (artifact_dir / "index.html").write_text("mutated after preflight\n", encoding="utf-8")
+    assert result.upload_input.artifact_bytes("index.html") == sealed_index
+    assert result.upload_input.destination == DESTINATION
+    assert result.upload_input.source_commit == head
+
+
+def test_final_packet_uses_private_snapshots_if_source_paths_change_after_capture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(repo, head)
+    original_validator = first_write_packet_module.validate_first_write_manifest
+    mutated = False
+
+    def mutate_sources_then_validate(
+        snapshot_path: Path,
+        *,
+        final_preflight: bool = False,
+    ):
+        nonlocal mutated
+        if not mutated:
+            mutated = True
+            manifest.write_text(
+                manifest.read_text(encoding="utf-8").replace(
+                    "production_write_allowed: false",
+                    "production_write_allowed: true",
+                ),
+                encoding="utf-8",
+            )
+            readiness.write_text(
+                readiness.read_text(encoding="utf-8").replace(
+                    "production_write_allowed: false",
+                    "production_write_allowed: true",
+                ),
+                encoding="utf-8",
+            )
+        return original_validator(snapshot_path, final_preflight=final_preflight)
+
+    monkeypatch.setattr(
+        first_write_packet_module,
+        "validate_first_write_manifest",
+        mutate_sources_then_validate,
+    )
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert result.ready, result.as_text()
+    assert result.upload_input is not None
+    assert "production_write_allowed: true" in manifest.read_text(encoding="utf-8")
+    assert "production_write_allowed: true" in readiness.read_text(encoding="utf-8")
+    assert result.upload_input.destination == DESTINATION
+
+
+def test_final_packet_rejects_directory_change_during_artifact_reads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, head = _init_repo(tmp_path)
+    manifest, readiness, _, artifact_dir = _write_packet(repo, head)
+    real_listdir = first_write_packet_module.os.listdir
+    directory_reads = 0
+
+    def changing_listdir(path: int | str | bytes | os.PathLike[str] | os.PathLike[bytes]):
+        nonlocal directory_reads
+        entries = real_listdir(path)
+        if isinstance(path, int):
+            directory_reads += 1
+            if directory_reads == 2:
+                return [*entries, "unexpected-after-read.tmp"]
+        return entries
+
+    monkeypatch.setattr(first_write_packet_module.os, "listdir", changing_listdir)
+
+    result = validate_first_write_packet(manifest, readiness, repo, artifact_dir)
+
+    assert not result.ready
+    assert result.upload_input is None
+    assert any(
+        "changed during validation" in error or "after reads contains unexpected" in error
+        for error in result.errors
+    )
 
 
 def test_final_packet_rejects_syntactically_valid_but_non_head_commit(tmp_path: Path) -> None:
