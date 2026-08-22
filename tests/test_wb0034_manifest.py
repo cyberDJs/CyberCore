@@ -182,3 +182,26 @@ def test_manifest_rejects_credential_url_scalar(tmp_path: Path) -> None:
 
     assert not result.ok
     assert any("credential-bearing URL" in error for error in result.errors)
+
+
+def test_manifest_rejects_broader_private_key_header_family(tmp_path: Path) -> None:
+    markers = (
+        "-----BEGIN EC PRIVATE KEY-----",
+        "-----BEGIN DSA PRIVATE KEY-----",
+        "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+        "-----BEGIN ENCRYPTED PRIVATE KEY-----",
+    )
+    for index, marker in enumerate(markers):
+        path = tmp_path / f"manifest-{index}.yaml"
+        path.write_text(
+            MANIFEST.read_text(encoding="utf-8").replace(
+                "operator_authorization_reference: NOT_REQUIRED_FOR_PLAN_ONLY",
+                f"operator_authorization_reference: {marker}",
+            ),
+            encoding="utf-8",
+        )
+
+        result = validate_first_write_manifest(path)
+
+        assert not result.ok
+        assert any("private-key material" in error for error in result.errors)
