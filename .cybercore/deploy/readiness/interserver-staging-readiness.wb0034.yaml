@@ -9,6 +9,8 @@ production_write_allowed: false
 plaintext_secret_values_present: false
 safe_secret_aliases_only: true
 fresh_operator_authorization_required: true
+evidence_bundle_reference: WB0034_EVIDENCE_BUNDLE_REQUIRED
+evidence_bundle_sha256: TBD
 
 staging_target_identity:
   staging_url_status: VERIFIED
