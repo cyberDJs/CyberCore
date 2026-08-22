@@ -2,15 +2,6 @@
   <img src="assets/brand/cybercore-readme-hero.svg" width="100%" alt="CyberCore — Infrastructure Intelligence Platform. Evidence-first operations, governed decisions, controlled action.">
 </p>
 
-<<<<<<< HEAD
-=======
-<h1 align="center">CYBERCORE</h1>
-
-<p align="center">
-  <img src="docs/visual/generated/architecture-overview.png" width="640" alt="CyberCore architecture overview">
-</p>
-
->>>>>>> b3e20c5 (docs: replace README architecture SVG with PNG)
 <p align="center">
   <a href="ARCHITECTURE.md"><strong>Architecture</strong></a> ·
   <a href="docs/visual/README.md"><strong>Visual docs</strong></a> ·
@@ -86,7 +77,7 @@ The result is not “AI with root access.” It is an evidence-first control mod
 ## Architecture at a glance
 
 <p align="center">
-  <img src="docs/visual/generated/architecture-overview.svg" width="820" alt="CyberCore architecture overview">
+  <img src="docs/visual/generated/architecture-overview.png" width="640" alt="CyberCore architecture overview">
 </p>
 
 CyberCore keeps four concerns deliberately separate:
