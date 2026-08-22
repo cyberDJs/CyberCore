@@ -491,7 +491,9 @@ def _build_upload_input(
         return None
 
     sealed_artifacts = tuple(
-        ValidatedFirstWriteArtifact(name=name, sha256=artifacts[name][0], content=artifacts[name][1])
+        ValidatedFirstWriteArtifact(
+            name=name, sha256=artifacts[name][0], content=artifacts[name][1]
+        )
         for name in sorted(EXPECTED_ARTIFACTS)
     )
     return FirstWriteUploadInput(
