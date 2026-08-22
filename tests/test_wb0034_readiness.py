@@ -67,8 +67,8 @@ source_commit: {PINNED_SHA}
 run_id: {RUN_ID}
 destination: {DESTINATION}
 artifacts:
-  index.html: {'a' * 64}
-  cybercore-version.json: {'b' * 64}
+  index.html: {"a" * 64}
+  cybercore-version.json: {"b" * 64}
 deployment:
   protocol: SFTP
   target_capability_reference: {CAPABILITY_REF}
@@ -175,7 +175,9 @@ def test_hash_bound_evidence_bundle_can_clear_component_readiness(tmp_path: Path
 
 def test_evidence_bundle_hash_mismatch_blocks_readiness(tmp_path: Path) -> None:
     readiness, evidence = _write_bound_readiness(tmp_path)
-    evidence.write_text(_evidence_text().replace("protocol: SFTP", "protocol: SSH"), encoding="utf-8")
+    evidence.write_text(
+        _evidence_text().replace("protocol: SFTP", "protocol: SSH"), encoding="utf-8"
+    )
 
     result = validate_first_write_readiness(readiness)
 
