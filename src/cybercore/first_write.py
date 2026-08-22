@@ -19,6 +19,12 @@ from yaml.tokens import (
     FlowSequenceStartToken,
 )
 
+from cybercore.first_write_evidence import (
+    resolve_evidence_bundle_path,
+    validate_first_write_evidence,
+)
+from cybercore.first_write_security import scan_first_write_yaml_text
+
 
 MAX_YAML_NESTING_DEPTH = 64
 YAML_MERGE_TAG = "tag:yaml.org,2002:merge"
@@ -40,6 +46,8 @@ EXPECTED_TOP_LEVEL_KEYS = {
     "plaintext_secret_values_present",
     "safe_secret_aliases_only",
     "fresh_operator_authorization_required",
+    "evidence_bundle_reference",
+    "evidence_bundle_sha256",
     "staging_target_identity",
     "deployment_capability_readiness",
     "source_artifact_readiness",
@@ -77,21 +85,6 @@ EXPECTED_BLOCKED_UNTIL = {
     "operator_authorization_status": "APPROVED",
 }
 
-DENIED_LITERAL_PATTERNS = (
-    "BEGIN OPENSSH PRIVATE KEY",
-    "BEGIN RSA PRIVATE KEY",
-    "BEGIN PRIVATE KEY",
-    "password=",
-    "password:",
-    "api_key=",
-    "api_key:",
-    "api_token:",
-    "private_key:",
-    "secret_value:",
-    "totp_seed:",
-    "recovery_code:",
-)
-
 PLACEHOLDER_REFERENCES = {
     "TBD",
     "UNKNOWN",
@@ -102,6 +95,7 @@ PLACEHOLDER_REFERENCES = {
     "WB0034_DEPLOY_IDENTITY_SCOPE_VERIFICATION_REQUIRED",
     "WB0034_ARTIFACT_HASHES_REQUIRED",
     "WB0034_EFFECT_VERIFIER_IMPLEMENTATION_REQUIRED",
+    "WB0034_EVIDENCE_BUNDLE_REQUIRED",
 }
 
 
@@ -151,10 +145,7 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
         errors.append(f"missing readiness artifact: {path}")
         return None
 
-    lowered = text.lower()
-    for pattern in DENIED_LITERAL_PATTERNS:
-        if pattern.lower() in lowered:
-            errors.append(f"readiness contains denied literal pattern: {pattern}")
+    errors.extend(scan_first_write_yaml_text(text, "readiness"))
 
     depth = 0
     try:
@@ -376,6 +367,61 @@ def _append_supporting_evidence_blockers(
             )
 
 
+def _append_bound_evidence_blockers(
+    path: Path,
+    document: dict[str, object],
+    capability: dict[str, object] | None,
+    source: dict[str, object] | None,
+    verifier: dict[str, object] | None,
+    authorization: dict[str, object] | None,
+    blockers: list[str],
+) -> None:
+    reference = document.get("evidence_bundle_reference")
+    digest = document.get("evidence_bundle_sha256")
+
+    if not _has_evidence_reference(reference):
+        blockers.append("readiness requires a non-placeholder evidence bundle reference")
+        return
+    if not isinstance(digest, str) or len(digest) != 64 or not all(
+        character in "0123456789abcdef" for character in digest.lower()
+    ):
+        blockers.append("readiness requires an exact evidence bundle sha256")
+        return
+
+    evidence_path = resolve_evidence_bundle_path(path, reference)
+    if evidence_path is None:
+        blockers.append("evidence bundle reference must resolve inside the deployment evidence directory")
+        return
+
+    evidence = validate_first_write_evidence(evidence_path, expected_sha256=digest)
+    if not evidence.ok:
+        blockers.extend(f"evidence bundle: {error}" for error in evidence.errors)
+        return
+
+    if source is None or evidence.source_commit != source.get("source_commit_reference"):
+        blockers.append("evidence bundle source_commit must equal readiness source_commit_reference")
+    if capability is None or evidence.protocol != capability.get("deployment_protocol"):
+        blockers.append("evidence bundle protocol must equal readiness deployment_protocol")
+    if capability is None or evidence.target_capability_reference != capability.get(
+        "target_capability_reference"
+    ):
+        blockers.append("evidence bundle capability reference must equal readiness capability reference")
+    if capability is None or evidence.deploy_identity_scope_reference != capability.get(
+        "deploy_identity_scope_reference"
+    ):
+        blockers.append("evidence bundle scope reference must equal readiness scope reference")
+    if verifier is None or evidence.effect_verifier_reference != verifier.get(
+        "effect_verifier_reference"
+    ):
+        blockers.append("evidence bundle verifier reference must equal readiness verifier reference")
+    if authorization is None or evidence.authorization_reference != authorization.get(
+        "authorization_reference"
+    ):
+        blockers.append(
+            "evidence bundle authorization reference must equal readiness authorization reference"
+        )
+
+
 def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
     errors: list[str] = []
     blockers: list[str] = []
@@ -537,6 +583,17 @@ def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
             authorization,
             blockers,
         )
+
+        if not blockers:
+            _append_bound_evidence_blockers(
+                path,
+                document,
+                capability,
+                source,
+                verifier,
+                authorization,
+                blockers,
+            )
 
     schema_ok = not errors
     ready = schema_ok and not blockers
