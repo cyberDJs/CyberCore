@@ -1,0 +1,25 @@
+version: 1
+work_block: WB-0035
+provider: InterServer
+evidence_mode: SYNTHETIC_FIXTURE
+response_sanitized: true
+secret_values_recorded: false
+provider_contact_performed: false
+order_performed: false
+payment_performed: false
+currency: USD
+recurring_price_usd_month: 3.00
+one_time_price_usd: 0.00
+platform: kvm
+slices: 1
+os_distro: ubuntu
+os_version: ubuntu24
+control_panel: none
+period_months: 1
+quantity: 1
+stock_available: true
+resources:
+  ram_mib: 2048
+  disk_gib: 40
+public_hostname: tasks.cyberdjs.org
+quote_reference: SYNTHETIC-WB0035
