@@ -95,6 +95,23 @@ def test_subcent_quote_amount_is_rejected(tmp_path: Path) -> None:
     assert any("whole-cent recurring_price_usd_month" in error for error in result.errors)
 
 
+def test_unquoted_high_precision_yaml_money_is_rejected_losslessly(tmp_path: Path) -> None:
+    quote = tmp_path / "quote.yaml"
+    quote.write_text(
+        _live_quote_text().replace(
+            "recurring_price_usd_month: 3.00",
+            "recurring_price_usd_month: 3.0000000000000001",
+        ),
+        encoding="utf-8",
+    )
+
+    result, packet = prepare_purchase_approval_packet(PLAN, quote)
+
+    assert not result.ok
+    assert packet is None
+    assert any("whole-cent recurring_price_usd_month" in error for error in result.errors)
+
+
 def test_extreme_decimal_exponent_fails_closed_without_exception(tmp_path: Path) -> None:
     quote = tmp_path / "quote.yaml"
     quote.write_text(
