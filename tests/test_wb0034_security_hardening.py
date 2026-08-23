@@ -44,9 +44,11 @@ def test_evidence_yaml_excessive_nesting_fails_closed(tmp_path: Path) -> None:
     evidence = tmp_path / "evidence.yaml"
     nested = "value: 1\n"
     for index in reversed(range(70)):
-        nested = f"level_{index}:\n" + "\n".join(
-            f"  {line}" if line else line for line in nested.splitlines()
-        ) + "\n"
+        nested = (
+            f"level_{index}:\n"
+            + "\n".join(f"  {line}" if line else line for line in nested.splitlines())
+            + "\n"
+        )
     evidence.write_text(nested, encoding="utf-8")
 
     result = validate_first_write_evidence(evidence)
