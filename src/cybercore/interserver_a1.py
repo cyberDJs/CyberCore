@@ -223,8 +223,8 @@ def sanitize_quote(candidate: Candidate, response: dict[str, object]) -> dict[st
         raise A1ProbeError("provider quote validation did not return continue=true")
 
     errors = response.get("errors")
-    if errors not in (None, []):
-        raise A1ProbeError("provider quote validation returned one or more errors")
+    if type(errors) is not list or errors != []:
+        raise A1ProbeError("provider quote validation did not return errors=[]")
 
     # InterServer's live response labels the submitted osVersion as `os`
     # and the submitted osDistro as `version`.
