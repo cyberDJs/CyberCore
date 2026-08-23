@@ -9,6 +9,10 @@ import pytest
 
 from cybercore.interserver_a1 import (
     A1ProbeError,
+    PASSWORD_DIGITS,
+    PASSWORD_LOWER,
+    PASSWORD_SPECIALS,
+    PASSWORD_UPPER,
     build_quote_payload,
     safe_catalog_receipt,
     sanitize_quote,
@@ -67,7 +71,12 @@ def test_quote_payload_uses_only_a1_validation_shape() -> None:
     assert payload["controlpanel"] == "none"
     assert payload["hostname"] == "tasks.cyberdjs.org"
     assert isinstance(payload["rootpass"], str)
-    assert len(payload["rootpass"]) >= 32
+    rootpass = payload["rootpass"]
+    assert len(rootpass) >= 32
+    assert any(char in PASSWORD_LOWER for char in rootpass)
+    assert any(char in PASSWORD_UPPER for char in rootpass)
+    assert any(char in PASSWORD_DIGITS for char in rootpass)
+    assert any(char in PASSWORD_SPECIALS for char in rootpass)
     assert "order" not in payload
     assert "payment" not in payload
 
@@ -89,6 +98,16 @@ def test_sanitize_quote_drops_secret_and_customer_fields() -> None:
     assert "SYNTHETIC_SECRET_MUST_NOT_ESCAPE" not in rendered
     assert "custid" not in rendered.lower()
     assert "123456" not in rendered
+
+
+def test_live_quote_os_version_field_mapping_is_enforced() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    raw_quote = copy.deepcopy(_load(QUOTE_FIXTURE))
+    raw_quote["os"] = "ubuntu"
+    raw_quote["version"] = "ubuntu24"
+
+    with pytest.raises(A1ProbeError, match="mismatch"):
+        sanitize_quote(candidate, raw_quote)
 
 
 def test_catalog_above_budget_fails_closed() -> None:
