@@ -2,7 +2,7 @@
 
 ## Status
 
-`PROPOSED — REPOSITORY PREPARATION ONLY; PROVIDER CONTACT/PURCHASE NOT AUTHORIZED`
+`ACTIVE — A1 AUTHORIZED; AUTHENTICATED QUOTE BLOCKED BY PROVIDER HTTP 403; PURCHASE NOT AUTHORIZED`
 
 Date: 2026-08-23
 Canonical base: `main@2bea07db4e0a5d2a062c96ef1642a6f2a0927f0a`
@@ -26,7 +26,7 @@ Prepare a fail-closed path for CyberCore to:
 9. bootstrap a minimal attention-friendly workflow through the Vikunja API;
 10. record an evidence receipt without secrets.
 
-This work block does not itself authorize provider contact, VPS purchase, billing/payment, DNS mutation, credential mutation, SSH mutation, or application deployment.
+The work-block definition alone does not authorize provider contact, VPS purchase, billing/payment, DNS mutation, credential mutation, SSH mutation, or application deployment. A separate operator authorization granted A1 catalog + quote on 2026-08-23; A2 purchase/payment, A3 bootstrap/deploy, and A4 DNS remain not granted.
 
 ## Client direction
 
@@ -101,6 +101,8 @@ GET  /apiv2/vps/{id}         -> read service state after ordering
 
 Billing/payment endpoints may use HTTP GET while still causing side effects. HTTP method is therefore not treated as a safety boundary. Any payment action is a mutation and requires explicit approval.
 
+Authentication is documented through `X-API-KEY`. InterServer also documents account-wide Web/API source-IP restrictions. No provider security restriction may be bypassed or mutated under A1.
+
 Official documentation references:
 
 - `https://my.interserver.net/api-docs/redoc.html`
@@ -121,7 +123,7 @@ Allowed:
 - validators;
 - dry-run logic that does not use provider credentials or network access.
 
-Not allowed:
+Not allowed by A0 alone:
 
 - provider API contact;
 - billing/account inspection;
@@ -134,18 +136,44 @@ Not allowed:
 
 ### A1 — live VPS catalog + quote
 
-`NOT_GRANTED`
+`AUTHORIZED — EXECUTION CURRENTLY BLOCKED BY PROVIDER HTTP 403`
 
-A fresh explicit authorization must name:
+Operator authorization granted on 2026-08-23:
+
+> Schvaluju A1: InterServer VPS catalog + quote pro WB-0035, maximálně $3/měsíc, pouze zjištění nabídky a ceny. Bez objednávky, platby nebo jiné změny na InterServeru.
+
+Allowed:
 
 - provider: InterServer;
 - scope: VPS catalog and quote only;
-- allowed operations: `GET /apiv2/vps/order` and the exact quote/validation operation after response-sensitivity review;
-- budget ceiling: USD 3.00/month;
-- no order, no invoice payment, no VPS mutation;
-- no secret values in evidence.
+- `GET /apiv2/vps/order`;
+- documented non-mutating `PUT /apiv2/vps/order` validation/quote operation;
+- recurring price ceiling: USD 3.00/month;
+- sanitized non-secret evidence only.
 
-The quote step must return a sanitized approval packet containing only non-secret configuration, price, resource and availability facts.
+Still prohibited:
+
+- VPS order;
+- invoice/payment action;
+- provider/account configuration mutation;
+- API-key rotation;
+- IP allow-list mutation;
+- DNS, SSH or application mutation;
+- any attempt to bypass provider security controls;
+- secret values in ordinary evidence.
+
+Execution history:
+
+- initial isolated runtime: no usable authenticated provider call;
+- first GitHub Actions attempt: blocked because `INTERSERVER_API_KEY` alias was absent;
+- after operator configured the GitHub Actions secret: credential alias was present, but the bounded provider probe returned `HTTP 403`;
+- no sanitized authenticated catalog/quote was produced;
+- no order, payment or provider mutation occurred;
+- the ephemeral A1 workflow was removed after the safe stop.
+
+Evidence: `docs/evidence/wb-0035-a1-catalog-quote-2026-08-23.md`.
+
+A1 reaches `VERIFIED` only after the authorized catalog read and quote validation succeed and produce a sanitized approval packet containing only non-secret configuration, price, resource and availability facts.
 
 ### A2 — purchase + payment
 
@@ -191,7 +219,7 @@ No apex, `www`, MX, mail, staging or unrelated record mutation is implied.
 
 ## Phase 1 — repository implementation
 
-Deliverables before any provider contact:
+Deliverables before provider mutation:
 
 1. VPS plan schema with fail-closed default state;
 2. sanitized InterServer catalog fixture;
@@ -207,7 +235,9 @@ Deliverables before any provider contact:
 
 ## Phase 2 — live read-only catalog and quote
 
-Blocked until A1.
+A1 is authorized, but execution is currently `BLOCKED` because the provider returned HTTP 403 from the GitHub-hosted A1 runtime after the credential alias became available.
+
+Do not treat this as permission to change provider security configuration, rotate the credential, use undocumented bypass headers, or broaden the endpoint set. Diagnose the access path separately and preserve the A1 no-mutation boundary.
 
 Expected candidate configuration, subject to live verification:
 
@@ -372,6 +402,7 @@ A successful MVP requires evidence for:
 Stop immediately when:
 
 - quote exceeds USD 3.00/month without new approval;
+- provider returns an access/security response that would require security-control mutation or bypass to proceed;
 - order response is ambiguous;
 - more than one new VPS appears;
 - provider behavior differs materially from reviewed documentation;
@@ -386,7 +417,7 @@ Rollback is phase-specific and must be defined before each mutation. Deleting/ca
 
 ## Exit criteria
 
-WB-0035 planning is ready for live discovery when:
+WB-0035 planning is ready for live A1 completion when:
 
 - repository-only schemas/validators/tests exist;
 - no provider or billing mutation path is reachable from plan-only mode;
@@ -394,4 +425,5 @@ WB-0035 planning is ready for live discovery when:
 - the Vikunja deployment design is reproducible and secret-safe;
 - the budget ceiling is machine-enforced;
 - the approval packet can distinguish quote, purchase, bootstrap and DNS authorities;
-- the next requested action is A1 only: live catalog + quote, with no spend.
+- A1 remains limited to live catalog + quote, with no spend;
+- the HTTP 403 provider-access blocker is resolved through an approved non-mutating access path, not by silently weakening provider security.
