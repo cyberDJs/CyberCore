@@ -233,6 +233,7 @@ def sanitize_quote(candidate: Candidate, response: dict[str, object]) -> dict[st
         "os": candidate.os_version,
         "version": candidate.os_distro,
         "controlpanel": candidate.control_panel,
+        "hostname": candidate.public_hostname,
     }
     for key, expected in expected_response.items():
         if response.get(key) != expected:
