@@ -126,6 +126,15 @@ def test_live_quote_os_version_field_mapping_is_enforced() -> None:
         sanitize_quote(candidate, raw_quote)
 
 
+def test_quote_hostname_mismatch_fails_closed() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    raw_quote = copy.deepcopy(_load(QUOTE_FIXTURE))
+    raw_quote["hostname"] = "unexpected.example"
+
+    with pytest.raises(A1ProbeError, match="hostname"):
+        sanitize_quote(candidate, raw_quote)
+
+
 def test_catalog_above_budget_fails_closed() -> None:
     catalog = copy.deepcopy(_load(CATALOG_FIXTURE))
     catalog["vpsSliceKvmLCost"] = 3.01
