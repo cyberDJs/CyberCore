@@ -244,9 +244,7 @@ def _require_positive_int(
     return value
 
 
-def _decimal_value(
-    value: object, label: str, context: str, errors: list[str]
-) -> Decimal | None:
+def _decimal_value(value: object, label: str, context: str, errors: list[str]) -> Decimal | None:
     if isinstance(value, bool) or not isinstance(value, (int, float, str)):
         errors.append(f"{context} requires numeric {label}; got {value!r}")
         return None
@@ -421,7 +419,9 @@ def validate_plan_and_quote(plan_path: Path, quote_path: Path) -> VpsValidationR
         "quantity",
     ):
         if quote.get(key) != plan.get(key):
-            errors.append(f"quote {key} does not match plan: {quote.get(key)!r} != {plan.get(key)!r}")
+            errors.append(
+                f"quote {key} does not match plan: {quote.get(key)!r} != {plan.get(key)!r}"
+            )
 
     monthly = _decimal_value(
         quote.get("recurring_price_usd_month"), "recurring_price_usd_month", "VPS quote", errors
@@ -430,7 +430,9 @@ def validate_plan_and_quote(plan_path: Path, quote_path: Path) -> VpsValidationR
         plan.get("budget_ceiling_usd_month"), "budget_ceiling_usd_month", "VPS plan", errors
     )
     if monthly is not None and monthly_budget is not None and monthly > monthly_budget:
-        errors.append(f"quote recurring price {monthly} exceeds monthly budget ceiling {monthly_budget}")
+        errors.append(
+            f"quote recurring price {monthly} exceeds monthly budget ceiling {monthly_budget}"
+        )
 
     one_time = _decimal_value(
         quote.get("one_time_price_usd"), "one_time_price_usd", "VPS quote", errors
@@ -439,7 +441,9 @@ def validate_plan_and_quote(plan_path: Path, quote_path: Path) -> VpsValidationR
         plan.get("one_time_budget_ceiling_usd"), "one_time_budget_ceiling_usd", "VPS plan", errors
     )
     if one_time is not None and one_time_budget is not None and one_time > one_time_budget:
-        errors.append(f"quote one-time price {one_time} exceeds one-time budget ceiling {one_time_budget}")
+        errors.append(
+            f"quote one-time price {one_time} exceeds one-time budget ceiling {one_time_budget}"
+        )
 
     minimum = plan.get("minimum_resources")
     resources = quote.get("resources")
@@ -448,10 +452,14 @@ def validate_plan_and_quote(plan_path: Path, quote_path: Path) -> VpsValidationR
             required = minimum.get(key)
             actual = resources.get(key)
             if type(required) is int and type(actual) is int and actual < required:
-                errors.append(f"quote resources.{key} {actual} is below required minimum {required}")
+                errors.append(
+                    f"quote resources.{key} {actual} is below required minimum {required}"
+                )
 
     if quote.get("evidence_mode") == "SYNTHETIC_FIXTURE":
-        warnings.append("comparison uses synthetic evidence; A1 live catalog + quote is still required")
+        warnings.append(
+            "comparison uses synthetic evidence; A1 live catalog + quote is still required"
+        )
 
     return VpsValidationResult(not errors, tuple(errors), tuple(dict.fromkeys(warnings)))
 
