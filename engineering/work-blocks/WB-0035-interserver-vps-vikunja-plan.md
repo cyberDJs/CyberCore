@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACTIVE — A1 VERIFIED; PRE-A2 VERIFIED / ONE EXPIRED VPS / NEW RECOMMENDED; PURCHASE NOT AUTHORIZED`
+`ACTIVE — A1 VERIFIED; PRE-A2 VERIFIED; A2 AUTHORIZED / PAYMENT METHOD DISCOVERY PENDING; A3/A4 NOT AUTHORIZED`
 
 Date: 2026-08-23
 Canonical base: `main@2bea07db4e0a5d2a062c96ef1642a6f2a0927f0a`
@@ -13,9 +13,9 @@ Budget ceiling: USD 3.00/month unless separately approved
 
 ## Goal
 
-Prepare a fail-closed path for CyberCore to discover the current InterServer VPS catalog, produce a non-mutating live quote, stop for explicit human approval before purchase/payment, and only later—under separate authority gates—provision at most one VPS, harden it, deploy Vikunja, publish DNS, and verify persistence/backup/restore.
+Prepare a fail-closed path for CyberCore to discover the current InterServer VPS catalog, produce a non-mutating live quote, inspect existing VPS inventory, execute an explicitly authorized bounded purchase/payment, and only later—under separate authority gates—harden the resulting VPS, deploy Vikunja, publish DNS, and verify persistence/backup/restore.
 
-A1 catalog + quote is verified. PRE-A2 read-only existing-VPS inventory is verified and complete: the account contains one VPS record, it is `expired`, and there are no active VPS services available for immediate reuse. The current recommendation is **new provisioning**, subject to separate A2 authorization. A2 purchase/payment, A3 bootstrap/deploy, and A4 DNS remain not granted.
+A1 catalog + quote is verified. PRE-A2 read-only existing-VPS inventory is verified and complete: the account contains one VPS record, it is `expired`, and there are no active VPS services available for immediate reuse. A2 now explicitly authorizes purchase/payment of exactly one new VPS matching the verified candidate, but no order has been executed yet because InterServer payment initiation requires an explicit payment method and the user has not selected one. A3 bootstrap/deploy and A4 DNS remain not granted.
 
 ## Client direction
 
@@ -52,11 +52,15 @@ Planned baseline: Ubuntu 24.04 LTS, KVM, one slice, no control panel, Docker Eng
 Reviewed provider flow:
 
 ```text
-GET  /apiv2/vps              -> existing VPS inventory on the authenticated account
-GET  /apiv2/vps/order        -> current catalog / resources / stock / pricing inputs
-PUT  /apiv2/vps/order        -> validate configuration and calculate quote without provisioning
-POST /apiv2/vps/order        -> create the VPS order and invoice/service state
-GET  /apiv2/vps/{id}         -> read service state after ordering
+GET  /apiv2/vps                         -> existing VPS inventory
+GET  /apiv2/vps/order                   -> current catalog / stock / pricing inputs
+PUT  /apiv2/vps/order                   -> validate configuration and calculate quote
+POST /apiv2/vps/order                   -> create VPS order + invoice/service state
+GET  /apiv2/billing/cart                -> read checkout state / available payment methods
+GET  /apiv2/billing/invoices/{id}       -> read invoice detail
+GET  /apiv2/vps/{id}/invoices           -> read per-VPS invoice history
+POST /apiv2/billing/pay/{method}/{invoices} -> initiate payment for named invoice(s)
+GET  /apiv2/vps/{id}                    -> read service state after ordering
 ```
 
 HTTP method alone is not treated as a safety boundary. Authority is bound to exact reviewed operations and semantics.
@@ -114,8 +118,6 @@ Live behavior established that submitted `osVersion=ubuntu24` is returned as `os
 
 Evidence: `docs/evidence/wb-0035-a1-catalog-quote-2026-08-23.md`.
 
-A1 provider activity is complete. No further A1 provider calls are required.
-
 ### PRE-A2 — existing VPS inventory / reuse decision
 
 `VERIFIED — COMPLETE; ONE EXPIRED VPS FOUND; NEW PROVISIONING RECOMMENDED`
@@ -124,9 +126,7 @@ Operator authorization granted on 2026-08-23 at 21:39 CEST:
 
 > Schvaluju PRE-A2: read-only inventuru existujících InterServer VPS přes GET /apiv2/vps pro WB-0035. Bez jakékoli změny, restartu, resize, reinstallu, zrušení, objednávky nebo platby.
 
-The single authorized `GET /apiv2/vps` executed from the operator Mac and returned `HTTP 200`. Shape-only sanitization reported an array containing exactly one VPS row. The local-only second pass extracted the authorized safe fields and then deleted the raw mode-0600 temporary response.
-
-Sanitized result:
+Sanitized verified result:
 
 ```yaml
 existing_vps_count: 1
@@ -143,42 +143,24 @@ vps:
 raw_temp_removed: true
 ```
 
-Interpretation and decision:
-
-- no active VPS exists that can be reused as-is;
-- the sole provider record is expired;
-- `repeat_invoices_cost=3.00` is a provider field on the expired record and does not by itself prove current recurring billing;
-- no SSH/application inspection was authorized or performed, so no claim is made about preserved data or recoverability on the expired VPS;
-- reactivation/renewal of the expired VPS would itself require a separate provider-side authorization and was not evaluated under PRE-A2;
-- the current WB-0035 recommendation is **new provisioning** using the A1-verified one-slice KVM candidate;
-- according to the verified inventory, such a new VPS would not duplicate an active VPS service.
+Decision: **new provisioning**. No active VPS exists that can be reused as-is, and a new VPS would not duplicate an active service. No SSH/application inspection was performed and no claim is made about recoverability of the expired VPS.
 
 Evidence: `docs/evidence/wb-0035-pre-a2-inventory-2026-08-23.md`.
 
-Still prohibited:
-
-- purchase/payment;
-- reactivation/renewal of the expired VPS;
-- reboot/start/stop/shutdown;
-- resize/reinstall/migrate;
-- cancel/delete;
-- credential or account-security mutation;
-- SSH/application access;
-- DNS mutation;
-- any other provider mutation.
-
 ### A2 — purchase + payment
 
-`NOT_GRANTED`
+`AUTHORIZED — EXACT ONE-VPS PURCHASE/PAYMENT; EXECUTION PENDING PAYMENT-METHOD DISCOVERY`
 
-Requires a separate explicit approval after A1 and PRE-A2 are verified.
+Operator authorization granted on 2026-08-23 at 22:08 CEST:
 
-Current A2 candidate basis:
+> Schvaluju A2: objednávku a platbu právě jednoho nového InterServer KVM VPS pro WB-0035, 1 slice, Ubuntu 24, bez control panelu, location 1 New Jersey, hostname tasks.cyberdjs.org, maximálně $3.00/měsíc a $0 neočekávaný jednorázový příplatek. Bez jakékoli jiné změny na InterServeru.
+
+Bound purchase envelope:
 
 ```yaml
-reuse_decision: new_provisioning_recommended
-active_existing_vps_count: 0
+reuse_decision: new_provisioning
 provider: InterServer
+quantity: 1
 platform: kvm
 slices: 1
 os_distro: ubuntu
@@ -188,12 +170,26 @@ period_months: 1
 location_id: 1
 location_name: New Jersey
 hostname: tasks.cyberdjs.org
-recurring_price_usd_month: 3.00
-modeled_one_time_surcharge_usd: 0.00
-quantity: 1
+max_recurring_usd_month: 3.00
+max_unexpected_one_time_surcharge_usd: 0.00
 ```
 
-A2 must bind exact provider configuration, recurring price, one-time cost, payment action, hostname, OS/platform/location, quantity exactly one, and the explicit new-provisioning decision. Ambiguous order responses must never be blindly retried.
+Execution invariants:
+
+- discover available payment methods read-only before creating order state; do not alter the default payment method;
+- perform a fresh `PUT /apiv2/vps/order` immediately before the order using the exact candidate and an ephemeral policy-compliant root password;
+- abort unless `continue=true`, `errors=[]`, configuration matches exactly, recurring cost <= USD 3.00/month and no unexpected one-time surcharge appears;
+- if the fresh quote passes, execute **exactly one** `POST /apiv2/vps/order` with the identical payload and same ephemeral root password;
+- never automatically retry an ambiguous POST response;
+- extract the new service id and invoice id(s), then verify invoice ownership/amount read-only before charging;
+- initiate payment only for the exact invoice created by this order and only via an explicitly selected available payment method;
+- do not create a card, verify a card, add prepay credit or change account payment-method settings as part of A2;
+- retain only sanitized order/payment evidence; never store API keys, root passwords, full payment data or gateway tokens;
+- stop after order/payment verification. A3 and A4 remain separate gates.
+
+The payment authorization is explicit, but the payment method is not. InterServer's payment endpoint requires a method identifier (`cc`, `paypal`, `prepay`, etc.), so CyberCore must not guess which funding source to charge. The next provider action is therefore read-only `/billing/cart` discovery of available method identifiers only.
+
+Evidence: `docs/evidence/wb-0035-a2-order-payment-2026-08-23.md`.
 
 ### A3 — bootstrap + application deployment
 
@@ -213,7 +209,7 @@ tasks.cyberdjs.org -> <approved VPS public IP>
 
 No apex, `www`, MX, mail or unrelated DNS mutation is implied.
 
-## Verified A1 candidate
+## Verified purchase candidate
 
 ```yaml
 provider: InterServer
@@ -235,11 +231,11 @@ transfer_gib: 2000
 quantity: 1
 ```
 
-This is verified quote and PRE-A2 planning evidence, **not purchase authorization**.
+This candidate is now authorized for A2 purchase/payment, but no order or payment is claimed until runtime evidence verifies it.
 
 ## Later phases
 
-Phase 3 purchase/provisioning remains blocked until A2. Phase 4 hardening and Phase 5 Vikunja deployment remain blocked until A3. DNS publication remains blocked until A4.
+A3 hardening/application deployment remains blocked until explicit authorization after the purchased VPS identity/status/access method is verified. DNS publication remains blocked until A4.
 
 Planned deployment invariants remain: pinned image digests, Vikunja loopback-only behind Caddy, persistent `/srv/vikunja` data, no plaintext secrets in Git/chat/ordinary evidence, tested backup/restore before durable use.
 
@@ -254,6 +250,6 @@ LATER
 
 ## Stop conditions
 
-Stop on purchase price > USD 3.00/month, unexpected one-time charge, ambiguous provider behavior, credential exposure risk, unrelated infrastructure impact, or any step requiring authority beyond the current gate.
+Stop on unavailable/ambiguous payment method, purchase price > USD 3.00/month, unexpected one-time charge, exact-config mismatch, ambiguous order response, unrelated invoice, credential/payment-data exposure risk, unrelated infrastructure impact, or any step requiring authority beyond A2.
 
-Deleting/canceling/reactivating an expired or paid VPS is itself a provider mutation and is never inferred from a failed deployment.
+Deleting/canceling/reactivating any VPS is a separate provider mutation and is never inferred from A2.
