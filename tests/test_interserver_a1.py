@@ -135,6 +135,15 @@ def test_quote_hostname_mismatch_fails_closed() -> None:
         sanitize_quote(candidate, raw_quote)
 
 
+def test_conflicting_recurring_quote_prices_fail_closed() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    raw_quote = copy.deepcopy(_load(QUOTE_FIXTURE))
+    raw_quote["repeat_service_cost"] = "4.00"
+
+    with pytest.raises(A1ProbeError, match="conflicting recurring"):
+        sanitize_quote(candidate, raw_quote)
+
+
 def test_catalog_above_budget_fails_closed() -> None:
     catalog = copy.deepcopy(_load(CATALOG_FIXTURE))
     catalog["vpsSliceKvmLCost"] = 3.01
@@ -178,6 +187,8 @@ def test_quote_above_budget_fails_closed() -> None:
     raw_quote = copy.deepcopy(_load(QUOTE_FIXTURE))
     raw_quote["service_cost"] = 4
     raw_quote["monthly_service_cost"] = 4
+    raw_quote["repeat_service_cost"] = 4
+    raw_quote["repeat_slice_cost"] = 4
 
     with pytest.raises(A1ProbeError, match="monthly ceiling"):
         sanitize_quote(candidate, raw_quote)
@@ -188,6 +199,8 @@ def test_quote_fractional_cent_fails_closed_before_rounding() -> None:
     raw_quote = copy.deepcopy(_load(QUOTE_FIXTURE))
     raw_quote["service_cost"] = "2.994"
     raw_quote["monthly_service_cost"] = "2.994"
+    raw_quote["repeat_service_cost"] = "2.994"
+    raw_quote["repeat_slice_cost"] = "2.994"
 
     with pytest.raises(A1ProbeError, match="fractional-cent"):
         sanitize_quote(candidate, raw_quote)
