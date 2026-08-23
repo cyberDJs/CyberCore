@@ -315,7 +315,9 @@ def _request_json(
     except HTTPError as exc:
         raise A1ProbeError(f"InterServer returned HTTP {exc.code}") from None
     except URLError as exc:
-        raise A1ProbeError("InterServer connection failed before a safe response was obtained") from exc
+        raise A1ProbeError(
+            "InterServer connection failed before a safe response was obtained"
+        ) from exc
 
     try:
         decoded = json.loads(raw.decode("utf-8"))
@@ -341,7 +343,5 @@ def run_live_a1(api_key: str, out_dir: Path) -> tuple[Path, Path]:
     catalog_path.write_text(
         json.dumps(safe_catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-    quote_path.write_text(
-        json.dumps(safe_quote, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    quote_path.write_text(json.dumps(safe_quote, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return catalog_path, quote_path
