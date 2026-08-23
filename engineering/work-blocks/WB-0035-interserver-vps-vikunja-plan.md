@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACTIVE — A1 AUTHORIZED; AUTHENTICATED QUOTE BLOCKED BY PROVIDER HTTP 403; PURCHASE NOT AUTHORIZED`
+`ACTIVE — A1 AUTHORIZED; AUTHENTICATED CATALOG VERIFIED; LIVE QUOTE PENDING; PURCHASE NOT AUTHORIZED`
 
 Date: 2026-08-23
 Canonical base: `main@2bea07db4e0a5d2a062c96ef1642a6f2a0927f0a`
@@ -93,6 +93,7 @@ If the live provider catalog, pricing, stock, or OS availability differs, the pl
 Current official InterServer API documentation reviewed on 2026-08-23 exposes this VPS flow:
 
 ```text
+GET  /apiv2/vps              -> existing VPS inventory on the authenticated account
 GET  /apiv2/vps/order        -> current catalog / resources / stock / pricing inputs
 PUT  /apiv2/vps/order        -> validate configuration and calculate quote without provisioning
 POST /apiv2/vps/order        -> create the VPS order and invoice/service state
@@ -136,7 +137,7 @@ Not allowed by A0 alone:
 
 ### A1 — live VPS catalog + quote
 
-`AUTHORIZED — EXECUTION CURRENTLY BLOCKED BY PROVIDER HTTP 403`
+`AUTHORIZED — AUTHENTICATED CATALOG VERIFIED; LIVE QUOTE PENDING`
 
 Operator authorization granted on 2026-08-23:
 
@@ -167,19 +168,22 @@ Execution history:
 - initial isolated runtime: no usable authenticated provider call;
 - first GitHub Actions attempt: blocked because `INTERSERVER_API_KEY` alias was absent;
 - after operator configured the GitHub Actions secret: credential alias was present, but the bounded provider probe returned `HTTP 403`;
-- no sanitized authenticated catalog/quote was produced;
-- no order, payment or provider mutation occurred;
-- the ephemeral A1 workflow was removed after the safe stop.
+- operator Mac then performed the same authenticated `GET /apiv2/vps/order` contract and received `HTTP 200`;
+- the live catalog verified USD currency, KVM stock in New Jersey / Los Angeles / Dallas, Ubuntu 24.04 availability, 2048 MiB RAM, 40 GiB disk and 2000 GiB transfer per slice;
+- the selected KVM per-slice catalog price is `vpsSliceKvmLCost=3`; `vpsNyCost=1` is a distinct field and must not be used as the KVM price;
+- no quote, order, payment or provider mutation occurred in the local catalog step.
 
 Evidence: `docs/evidence/wb-0035-a1-catalog-quote-2026-08-23.md`.
 
-A1 reaches `VERIFIED` only after the authorized catalog read and quote validation succeed and produce a sanitized approval packet containing only non-secret configuration, price, resource and availability facts.
+A1 reaches `VERIFIED` only after the authorized quote validation succeeds and produces a sanitized approval packet containing only non-secret configuration, price, resource and availability facts.
 
 ### A2 — purchase + payment
 
 `NOT_GRANTED`
 
 Requires a separate explicit approval after A1 produces a valid quote.
+
+Before any A2 decision, CyberCore must also inspect the current account VPS inventory (`GET /apiv2/vps` / `getVpsList`) and decide **reuse vs new provisioning**. This read-only inventory step is not retroactively claimed by the existing A1 catalog+quote authorization; it requires explicit operator approval before execution.
 
 The approval packet must bind:
 
@@ -191,6 +195,7 @@ The approval packet must bind:
 - hostname;
 - OS/platform/location;
 - quantity: exactly one VPS;
+- current VPS inventory/reuse decision;
 - rollback/cancellation assumptions known at that time.
 
 No retry may create a second service. The implementation must use an idempotency or duplicate-service guard based on provider/account state before retrying an ambiguous order response.
@@ -235,11 +240,9 @@ Deliverables before provider mutation:
 
 ## Phase 2 — live read-only catalog and quote
 
-A1 is authorized, but execution is currently `BLOCKED` because the provider returned HTTP 403 from the GitHub-hosted A1 runtime after the credential alias became available.
+A1 is authorized. The authenticated catalog read is verified from the operator Mac; the remaining A1 operation is the documented non-mutating `PUT /apiv2/vps/order` quote.
 
-Do not treat this as permission to change provider security configuration, rotate the credential, use undocumented bypass headers, or broaden the endpoint set. Diagnose the access path separately and preserve the A1 no-mutation boundary.
-
-Expected candidate configuration, subject to live verification:
+Current authenticated catalog candidate:
 
 ```yaml
 provider: InterServer
@@ -249,7 +252,13 @@ os_distro: ubuntu
 os_version: ubuntu24
 control_panel: none
 period_months: 1
+location_id: 1
+location_name: New Jersey
 budget_ceiling_usd_month: 3.00
+catalog_price_usd_month: 3.00
+ram_mib: 2048
+disk_gib: 40
+transfer_gib: 2000
 quantity: 1
 ```
 
@@ -258,9 +267,7 @@ Live quote passes only when:
 - configuration validates;
 - quoted recurring amount is <= USD 3.00/month;
 - no unexpected one-time charge exceeds the separately approved amount;
-- 1-slice resources are at least 2 GiB RAM and 30 GiB disk, or the plan is manually reconsidered;
-- a supported Ubuntu 24.04 image is available;
-- provider location has stock;
+- response matches KVM / 1 slice / Ubuntu 24 / no control panel / one month / location 1;
 - response is sanitized before evidence storage;
 - no order or payment occurred.
 
@@ -279,6 +286,8 @@ provider_order_allowed: false until explicit approval
 billing_payment_allowed: false until explicit approval
 unrelated_provider_mutation_allowed: false
 ```
+
+Before any purchase request, run the separately authorized read-only current-VPS inventory check and stop for reuse review if an existing VPS is potentially suitable.
 
 After purchase, poll only the newly created service until one of:
 
@@ -417,7 +426,7 @@ Rollback is phase-specific and must be defined before each mutation. Deleting/ca
 
 ## Exit criteria
 
-WB-0035 planning is ready for live A1 completion when:
+WB-0035 planning is ready for A1 completion when:
 
 - repository-only schemas/validators/tests exist;
 - no provider or billing mutation path is reachable from plan-only mode;
@@ -425,5 +434,6 @@ WB-0035 planning is ready for live A1 completion when:
 - the Vikunja deployment design is reproducible and secret-safe;
 - the budget ceiling is machine-enforced;
 - the approval packet can distinguish quote, purchase, bootstrap and DNS authorities;
-- A1 remains limited to live catalog + quote, with no spend;
-- the HTTP 403 provider-access blocker is resolved through an approved non-mutating access path, not by silently weakening provider security.
+- authenticated catalog evidence is VERIFIED;
+- the remaining A1 quote succeeds without spend or mutation;
+- current VPS inventory is inspected under a separately explicit read-only authorization before any A2 purchase decision.
