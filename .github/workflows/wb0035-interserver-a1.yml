@@ -1,0 +1,94 @@
+name: WB-0035 InterServer A1 catalog and quote
+
+on:
+  push:
+    branches:
+      - wb-0035-interserver-vps-vikunja-plan
+    paths:
+      - .github/workflows/wb0035-interserver-a1.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wb0035-interserver-a1
+  cancel-in-progress: false
+
+jobs:
+  authorized-a1:
+    name: authorized read-only catalog and quote
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      INTERSERVER_API_KEY: ${{ secrets.INTERSERVER_API_KEY }}
+    steps:
+      - name: Checkout exact branch state
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
+
+      - name: Install CyberCore
+        run: python -m pip install -e .
+
+      - name: Require existing runtime credential alias
+        shell: bash
+        run: |
+          if [ -z "${INTERSERVER_API_KEY:-}" ]; then
+            echo "WB-0035 A1 BLOCKED: GitHub Actions secret INTERSERVER_API_KEY is not configured."
+            echo "No provider call, order, payment, DNS, SSH, or application mutation was attempted."
+            exit 78
+          fi
+
+      - name: Run authorized A1 provider probe
+        run: python scripts/run_wb0035_interserver_a1.py --out-dir dist/wb0035-a1
+
+      - name: Validate sanitized live quote against WB-0035 plan
+        run: >-
+          python scripts/validate_vps_plan.py
+          --plan .cybercore/provisioning/interserver-vps-plan.example.yaml
+          --quote dist/wb0035-a1/interserver-vps-quote.live.json
+
+      - name: Print sanitized approval facts only
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          quote = json.loads(Path("dist/wb0035-a1/interserver-vps-quote.live.json").read_text())
+          print("WB-0035 A1 VERIFIED")
+          for key in (
+              "provider",
+              "platform",
+              "slices",
+              "os_distro",
+              "os_version",
+              "control_panel",
+              "recurring_price_usd_month",
+              "one_time_price_usd",
+              "stock_available",
+              "public_hostname",
+              "quote_reference",
+          ):
+              print(f"{key}={quote[key]}")
+          resources = quote["resources"]
+          print(f"ram_mib={resources['ram_mib']}")
+          print(f"disk_gib={resources['disk_gib']}")
+          print("order_performed=false")
+          print("payment_performed=false")
+          print("provider_mutation_performed=false")
+          print("secret_values_recorded=false")
+          PY
+
+      - name: Upload sanitized A1 evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: wb0035-a1-interserver-quote
+          path: dist/wb0035-a1/*.json
+          if-no-files-found: error
+          retention-days: 7
