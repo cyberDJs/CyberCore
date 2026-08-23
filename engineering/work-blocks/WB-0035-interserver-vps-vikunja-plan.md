@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACTIVE — A1 VERIFIED; PRE-A2 VERIFIED; A2 AUTHORIZED / PAYMENT METHOD DISCOVERY PENDING; A3/A4 NOT AUTHORIZED`
+`ACTIVE — A1 VERIFIED; PRE-A2 VERIFIED; A2 AUTHORIZED / PAYPAL ONLY DISCOVERED / EXPLICIT METHOD SELECTION PENDING; A3/A4 NOT AUTHORIZED`
 
 Date: 2026-08-23
 Canonical base: `main@2bea07db4e0a5d2a062c96ef1642a6f2a0927f0a`
@@ -15,7 +15,7 @@ Budget ceiling: USD 3.00/month unless separately approved
 
 Prepare a fail-closed path for CyberCore to discover the current InterServer VPS catalog, produce a non-mutating live quote, inspect existing VPS inventory, execute an explicitly authorized bounded purchase/payment, and only later—under separate authority gates—harden the resulting VPS, deploy Vikunja, publish DNS, and verify persistence/backup/restore.
 
-A1 catalog + quote is verified. PRE-A2 read-only existing-VPS inventory is verified and complete: the account contains one VPS record, it is `expired`, and there are no active VPS services available for immediate reuse. A2 now explicitly authorizes purchase/payment of exactly one new VPS matching the verified candidate, but no order has been executed yet because InterServer payment initiation requires an explicit payment method and the user has not selected one. A3 bootstrap/deploy and A4 DNS remain not granted.
+A1 catalog + quote is verified. PRE-A2 existing-VPS inventory is verified and complete: one provider VPS record exists, it is `expired`, and there are zero active VPS services available for immediate reuse. A2 explicitly authorizes purchase/payment of exactly one new VPS matching the verified candidate. Payment-method discovery is complete and the only currently exposed reviewed method is `paypal`; the operator has not yet explicitly selected it. No order has been placed. A3 bootstrap/deploy and A4 DNS remain not granted.
 
 ## Client direction
 
@@ -81,7 +81,7 @@ Operator authorization:
 
 > Schvaluju A1: InterServer VPS catalog + quote pro WB-0035, maximálně $3/měsíc, pouze zjištění nabídky a ceny. Bez objednávky, platby nebo jiné změny na InterServeru.
 
-Verified live result from the operator Mac:
+Verified live result:
 
 ```yaml
 provider: InterServer
@@ -112,9 +112,7 @@ provider_mutation_performed: false
 secret_values_recorded: false
 ```
 
-The authenticated catalog also showed KVM stock in New Jersey, Los Angeles and Dallas and the exact Ubuntu 24 template. `vpsSliceKvmLCost=3` is the KVM slice price; `vpsNyCost=1` is a distinct field and is not used as KVM price.
-
-Live behavior established that submitted `osVersion=ubuntu24` is returned as `os=ubuntu24`, while submitted `osDistro=ubuntu` is returned as `version=ubuntu`. CyberCore fixtures/tests and parser logic have been corrected accordingly. Quote-only root-password generation now guarantees the provider-required character categories while keeping the value ephemeral and out of ordinary evidence.
+The authenticated catalog showed KVM stock in New Jersey, Los Angeles and Dallas and the exact Ubuntu 24 template. `vpsSliceKvmLCost=3` is the KVM slice price; `vpsNyCost=1` is a distinct field and is not used as KVM price.
 
 Evidence: `docs/evidence/wb-0035-a1-catalog-quote-2026-08-23.md`.
 
@@ -149,7 +147,7 @@ Evidence: `docs/evidence/wb-0035-pre-a2-inventory-2026-08-23.md`.
 
 ### A2 — purchase + payment
 
-`AUTHORIZED — EXACT ONE-VPS PURCHASE/PAYMENT; EXECUTION PENDING PAYMENT-METHOD DISCOVERY`
+`AUTHORIZED — EXACT ONE-VPS PURCHASE/PAYMENT; PAYPAL ONLY DISCOVERED; EXPLICIT METHOD SELECTION PENDING`
 
 Operator authorization granted on 2026-08-23 at 22:08 CEST:
 
@@ -174,20 +172,28 @@ max_recurring_usd_month: 3.00
 max_unexpected_one_time_surcharge_usd: 0.00
 ```
 
-Execution invariants:
+Payment-method discovery completed read-only. The first discovery returned HTTP 200 but its local temporary artifact was lost before sanitization. A second read-only discovery was sanitized atomically and returned:
 
-- discover available payment methods read-only before creating order state; do not alter the default payment method;
+```yaml
+available_payment_method_ids:
+  - paypal
+raw_cart_temp_removed: true
+```
+
+No order, invoice creation, payment or provider mutation occurred during payment-method discovery. Availability of `paypal` is not treated as operator selection; an explicit method selection is still required before order creation.
+
+Execution invariants after explicit `paypal` selection:
+
 - perform a fresh `PUT /apiv2/vps/order` immediately before the order using the exact candidate and an ephemeral policy-compliant root password;
 - abort unless `continue=true`, `errors=[]`, configuration matches exactly, recurring cost <= USD 3.00/month and no unexpected one-time surcharge appears;
 - if the fresh quote passes, execute **exactly one** `POST /apiv2/vps/order` with the identical payload and same ephemeral root password;
 - never automatically retry an ambiguous POST response;
-- extract the new service id and invoice id(s), then verify invoice ownership/amount read-only before charging;
-- initiate payment only for the exact invoice created by this order and only via an explicitly selected available payment method;
-- do not create a card, verify a card, add prepay credit or change account payment-method settings as part of A2;
+- extract only the new service id and invoice id(s), then verify invoice ownership/amount read-only before charging;
+- initiate payment only for the exact invoice created by this order and only via explicitly selected `paypal`;
+- if PayPal requires a redirect or form submission, surface that next action to the operator instead of performing unrelated billing mutations;
+- do not create/verify cards, add prepay credit or change account payment-method settings as part of A2;
 - retain only sanitized order/payment evidence; never store API keys, root passwords, full payment data or gateway tokens;
 - stop after order/payment verification. A3 and A4 remain separate gates.
-
-The payment authorization is explicit, but the payment method is not. InterServer's payment endpoint requires a method identifier (`cc`, `paypal`, `prepay`, etc.), so CyberCore must not guess which funding source to charge. The next provider action is therefore read-only `/billing/cart` discovery of available method identifiers only.
 
 Evidence: `docs/evidence/wb-0035-a2-order-payment-2026-08-23.md`.
 
@@ -231,7 +237,7 @@ transfer_gib: 2000
 quantity: 1
 ```
 
-This candidate is now authorized for A2 purchase/payment, but no order or payment is claimed until runtime evidence verifies it.
+This candidate is authorized for A2 purchase/payment, but no order or payment is claimed until runtime evidence verifies it.
 
 ## Later phases
 
