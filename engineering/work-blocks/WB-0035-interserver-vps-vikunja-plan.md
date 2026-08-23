@@ -28,6 +28,17 @@ Prepare a fail-closed path for CyberCore to:
 
 This work block does not itself authorize provider contact, VPS purchase, billing/payment, DNS mutation, credential mutation, SSH mutation, or application deployment.
 
+## Client direction
+
+CyberFlow is **iPhone-first**.
+
+- primary client target: iPhone;
+- responsive web/PWA: operational fallback;
+- macOS integration: later where useful;
+- Android: explicitly out of MVP scope and must not influence first-client architecture or UX.
+
+See `docs/product/cyberflow-iphone-first-client.md`.
+
 ## Why Vikunja for the MVP
 
 Vikunja is the selected MVP candidate because it is:
