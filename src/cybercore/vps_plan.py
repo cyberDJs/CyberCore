@@ -85,6 +85,8 @@ DENIED_LITERAL_PATTERNS = (
     "BEGIN PRIVATE KEY",
     "password:",
     "password=",
+    "rootpass:",
+    "rootpass=",
     "api_key:",
     "api_key=",
     "x-api-key:",
