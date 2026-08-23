@@ -86,7 +86,7 @@ The result is not “AI with root access.” It is an evidence-first control mod
 ## Architecture at a glance
 
 <p align="center">
-  <img src="docs/visual/generated/architecture-overview.png" width="640" alt="CyberCore architecture overview">
+  <img src="assets/brand/cybercore-architecture-at-a-glance.svg" width="100%" alt="CyberCore architecture at a glance: interfaces, core reasoning, operational domains, providers and drivers, with human approval before consequential mutation">
 </p>
 
 CyberCore keeps four concerns deliberately separate:
