@@ -249,10 +249,17 @@ def sanitize_quote(candidate: Candidate, response: dict[str, object]) -> dict[st
     if location != candidate.location_id:
         raise A1ProbeError("provider quote response mismatch for location")
 
-    monthly = _whole_cent_decimal(
-        response.get("monthly_service_cost", response.get("repeat_service_cost")),
-        "monthly_service_cost",
-    )
+    recurring_values: dict[str, Decimal] = {}
+    for field in ("monthly_service_cost", "repeat_service_cost", "repeat_slice_cost"):
+        value = response.get(field)
+        if value is not None:
+            recurring_values[field] = _whole_cent_decimal(value, field)
+    if not recurring_values:
+        raise A1ProbeError("provider quote response is missing recurring price fields")
+    if len(set(recurring_values.values())) != 1:
+        raise A1ProbeError("provider quote contains conflicting recurring charges")
+
+    monthly = next(iter(recurring_values.values()))
     service_cost = _whole_cent_decimal(response.get("service_cost"), "service_cost")
     if monthly > MAX_MONTHLY_USD:
         raise A1ProbeError("live quote exceeds the authorized USD 3.00 monthly ceiling")
