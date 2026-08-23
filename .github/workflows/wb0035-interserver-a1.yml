@@ -49,23 +49,35 @@ jobs:
       - name: Run authorized A1 provider probe
         id: probe
         if: ${{ steps.credential.outcome == 'success' }}
-        run: python scripts/run_wb0035_interserver_a1.py --out-dir dist/wb0035-a1
+        shell: bash
+        run: |
+          mkdir -p dist/wb0035-status
+          set +e
+          python scripts/run_wb0035_interserver_a1.py --out-dir dist/wb0035-a1 2>&1 | tee dist/wb0035-status/probe.log
+          rc=${PIPESTATUS[0]}
+          echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Validate sanitized live quote against WB-0035 plan
         id: validate
-        if: ${{ steps.probe.outcome == 'success' }}
-        run: >-
-          python scripts/validate_vps_plan.py
-          --plan .cybercore/provisioning/interserver-vps-plan.example.yaml
-          --quote dist/wb0035-a1/interserver-vps-quote.live.json
+        if: ${{ steps.probe.outputs.exit_code == '0' }}
+        shell: bash
+        run: |
+          set +e
+          python scripts/validate_vps_plan.py \
+            --plan .cybercore/provisioning/interserver-vps-plan.example.yaml \
+            --quote dist/wb0035-a1/interserver-vps-quote.live.json
+          rc=$?
+          echo "exit_code=${rc}" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Build safe A1 status report
         if: ${{ always() }}
         shell: bash
         env:
           CREDENTIAL_OUTCOME: ${{ steps.credential.outcome }}
-          PROBE_OUTCOME: ${{ steps.probe.outcome }}
-          VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          PROBE_EXIT_CODE: ${{ steps.probe.outputs.exit_code }}
+          VALIDATE_EXIT_CODE: ${{ steps.validate.outputs.exit_code }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           mkdir -p dist/wb0035-status
@@ -75,10 +87,11 @@ jobs:
           from pathlib import Path
 
           credential = os.environ.get("CREDENTIAL_OUTCOME", "unknown")
-          probe = os.environ.get("PROBE_OUTCOME", "unknown")
-          validate = os.environ.get("VALIDATE_OUTCOME", "unknown")
+          probe_exit = os.environ.get("PROBE_EXIT_CODE", "")
+          validate_exit = os.environ.get("VALIDATE_EXIT_CODE", "")
           head = os.environ.get("HEAD_SHA", "unknown")
           quote_path = Path("dist/wb0035-a1/interserver-vps-quote.live.json")
+          probe_log = Path("dist/wb0035-status/probe.log")
 
           lines = [
               "## WB-0035 A1 runtime result",
@@ -93,13 +106,20 @@ jobs:
                   "",
                   "`INTERSERVER_API_KEY` is not configured for this GitHub Actions runtime. No authenticated InterServer call was made.",
               ])
-          elif probe != "success":
+          elif probe_exit != "0":
+              reason = "authorized provider probe failed closed"
+              if probe_log.exists():
+                  safe_lines = [line.strip() for line in probe_log.read_text(encoding="utf-8").splitlines() if line.strip().startswith("WB-0035 A1 BLOCKED:")]
+                  if safe_lines:
+                      reason = safe_lines[-1].removeprefix("WB-0035 A1 BLOCKED:").strip()
               lines.extend([
                   "**BLOCKED — authorized A1 provider probe did not produce a verified quote.**",
                   "",
-                  "The probe failed closed. No order or payment action exists in this workflow.",
+                  f"Safe diagnostic: `{reason}`",
+                  "",
+                  "No order or payment action exists in this workflow.",
               ])
-          elif validate != "success" or not quote_path.exists():
+          elif validate_exit != "0" or not quote_path.exists():
               lines.extend([
                   "**BLOCKED — sanitized live quote failed the WB-0035 plan gate.**",
                   "",
@@ -133,7 +153,7 @@ jobs:
           PY
 
       - name: Upload sanitized A1 evidence
-        if: ${{ steps.validate.outcome == 'success' }}
+        if: ${{ steps.validate.outputs.exit_code == '0' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: wb0035-a1-interserver-quote
