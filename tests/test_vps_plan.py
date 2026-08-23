@@ -95,6 +95,22 @@ def test_subcent_quote_amount_is_rejected(tmp_path: Path) -> None:
     assert any("whole-cent recurring_price_usd_month" in error for error in result.errors)
 
 
+def test_extreme_decimal_exponent_fails_closed_without_exception(tmp_path: Path) -> None:
+    quote = tmp_path / "quote.yaml"
+    quote.write_text(
+        _live_quote_text().replace(
+            "recurring_price_usd_month: 3.00",
+            "recurring_price_usd_month: 1e999999999",
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_plan_and_quote(PLAN, quote)
+
+    assert not result.ok
+    assert any("exceeds monthly budget ceiling" in error for error in result.errors)
+
+
 def test_unexpected_one_time_charge_is_blocked(tmp_path: Path) -> None:
     quote = tmp_path / "quote.yaml"
     quote.write_text(
