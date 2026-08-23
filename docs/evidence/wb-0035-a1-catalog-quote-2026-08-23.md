@@ -1,6 +1,6 @@
 # WB-0035 A1 — InterServer VPS catalog + quote
 
-Status: `PARTIAL — PUBLIC CATALOG VERIFIED; AUTHENTICATED QUOTE BLOCKED BY CURRENT RUNTIME ACCESS`
+Status: `PARTIAL — PUBLIC CATALOG VERIFIED; AUTHENTICATED A1 BLOCKED BY PROVIDER HTTP 403`
 
 Date: 2026-08-23
 Work block: `WB-0035 — InterServer VPS + Vikunja ADHD Time-Management MVP`
@@ -58,7 +58,7 @@ These public pages are useful catalog evidence but are **not** treated as an acc
 
 ## API contract review
 
-The current official InterServer REST documentation describes:
+Current official InterServer REST documentation describes:
 
 ```text
 GET /apiv2/vps/order
@@ -72,7 +72,7 @@ It describes:
 PUT /apiv2/vps/order
 ```
 
-as a pure validation/quote operation with no invoice or service creation. The documentation's current example accepts a candidate equivalent to:
+as validation/quote without invoice or service creation. The current documentation example accepts a candidate equivalent to:
 
 ```yaml
 vpsPlatform: kvm
@@ -86,18 +86,21 @@ location: 1
 
 and shows a USD 3.00 one-slice validation result. That example confirms API semantics and expected shape only; it is **not** accepted as the live account quote required by WB-0035.
 
+Authentication is documented as API key in the `X-API-KEY` header. The provider documentation generally describes missing/invalid authentication on authenticated API operations as `401 Unauthorized`.
+
+The same documentation also describes account-wide Web/API IP restrictions. Once an IP allow-list exists, `/apiv2` access can be restricted by source IP. This is a plausible explanation for an HTTP 403 from a GitHub-hosted runner, but it is **not proven** by the current A1 evidence.
+
 Provider API reference:
 
 - `https://my.interserver.net/api-docs/redoc.html`
 
-## A1 runtime execution result
+## A1 runtime execution history
 
-A safe `GET https://my.interserver.net/apiv2/vps/order` was attempted from the currently available isolated execution runtime.
+### Attempt 1 — isolated ChatGPT execution runtime
 
-Result:
+A safe provider request could not be completed because that isolated runtime did not have usable provider network/credential access.
 
 ```yaml
-runtime_network_result: DNS_RESOLUTION_FAILED
 provider_response_observed: false
 authenticated_provider_call_performed: false
 order_performed: false
@@ -106,13 +109,67 @@ provider_mutation_performed: false
 secret_values_recorded: false
 ```
 
-The current ChatGPT tool environment also exposes no connected InterServer account connector and no approved InterServer credential is present in the available runtime environment. No old/revoked credential was reused and no credential was requested into chat.
+### Attempt 2 — GitHub Actions before credential alias existed
 
-Therefore the account-scoped `GET /apiv2/vps/order` catalog and `PUT /apiv2/vps/order` quote were **not** executed from this runtime.
+The ephemeral A1 runner failed closed because `INTERSERVER_API_KEY` was not configured.
 
-## Current decision
+```yaml
+credential_alias_available: false
+authenticated_provider_call_performed: false
+order_performed: false
+payment_performed: false
+provider_mutation_performed: false
+secret_values_recorded: false
+```
 
-Public catalog evidence supports the planned 1-slice KVM candidate and the USD 3.00/month ceiling:
+### Attempt 3 — GitHub Actions after operator configured the secret alias
+
+Exact A1 diagnostic head:
+
+```text
+60462829e8f7531ab9cc5edd33e6f279d60c458f
+```
+
+The runtime confirmed that the credential alias was present, then the bounded A1 provider probe stopped on:
+
+```text
+InterServer returned HTTP 403
+```
+
+No sanitized live catalog or quote was produced, therefore A1 remains unverified.
+
+Safety receipt:
+
+```yaml
+credential_alias_available: true
+provider_response_observed: true
+provider_http_status: 403
+authenticated_catalog_verified: false
+live_quote_verified: false
+order_performed: false
+payment_performed: false
+provider_mutation_performed: false
+secret_values_recorded: false
+```
+
+The ephemeral GitHub Actions runner was removed after the safe stop so the repository's normal fixed workflow set remains unchanged.
+
+## Interpretation
+
+The `INTERSERVER_API_KEY` secret is now reaching the A1 runtime. The current blocker is provider access, not a missing GitHub secret.
+
+Because the documented authenticated endpoints normally use `401` for missing/invalid authentication while InterServer also supports source-IP restrictions, HTTP 403 is **consistent with** an account/provider access-policy or upstream protection decision. The current evidence does not prove whether the exact cause is:
+
+- an InterServer account IP allow-list;
+- another provider security policy / WAF gate affecting GitHub-hosted runners;
+- a credential/account policy not described by the endpoint schema;
+- another provider-side authorization condition.
+
+Do not bypass provider security controls by adding undocumented headers or changing InterServer account security under A1. Any IP allow-list change, API-key rotation, or other account-security mutation requires separate explicit authorization.
+
+## Current candidate
+
+Public catalog evidence still supports:
 
 ```yaml
 candidate:
@@ -130,23 +187,21 @@ candidate:
     transfer_tb: 2
 ```
 
-However A1 does **not** reach `VERIFIED` until an approved CyberCore runtime with an existing secret reference performs the authenticated catalog read and pure quote validation, captures location stock/OS-template availability, and produces a sanitized quote receipt.
-
-No A2 purchase approval packet may be treated as valid until that happens.
+This is **not** yet an account-scoped live quote and must not be used as A2 purchase evidence.
 
 ## Stop line
-
-Current stop state:
 
 ```yaml
 A1_authorized: true
 public_catalog_verified: true
+credential_alias_available: true
 authenticated_catalog_verified: false
 live_quote_verified: false
+latest_provider_result: HTTP_403
 A2_purchase_authorized: false
 A2_payment_authorized: false
 A3_bootstrap_deploy_authorized: false
 A4_dns_authorized: false
 ```
 
-Do not call `POST /apiv2/vps/order`, any invoice/payment operation, or any other InterServer mutation under this authorization.
+Do not call `POST /apiv2/vps/order`, any invoice/payment operation, modify InterServer account security, rotate credentials, or perform any other InterServer mutation under this authorization.
