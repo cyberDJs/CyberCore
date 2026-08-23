@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACTIVE — A1 VERIFIED; PRE-A2 INVENTORY AUTHORIZATION REQUIRED; PURCHASE NOT AUTHORIZED`
+`ACTIVE — A1 VERIFIED; PRE-A2 INVENTORY AUTHORIZED/PENDING; PURCHASE NOT AUTHORIZED`
 
 Date: 2026-08-23
 Canonical base: `main@2bea07db4e0a5d2a062c96ef1642a6f2a0927f0a`
@@ -15,7 +15,7 @@ Budget ceiling: USD 3.00/month unless separately approved
 
 Prepare a fail-closed path for CyberCore to discover the current InterServer VPS catalog, produce a non-mutating live quote, stop for explicit human approval before purchase/payment, and only later—under separate authority gates—provision at most one VPS, harden it, deploy Vikunja, publish DNS, and verify persistence/backup/restore.
 
-A1 catalog + quote is now verified. A2 purchase/payment, A3 bootstrap/deploy, and A4 DNS remain not granted.
+A1 catalog + quote is verified. PRE-A2 read-only existing-VPS inventory is authorized but not yet executed. A2 purchase/payment, A3 bootstrap/deploy, and A4 DNS remain not granted.
 
 ## Client direction
 
@@ -118,20 +118,33 @@ A1 provider activity is complete. No further A1 provider calls are required.
 
 ### PRE-A2 — existing VPS inventory / reuse decision
 
-`NOT_GRANTED`
+`AUTHORIZED — READ-ONLY INVENTORY PENDING EXECUTION`
 
-Before any purchase decision, CyberCore must inspect current account VPS inventory through read-only `GET /apiv2/vps` / `getVpsList` and decide **reuse vs new provisioning**.
+Operator authorization granted on 2026-08-23 at 21:39 CEST:
 
-This inventory call was not included in the existing A1 wording, so it requires separate explicit read-only authorization. It must not mutate, cancel, resize, reboot, reinstall or otherwise alter any existing VPS.
+> Schvaluju PRE-A2: read-only inventuru existujících InterServer VPS přes GET /apiv2/vps pro WB-0035. Bez jakékoli změny, restartu, resize, reinstallu, zrušení, objednávky nebo platby.
 
-Expected output is a sanitized inventory summary sufficient to answer:
+Authorized:
 
-- how many VPS services already exist;
-- which are active;
-- hostname / primary IP / plan or slice count where safely exposed;
-- current monthly cost;
-- whether an existing VPS could safely host the task-management MVP;
-- whether a new VPS would create duplicate or unnecessary spend.
+- exactly one read-only authenticated `GET /apiv2/vps` inventory request for WB-0035;
+- local sanitization of the response;
+- determining existing VPS count, active state, safe identifying/configuration facts and monthly cost where returned;
+- making the reuse-vs-new recommendation.
+
+Still prohibited:
+
+- purchase/payment;
+- reboot/start/stop/shutdown;
+- resize/reinstall/migrate;
+- cancel/delete;
+- credential or account-security mutation;
+- SSH/application access;
+- DNS mutation;
+- any other provider mutation.
+
+Runtime handling must keep the API key out of output, store the raw response only in a mode-0600 temporary file, inspect shape before exposing values, retain only sanitized evidence, and remove the temporary raw response after sanitization.
+
+Evidence: `docs/evidence/wb-0035-pre-a2-inventory-2026-08-23.md`.
 
 ### A2 — purchase + payment
 
