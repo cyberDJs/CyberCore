@@ -103,6 +103,15 @@ def test_sanitize_quote_drops_secret_and_customer_fields() -> None:
     assert "123456" not in rendered
 
 
+def test_missing_quote_errors_field_fails_closed() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    raw_quote = copy.deepcopy(_load(QUOTE_FIXTURE))
+    raw_quote.pop("errors")
+
+    with pytest.raises(A1ProbeError, match=r"errors=\[\]"):
+        sanitize_quote(candidate, raw_quote)
+
+
 def test_provider_json_money_lexeme_is_preserved_before_validation() -> None:
     candidate = select_candidate(_load(CATALOG_FIXTURE))
     raw = QUOTE_FIXTURE.read_text(encoding="utf-8").replace(
