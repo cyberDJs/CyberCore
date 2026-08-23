@@ -82,6 +82,25 @@ def _decimal(value: object, label: str) -> Decimal:
     return number
 
 
+def _whole_cent_decimal(value: object, label: str) -> Decimal:
+    """Parse provider money without rounding away fractional-cent data."""
+    number = _decimal(value, label)
+    decimal_tuple = number.as_tuple()
+    exponent = decimal_tuple.exponent
+    if not isinstance(exponent, int):
+        raise A1ProbeError(f"provider response has invalid numeric field: {label}")
+    if exponent < -2:
+        extra_places = -2 - exponent
+        digits = decimal_tuple.digits
+        if extra_places >= len(digits):
+            has_fractional_cent = any(digit != 0 for digit in digits)
+        else:
+            has_fractional_cent = any(digit != 0 for digit in digits[-extra_places:])
+        if has_fractional_cent:
+            raise A1ProbeError(f"provider response has fractional-cent numeric field: {label}")
+    return number
+
+
 def _positive_int(value: object, label: str) -> int:
     if isinstance(value, bool):
         raise A1ProbeError(f"provider response has invalid integer field: {label}")
@@ -152,7 +171,7 @@ def select_candidate(catalog: dict[str, object]) -> Candidate:
         raise A1ProbeError("no KVM location reports live stock")
 
     location_id, location_name = sorted(candidates)[0]
-    monthly = _decimal(catalog.get(KVM_CATALOG_PRICE_FIELD), KVM_CATALOG_PRICE_FIELD)
+    monthly = _whole_cent_decimal(catalog.get(KVM_CATALOG_PRICE_FIELD), KVM_CATALOG_PRICE_FIELD)
     if monthly <= 0:
         raise A1ProbeError("live catalog KVM slice price must be positive")
     if monthly > MAX_MONTHLY_USD:
@@ -229,17 +248,17 @@ def sanitize_quote(candidate: Candidate, response: dict[str, object]) -> dict[st
     if location != candidate.location_id:
         raise A1ProbeError("provider quote response mismatch for location")
 
-    monthly = _decimal(
+    monthly = _whole_cent_decimal(
         response.get("monthly_service_cost", response.get("repeat_service_cost")),
         "monthly_service_cost",
     )
-    service_cost = _decimal(response.get("service_cost"), "service_cost")
+    service_cost = _whole_cent_decimal(response.get("service_cost"), "service_cost")
     if monthly > MAX_MONTHLY_USD:
         raise A1ProbeError("live quote exceeds the authorized USD 3.00 monthly ceiling")
-    if service_cost < monthly:
-        raise A1ProbeError("provider quote service_cost is unexpectedly below monthly cost")
+    if service_cost != monthly:
+        raise A1ProbeError("provider quote contains an unexpected one-time charge")
 
-    one_time = service_cost - monthly
+    one_time = Decimal("0.00")
     safe_fingerprint_source = {
         "platform": candidate.platform,
         "slices": candidate.slices,
@@ -275,6 +294,8 @@ def sanitize_quote(candidate: Candidate, response: dict[str, object]) -> dict[st
         "control_panel": candidate.control_panel,
         "period_months": candidate.period_months,
         "quantity": 1,
+        "location_id": candidate.location_id,
+        "location_name": candidate.location_name,
         "stock_available": True,
         "resources": {
             "ram_mib": candidate.ram_mib,
