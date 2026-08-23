@@ -183,14 +183,10 @@ def _reject_denied_loaded_scalars(
             for key, item in value.items():
                 if isinstance(key, str):
                     _reject_denied_literals(key, context, errors)
-                _reject_denied_loaded_scalars(
-                    item, context, errors, depth=depth + 1, seen=seen
-                )
+                _reject_denied_loaded_scalars(item, context, errors, depth=depth + 1, seen=seen)
         else:
             for item in value:
-                _reject_denied_loaded_scalars(
-                    item, context, errors, depth=depth + 1, seen=seen
-                )
+                _reject_denied_loaded_scalars(item, context, errors, depth=depth + 1, seen=seen)
     finally:
         seen.remove(identity)
 
@@ -246,9 +242,7 @@ def _collect_structure_errors(
         seen.remove(identity)
 
 
-def _parse_closed_yaml_text(
-    text: str, context: str
-) -> tuple[dict[str, object] | None, list[str]]:
+def _parse_closed_yaml_text(text: str, context: str) -> tuple[dict[str, object] | None, list[str]]:
     errors: list[str] = []
     _reject_denied_literals(text, context, errors)
 
@@ -530,9 +524,7 @@ def _validate_loaded_pair(
                 f"quote {key} does not match plan: {quote.get(key)!r} != {plan.get(key)!r}"
             )
 
-    monthly = _require_non_negative_money(
-        quote, "recurring_price_usd_month", "VPS quote", errors
-    )
+    monthly = _require_non_negative_money(quote, "recurring_price_usd_month", "VPS quote", errors)
     monthly_budget = _require_non_negative_money(
         plan, "budget_ceiling_usd_month", "VPS plan", errors
     )
@@ -617,9 +609,7 @@ def prepare_purchase_approval_packet(
         return VpsValidationResult(False, tuple(errors), tuple(dict.fromkeys(warnings))), None
 
     quote_reference = _require_non_empty_string(quote, "quote_reference", "VPS quote", errors)
-    monthly = _require_non_negative_money(
-        quote, "recurring_price_usd_month", "VPS quote", errors
-    )
+    monthly = _require_non_negative_money(quote, "recurring_price_usd_month", "VPS quote", errors)
     one_time = _require_non_negative_money(quote, "one_time_price_usd", "VPS quote", errors)
     if errors or quote_reference is None or monthly is None or one_time is None:
         return VpsValidationResult(False, tuple(errors), tuple(dict.fromkeys(warnings))), None
