@@ -1,6 +1,6 @@
 # WB-0035 A1 — InterServer VPS catalog + quote
 
-Status: `PARTIAL — PUBLIC CATALOG VERIFIED; AUTHENTICATED A1 BLOCKED BY PROVIDER HTTP 403`
+Status: `PARTIAL — AUTHENTICATED CATALOG VERIFIED; LIVE QUOTE PENDING`
 
 Date: 2026-08-23
 Work block: `WB-0035 — InterServer VPS + Vikunja ADHD Time-Management MVP`
@@ -29,175 +29,140 @@ Authorized scope:
 
 A2 purchase/payment, A3 bootstrap/deploy, and A4 DNS remain **not granted**.
 
-## Public provider catalog observation
-
-Official InterServer public VPS pages were checked on 2026-08-23 before attempting authenticated A1 execution.
-
-Current public Linux/KVM starting point observed from InterServer:
-
-```yaml
-platform: KVM
-slices: 1
-price_usd_month: 3.00
-cpu_cores: 1
-ram_mib: 2048
-ssd_gib: 40
-transfer_tb: 2
-root_access: true
-```
-
-The official Ubuntu Cloud Compute page also currently advertises the same one-slice starting point at USD 3.00/month with 1 core, 2 GB RAM, 40 GB SSD and 2 TB transfer.
-
-Provider references:
-
-- `https://www.interserver.net/vps/`
-- `https://www.interserver.net/vps/cheap-vps.html`
-- `https://www.interserver.net/vps/ubuntu-vps.html`
-
-These public pages are useful catalog evidence but are **not** treated as an account-scoped purchase quote or stock proof.
-
 ## API contract review
 
-Current official InterServer REST documentation describes:
+InterServer's current client API exposes the VPS flow as:
 
 ```text
-GET /apiv2/vps/order
+GET  /apiv2/vps/order  -> ordering catalog
+PUT  /apiv2/vps/order  -> validate configuration and quote; no service/invoice creation
+POST /apiv2/vps/order  -> real order; service/invoice creation
 ```
 
-as the authenticated VPS ordering catalog, including virtualization platforms, OS templates, location stock, per-slice resources/pricing and billing currency.
-
-It describes:
-
-```text
-PUT /apiv2/vps/order
-```
-
-as validation/quote without invoice or service creation. The current documentation example accepts a candidate equivalent to:
-
-```yaml
-vpsPlatform: kvm
-osDistro: ubuntu
-osVersion: ubuntu24
-slices: 1
-controlpanel: none
-period: 1
-location: 1
-```
-
-and shows a USD 3.00 one-slice validation result. That example confirms API semantics and expected shape only; it is **not** accepted as the live account quote required by WB-0035.
-
-Authentication is documented as API key in the `X-API-KEY` header. The provider documentation generally describes missing/invalid authentication on authenticated API operations as `401 Unauthorized`.
-
-The same documentation also describes account-wide Web/API IP restrictions. Once an IP allow-list exists, `/apiv2` access can be restricted by source IP. This is a plausible explanation for an HTTP 403 from a GitHub-hosted runner, but it is **not proven** by the current A1 evidence.
-
-Provider API reference:
-
-- `https://my.interserver.net/api-docs/redoc.html`
+Authentication uses `X-API-KEY`. The private InterServer MCP discovery independently describes `getNewVps` as the catalog operation, `putVps` as the dry-run quote operation, and `addVps` as the real-money order operation.
 
 ## A1 runtime execution history
 
 ### Attempt 1 — isolated ChatGPT execution runtime
 
-A safe provider request could not be completed because that isolated runtime did not have usable provider network/credential access.
-
-```yaml
-provider_response_observed: false
-authenticated_provider_call_performed: false
-order_performed: false
-payment_performed: false
-provider_mutation_performed: false
-secret_values_recorded: false
-```
+No authenticated provider response was obtained. No mutation occurred.
 
 ### Attempt 2 — GitHub Actions before credential alias existed
 
-The ephemeral A1 runner failed closed because `INTERSERVER_API_KEY` was not configured.
+The ephemeral runner failed closed because `INTERSERVER_API_KEY` was absent. No provider call or mutation occurred.
 
-```yaml
-credential_alias_available: false
-authenticated_provider_call_performed: false
-order_performed: false
-payment_performed: false
-provider_mutation_performed: false
-secret_values_recorded: false
-```
+### Attempt 3 — GitHub Actions with credential alias
 
-### Attempt 3 — GitHub Actions after operator configured the secret alias
-
-Exact A1 diagnostic head:
+The secret alias was present, but the GitHub-hosted runner received:
 
 ```text
-60462829e8f7531ab9cc5edd33e6f279d60c458f
+HTTP 403
 ```
 
-The runtime confirmed that the credential alias was present, then the bounded A1 provider probe stopped on:
+No catalog/quote evidence was accepted from that runtime. The ephemeral workflow was removed after the safe stop.
+
+### Attempt 4 — operator Mac, same API-key contract
+
+The operator executed the authenticated catalog request locally using the `X-API-KEY` header:
 
 ```text
-InterServer returned HTTP 403
+GET https://my.interserver.net/apiv2/vps/order
+HTTP 200
 ```
 
-No sanitized live catalog or quote was produced, therefore A1 remains unverified.
-
-Safety receipt:
+Only non-secret catalog fields were retained for this evidence. The authenticated catalog reported:
 
 ```yaml
-credential_alias_available: true
-provider_response_observed: true
-provider_http_status: 403
-authenticated_catalog_verified: false
-live_quote_verified: false
-order_performed: false
-payment_performed: false
-provider_mutation_performed: false
-secret_values_recorded: false
+currency: USD
+platform: kvm
+platform_name: KVM
+kvm_slice_price_field: vpsSliceKvmLCost
+kvm_slice_price_usd_month: 3.00
+vpsNyCost_observed: 1
+ram_per_slice_mib: 2048
+disk_per_slice_gib: 40
+bandwidth_per_slice_gib: 2000
+ubuntu24_template: ubuntu24
+ubuntu24_template_label: "24.04"
+locations:
+  1:
+    name: New Jersey
+    kvm_stock: true
+  2:
+    name: Los Angeles
+    kvm_stock: true
+  3:
+    name: Dallas, TX
+    kvm_stock: true
 ```
 
-The ephemeral GitHub Actions runner was removed after the safe stop so the repository's normal fixed workflow set remains unchanged.
+This proves the authenticated catalog portion of A1 from the operator Mac. It does **not** yet prove the final `PUT` quote response.
 
-## Interpretation
+## Parser correction discovered by live catalog
 
-The `INTERSERVER_API_KEY` secret is now reaching the A1 runtime. The current blocker is provider access, not a missing GitHub secret.
+The original A1 parser incorrectly treated `vpsNyCost` as the KVM slice price. The live catalog demonstrates that the selected KVM platform's explicit per-slice price is:
 
-Because the documented authenticated endpoints normally use `401` for missing/invalid authentication while InterServer also supports source-IP restrictions, HTTP 403 is **consistent with** an account/provider access-policy or upstream protection decision. The current evidence does not prove whether the exact cause is:
+```text
+vpsSliceKvmLCost = 3
+```
 
-- an InterServer account IP allow-list;
-- another provider security policy / WAF gate affecting GitHub-hosted runners;
-- a credential/account policy not described by the endpoint schema;
-- another provider-side authorization condition.
+while:
 
-Do not bypass provider security controls by adding undocumented headers or changing InterServer account security under A1. Any IP allow-list change, API-key rotation, or other account-security mutation requires separate explicit authorization.
+```text
+vpsNyCost = 1
+```
+
+is a distinct catalog field and must not be used as the selected KVM platform price.
+
+CyberCore was corrected to:
+
+- bind the KVM candidate to `vpsSliceKvmLCost`;
+- reject non-positive or > USD 3.00 KVM slice pricing;
+- require the exact `templates.kvm.ubuntu.ubuntu24` template;
+- mirror the live 2 GiB / 40 GiB / 2000 GiB-per-slice catalog shape in the synthetic fixture;
+- keep `vpsNyCost=1` in the fixture as a regression trap so it cannot silently become the KVM price again.
 
 ## Current candidate
 
-Public catalog evidence still supports:
+Authenticated catalog evidence now supports:
 
 ```yaml
 candidate:
   platform: kvm
   slices: 1
   os_distro: ubuntu
-  os_version_candidate: ubuntu24
+  os_version: ubuntu24
   control_panel: none
-  public_hostname_candidate: tasks.cyberdjs.org
-  public_price_evidence_usd_month: 3.00
-  public_resources:
-    cpu_cores: 1
-    ram_mib: 2048
-    disk_gib: 40
-    transfer_tb: 2
+  location_id: 1
+  location_name: New Jersey
+  public_hostname: tasks.cyberdjs.org
+  catalog_price_usd_month: 3.00
+  ram_mib: 2048
+  disk_gib: 40
+  transfer_gib: 2000
 ```
 
-This is **not** yet an account-scoped live quote and must not be used as A2 purchase evidence.
+Location `1` is currently selected deterministically because all three reported KVM stock and it is the lowest stable location id. This is not a statement that New Jersey is globally optimal; it is the deterministic current WB-0035 candidate.
+
+## Existing-service guard before purchase
+
+The private API/MCP contract also exposes a read-only VPS inventory operation (`GET /apiv2/vps` / `getVpsList`) that lists existing VPS services, their status, hostname, primary IP, plan and monthly cost.
+
+Before any A2 purchase can be considered, CyberCore must inspect current VPS inventory and decide **reuse vs new provisioning**. The original A1 authorization names catalog + quote; this evidence does not claim that an inventory call has already been authorized or performed.
 
 ## Stop line
 
 ```yaml
 A1_authorized: true
-public_catalog_verified: true
-credential_alias_available: true
-authenticated_catalog_verified: false
+authenticated_catalog_verified: true
 live_quote_verified: false
-latest_provider_result: HTTP_403
+catalog_runtime: operator_mac
+catalog_http_status: 200
+catalog_kvm_price_usd_month: 3.00
+order_performed: false
+payment_performed: false
+provider_mutation_performed: false
+secret_values_recorded: false
 A2_purchase_authorized: false
 A2_payment_authorized: false
 A3_bootstrap_deploy_authorized: false
