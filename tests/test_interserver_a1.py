@@ -91,6 +91,8 @@ def test_sanitize_quote_drops_secret_and_customer_fields() -> None:
     assert sanitized["evidence_mode"] == "LIVE_READ_ONLY"
     assert sanitized["recurring_price_usd_month"] == "3.00"
     assert sanitized["one_time_price_usd"] == "0.00"
+    assert sanitized["location_id"] == 1
+    assert sanitized["location_name"] == "New Jersey"
     assert sanitized["order_performed"] is False
     assert sanitized["payment_performed"] is False
     assert sanitized["secret_values_recorded"] is False
@@ -115,6 +117,14 @@ def test_catalog_above_budget_fails_closed() -> None:
     catalog["vpsSliceKvmLCost"] = 3.01
 
     with pytest.raises(A1ProbeError, match="monthly ceiling"):
+        select_candidate(catalog)
+
+
+def test_catalog_fractional_cent_fails_closed() -> None:
+    catalog = copy.deepcopy(_load(CATALOG_FIXTURE))
+    catalog["vpsSliceKvmLCost"] = "2.994"
+
+    with pytest.raises(A1ProbeError, match="fractional-cent"):
         select_candidate(catalog)
 
 
@@ -147,6 +157,26 @@ def test_quote_above_budget_fails_closed() -> None:
     raw_quote["monthly_service_cost"] = 4
 
     with pytest.raises(A1ProbeError, match="monthly ceiling"):
+        sanitize_quote(candidate, raw_quote)
+
+
+def test_quote_fractional_cent_fails_closed_before_rounding() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    raw_quote = copy.deepcopy(_load(QUOTE_FIXTURE))
+    raw_quote["service_cost"] = "2.994"
+    raw_quote["monthly_service_cost"] = "2.994"
+
+    with pytest.raises(A1ProbeError, match="fractional-cent"):
+        sanitize_quote(candidate, raw_quote)
+
+
+def test_quote_unexpected_one_time_charge_fails_closed() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    raw_quote = copy.deepcopy(_load(QUOTE_FIXTURE))
+    raw_quote["service_cost"] = "3.01"
+    raw_quote["monthly_service_cost"] = "3.00"
+
+    with pytest.raises(A1ProbeError, match="one-time charge"):
         sanitize_quote(candidate, raw_quote)
 
 
