@@ -13,6 +13,7 @@ from cybercore.interserver_a1 import (
     PASSWORD_LOWER,
     PASSWORD_SPECIALS,
     PASSWORD_UPPER,
+    _decode_provider_json,
     build_quote_payload,
     safe_catalog_receipt,
     sanitize_quote,
@@ -100,6 +101,19 @@ def test_sanitize_quote_drops_secret_and_customer_fields() -> None:
     assert "SYNTHETIC_SECRET_MUST_NOT_ESCAPE" not in rendered
     assert "custid" not in rendered.lower()
     assert "123456" not in rendered
+
+
+def test_provider_json_money_lexeme_is_preserved_before_validation() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    raw = QUOTE_FIXTURE.read_text(encoding="utf-8").replace(
+        '"monthly_service_cost": 3',
+        '"monthly_service_cost": 3.0000000000000001',
+    )
+    decoded = _decode_provider_json(raw.encode("utf-8"))
+
+    assert decoded["monthly_service_cost"] == Decimal("3.0000000000000001")
+    with pytest.raises(A1ProbeError, match="fractional-cent"):
+        sanitize_quote(candidate, decoded)
 
 
 def test_live_quote_os_version_field_mapping_is_enforced() -> None:
