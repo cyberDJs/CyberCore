@@ -18,6 +18,7 @@ TARGET_HOSTNAME = "tasks.cyberdjs.org"
 MAX_MONTHLY_USD = Decimal("3.00")
 MIN_RAM_MIB = 2048
 MIN_DISK_GIB = 30
+KVM_CATALOG_PRICE_FIELD = "vpsSliceKvmLCost"
 
 
 class A1ProbeError(RuntimeError):
@@ -94,16 +95,6 @@ def _mapping(value: object, label: str) -> dict[str, object]:
     return value
 
 
-def _contains_scalar(value: object, expected: str) -> bool:
-    if isinstance(value, dict):
-        return any(
-            key == expected or _contains_scalar(child, expected) for key, child in value.items()
-        )
-    if isinstance(value, list):
-        return any(_contains_scalar(child, expected) for child in value)
-    return isinstance(value, str) and value == expected
-
-
 def select_candidate(catalog: dict[str, object]) -> Candidate:
     currency = catalog.get("currency")
     if currency != "USD":
@@ -118,7 +109,9 @@ def select_candidate(catalog: dict[str, object]) -> Candidate:
         raise A1ProbeError("Ubuntu is not present in the live VPS catalog")
 
     templates = _mapping(catalog.get("templates"), "templates")
-    if not _contains_scalar(templates.get("kvm"), "ubuntu24"):
+    kvm_templates = _mapping(templates.get("kvm"), "templates.kvm")
+    ubuntu_templates = _mapping(kvm_templates.get("ubuntu"), "templates.kvm.ubuntu")
+    if "ubuntu24" not in ubuntu_templates:
         raise A1ProbeError("Ubuntu 24 template is not present in the live KVM catalog")
 
     location_stock = _mapping(catalog.get("locationStock"), "locationStock")
@@ -139,7 +132,9 @@ def select_candidate(catalog: dict[str, object]) -> Candidate:
         raise A1ProbeError("no KVM location reports live stock")
 
     location_id, location_name = sorted(candidates)[0]
-    monthly = _decimal(catalog.get("vpsNyCost"), "vpsNyCost")
+    monthly = _decimal(catalog.get(KVM_CATALOG_PRICE_FIELD), KVM_CATALOG_PRICE_FIELD)
+    if monthly <= 0:
+        raise A1ProbeError("live catalog KVM slice price must be positive")
     if monthly > MAX_MONTHLY_USD:
         raise A1ProbeError("live catalog price exceeds the authorized USD 3.00 monthly ceiling")
 
@@ -280,6 +275,7 @@ def safe_catalog_receipt(candidate: Candidate) -> dict[str, object]:
         "provider_contact_performed": True,
         "order_performed": False,
         "payment_performed": False,
+        "catalog_price_field": KVM_CATALOG_PRICE_FIELD,
         "candidate": candidate.as_safe_dict(),
     }
 
