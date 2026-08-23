@@ -71,10 +71,10 @@ class _NoRedirectHandler(HTTPRedirectHandler):
 
 
 def _decimal(value: object, label: str) -> Decimal:
-    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+    if isinstance(value, bool) or not isinstance(value, (Decimal, int, float, str)):
         raise A1ProbeError(f"provider response has invalid numeric field: {label}")
     try:
-        number = Decimal(str(value))
+        number = value if isinstance(value, Decimal) else Decimal(str(value))
     except InvalidOperation as exc:
         raise A1ProbeError(f"provider response has invalid numeric field: {label}") from exc
     if not number.is_finite():
@@ -323,6 +323,17 @@ def safe_catalog_receipt(candidate: Candidate) -> dict[str, object]:
     }
 
 
+def _decode_provider_json(raw: bytes) -> dict[str, object]:
+    """Decode provider JSON while preserving every decimal lexeme exactly."""
+    try:
+        decoded = json.loads(raw.decode("utf-8"), parse_float=Decimal)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise A1ProbeError("InterServer returned a non-JSON or undecodable response") from exc
+    if not isinstance(decoded, dict) or not all(isinstance(key, str) for key in decoded):
+        raise A1ProbeError("InterServer returned an unexpected response shape")
+    return decoded
+
+
 def _request_json(
     method: str,
     url: str,
@@ -358,13 +369,7 @@ def _request_json(
             "InterServer connection failed before a safe response was obtained"
         ) from exc
 
-    try:
-        decoded = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise A1ProbeError("InterServer returned a non-JSON or undecodable response") from exc
-    if not isinstance(decoded, dict) or not all(isinstance(key, str) for key in decoded):
-        raise A1ProbeError("InterServer returned an unexpected response shape")
-    return decoded
+    return _decode_provider_json(raw)
 
 
 def run_live_a1(api_key: str, out_dir: Path) -> tuple[Path, Path]:
