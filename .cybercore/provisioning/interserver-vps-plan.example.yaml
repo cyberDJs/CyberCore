@@ -1,0 +1,28 @@
+version: 1
+work_block: WB-0035
+provider: InterServer
+mode: plan_only
+public_hostname: tasks.cyberdjs.org
+platform: kvm
+slices: 1
+os_distro: ubuntu
+os_version: ubuntu24
+control_panel: none
+period_months: 1
+quantity: 1
+budget_ceiling_usd_month: 3.00
+one_time_budget_ceiling_usd: 0.00
+minimum_resources:
+  ram_mib: 2048
+  disk_gib: 30
+authority:
+  provider_contact_allowed: false
+  order_allowed: false
+  payment_allowed: false
+  dns_mutation_allowed: false
+  ssh_mutation_allowed: false
+  application_deploy_allowed: false
+  max_new_vps_count: 1
+evidence:
+  plaintext_secret_values_allowed: false
+  safe_aliases_only: true
