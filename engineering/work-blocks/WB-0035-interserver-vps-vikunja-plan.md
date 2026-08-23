@@ -72,7 +72,7 @@ MVP choices:
 - reverse proxy: Caddy;
 - database: SQLite for the first small-team MVP;
 - application: Vikunja;
-- public hostname candidate: `tasks.eimyherrer.com`;
+- public hostname candidate: `tasks.cyberdjs.org`;
 - public DNS remains approval-gated and is not authorized by this work block.
 
 If the live provider catalog, pricing, stock, or OS availability differs, the plan must be regenerated rather than silently substituting another configuration.
@@ -173,7 +173,7 @@ Requires a separate DNS approval for exactly one hostname after the application 
 Candidate only:
 
 ```text
-tasks.eimyherrer.com -> <new VPS public IP>
+tasks.cyberdjs.org -> <new VPS public IP>
 ```
 
 No apex, `www`, MX, mail, staging or unrelated record mutation is implied.
