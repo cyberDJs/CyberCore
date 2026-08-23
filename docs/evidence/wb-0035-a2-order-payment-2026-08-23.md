@@ -1,6 +1,6 @@
 # WB-0035 A2 — InterServer VPS order + payment
 
-Status: `AUTHORIZED — PAYMENT-METHOD DISCOVERY EXECUTED; SAFE METHOD IDS PENDING LOCAL EXTRACTION; ORDER NOT YET PLACED`
+Status: `AUTHORIZED — PAYMENT-METHOD DISCOVERY MUST BE REPEATED READ-ONLY; ORDER NOT YET PLACED`
 
 Date: 2026-08-23
 Work block: `WB-0035 — InterServer VPS + Vikunja ADHD Time-Management MVP`
@@ -36,8 +36,6 @@ A1 already verified this exact candidate at USD 3.00/month with `continue=true` 
 
 ## Reviewed provider semantics
 
-The reviewed InterServer contract is:
-
 ```text
 PUT  /apiv2/vps/order               -> non-mutating validation/quote
 POST /apiv2/vps/order               -> create one VPS service + recurring invoice + initial invoice
@@ -51,40 +49,28 @@ POST /apiv2/billing/pay/{method}/{invoices} -> initiate payment for exactly the 
 
 ## Payment-method discovery runtime
 
-The operator executed the planned read-only checkout discovery from the Mac:
+The first read-only checkout discovery executed successfully from the operator Mac:
 
 ```text
 GET /apiv2/billing/cart
 HTTP=200
 ```
 
-Shape-only inspection reported an object containing, among other checkout fields:
+Shape-only inspection confirmed payment-method structures such as `paymentMethods`, `paymentMethodsData`, `paymentMethodsType`, and `pymt_method`. No order, invoice creation, payment, or provider mutation occurred.
 
-```yaml
-payment_method_related_fields:
-  - paymentMethods
-  - paymentMethodsData
-  - paymentMethodsType
-  - pymt_method
-nested_related_key_observed:
-  - REPEAT_BILLING_METHOD
-raw_cart_temp_retained: true
+The intended local-only sanitization could not run because the shell no longer had the temporary-file variable/file available and returned:
+
+```text
+A2_CART_TMP_MISSING
 ```
 
-Interpretation:
+Therefore no payment-method identifiers were extracted, and no funding source has been selected. The missing temporary artifact is a local execution-state loss, not a provider-side ambiguity and not an order/payment ambiguity.
 
-- authenticated billing-cart access succeeded;
-- the response exposes the expected payment-method structures;
-- no payment-method values, card details, funding-source data, or unrelated billing values have yet been retained in evidence;
-- the raw response remains only in the operator Mac temporary file for one local sanitization pass;
-- no order, invoice creation, payment or provider mutation occurred in this discovery step;
-- no second `/billing/cart` request is needed.
+## Recovery plan
 
-## Next local-only step
+A second `GET /apiv2/billing/cart` is permitted as a read-only recovery step within the already authorized A2 execution because it does not create an order, invoice, charge, or account mutation. The response must be sanitized in the same shell immediately, retaining only payment method identifiers matching the reviewed `initiatePayment` allowlist, then the temporary raw response must be deleted.
 
-Extract only payment method identifiers that match the reviewed `initiatePayment` method allowlist from the already-retained cart response. Do not retain card metadata, account profile data, invoice rows, gateway tokens or unrelated checkout fields. Then remove the raw cart temporary file.
-
-After safe method identifiers are known, the operator must explicitly select which available funding source to use. CyberCore must not guess.
+No order POST may occur until a payment method is successfully extracted and explicitly selected by the operator.
 
 ## Fail-closed execution plan after method selection
 
@@ -104,21 +90,22 @@ order_authorized: true
 payment_authorized: true
 exact_quantity: 1
 candidate_bound: true
-payment_method_discovery_executed: true
-payment_method_discovery_http_status: 200
+payment_method_discovery_attempts: 1
+payment_method_discovery_last_http_status: 200
 payment_method_structures_present: true
 payment_method_ids_sanitized: false
 payment_method_selected: false
+cart_temp_available: false
+read_only_cart_rediscovery_required: true
 fresh_quote_required_before_order: true
 order_performed: false
 invoice_created: false
 payment_performed: false
 provider_mutation_performed_under_A2: false
-raw_cart_temp_retained_on_operator_mac: true
 A3_bootstrap_deploy_authorized: false
 A4_dns_authorized: false
 ```
 
 ## Stop line
 
-Do not order until safe available payment method identifiers have been extracted locally and the operator explicitly selects one. Do not change payment-method settings, create/verify cards, add prepays, reactivate the expired VPS, perform SSH/bootstrap/deploy, or change DNS under A2.
+Do not order until safe available payment method identifiers have been extracted and the operator explicitly selects one. Do not change payment-method settings, create/verify cards, add prepays, reactivate the expired VPS, perform SSH/bootstrap/deploy, or change DNS under A2.
