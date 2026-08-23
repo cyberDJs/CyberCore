@@ -371,10 +371,22 @@ def _require_non_negative_money(
     if decimal < 0:
         errors.append(f"{context} requires non-negative {key}; got {decimal}")
         return None
-    scaled = decimal * Decimal("100")
-    if scaled != scaled.to_integral_value():
-        errors.append(f"{context} requires whole-cent {key}; got {decimal}")
+
+    decimal_tuple = decimal.as_tuple()
+    exponent = decimal_tuple.exponent
+    if not isinstance(exponent, int):
+        errors.append(f"{context} requires valid monetary {key}; got {decimal}")
         return None
+    if exponent < -2:
+        extra_places = -2 - exponent
+        digits = decimal_tuple.digits
+        if extra_places >= len(digits):
+            has_fractional_cent = any(digit != 0 for digit in digits)
+        else:
+            has_fractional_cent = any(digit != 0 for digit in digits[-extra_places:])
+        if has_fractional_cent:
+            errors.append(f"{context} requires whole-cent {key}; got {decimal}")
+            return None
     return decimal
 
 
