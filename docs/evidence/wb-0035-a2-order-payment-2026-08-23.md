@@ -1,6 +1,6 @@
 # WB-0035 A2 — InterServer VPS order + payment
 
-Status: `AUTHORIZED — PAYMENT-METHOD DISCOVERY MUST BE REPEATED READ-ONLY; ORDER NOT YET PLACED`
+Status: `AUTHORIZED — PAYMENT METHOD DISCOVERED: PAYPAL ONLY; EXPLICIT METHOD SELECTION PENDING; ORDER NOT YET PLACED`
 
 Date: 2026-08-23
 Work block: `WB-0035 — InterServer VPS + Vikunja ADHD Time-Management MVP`
@@ -49,38 +49,50 @@ POST /apiv2/billing/pay/{method}/{invoices} -> initiate payment for exactly the 
 
 ## Payment-method discovery runtime
 
-The first read-only checkout discovery executed successfully from the operator Mac:
+The first read-only checkout discovery returned `HTTP=200`, but the local shell later lost the temporary artifact before sanitization. No provider mutation occurred.
+
+A read-only recovery discovery was then executed from the operator Mac and sanitized atomically in the same shell:
 
 ```text
 GET /apiv2/billing/cart
 HTTP=200
 ```
 
-Shape-only inspection confirmed payment-method structures such as `paymentMethods`, `paymentMethodsData`, `paymentMethodsType`, and `pymt_method`. No order, invoice creation, payment, or provider mutation occurred.
+Sanitized result:
 
-The intended local-only sanitization could not run because the shell no longer had the temporary-file variable/file available and returned:
-
-```text
-A2_CART_TMP_MISSING
+```yaml
+available_payment_method_ids:
+  - paypal
+raw_cart_temp_removed: true
 ```
 
-Therefore no payment-method identifiers were extracted, and no funding source has been selected. The missing temporary artifact is a local execution-state loss, not a provider-side ambiguity and not an order/payment ambiguity.
+Interpretation:
 
-## Recovery plan
+- authenticated billing-cart discovery succeeded;
+- the only reviewed payment method identifier exposed by the current checkout state is `paypal`;
+- no card metadata, account profile data, invoice rows, gateway tokens or unrelated checkout values were retained;
+- the raw cart temporary response was removed after sanitization;
+- no order, invoice creation, payment or other provider mutation occurred during discovery;
+- no further `/billing/cart` request is required before A2 order execution.
 
-A second `GET /apiv2/billing/cart` is permitted as a read-only recovery step within the already authorized A2 execution because it does not create an order, invoice, charge, or account mutation. The response must be sanitized in the same shell immediately, retaining only payment method identifiers matching the reviewed `initiatePayment` allowlist, then the temporary raw response must be deleted.
+## Remaining human selection gate
 
-No order POST may occur until a payment method is successfully extracted and explicitly selected by the operator.
+The operator authorized payment under A2, but CyberCore requires the actual funding method to be selected explicitly before any order is placed. Discovery found only `paypal`, but availability alone is not treated as method selection.
 
-## Fail-closed execution plan after method selection
+Required explicit selection: `paypal`.
+
+No order POST may occur until the operator explicitly selects PayPal for this A2 transaction.
+
+## Fail-closed execution plan after PayPal selection
 
 1. Freshly revalidate the exact candidate with `PUT /apiv2/vps/order` immediately before the order. Abort unless `continue=true`, `errors=[]`, exact config matches, recurring price <= USD 3.00/month and no unexpected one-time surcharge exists.
 2. Execute exactly one `POST /apiv2/vps/order` using the identical payload and same ephemeral root password used for the fresh validation.
 3. Never automatically retry the POST if the response is missing, ambiguous, timed out after submission, or otherwise uncertain. Inspect resulting provider state instead.
 4. Extract only the new service id and invoice id(s). Before payment, verify the invoice belongs to the new VPS and the amount is within the approved envelope.
-5. Initiate payment only for that exact invoice via the explicitly selected available payment method. Do not change the default account payment method as part of A2.
-6. Record sanitized evidence only. Never retain the API key, root password, full payment data, gateway tokens, or unrelated account/billing information.
-7. Stop after order/payment verification. A3 bootstrap/deploy and A4 DNS remain unauthorized.
+5. Initiate payment only for that exact invoice via `paypal`. If the provider returns a redirect or form-submission action, stop and surface that action to the operator rather than attempting unrelated billing mutations.
+6. Do not change the default account payment method, create/verify a card, add prepay credit, or alter account-security settings.
+7. Record sanitized evidence only. Never retain the API key, root password, full payment data, gateway tokens, or unrelated account/billing information.
+8. Stop after order/payment verification. A3 bootstrap/deploy and A4 DNS remain unauthorized.
 
 ## Current state
 
@@ -90,13 +102,14 @@ order_authorized: true
 payment_authorized: true
 exact_quantity: 1
 candidate_bound: true
-payment_method_discovery_attempts: 1
+payment_method_discovery_attempts: 2
 payment_method_discovery_last_http_status: 200
-payment_method_structures_present: true
-payment_method_ids_sanitized: false
+payment_method_ids_sanitized: true
+available_payment_method_ids:
+  - paypal
 payment_method_selected: false
-cart_temp_available: false
-read_only_cart_rediscovery_required: true
+raw_cart_temp_removed: true
+read_only_cart_rediscovery_required: false
 fresh_quote_required_before_order: true
 order_performed: false
 invoice_created: false
@@ -108,4 +121,6 @@ A4_dns_authorized: false
 
 ## Stop line
 
-Do not order until safe available payment method identifiers have been extracted and the operator explicitly selects one. Do not change payment-method settings, create/verify cards, add prepays, reactivate the expired VPS, perform SSH/bootstrap/deploy, or change DNS under A2.
+**Stop before order creation until the operator explicitly selects `paypal` for A2.**
+
+Do not change payment-method settings, create/verify cards, add prepays, reactivate the expired VPS, perform SSH/bootstrap/deploy, or change DNS under A2.
