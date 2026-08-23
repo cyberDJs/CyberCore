@@ -69,8 +69,10 @@ for readme in "${repo_root}/README.md" "${repo_root}/ARCHITECTURE.md" "${repo_ro
   [[ -f "${readme}" ]] || fail "required documentation file is missing: ${readme#"${repo_root}/"}"
 done
 
-if ! rg -F 'docs/visual/generated/architecture-overview.svg' "${repo_root}/README.md" >/dev/null; then
-  fail "README.md does not link to the architecture overview SVG"
+architecture_readme_asset='assets/brand/cybercore-architecture-at-a-glance.svg'
+[[ -s "${repo_root}/${architecture_readme_asset}" ]] || fail "README architecture asset is missing or empty: ${architecture_readme_asset}"
+if ! rg -F "${architecture_readme_asset}" "${repo_root}/README.md" >/dev/null; then
+  fail "README.md does not link to the canonical architecture overview asset"
 fi
 if ! rg -F 'docs/visual/' "${repo_root}/ARCHITECTURE.md" >/dev/null; then
   fail "ARCHITECTURE.md does not link to visual documentation"
