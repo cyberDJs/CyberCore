@@ -12,8 +12,9 @@
   "templates": {
     "kvm": {
       "ubuntu": {
-        "ubuntu22": "Ubuntu 22.04",
-        "ubuntu24": "Ubuntu 24.04"
+        "ubuntu22": "22.04",
+        "ubuntu24": "24.04",
+        "ubuntu26": "26.04"
       }
     }
   },
@@ -24,17 +25,25 @@
       "hyperv": true
     },
     "2": {
-      "kvm": false,
+      "kvm": true,
+      "kvmstorage": true,
+      "hyperv": true
+    },
+    "3": {
+      "kvm": true,
       "kvmstorage": true,
       "hyperv": true
     }
   },
   "locationNames": {
-    "1": "Secaucus, NJ",
-    "2": "Los Angeles, CA"
+    "1": "New Jersey",
+    "2": "Los Angeles",
+    "3": "Dallas, TX"
   },
-  "vpsNyCost": 3,
+  "vpsSliceKvmLCost": 3,
+  "vpsSliceKvmStorageCost": 3,
+  "vpsNyCost": 1,
   "ramSlice": "2048",
-  "hdSlice": "30",
+  "hdSlice": "40",
   "bwSlice": "2000"
 }
