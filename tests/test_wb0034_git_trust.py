@@ -29,6 +29,15 @@ def _init_repo(tmp_path: Path) -> Path:
     return repo
 
 
+def _init_origin(tmp_path: Path, repo: Path) -> Path:
+    origin = tmp_path / "origin.git"
+    origin.mkdir()
+    _run_git(origin, "init", "--bare")
+    _run_git(repo, "remote", "add", "origin", str(origin))
+    _run_git(repo, "push", "-u", "origin", "main")
+    return origin
+
+
 def test_trusted_main_fails_closed_when_origin_main_ref_is_dangling(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     remote_ref = repo / ".git/refs/remotes/origin/main"
@@ -40,3 +49,35 @@ def test_trusted_main_fails_closed_when_origin_main_ref_is_dangling(tmp_path: Pa
 
     assert commit is None
     assert any("origin/main" in error for error in errors)
+
+
+def test_trusted_main_refreshes_stale_origin_main_before_resolution(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _init_origin(tmp_path, repo)
+    old_commit = _run_git(repo, "rev-parse", "HEAD")
+
+    (repo / "source.txt").write_text("new trusted main\n", encoding="utf-8")
+    _run_git(repo, "add", "source.txt")
+    _run_git(repo, "commit", "-m", "advance main")
+    new_commit = _run_git(repo, "rev-parse", "HEAD")
+    _run_git(repo, "push", "origin", "main")
+    _run_git(repo, "update-ref", "refs/remotes/origin/main", old_commit)
+    assert _run_git(repo, "rev-parse", "refs/remotes/origin/main") == old_commit
+
+    errors: list[str] = []
+    commit = _git_main_commit(repo, errors)
+
+    assert commit == new_commit
+    assert not errors
+    assert _run_git(repo, "rev-parse", "refs/remotes/origin/main") == new_commit
+
+
+def test_trusted_main_blocks_when_origin_refresh_fails(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    _run_git(repo, "remote", "add", "origin", str(tmp_path / "missing-origin.git"))
+
+    errors: list[str] = []
+    commit = _git_main_commit(repo, errors)
+
+    assert commit is None
+    assert any("refresh trusted origin/main" in error for error in errors)
