@@ -1,0 +1,40 @@
+{
+  "currency": "USD",
+  "platformNames": {
+    "kvm": "KVM",
+    "kvmstorage": "KVM Storage",
+    "hyperv": "HyperV"
+  },
+  "osNames": {
+    "ubuntu": "Ubuntu",
+    "debian": "Debian"
+  },
+  "templates": {
+    "kvm": {
+      "ubuntu": {
+        "ubuntu22": "Ubuntu 22.04",
+        "ubuntu24": "Ubuntu 24.04"
+      }
+    }
+  },
+  "locationStock": {
+    "1": {
+      "kvm": true,
+      "kvmstorage": true,
+      "hyperv": true
+    },
+    "2": {
+      "kvm": false,
+      "kvmstorage": true,
+      "hyperv": true
+    }
+  },
+  "locationNames": {
+    "1": "Secaucus, NJ",
+    "2": "Los Angeles, CA"
+  },
+  "vpsNyCost": 3,
+  "ramSlice": "2048",
+  "hdSlice": "30",
+  "bwSlice": "2000"
+}
