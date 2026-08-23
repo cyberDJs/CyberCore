@@ -1,6 +1,6 @@
 # WB-0035 PRE-A2 — InterServer existing VPS inventory
 
-Status: `PARTIAL — READ-ONLY INVENTORY EXECUTED; ONE VPS FOUND; SANITIZED VALUES PENDING`
+Status: `VERIFIED — READ-ONLY INVENTORY COMPLETE; ONE EXPIRED VPS FOUND; NEW PROVISIONING RECOMMENDED`
 
 Date: 2026-08-23
 Work block: `WB-0035 — InterServer VPS + Vikunja ADHD Time-Management MVP`
@@ -62,32 +62,52 @@ first_item_keys:
 raw_temp_retained: true
 ```
 
-Interpretation:
+The second pass was local-only against the already-retrieved mode-0600 temporary file. It did not contact InterServer again. `vps_comment` was intentionally excluded.
 
-- exactly one existing VPS service is present in the authenticated account inventory response;
-- the provider returned the expected small read-only service summary shape;
-- no values beyond field names/count were exposed during the first sanitization pass;
-- the raw response remains only in the operator Mac mode-0600 temporary file for local sanitization;
-- no second provider request is needed or authorized for this PRE-A2 inventory step;
+Sanitized inventory:
+
+```yaml
+existing_vps_count: 1
+vps:
+  - vps_id: "3447580"
+    vps_name: "KVM540"
+    vps_hostname: "vps3447580"
+    vps_ip: "162.35.163.231"
+    vps_status: "expired"
+    services_name: "KVM Linux VPS Slice"
+    repeat_invoices_cost: "3.00"
+```
+
+After sanitization the raw temporary response was deleted successfully:
+
+```text
+RAW_TEMP_REMOVED=yes
+```
+
+## Interpretation
+
+- exactly one VPS record exists in the authenticated account inventory;
+- its provider status is `expired`, so the inventory contains **zero active VPS services** available for immediate reuse;
+- the provider lists `repeat_invoices_cost=3.00` for the expired service, but PRE-A2 does not prove that this expired record is currently billing USD 3.00/month;
+- the hostname is the provider-style generic `vps3447580`, not the WB-0035 target `tasks.cyberdjs.org`;
+- no SSH/application inspection was authorized or performed, so no claim is made about preserved data or recoverability on the expired service;
+- the raw provider response was removed from the operator Mac after sanitization;
 - no provider mutation occurred.
 
-## Next local-only sanitization
+## Reuse-vs-new decision
 
-Use the existing temporary file only. Retain at most these safe fields from the one inventory row:
+**Recommendation: NEW PROVISIONING for WB-0035, subject to a separate A2 purchase/payment authorization.**
 
-- `vps_id`
-- `vps_name`
-- `vps_hostname`
-- `vps_ip`
-- `vps_status`
-- `services_name`
-- `repeat_invoices_cost`
+Reasoning:
 
-Do not retain `vps_comment` unless it is independently reviewed and clearly needed.
+1. There is no active VPS in the current inventory that can be reused as-is.
+2. The sole record is expired and therefore cannot host the task-management MVP without a provider-side reactivation/renewal action, which was not evaluated or authorized in PRE-A2.
+3. A new one-slice KVM candidate is already A1-verified at USD 3.00/month with the intended Ubuntu 24 configuration.
+4. According to the current inventory, a new VPS would not duplicate an active VPS service. The expired record remains an account-history/service record and must not be canceled, reactivated or otherwise changed without separate authorization.
 
-After sanitized values are recorded, delete the raw temporary file and decide reuse-vs-new.
+If preservation or recovery of data from VPS `3447580` becomes important, stop before A2 and obtain a separate narrowly-scoped read-only authorization to inspect only the information required to assess recoverability. PRE-A2 itself does not authorize such inspection.
 
-## Current state
+## Completion receipt
 
 ```yaml
 PRE_A2_authorized: true
@@ -96,11 +116,16 @@ inventory_executed: true
 inventory_http_status: 200
 inventory_shape: array
 existing_vps_count: 1
-inventory_values_sanitized: false
-inventory_verified: partial
-reuse_vs_new_decision: pending
-raw_temp_retained_on_operator_mac: true
+active_vps_count: 0
+expired_vps_count: 1
+inventory_values_sanitized: true
+inventory_verified: true
+raw_temp_removed: true
+reuse_viable_as_is: false
+reuse_vs_new_decision: new_recommended
 provider_mutation_performed: false
+order_performed: false
+payment_performed: false
 A2_purchase_authorized: false
 A2_payment_authorized: false
 A3_bootstrap_deploy_authorized: false
@@ -109,4 +134,6 @@ A4_dns_authorized: false
 
 ## Stop line
 
-Do not perform another provider inventory request. Complete only local sanitization of the already-retrieved response, remove the raw temporary file, record the reuse-vs-new decision, then stop for a separate A2 decision.
+**PRE-A2 is VERIFIED and complete. Stop provider activity here.**
+
+Do not perform another inventory request, reactivate/renew the expired VPS, call `POST /apiv2/vps/order`, purchase/pay, reboot, resize, reinstall, cancel, change credentials/account security, access the VPS over SSH, deploy applications, or change DNS without the applicable next explicit authorization.
