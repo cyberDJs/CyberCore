@@ -12,6 +12,7 @@ from yaml.tokens import AliasToken, AnchorToken, DirectiveToken
 
 MAX_YAML_DEPTH = 64
 MERGE_TAG = "tag:yaml.org,2002:merge"
+YAML_FLOAT_TAG = "tag:yaml.org,2002:float"
 
 PLAN_TOP_LEVEL_KEYS = {
     "version",
@@ -93,6 +94,17 @@ DENIED_LITERAL_PATTERNS = (
     "recovery_code:",
     "session_cookie:",
 )
+
+
+class _LosslessSafeLoader(yaml.SafeLoader):
+    """SafeLoader variant that keeps YAML float lexemes as strings."""
+
+
+def _construct_lossless_float(loader: yaml.SafeLoader, node: ScalarNode) -> str:
+    return loader.construct_scalar(node)
+
+
+_LosslessSafeLoader.add_constructor(YAML_FLOAT_TAG, _construct_lossless_float)
 
 
 @dataclass(frozen=True)
@@ -262,9 +274,6 @@ def _parse_closed_yaml_text(text: str, context: str) -> tuple[dict[str, object] 
         errors.append(f"{context} is invalid YAML: {exc}")
         return None, errors
 
-    # Do not continue into composition/loading when metadata already proves the
-    # document is outside the closed subset. This also prevents recursive alias
-    # graphs from reaching later structure walks.
     if unsafe_yaml_metadata:
         return None, errors
 
@@ -285,7 +294,7 @@ def _parse_closed_yaml_text(text: str, context: str) -> tuple[dict[str, object] 
         return None, errors
 
     try:
-        loaded = yaml.safe_load(text)
+        loaded = yaml.load(text, Loader=_LosslessSafeLoader)
     except (yaml.YAMLError, RecursionError) as exc:
         errors.append(f"{context} is invalid YAML: {exc}")
         return None, errors
@@ -607,9 +616,6 @@ def validate_plan_and_quote(plan_path: Path, quote_path: Path) -> VpsValidationR
 def prepare_purchase_approval_packet(
     plan_path: Path, quote_path: Path
 ) -> tuple[VpsValidationResult, PurchaseApprovalPacket | None]:
-    # Load each input exactly once and build the packet from the same parsed
-    # snapshots that are validated below. This removes the validate-then-reload
-    # TOCTOU gap that could otherwise substitute unvalidated file contents.
     plan, plan_errors = _load_closed_yaml(plan_path, "VPS plan")
     quote, quote_errors = _load_closed_yaml(quote_path, "VPS quote")
     errors = [*plan_errors, *quote_errors]
