@@ -19,6 +19,11 @@ MAX_MONTHLY_USD = Decimal("3.00")
 MIN_RAM_MIB = 2048
 MIN_DISK_GIB = 30
 KVM_CATALOG_PRICE_FIELD = "vpsSliceKvmLCost"
+PASSWORD_LOWER = "abcdefghijklmnopqrstuvwxyz"
+PASSWORD_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+PASSWORD_DIGITS = "0123456789"
+PASSWORD_SPECIALS = "_~-!@#$%^&*"
+PASSWORD_ALPHABET = PASSWORD_LOWER + PASSWORD_UPPER + PASSWORD_DIGITS + PASSWORD_SPECIALS
 
 
 class A1ProbeError(RuntimeError):
@@ -93,6 +98,21 @@ def _mapping(value: object, label: str) -> dict[str, object]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise A1ProbeError(f"provider response requires mapping field: {label}")
     return value
+
+
+def _generate_root_password(length: int = 40) -> str:
+    if length < 8:
+        raise ValueError("root password length must be at least 8 characters")
+
+    chars = [
+        secrets.choice(PASSWORD_LOWER),
+        secrets.choice(PASSWORD_UPPER),
+        secrets.choice(PASSWORD_DIGITS),
+        secrets.choice(PASSWORD_SPECIALS),
+    ]
+    chars.extend(secrets.choice(PASSWORD_ALPHABET) for _ in range(length - len(chars)))
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
 
 
 def select_candidate(catalog: dict[str, object]) -> Candidate:
@@ -174,7 +194,7 @@ def build_quote_payload(candidate: Candidate) -> dict[str, object]:
         "osVersion": candidate.os_version,
         "hostname": candidate.public_hostname,
         "coupon": "",
-        "rootpass": secrets.token_urlsafe(32),
+        "rootpass": _generate_root_password(),
         "comment": "WB-0035 A1 quote validation only; no order",
     }
 
@@ -187,10 +207,12 @@ def sanitize_quote(candidate: Candidate, response: dict[str, object]) -> dict[st
     if errors not in (None, []):
         raise A1ProbeError("provider quote validation returned one or more errors")
 
+    # InterServer's live response labels the submitted osVersion as `os`
+    # and the submitted osDistro as `version`.
     expected_response = {
         "platform": candidate.platform,
-        "os": candidate.os_distro,
-        "version": candidate.os_version,
+        "os": candidate.os_version,
+        "version": candidate.os_distro,
         "controlpanel": candidate.control_panel,
     }
     for key, expected in expected_response.items():
