@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACTIVE — A1 VERIFIED; PRE-A2 VERIFIED; A2 AUTHORIZED / PAYPAL ONLY DISCOVERED / EXPLICIT METHOD SELECTION PENDING; A3/A4 NOT AUTHORIZED`
+`ACTIVE — A1 VERIFIED; PRE-A2 VERIFIED; A2 AUTHORIZED / PAYPAL SELECTED / PRE-ORDER INVENTORY RACE GUARD REQUIRED / EXACT-HEAD GATES PENDING; A3/A4 NOT AUTHORIZED`
 
 Date: 2026-08-23
 Canonical base: `main@2bea07db4e0a5d2a062c96ef1642a6f2a0927f0a`
@@ -13,13 +13,13 @@ Budget ceiling: USD 3.00/month unless separately approved
 
 ## Goal
 
-Prepare a fail-closed path for CyberCore to discover the current InterServer VPS catalog, produce a non-mutating live quote, inspect existing VPS inventory, execute an explicitly authorized bounded purchase/payment, and only later—under separate authority gates—harden the resulting VPS, deploy Vikunja, publish DNS, and verify persistence/backup/restore.
+Prepare and execute a fail-closed path for CyberCore to discover the current InterServer VPS catalog, quote an exact one-slice candidate, inspect existing inventory, execute an explicitly authorized bounded purchase/payment, and only later—under separate gates—harden the resulting VPS, deploy Vikunja, publish DNS, and verify persistence/backup/restore.
 
-A1 catalog + quote is verified. PRE-A2 existing-VPS inventory is verified and complete: one provider VPS record exists, it is `expired`, and there are zero active VPS services available for immediate reuse. A2 explicitly authorizes purchase/payment of exactly one new VPS matching the verified candidate. Payment-method discovery is complete and the only currently exposed reviewed method is `paypal`; the operator has not yet explicitly selected it. No order has been placed. A3 bootstrap/deploy and A4 DNS remain not granted.
+A1 catalog + quote is verified. PRE-A2 inventory is verified: the account contained exactly one VPS record, `vps_id=3447580`, and it was `expired`; active VPS count was zero. A2 authorizes purchase/payment of exactly one new VPS matching the verified candidate. Payment-method discovery exposed only `paypal`, and the operator explicitly selected `paypal` at 2026-08-23T22:47:00+02:00. No order has yet been placed. A3 bootstrap/deploy and A4 DNS remain not granted.
 
 ## Client direction
 
-CyberFlow is **iPhone-first**. Responsive web/PWA is the fallback; macOS may follow; Android is explicitly out of MVP scope.
+CyberFlow is **iPhone-first**. Responsive web/PWA is the fallback; macOS may follow; Android is out of MVP scope.
 
 See `docs/product/cyberflow-iphone-first-client.md`.
 
@@ -45,14 +45,14 @@ Persistent host data:
 /srv/vikunja/backups
 ```
 
-Planned baseline: Ubuntu 24.04 LTS, KVM, one slice, no control panel, Docker Engine + Compose, Caddy, Vikunja + SQLite, hostname candidate `tasks.cyberdjs.org`.
+Planned baseline: Ubuntu 24.04 LTS, KVM, one slice, no control panel, Docker Engine + Compose, Caddy, Vikunja + SQLite, hostname `tasks.cyberdjs.org`.
 
 ## InterServer API basis
 
 Reviewed provider flow:
 
 ```text
-GET  /apiv2/vps                         -> existing VPS inventory
+GET  /apiv2/vps                         -> current VPS inventory
 GET  /apiv2/vps/order                   -> current catalog / stock / pricing inputs
 PUT  /apiv2/vps/order                   -> validate configuration and calculate quote
 POST /apiv2/vps/order                   -> create VPS order + invoice/service state
@@ -63,7 +63,7 @@ POST /apiv2/billing/pay/{method}/{invoices} -> initiate payment for named invoic
 GET  /apiv2/vps/{id}                    -> read service state after ordering
 ```
 
-HTTP method alone is not treated as a safety boundary. Authority is bound to exact reviewed operations and semantics.
+HTTP method alone is not a safety boundary. Authority is bound to the exact reviewed operation semantics.
 
 ## Authority model
 
@@ -71,7 +71,7 @@ HTTP method alone is not treated as a safety boundary. Authority is bound to exa
 
 `AUTHORIZED_BY_CURRENT_WORK`
 
-Documentation, schemas, tests, synthetic fixtures and validators are allowed. Provider contact, billing inspection, purchase/payment, DNS, SSH, credential mutation and deployment are not allowed by A0 alone.
+Documentation, schemas, tests, synthetic fixtures and validators are allowed. Provider contact, billing mutation, purchase/payment, DNS, SSH, credential mutation and deployment are not allowed by A0 alone.
 
 ### A1 — live VPS catalog + quote
 
@@ -81,7 +81,7 @@ Operator authorization:
 
 > Schvaluju A1: InterServer VPS catalog + quote pro WB-0035, maximálně $3/měsíc, pouze zjištění nabídky a ceny. Bez objednávky, platby nebo jiné změny na InterServeru.
 
-Verified live result:
+Verified result:
 
 ```yaml
 provider: InterServer
@@ -112,7 +112,7 @@ provider_mutation_performed: false
 secret_values_recorded: false
 ```
 
-The authenticated catalog showed KVM stock in New Jersey, Los Angeles and Dallas and the exact Ubuntu 24 template. `vpsSliceKvmLCost=3` is the KVM slice price; `vpsNyCost=1` is a distinct field and is not used as KVM price.
+The authenticated catalog showed KVM stock in New Jersey, Los Angeles and Dallas and the exact Ubuntu 24 template. `vpsSliceKvmLCost=3` is the KVM slice price; `vpsNyCost=1` is a separate field and is not used as KVM price.
 
 Evidence: `docs/evidence/wb-0035-a1-catalog-quote-2026-08-23.md`.
 
@@ -120,11 +120,11 @@ Evidence: `docs/evidence/wb-0035-a1-catalog-quote-2026-08-23.md`.
 
 `VERIFIED — COMPLETE; ONE EXPIRED VPS FOUND; NEW PROVISIONING RECOMMENDED`
 
-Operator authorization granted on 2026-08-23 at 21:39 CEST:
+Operator authorization:
 
 > Schvaluju PRE-A2: read-only inventuru existujících InterServer VPS přes GET /apiv2/vps pro WB-0035. Bez jakékoli změny, restartu, resize, reinstallu, zrušení, objednávky nebo platby.
 
-Sanitized verified result:
+Verified sanitized baseline:
 
 ```yaml
 existing_vps_count: 1
@@ -141,17 +141,21 @@ vps:
 raw_temp_removed: true
 ```
 
-Decision: **new provisioning**. No active VPS exists that can be reused as-is, and a new VPS would not duplicate an active service. No SSH/application inspection was performed and no claim is made about recoverability of the expired VPS.
+Decision: **new provisioning**. No active VPS existed that could be reused as-is. No SSH/application inspection was performed and no claim is made about preserved data or recoverability of the expired VPS.
 
 Evidence: `docs/evidence/wb-0035-pre-a2-inventory-2026-08-23.md`.
 
 ### A2 — purchase + payment
 
-`AUTHORIZED — EXACT ONE-VPS PURCHASE/PAYMENT; PAYPAL ONLY DISCOVERED; EXPLICIT METHOD SELECTION PENDING`
+`AUTHORIZED — EXACT ONE-VPS PURCHASE/PAYMENT; PAYPAL EXPLICITLY SELECTED; EXECUTION BLOCKED ON EXACT-HEAD GATES`
 
-Operator authorization granted on 2026-08-23 at 22:08 CEST:
+Purchase/payment authorization:
 
 > Schvaluju A2: objednávku a platbu právě jednoho nového InterServer KVM VPS pro WB-0035, 1 slice, Ubuntu 24, bez control panelu, location 1 New Jersey, hostname tasks.cyberdjs.org, maximálně $3.00/měsíc a $0 neočekávaný jednorázový příplatek. Bez jakékoli jiné změny na InterServeru.
+
+Payment-method selection:
+
+> Volím paypal pro A2.
 
 Bound purchase envelope:
 
@@ -170,29 +174,51 @@ location_name: New Jersey
 hostname: tasks.cyberdjs.org
 max_recurring_usd_month: 3.00
 max_unexpected_one_time_surcharge_usd: 0.00
+payment_method: paypal
 ```
 
-Payment-method discovery completed read-only. The first discovery returned HTTP 200 but its local temporary artifact was lost before sanitization. A second read-only discovery was sanitized atomically and returned:
+Payment-method discovery completed read-only and returned:
 
 ```yaml
 available_payment_method_ids:
   - paypal
+payment_method_selected: true
+selected_payment_method: paypal
 raw_cart_temp_removed: true
 ```
 
-No order, invoice creation, payment or provider mutation occurred during payment-method discovery. Availability of `paypal` is not treated as operator selection; an explicit method selection is still required before order creation.
+No order, invoice creation, payment or provider mutation occurred during payment-method discovery.
 
-Execution invariants after explicit `paypal` selection:
+#### Exact-head governance gate
 
-- perform a fresh `PUT /apiv2/vps/order` immediately before the order using the exact candidate and an ephemeral policy-compliant root password;
-- abort unless `continue=true`, `errors=[]`, configuration matches exactly, recurring cost <= USD 3.00/month and no unexpected one-time surcharge appears;
-- if the fresh quote passes, execute **exactly one** `POST /apiv2/vps/order` with the identical payload and same ephemeral root password;
-- never automatically retry an ambiguous POST response;
-- extract only the new service id and invoice id(s), then verify invoice ownership/amount read-only before charging;
-- initiate payment only for the exact invoice created by this order and only via explicitly selected `paypal`;
-- if PayPal requires a redirect or form submission, surface that next action to the operator instead of performing unrelated billing mutations;
-- do not create/verify cards, add prepay credit or change account payment-method settings as part of A2;
-- retain only sanitized order/payment evidence; never store API keys, root passwords, full payment data or gateway tokens;
+Before any provider mutation under A2, the exact current PR head must have successful CI and CodeQL and then a fresh Codex review on that same head. Any fresh review finding that weakens A2 safety must be addressed first.
+
+#### Pre-order inventory race guard
+
+Immediately before the single order POST, execute one fresh read-only `GET /apiv2/vps` and abort unless the inventory still matches the PRE-A2 baseline exactly:
+
+```yaml
+expected_existing_vps_count: 1
+expected_only_vps_id: "3447580"
+expected_only_vps_status: expired
+expected_active_or_pending_vps_count: 0
+expected_target_hostname_occurrences: 0
+```
+
+Any additional VPS row, any baseline-state drift, any active/pending VPS, or any existing `tasks.cyberdjs.org` service blocks the POST. No automatic cancel/delete/reuse/second order is authorized.
+
+#### A2 execution invariants
+
+- fresh `PUT /apiv2/vps/order` using the exact candidate and one ephemeral policy-compliant root password;
+- abort unless `continue=true`, `errors=[]`, exact config matches, recurring cost <= USD 3.00/month and unexpected one-time surcharge is USD 0.00;
+- after the quote, run the pre-order inventory race guard immediately before mutation;
+- only if both guards pass, execute **exactly one** `POST /apiv2/vps/order` with the identical payload and same ephemeral root password;
+- never automatically retry an ambiguous/timed-out POST; inspect provider state read-only first;
+- extract only the new service id and invoice id(s), verify invoice ownership/amount read-only, and bind payment to that exact new VPS;
+- initiate payment only through `paypal` and only for the exact A2 invoice(s);
+- if PayPal requires redirect/form submission, surface that next action to the operator;
+- do not create/verify cards, add prepay credit, change the account default payment method, alter account security, or mutate unrelated services;
+- retain only sanitized evidence; never store API keys, root passwords, full payment data or gateway tokens;
 - stop after order/payment verification. A3 and A4 remain separate gates.
 
 Evidence: `docs/evidence/wb-0035-a2-order-payment-2026-08-23.md`.
@@ -235,6 +261,7 @@ ram_mib: 2048
 disk_gib: 40
 transfer_gib: 2000
 quantity: 1
+payment_method: paypal
 ```
 
 This candidate is authorized for A2 purchase/payment, but no order or payment is claimed until runtime evidence verifies it.
@@ -256,6 +283,6 @@ LATER
 
 ## Stop conditions
 
-Stop on unavailable/ambiguous payment method, purchase price > USD 3.00/month, unexpected one-time charge, exact-config mismatch, ambiguous order response, unrelated invoice, credential/payment-data exposure risk, unrelated infrastructure impact, or any step requiring authority beyond A2.
+Stop on exact-head gate failure, pre-order inventory drift, unavailable/ambiguous payment method, purchase price > USD 3.00/month, unexpected one-time charge, exact-config mismatch, ambiguous order response, unrelated invoice, credential/payment-data exposure risk, unrelated infrastructure impact, or any operation outside A2.
 
 Deleting/canceling/reactivating any VPS is a separate provider mutation and is never inferred from A2.
