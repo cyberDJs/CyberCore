@@ -172,6 +172,21 @@ def test_plan_rejects_authority_escalation(tmp_path: Path) -> None:
     assert any("order_allowed" in error for error in result.errors)
 
 
+def test_plan_rejects_positive_one_time_budget_ceiling(tmp_path: Path) -> None:
+    plan = tmp_path / "plan.yaml"
+    plan.write_text(
+        PLAN.read_text(encoding="utf-8").replace(
+            "one_time_budget_ceiling_usd: 0.00", "one_time_budget_ceiling_usd: 1.00"
+        ),
+        encoding="utf-8",
+    )
+
+    result = validate_vps_plan(plan)
+
+    assert not result.ok
+    assert any("must equal 0.00" in error for error in result.errors)
+
+
 def test_duplicate_yaml_key_is_rejected(tmp_path: Path) -> None:
     plan = tmp_path / "plan.yaml"
     plan.write_text("provider: Evil\n" + PLAN.read_text(encoding="utf-8"), encoding="utf-8")
