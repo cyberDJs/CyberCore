@@ -10,6 +10,8 @@ os_version: ubuntu24
 control_panel: none
 period_months: 1
 quantity: 1
+location_id: 1
+location_name: New Jersey
 budget_ceiling_usd_month: 3.00
 one_time_budget_ceiling_usd: 0.00
 minimum_resources:
