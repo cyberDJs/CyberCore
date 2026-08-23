@@ -153,6 +153,48 @@ def _git_ref_exists(repository_root: Path, ref: str) -> bool | None:
     return None
 
 
+def _git_origin_remote_exists(repository_root: Path) -> bool | None:
+    try:
+        completed = subprocess.run(
+            ["git", "remote"],
+            cwd=repository_root,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
+        return None
+    return "origin" in {line.strip() for line in completed.stdout.splitlines() if line.strip()}
+
+
+def _git_refresh_origin_main(repository_root: Path) -> bool:
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    try:
+        completed = subprocess.run(
+            [
+                "git",
+                "fetch",
+                "--no-tags",
+                "--prune",
+                "origin",
+                "+refs/heads/main:refs/remotes/origin/main",
+            ],
+            cwd=repository_root,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return completed.returncode == 0
+
+
 def _git_head(repository_root: Path, errors: list[str]) -> str | None:
     head = _git_rev_parse(repository_root, "HEAD^{commit}")
     if head is None:
@@ -161,20 +203,32 @@ def _git_head(repository_root: Path, errors: list[str]) -> str | None:
 
 
 def _git_main_commit(repository_root: Path, errors: list[str]) -> str | None:
-    # A fetched origin/main is authoritative when the ref exists. If that ref
-    # is corrupt or cannot resolve to a commit, fail closed rather than falling
-    # back to a potentially attacker-controlled local main branch.
     remote_ref = "refs/remotes/origin/main"
-    remote_exists = _git_ref_exists(repository_root, remote_ref)
-    if remote_exists is None:
-        errors.append("cannot verify fetched origin/main ref state")
+    origin_exists = _git_origin_remote_exists(repository_root)
+    if origin_exists is None:
+        errors.append("cannot verify whether repository origin remote exists")
         return None
-    if remote_exists:
+
+    if origin_exists:
+        if not _git_refresh_origin_main(repository_root):
+            errors.append("cannot refresh trusted origin/main before final preflight")
+            return None
         remote_commit = _git_rev_parse(repository_root, f"{remote_ref}^{{commit}}")
         if remote_commit is None:
-            errors.append("fetched origin/main exists but cannot resolve to an exact commit")
+            errors.append("refreshed origin/main cannot resolve to an exact commit")
             return None
         return remote_commit
+
+    # Local-main fallback is permitted only in repositories with no origin
+    # remote. A leftover origin/main ref without an origin remote is suspicious
+    # and must not silently become a trust source or be ignored.
+    remote_ref_state = _git_ref_exists(repository_root, remote_ref)
+    if remote_ref_state is None:
+        errors.append("cannot verify origin/main ref state without an origin remote")
+        return None
+    if remote_ref_state:
+        errors.append("origin/main ref exists but repository has no origin remote")
+        return None
 
     local_commit = _git_rev_parse(repository_root, "refs/heads/main^{commit}")
     if local_commit is None:
