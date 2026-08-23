@@ -7,6 +7,18 @@ import re
 from typing import cast
 
 import yaml
+from yaml.tokens import (
+    AliasToken,
+    AnchorToken,
+    BlockEndToken,
+    BlockMappingStartToken,
+    BlockSequenceStartToken,
+    DirectiveToken,
+    FlowMappingEndToken,
+    FlowMappingStartToken,
+    FlowSequenceEndToken,
+    FlowSequenceStartToken,
+)
 
 from cybercore.first_write_security import scan_first_write_yaml_text
 
@@ -17,6 +29,14 @@ RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$")
 HEX64_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 HEX40_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 PLACEHOLDER_MARKERS = ("TBD", "UNKNOWN", "UNVERIFIED", "REQUIRED", "PLACEHOLDER")
+MAX_YAML_NESTING_DEPTH = 64
+YAML_NESTING_START_TOKENS = (
+    BlockMappingStartToken,
+    BlockSequenceStartToken,
+    FlowMappingStartToken,
+    FlowSequenceStartToken,
+)
+YAML_NESTING_END_TOKENS = (BlockEndToken, FlowMappingEndToken, FlowSequenceEndToken)
 
 
 class UniqueKeyLoader(yaml.SafeLoader):
@@ -140,6 +160,31 @@ def _string_set(value: object, errors: list[str], context: str) -> set[str]:
     return result
 
 
+def _scan_safe_yaml_structure(text: str, errors: list[str]) -> bool:
+    depth = 0
+    try:
+        for token in yaml.scan(text, Loader=yaml.SafeLoader):
+            if isinstance(token, YAML_NESTING_START_TOKENS):
+                depth += 1
+                if depth > MAX_YAML_NESTING_DEPTH:
+                    errors.append(
+                        f"evidence bundle exceeds safe YAML nesting depth ({MAX_YAML_NESTING_DEPTH})"
+                    )
+                    return False
+            elif isinstance(token, YAML_NESTING_END_TOKENS):
+                depth = max(0, depth - 1)
+            elif isinstance(token, AnchorToken):
+                errors.append("evidence bundle forbids YAML anchors")
+            elif isinstance(token, AliasToken):
+                errors.append("evidence bundle forbids YAML aliases")
+            elif isinstance(token, DirectiveToken):
+                errors.append("evidence bundle forbids YAML directives")
+    except (RecursionError, yaml.YAMLError) as exc:
+        errors.append(f"evidence bundle is invalid YAML: {exc}")
+        return False
+    return True
+
+
 def validate_first_write_evidence(
     path: Path,
     *,
@@ -165,9 +210,12 @@ def validate_first_write_evidence(
 
     errors.extend(scan_first_write_yaml_text(text, "evidence bundle"))
 
+    if not _scan_safe_yaml_structure(text, errors):
+        return FirstWriteEvidenceResult(False, tuple(errors), digest)
+
     try:
         loaded = yaml.load(text, Loader=UniqueKeyLoader)
-    except yaml.YAMLError as exc:
+    except (RecursionError, yaml.YAMLError) as exc:
         errors.append(f"evidence bundle is invalid YAML: {exc}")
         return FirstWriteEvidenceResult(False, tuple(errors), digest)
 
