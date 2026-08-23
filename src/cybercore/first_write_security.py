@@ -28,6 +28,29 @@ CREDENTIAL_LITERAL_RE = re.compile(
     re.IGNORECASE,
 )
 
+REFERENCE_LINE_RE = re.compile(
+    r"(?m)^\s*([A-Za-z0-9_]*reference)\s*:\s*([^\s#]+)\s*$",
+    re.IGNORECASE,
+)
+
+APPROVED_REFERENCE_VALUE_RE = re.compile(
+    r"^(?:"
+    r"evidence:wb0034:[A-Za-z0-9][A-Za-z0-9._:-]{2,191}|"
+    r"approval:wb0034:[A-Za-z0-9][A-Za-z0-9._:-]{2,191}|"
+    r"\.\./evidence/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.ya?ml|"
+    r"[0-9a-fA-F]{40}|"
+    r"WB0034_[A-Z0-9_]{2,127}|"
+    r"INTERSERVER_[A-Z0-9_]{2,127}|"
+    r"REQUIRED_BEFORE_REMOTE_WRITE|"
+    r"NOT_REQUIRED_FOR_PLAN_ONLY|"
+    r"TBD"
+    r")$"
+)
+
+
+def _reference_value_is_allowlisted(value: str) -> bool:
+    return APPROVED_REFERENCE_VALUE_RE.fullmatch(value) is not None
+
 
 def scan_first_write_yaml_text(text: str, label: str) -> tuple[str, ...]:
     """Reject raw-text constructs that may hide credentials from YAML parsing."""
@@ -51,5 +74,10 @@ def scan_first_write_yaml_text(text: str, label: str) -> tuple[str, ...]:
 
     if CREDENTIAL_LITERAL_RE.search(text):
         errors.append(f"{label} contains a recognizable credential literal")
+
+    for match in REFERENCE_LINE_RE.finditer(text):
+        key, value = match.groups()
+        if not _reference_value_is_allowlisted(value):
+            errors.append(f"{label} reference field {key} uses a non-allowlisted value")
 
     return tuple(errors)
