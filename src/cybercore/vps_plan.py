@@ -10,6 +10,9 @@ from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
 from yaml.tokens import AliasToken, AnchorToken, DirectiveToken
 
 
+MAX_YAML_DEPTH = 64
+MERGE_TAG = "tag:yaml.org,2002:merge"
+
 PLAN_TOP_LEVEL_KEYS = {
     "version",
     "work_block",
@@ -23,6 +26,8 @@ PLAN_TOP_LEVEL_KEYS = {
     "control_panel",
     "period_months",
     "quantity",
+    "location_id",
+    "location_name",
     "budget_ceiling_usd_month",
     "one_time_budget_ceiling_usd",
     "minimum_resources",
@@ -61,6 +66,8 @@ QUOTE_TOP_LEVEL_KEYS = {
     "control_panel",
     "period_months",
     "quantity",
+    "location_id",
+    "location_name",
     "stock_available",
     "resources",
     "public_hostname",
@@ -119,6 +126,8 @@ class PurchaseApprovalPacket:
     control_panel: str
     period_months: int
     quantity: int
+    location_id: int
+    location_name: str
     recurring_price_usd_month: str
     one_time_price_usd: str
     purchase_authorized: bool = False
@@ -146,57 +155,144 @@ def _reject_denied_literals(text: str, context: str, errors: list[str]) -> None:
             errors.append(f"{context} contains denied secret-like literal pattern: {pattern}")
 
 
-def _collect_structure_errors(node: Node, context: str, errors: list[str]) -> None:
-    if isinstance(node, MappingNode):
-        seen: set[str] = set()
-        for key_node, value_node in node.value:
-            if not isinstance(key_node, ScalarNode):
-                errors.append(f"{context} mapping keys must be scalar strings")
-            else:
-                key = key_node.value
-                if key == "<<":
-                    errors.append(f"{context} forbids YAML merge keys")
-                if key in seen:
-                    errors.append(f"{context} contains duplicate YAML key: {key}")
-                seen.add(key)
-            _collect_structure_errors(value_node, context, errors)
-    elif isinstance(node, SequenceNode):
-        for item in node.value:
-            _collect_structure_errors(item, context, errors)
+def _reject_denied_loaded_scalars(
+    value: object,
+    context: str,
+    errors: list[str],
+    *,
+    depth: int = 0,
+    seen: set[int] | None = None,
+) -> None:
+    if depth > MAX_YAML_DEPTH:
+        errors.append(f"{context} exceeds maximum YAML depth {MAX_YAML_DEPTH}")
+        return
+    if isinstance(value, str):
+        _reject_denied_literals(value, context, errors)
+        return
+    if not isinstance(value, (dict, list)):
+        return
+    if seen is None:
+        seen = set()
+    identity = id(value)
+    if identity in seen:
+        errors.append(f"{context} contains recursive YAML data")
+        return
+    seen.add(identity)
+    try:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if isinstance(key, str):
+                    _reject_denied_literals(key, context, errors)
+                _reject_denied_loaded_scalars(
+                    item, context, errors, depth=depth + 1, seen=seen
+                )
+        else:
+            for item in value:
+                _reject_denied_loaded_scalars(
+                    item, context, errors, depth=depth + 1, seen=seen
+                )
+    finally:
+        seen.remove(identity)
 
 
-def _load_closed_yaml(path: Path, context: str) -> tuple[dict[str, object] | None, list[str]]:
+def _collect_structure_errors(
+    node: Node,
+    context: str,
+    errors: list[str],
+    *,
+    depth: int = 0,
+    seen: set[int] | None = None,
+) -> None:
+    if depth > MAX_YAML_DEPTH:
+        errors.append(f"{context} exceeds maximum YAML depth {MAX_YAML_DEPTH}")
+        return
+    if seen is None:
+        seen = set()
+    identity = id(node)
+    if identity in seen:
+        errors.append(f"{context} contains recursive YAML node graph")
+        return
+    seen.add(identity)
+    try:
+        if isinstance(node, MappingNode):
+            keys_seen: set[str] = set()
+            for key_node, value_node in node.value:
+                if not isinstance(key_node, ScalarNode):
+                    errors.append(f"{context} mapping keys must be scalar strings")
+                else:
+                    key = key_node.value
+                    if key == "<<" or key_node.tag == MERGE_TAG:
+                        errors.append(f"{context} forbids YAML merge keys")
+                    if key in keys_seen:
+                        errors.append(f"{context} contains duplicate YAML key: {key}")
+                    keys_seen.add(key)
+                _collect_structure_errors(
+                    value_node,
+                    context,
+                    errors,
+                    depth=depth + 1,
+                    seen=seen,
+                )
+        elif isinstance(node, SequenceNode):
+            for item in node.value:
+                _collect_structure_errors(
+                    item,
+                    context,
+                    errors,
+                    depth=depth + 1,
+                    seen=seen,
+                )
+    finally:
+        seen.remove(identity)
+
+
+def _parse_closed_yaml_text(
+    text: str, context: str
+) -> tuple[dict[str, object] | None, list[str]]:
     errors: list[str] = []
-    text = _read_text(path, context, errors)
-    if text is None:
-        return None, errors
-
     _reject_denied_literals(text, context, errors)
 
+    unsafe_yaml_metadata = False
     try:
         for token in yaml.scan(text, Loader=yaml.SafeLoader):
             if isinstance(token, AnchorToken):
                 errors.append(f"{context} forbids YAML anchors")
+                unsafe_yaml_metadata = True
             elif isinstance(token, AliasToken):
                 errors.append(f"{context} forbids YAML aliases")
+                unsafe_yaml_metadata = True
             elif isinstance(token, DirectiveToken):
                 errors.append(f"{context} forbids YAML directives")
-    except yaml.YAMLError as exc:
+                unsafe_yaml_metadata = True
+    except (yaml.YAMLError, RecursionError) as exc:
         errors.append(f"{context} is invalid YAML: {exc}")
+        return None, errors
+
+    # Do not continue into composition/loading when metadata already proves the
+    # document is outside the closed subset. This also prevents recursive alias
+    # graphs from reaching later structure walks.
+    if unsafe_yaml_metadata:
         return None, errors
 
     try:
         node = yaml.compose(text, Loader=yaml.SafeLoader)
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, RecursionError) as exc:
         errors.append(f"{context} is invalid YAML: {exc}")
         return None, errors
 
     if node is not None:
-        _collect_structure_errors(node, context, errors)
+        try:
+            _collect_structure_errors(node, context, errors)
+        except RecursionError:
+            errors.append(f"{context} exceeds safe YAML recursion limits")
+            return None, errors
+
+    if errors:
+        return None, errors
 
     try:
         loaded = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
+    except (yaml.YAMLError, RecursionError) as exc:
         errors.append(f"{context} is invalid YAML: {exc}")
         return None, errors
 
@@ -206,7 +302,19 @@ def _load_closed_yaml(path: Path, context: str) -> tuple[dict[str, object] | Non
     if not all(isinstance(key, str) for key in loaded):
         errors.append(f"{context} keys must be strings")
         return None, errors
-    return loaded, errors
+
+    _reject_denied_loaded_scalars(loaded, context, errors)
+    return cast(dict[str, object], loaded), errors
+
+
+def _load_closed_yaml(path: Path, context: str) -> tuple[dict[str, object] | None, list[str]]:
+    errors: list[str] = []
+    text = _read_text(path, context, errors)
+    if text is None:
+        return None, errors
+    document, parse_errors = _parse_closed_yaml_text(text, context)
+    errors.extend(parse_errors)
+    return document, errors
 
 
 def _reject_unknown_keys(
@@ -232,7 +340,7 @@ def _require_mapping(
     if not isinstance(value, dict) or not all(isinstance(item, str) for item in value):
         errors.append(f"{context} requires mapping: {key}")
         return None
-    return value
+    return cast(dict[str, object], value)
 
 
 def _require_positive_int(
@@ -260,12 +368,18 @@ def _decimal_value(value: object, label: str, context: str, errors: list[str]) -
     return decimal
 
 
-def _require_non_negative_decimal(
+def _require_non_negative_money(
     mapping: dict[str, object], key: str, context: str, errors: list[str]
 ) -> Decimal | None:
     decimal = _decimal_value(mapping.get(key), key, context, errors)
-    if decimal is not None and decimal < 0:
+    if decimal is None:
+        return None
+    if decimal < 0:
         errors.append(f"{context} requires non-negative {key}; got {decimal}")
+        return None
+    scaled = decimal * Decimal("100")
+    if scaled != scaled.to_integral_value():
+        errors.append(f"{context} requires whole-cent {key}; got {decimal}")
         return None
     return decimal
 
@@ -280,11 +394,7 @@ def _require_non_empty_string(
     return value.strip()
 
 
-def validate_vps_plan(path: Path) -> VpsValidationResult:
-    document, errors = _load_closed_yaml(path, "VPS plan")
-    if document is None:
-        return VpsValidationResult(False, tuple(errors))
-
+def _validate_plan_document(document: dict[str, object], errors: list[str]) -> tuple[str, ...]:
     _reject_unknown_keys(document, PLAN_TOP_LEVEL_KEYS, "VPS plan", errors)
     _require_exact(document, "version", 1, "VPS plan", errors)
     _require_exact(document, "work_block", "WB-0035", "VPS plan", errors)
@@ -298,13 +408,15 @@ def validate_vps_plan(path: Path) -> VpsValidationResult:
     _require_exact(document, "control_panel", "none", "VPS plan", errors)
     _require_exact(document, "period_months", 1, "VPS plan", errors)
     _require_exact(document, "quantity", 1, "VPS plan", errors)
+    _require_exact(document, "location_id", 1, "VPS plan", errors)
+    _require_exact(document, "location_name", "New Jersey", "VPS plan", errors)
 
-    monthly_budget = _require_non_negative_decimal(
+    monthly_budget = _require_non_negative_money(
         document, "budget_ceiling_usd_month", "VPS plan", errors
     )
     if monthly_budget is not None and (monthly_budget <= 0 or monthly_budget > Decimal("3.00")):
         errors.append("VPS plan budget_ceiling_usd_month must be > 0 and <= 3.00")
-    _require_non_negative_decimal(document, "one_time_budget_ceiling_usd", "VPS plan", errors)
+    _require_non_negative_money(document, "one_time_budget_ceiling_usd", "VPS plan", errors)
 
     minimum = _require_mapping(document, "minimum_resources", "VPS plan", errors)
     if minimum is not None:
@@ -336,17 +448,12 @@ def validate_vps_plan(path: Path) -> VpsValidationResult:
         _require_exact(evidence, "plaintext_secret_values_allowed", False, "evidence", errors)
         _require_exact(evidence, "safe_aliases_only", True, "evidence", errors)
 
-    warnings = (
+    return (
         "plan is repository-only; it grants no InterServer contact, purchase, payment, DNS, SSH, or deploy authority",
     )
-    return VpsValidationResult(not errors, tuple(errors), warnings)
 
 
-def validate_vps_quote(path: Path) -> VpsValidationResult:
-    document, errors = _load_closed_yaml(path, "VPS quote")
-    if document is None:
-        return VpsValidationResult(False, tuple(errors))
-
+def _validate_quote_document(document: dict[str, object], errors: list[str]) -> tuple[str, ...]:
     _reject_unknown_keys(document, QUOTE_TOP_LEVEL_KEYS, "VPS quote", errors)
     _require_exact(document, "version", 1, "VPS quote", errors)
     _require_exact(document, "work_block", "WB-0035", "VPS quote", errors)
@@ -368,8 +475,8 @@ def validate_vps_quote(path: Path) -> VpsValidationResult:
         _require_exact(document, "provider_contact_performed", True, "VPS quote", errors)
 
     _require_exact(document, "currency", "USD", "VPS quote", errors)
-    _require_non_negative_decimal(document, "recurring_price_usd_month", "VPS quote", errors)
-    _require_non_negative_decimal(document, "one_time_price_usd", "VPS quote", errors)
+    _require_non_negative_money(document, "recurring_price_usd_month", "VPS quote", errors)
+    _require_non_negative_money(document, "one_time_price_usd", "VPS quote", errors)
     _require_exact(document, "platform", "kvm", "VPS quote", errors)
     _require_exact(document, "slices", 1, "VPS quote", errors)
     _require_exact(document, "os_distro", "ubuntu", "VPS quote", errors)
@@ -377,6 +484,8 @@ def validate_vps_quote(path: Path) -> VpsValidationResult:
     _require_exact(document, "control_panel", "none", "VPS quote", errors)
     _require_exact(document, "period_months", 1, "VPS quote", errors)
     _require_exact(document, "quantity", 1, "VPS quote", errors)
+    _require_exact(document, "location_id", 1, "VPS quote", errors)
+    _require_exact(document, "location_name", "New Jersey", "VPS quote", errors)
     _require_exact(document, "stock_available", True, "VPS quote", errors)
     _require_exact(document, "public_hostname", "tasks.cyberdjs.org", "VPS quote", errors)
     _require_non_empty_string(document, "quote_reference", "VPS quote", errors)
@@ -387,26 +496,21 @@ def validate_vps_quote(path: Path) -> VpsValidationResult:
         _require_positive_int(resources, "ram_mib", "quote resources", errors)
         _require_positive_int(resources, "disk_gib", "quote resources", errors)
 
-    warnings: tuple[str, ...] = ()
     if mode == "SYNTHETIC_FIXTURE":
-        warnings = ("synthetic quote cannot be used as purchase evidence",)
-    return VpsValidationResult(not errors, tuple(errors), warnings)
+        return ("synthetic quote cannot be used as purchase evidence",)
+    return ()
 
 
-def validate_plan_and_quote(plan_path: Path, quote_path: Path) -> VpsValidationResult:
-    plan_result = validate_vps_plan(plan_path)
-    quote_result = validate_vps_quote(quote_path)
-    errors = [*plan_result.errors, *quote_result.errors]
-    warnings = [*plan_result.warnings, *quote_result.warnings]
+def _validate_loaded_pair(
+    plan: dict[str, object],
+    quote: dict[str, object],
+    errors: list[str],
+    warnings: list[str],
+) -> None:
+    warnings.extend(_validate_plan_document(plan, errors))
+    warnings.extend(_validate_quote_document(quote, errors))
     if errors:
-        return VpsValidationResult(False, tuple(errors), tuple(dict.fromkeys(warnings)))
-
-    plan, plan_load_errors = _load_closed_yaml(plan_path, "VPS plan")
-    quote, quote_load_errors = _load_closed_yaml(quote_path, "VPS quote")
-    errors.extend(plan_load_errors)
-    errors.extend(quote_load_errors)
-    if plan is None or quote is None:
-        return VpsValidationResult(False, tuple(errors), tuple(dict.fromkeys(warnings)))
+        return
 
     for key in (
         "provider",
@@ -418,28 +522,28 @@ def validate_plan_and_quote(plan_path: Path, quote_path: Path) -> VpsValidationR
         "control_panel",
         "period_months",
         "quantity",
+        "location_id",
+        "location_name",
     ):
         if quote.get(key) != plan.get(key):
             errors.append(
                 f"quote {key} does not match plan: {quote.get(key)!r} != {plan.get(key)!r}"
             )
 
-    monthly = _decimal_value(
-        quote.get("recurring_price_usd_month"), "recurring_price_usd_month", "VPS quote", errors
+    monthly = _require_non_negative_money(
+        quote, "recurring_price_usd_month", "VPS quote", errors
     )
-    monthly_budget = _decimal_value(
-        plan.get("budget_ceiling_usd_month"), "budget_ceiling_usd_month", "VPS plan", errors
+    monthly_budget = _require_non_negative_money(
+        plan, "budget_ceiling_usd_month", "VPS plan", errors
     )
     if monthly is not None and monthly_budget is not None and monthly > monthly_budget:
         errors.append(
             f"quote recurring price {monthly} exceeds monthly budget ceiling {monthly_budget}"
         )
 
-    one_time = _decimal_value(
-        quote.get("one_time_price_usd"), "one_time_price_usd", "VPS quote", errors
-    )
-    one_time_budget = _decimal_value(
-        plan.get("one_time_budget_ceiling_usd"), "one_time_budget_ceiling_usd", "VPS plan", errors
+    one_time = _require_non_negative_money(quote, "one_time_price_usd", "VPS quote", errors)
+    one_time_budget = _require_non_negative_money(
+        plan, "one_time_budget_ceiling_usd", "VPS plan", errors
     )
     if one_time is not None and one_time_budget is not None and one_time > one_time_budget:
         errors.append(
@@ -462,36 +566,61 @@ def validate_plan_and_quote(plan_path: Path, quote_path: Path) -> VpsValidationR
             "comparison uses synthetic evidence; A1 live catalog + quote is still required"
         )
 
+
+def validate_vps_plan(path: Path) -> VpsValidationResult:
+    document, errors = _load_closed_yaml(path, "VPS plan")
+    if document is None:
+        return VpsValidationResult(False, tuple(errors))
+    warnings = _validate_plan_document(document, errors)
+    return VpsValidationResult(not errors, tuple(errors), warnings)
+
+
+def validate_vps_quote(path: Path) -> VpsValidationResult:
+    document, errors = _load_closed_yaml(path, "VPS quote")
+    if document is None:
+        return VpsValidationResult(False, tuple(errors))
+    warnings = _validate_quote_document(document, errors)
+    return VpsValidationResult(not errors, tuple(errors), warnings)
+
+
+def validate_plan_and_quote(plan_path: Path, quote_path: Path) -> VpsValidationResult:
+    plan, plan_errors = _load_closed_yaml(plan_path, "VPS plan")
+    quote, quote_errors = _load_closed_yaml(quote_path, "VPS quote")
+    errors = [*plan_errors, *quote_errors]
+    warnings: list[str] = []
+    if plan is None or quote is None:
+        return VpsValidationResult(False, tuple(errors))
+
+    _validate_loaded_pair(plan, quote, errors, warnings)
     return VpsValidationResult(not errors, tuple(errors), tuple(dict.fromkeys(warnings)))
 
 
 def prepare_purchase_approval_packet(
     plan_path: Path, quote_path: Path
 ) -> tuple[VpsValidationResult, PurchaseApprovalPacket | None]:
-    combined = validate_plan_and_quote(plan_path, quote_path)
-    errors = list(combined.errors)
-    warnings = list(combined.warnings)
-    if errors:
-        return combined, None
-
-    plan, _ = _load_closed_yaml(plan_path, "VPS plan")
-    quote, _ = _load_closed_yaml(quote_path, "VPS quote")
+    # Load each input exactly once and build the packet from the same parsed
+    # snapshots that are validated below. This removes the validate-then-reload
+    # TOCTOU gap that could otherwise substitute unvalidated file contents.
+    plan, plan_errors = _load_closed_yaml(plan_path, "VPS plan")
+    quote, quote_errors = _load_closed_yaml(quote_path, "VPS quote")
+    errors = [*plan_errors, *quote_errors]
+    warnings: list[str] = []
     if plan is None or quote is None:
-        return VpsValidationResult(
-            False, ("validated documents could not be reloaded",), tuple(warnings)
-        ), None
+        return VpsValidationResult(False, tuple(errors)), None
+
+    _validate_loaded_pair(plan, quote, errors, warnings)
+    if errors:
+        return VpsValidationResult(False, tuple(errors), tuple(dict.fromkeys(warnings))), None
 
     if quote.get("evidence_mode") != "LIVE_READ_ONLY":
         errors.append("purchase approval packet requires LIVE_READ_ONLY quote evidence")
         return VpsValidationResult(False, tuple(errors), tuple(dict.fromkeys(warnings))), None
 
     quote_reference = _require_non_empty_string(quote, "quote_reference", "VPS quote", errors)
-    monthly = _decimal_value(
-        quote.get("recurring_price_usd_month"), "recurring_price_usd_month", "VPS quote", errors
+    monthly = _require_non_negative_money(
+        quote, "recurring_price_usd_month", "VPS quote", errors
     )
-    one_time = _decimal_value(
-        quote.get("one_time_price_usd"), "one_time_price_usd", "VPS quote", errors
-    )
+    one_time = _require_non_negative_money(quote, "one_time_price_usd", "VPS quote", errors)
     if errors or quote_reference is None or monthly is None or one_time is None:
         return VpsValidationResult(False, tuple(errors), tuple(dict.fromkeys(warnings))), None
 
@@ -507,6 +636,8 @@ def prepare_purchase_approval_packet(
         control_panel=str(plan["control_panel"]),
         period_months=cast(int, plan["period_months"]),
         quantity=cast(int, plan["quantity"]),
+        location_id=cast(int, plan["location_id"]),
+        location_name=str(plan["location_name"]),
         recurring_price_usd_month=f"{monthly:.2f}",
         one_time_price_usd=f"{one_time:.2f}",
     )
