@@ -169,9 +169,7 @@ def test_duplicate_yaml_key_is_rejected(tmp_path: Path) -> None:
 def test_explicit_yaml_merge_tag_is_rejected(tmp_path: Path) -> None:
     plan = tmp_path / "plan.yaml"
     plan.write_text(
-        PLAN.read_text(encoding="utf-8").replace(
-            "authority:\n", "authority:\n  !!merge foo: {}\n"
-        ),
+        PLAN.read_text(encoding="utf-8").replace("authority:\n", "authority:\n  !!merge foo: {}\n"),
         encoding="utf-8",
     )
 
