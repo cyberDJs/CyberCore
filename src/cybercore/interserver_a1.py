@@ -9,7 +9,7 @@ from pathlib import Path
 import secrets
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, build_opener
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 CATALOG_URL = "https://my.interserver.net/apiv2/vps/order"
@@ -47,14 +47,21 @@ class Candidate:
         return data
 
 
-class _NoRedirectHandler:
-    def http_error_301(self, req: Any, fp: Any, code: int, msg: str, headers: Any) -> Any:
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def http_error_302(
+        self,
+        req: Any,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+    ) -> Any:
         raise A1ProbeError("provider response attempted an unexpected redirect")
 
-    http_error_302 = http_error_301
-    http_error_303 = http_error_301
-    http_error_307 = http_error_301
-    http_error_308 = http_error_301
+    http_error_301 = http_error_302
+    http_error_303 = http_error_302
+    http_error_307 = http_error_302
+    http_error_308 = http_error_302
 
 
 def _decimal(value: object, label: str) -> Decimal:
@@ -197,9 +204,12 @@ def sanitize_quote(candidate: Candidate, response: dict[str, object]) -> dict[st
 
     if str(response.get("slices")) != str(candidate.slices):
         raise A1ProbeError("provider quote response mismatch for slices")
-    if int(response.get("period", -1)) != candidate.period_months:
+
+    period = _positive_int(response.get("period"), "period")
+    location = _positive_int(response.get("location"), "location")
+    if period != candidate.period_months:
         raise A1ProbeError("provider quote response mismatch for period")
-    if int(response.get("location", -1)) != candidate.location_id:
+    if location != candidate.location_id:
         raise A1ProbeError("provider quote response mismatch for location")
 
     monthly = _decimal(
@@ -328,6 +338,10 @@ def run_live_a1(api_key: str, out_dir: Path) -> tuple[Path, Path]:
     out_dir.mkdir(parents=True, exist_ok=True)
     catalog_path = out_dir / "interserver-vps-catalog.live.json"
     quote_path = out_dir / "interserver-vps-quote.live.json"
-    catalog_path.write_text(json.dumps(safe_catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    quote_path.write_text(json.dumps(safe_quote, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    catalog_path.write_text(
+        json.dumps(safe_catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    quote_path.write_text(
+        json.dumps(safe_quote, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     return catalog_path, quote_path
