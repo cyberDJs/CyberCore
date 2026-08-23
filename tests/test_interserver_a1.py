@@ -10,6 +10,7 @@ import pytest
 from cybercore.interserver_a1 import (
     A1ProbeError,
     build_quote_payload,
+    safe_catalog_receipt,
     sanitize_quote,
     select_candidate,
 )
@@ -35,10 +36,24 @@ def test_select_candidate_enforces_wb0035_bounds() -> None:
     assert candidate.os_version == "ubuntu24"
     assert candidate.control_panel == "none"
     assert candidate.location_id == 1
+    assert candidate.location_name == "New Jersey"
     assert candidate.currency == "USD"
     assert candidate.catalog_price_month == Decimal("3")
     assert candidate.ram_mib == 2048
-    assert candidate.disk_gib == 30
+    assert candidate.disk_gib == 40
+    assert candidate.transfer_gib == 2000
+
+
+def test_catalog_uses_kvm_slice_price_not_vps_ny_cost() -> None:
+    catalog = copy.deepcopy(_load(CATALOG_FIXTURE))
+    catalog["vpsSliceKvmLCost"] = 3
+    catalog["vpsNyCost"] = 1
+
+    candidate = select_candidate(catalog)
+    receipt = safe_catalog_receipt(candidate)
+
+    assert candidate.catalog_price_month == Decimal("3")
+    assert receipt["catalog_price_field"] == "vpsSliceKvmLCost"
 
 
 def test_quote_payload_uses_only_a1_validation_shape() -> None:
@@ -78,9 +93,17 @@ def test_sanitize_quote_drops_secret_and_customer_fields() -> None:
 
 def test_catalog_above_budget_fails_closed() -> None:
     catalog = copy.deepcopy(_load(CATALOG_FIXTURE))
-    catalog["vpsNyCost"] = 3.01
+    catalog["vpsSliceKvmLCost"] = 3.01
 
     with pytest.raises(A1ProbeError, match="monthly ceiling"):
+        select_candidate(catalog)
+
+
+def test_catalog_nonpositive_kvm_price_fails_closed() -> None:
+    catalog = copy.deepcopy(_load(CATALOG_FIXTURE))
+    catalog["vpsSliceKvmLCost"] = 0
+
+    with pytest.raises(A1ProbeError, match="must be positive"):
         select_candidate(catalog)
 
 
