@@ -1,0 +1,117 @@
+from __future__ import annotations
+
+import copy
+from decimal import Decimal
+import json
+from pathlib import Path
+
+import pytest
+
+from cybercore.interserver_a1 import (
+    A1ProbeError,
+    build_quote_payload,
+    sanitize_quote,
+    select_candidate,
+)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+CATALOG_FIXTURE = ROOT / "tests/fixtures/interserver-vps-catalog.synthetic.json"
+QUOTE_FIXTURE = ROOT / "tests/fixtures/interserver-vps-quote-response.synthetic.json"
+
+
+def _load(path: Path) -> dict[str, object]:
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    assert isinstance(loaded, dict)
+    return loaded
+
+
+def test_select_candidate_enforces_wb0035_bounds() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+
+    assert candidate.platform == "kvm"
+    assert candidate.slices == 1
+    assert candidate.os_distro == "ubuntu"
+    assert candidate.os_version == "ubuntu24"
+    assert candidate.control_panel == "none"
+    assert candidate.location_id == 1
+    assert candidate.currency == "USD"
+    assert candidate.catalog_price_month == Decimal("3")
+    assert candidate.ram_mib == 2048
+    assert candidate.disk_gib == 30
+
+
+def test_quote_payload_uses_only_a1_validation_shape() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    payload = build_quote_payload(candidate)
+
+    assert payload["vpsPlatform"] == "kvm"
+    assert payload["slices"] == 1
+    assert payload["osDistro"] == "ubuntu"
+    assert payload["osVersion"] == "ubuntu24"
+    assert payload["controlpanel"] == "none"
+    assert payload["hostname"] == "tasks.cyberdjs.org"
+    assert isinstance(payload["rootpass"], str)
+    assert len(payload["rootpass"]) >= 32
+    assert "order" not in payload
+    assert "payment" not in payload
+
+
+def test_sanitize_quote_drops_secret_and_customer_fields() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    raw_quote = _load(QUOTE_FIXTURE)
+
+    sanitized = sanitize_quote(candidate, raw_quote)
+    rendered = json.dumps(sanitized, sort_keys=True)
+
+    assert sanitized["evidence_mode"] == "LIVE_READ_ONLY"
+    assert sanitized["recurring_price_usd_month"] == "3.00"
+    assert sanitized["one_time_price_usd"] == "0.00"
+    assert sanitized["order_performed"] is False
+    assert sanitized["payment_performed"] is False
+    assert sanitized["secret_values_recorded"] is False
+    assert "rootpass" not in rendered.lower()
+    assert "SYNTHETIC_SECRET_MUST_NOT_ESCAPE" not in rendered
+    assert "custid" not in rendered.lower()
+    assert "123456" not in rendered
+
+
+def test_catalog_above_budget_fails_closed() -> None:
+    catalog = copy.deepcopy(_load(CATALOG_FIXTURE))
+    catalog["vpsNyCost"] = 3.01
+
+    with pytest.raises(A1ProbeError, match="monthly ceiling"):
+        select_candidate(catalog)
+
+
+def test_catalog_without_ubuntu24_fails_closed() -> None:
+    catalog = copy.deepcopy(_load(CATALOG_FIXTURE))
+    templates = catalog["templates"]
+    assert isinstance(templates, dict)
+    kvm = templates["kvm"]
+    assert isinstance(kvm, dict)
+    ubuntu = kvm["ubuntu"]
+    assert isinstance(ubuntu, dict)
+    ubuntu.pop("ubuntu24")
+
+    with pytest.raises(A1ProbeError, match="Ubuntu 24"):
+        select_candidate(catalog)
+
+
+def test_quote_above_budget_fails_closed() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    raw_quote = copy.deepcopy(_load(QUOTE_FIXTURE))
+    raw_quote["service_cost"] = 4
+    raw_quote["monthly_service_cost"] = 4
+
+    with pytest.raises(A1ProbeError, match="monthly ceiling"):
+        sanitize_quote(candidate, raw_quote)
+
+
+def test_quote_configuration_mismatch_fails_closed() -> None:
+    candidate = select_candidate(_load(CATALOG_FIXTURE))
+    raw_quote = copy.deepcopy(_load(QUOTE_FIXTURE))
+    raw_quote["platform"] = "hyperv"
+
+    with pytest.raises(A1ProbeError, match="mismatch"):
+        sanitize_quote(candidate, raw_quote)
