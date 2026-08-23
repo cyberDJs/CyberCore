@@ -15,7 +15,7 @@ Budget ceiling: USD 3.00/month unless separately approved
 
 Prepare a fail-closed path for CyberCore to discover the current InterServer VPS catalog, produce a non-mutating live quote, stop for explicit human approval before purchase/payment, and only later—under separate authority gates—provision at most one VPS, harden it, deploy Vikunja, publish DNS, and verify persistence/backup/restore.
 
-A1 catalog + quote is verified. PRE-A2 read-only existing-VPS inventory is now verified and complete: the account contains one VPS record, it is `expired`, and there are no active VPS services available for immediate reuse. The current recommendation is therefore **new provisioning**, subject to separate A2 authorization. A2 purchase/payment, A3 bootstrap/deploy, and A4 DNS remain not granted.
+A1 catalog + quote is verified. PRE-A2 read-only existing-VPS inventory is verified and complete: the account contains one VPS record, it is `expired`, and there are no active VPS services available for immediate reuse. The current recommendation is **new provisioning**, subject to separate A2 authorization. A2 purchase/payment, A3 bootstrap/deploy, and A4 DNS remain not granted.
 
 ## Client direction
 
