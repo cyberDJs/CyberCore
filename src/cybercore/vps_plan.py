@@ -422,7 +422,12 @@ def _validate_plan_document(document: dict[str, object], errors: list[str]) -> t
     )
     if monthly_budget is not None and (monthly_budget <= 0 or monthly_budget > Decimal("3.00")):
         errors.append("VPS plan budget_ceiling_usd_month must be > 0 and <= 3.00")
-    _require_non_negative_money(document, "one_time_budget_ceiling_usd", "VPS plan", errors)
+
+    one_time_budget = _require_non_negative_money(
+        document, "one_time_budget_ceiling_usd", "VPS plan", errors
+    )
+    if one_time_budget is not None and one_time_budget != Decimal("0.00"):
+        errors.append("VPS plan one_time_budget_ceiling_usd must equal 0.00")
 
     minimum = _require_mapping(document, "minimum_resources", "VPS plan", errors)
     if minimum is not None:
