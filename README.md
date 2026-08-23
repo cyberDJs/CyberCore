@@ -74,10 +74,14 @@ The result is not “AI with root access.” It is an evidence-first control mod
 | 🔌 | **Provider boundaries** | Keeps durable capabilities separate from vendor-specific APIs and drivers. |
 | ✅ | **Governed execution** | Meaningful mutation requires explicit authority and post-change verification. |
 
+
 ## Architecture at a glance
 
 <p align="center">
-  <img src="docs/visual/generated/architecture-overview.png" width="640" alt="CyberCore architecture overview">
+  <img
+    src="assets/brand/cybercore-architecture-at-a-glance.png"
+    alt="CyberCore architecture at a glance"
+    width="1100">
 </p>
 
 CyberCore keeps four concerns deliberately separate:
