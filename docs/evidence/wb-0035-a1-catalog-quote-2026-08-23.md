@@ -178,7 +178,11 @@ Location `1` is selected deterministically because all three observed locations 
 
 InterServer also exposes read-only current VPS inventory through `GET /apiv2/vps` / `getVpsList`.
 
-Before any A2 purchase decision, CyberCore must inspect current VPS inventory and decide **reuse vs new provisioning**. The existing A1 authorization names catalog + quote only, so this evidence does not claim that the inventory call has been authorized or performed.
+PRE-A2 read-only inventory was separately authorized on 2026-08-23 at 21:39 CEST. The exact authorization and runtime evidence are tracked in:
+
+`docs/evidence/wb-0035-pre-a2-inventory-2026-08-23.md`
+
+That authorization permits only the read-only inventory GET and sanitized local analysis; it does not authorize purchase, payment or any VPS/account mutation.
 
 ## A1 completion receipt
 
@@ -204,6 +208,8 @@ order_performed: false
 payment_performed: false
 provider_mutation_performed: false
 secret_values_recorded: false
+PRE_A2_inventory_authorized: true
+PRE_A2_inventory_executed: false
 A2_purchase_authorized: false
 A2_payment_authorized: false
 A3_bootstrap_deploy_authorized: false
@@ -212,6 +218,6 @@ A4_dns_authorized: false
 
 ## Stop line
 
-**A1 is VERIFIED and complete. Stop provider activity here.**
+**A1 is VERIFIED and complete. PRE-A2 inventory is separately authorized and pending execution.**
 
-Do not call `POST /apiv2/vps/order`, any invoice/payment operation, `GET /apiv2/vps` inventory, modify InterServer account security, rotate credentials, bootstrap/deploy, or change DNS without the next explicit authorization applicable to that operation.
+Do not call `POST /apiv2/vps/order`, any invoice/payment operation, modify InterServer account security, rotate credentials, bootstrap/deploy, or change DNS without the next explicit authorization applicable to that operation.
