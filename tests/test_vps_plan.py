@@ -251,6 +251,23 @@ def test_secret_like_literal_is_rejected(tmp_path: Path) -> None:
     assert any("secret-like literal" in error for error in result.errors)
 
 
+def test_rootpass_literal_is_rejected(tmp_path: Path) -> None:
+    quote = tmp_path / "quote.yaml"
+    quote.write_text(
+        _live_quote_text().replace(
+            "quote_reference: LIVE-QUOTE-001",
+            'quote_reference: "rootpass=provider-secret"',
+        ),
+        encoding="utf-8",
+    )
+
+    result, packet = prepare_purchase_approval_packet(PLAN, quote)
+
+    assert not result.ok
+    assert packet is None
+    assert any("rootpass=" in error for error in result.errors)
+
+
 def test_decoded_secret_like_literal_is_rejected(tmp_path: Path) -> None:
     quote = tmp_path / "quote.yaml"
     quote.write_text(
