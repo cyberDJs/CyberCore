@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import cast
 
 import yaml
 from yaml.nodes import MappingNode, Node, ScalarNode, SequenceNode
@@ -500,12 +501,12 @@ def prepare_purchase_approval_packet(
         quote_reference=quote_reference,
         public_hostname=str(plan["public_hostname"]),
         platform=str(plan["platform"]),
-        slices=int(plan["slices"]),
+        slices=cast(int, plan["slices"]),
         os_distro=str(plan["os_distro"]),
         os_version=str(plan["os_version"]),
         control_panel=str(plan["control_panel"]),
-        period_months=int(plan["period_months"]),
-        quantity=int(plan["quantity"]),
+        period_months=cast(int, plan["period_months"]),
+        quantity=cast(int, plan["quantity"]),
         recurring_price_usd_month=f"{monthly:.2f}",
         one_time_price_usd=f"{one_time:.2f}",
     )
