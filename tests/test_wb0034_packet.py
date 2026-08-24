@@ -25,6 +25,17 @@ AUTH_REF = "approval:wb0034:20260822T183500Z"
 BUILT_AT = "2026-08-22T18:35:00Z"
 
 
+@pytest.fixture(autouse=True)
+def _isolate_packet_tests_from_repository_identity_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        first_write_packet_module,
+        "enforce_configured_repository_identity_policy",
+        lambda *_args, **_kwargs: None,
+    )
+
+
 def _run_git(repo: Path, *args: str) -> str:
     completed = subprocess.run(
         ["git", *args],
