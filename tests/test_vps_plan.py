@@ -268,6 +268,24 @@ def test_rootpass_literal_is_rejected(tmp_path: Path) -> None:
     assert any("rootpass=" in error for error in result.errors)
 
 
+def test_secret_label_whitespace_before_separator_is_rejected(tmp_path: Path) -> None:
+    for literal in ("rootpass =provider-secret", "rootpass : provider-secret"):
+        quote = tmp_path / "quote.yaml"
+        quote.write_text(
+            _live_quote_text().replace(
+                "quote_reference: LIVE-QUOTE-001",
+                f'quote_reference: "{literal}"',
+            ),
+            encoding="utf-8",
+        )
+
+        result, packet = prepare_purchase_approval_packet(PLAN, quote)
+
+        assert not result.ok
+        assert packet is None
+        assert any("secret-like literal" in error for error in result.errors)
+
+
 def test_decoded_secret_like_literal_is_rejected(tmp_path: Path) -> None:
     quote = tmp_path / "quote.yaml"
     quote.write_text(
