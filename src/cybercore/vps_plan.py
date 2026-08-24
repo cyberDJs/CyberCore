@@ -305,7 +305,7 @@ def _parse_closed_yaml_text(text: str, context: str) -> tuple[dict[str, object] 
 
     try:
         loaded = yaml.load(text, Loader=_LosslessSafeLoader)
-    except (yaml.YAMLError, RecursionError) as exc:
+    except (yaml.YAMLError, RecursionError, ValueError) as exc:
         errors.append(f"{context} is invalid YAML: {exc}")
         return None, errors
 
