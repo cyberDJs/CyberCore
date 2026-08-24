@@ -40,6 +40,36 @@ operator_authorization_reference: NOT_REQUIRED_FOR_PLAN_ONLY
     assert scan_first_write_yaml_text(text, "test packet") == ()
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "npm_abcdefghijklmnopqrstuvwxyz0123456789",
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature",
+        "pypi-AgEIcHlwaS5vcmcCJGE5YmNkZWYwMTIzNDU2Nzg5",
+    ],
+)
+def test_run_id_fields_reject_credential_shaped_values(value: str) -> None:
+    errors = scan_first_write_yaml_text(
+        f"run_id: {value}\nauthorization:\n  run_id: {value}\n",
+        "test packet",
+    )
+
+    assert any("run_id field" in error for error in errors)
+
+
+def test_run_id_fields_accept_structured_value_and_plan_placeholder() -> None:
+    assert (
+        scan_first_write_yaml_text("run_id: 20260824T063800Z-a1b2c3\n", "test packet") == ()
+    )
+    assert (
+        scan_first_write_yaml_text(
+            "run_id: WB0034-FIRST-STAGING-WRITE-PLAN\n",
+            "test packet",
+        )
+        == ()
+    )
+
+
 def test_evidence_yaml_excessive_nesting_fails_closed(tmp_path: Path) -> None:
     evidence = tmp_path / "evidence.yaml"
     nested = "value: 1\n"
