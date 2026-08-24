@@ -164,8 +164,11 @@ def _read_text(path: Path, context: str, errors: list[str]) -> str | None:
 
 def _reject_denied_literals(text: str, context: str, errors: list[str]) -> None:
     lowered = text.lower()
+    compacted = "".join(lowered.split())
     for pattern in DENIED_LITERAL_PATTERNS:
-        if pattern.lower() in lowered:
+        lowered_pattern = pattern.lower()
+        compacted_pattern = "".join(lowered_pattern.split())
+        if lowered_pattern in lowered or compacted_pattern in compacted:
             errors.append(f"{context} contains denied secret-like literal pattern: {pattern}")
 
 
