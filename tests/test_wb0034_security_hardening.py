@@ -58,9 +58,7 @@ def test_run_id_fields_reject_credential_shaped_values(value: str) -> None:
 
 
 def test_run_id_fields_accept_structured_value_and_plan_placeholder() -> None:
-    assert (
-        scan_first_write_yaml_text("run_id: 20260824T063800Z-a1b2c3\n", "test packet") == ()
-    )
+    assert scan_first_write_yaml_text("run_id: 20260824T063800Z-a1b2c3\n", "test packet") == ()
     assert (
         scan_first_write_yaml_text(
             "run_id: WB0034-FIRST-STAGING-WRITE-PLAN\n",
