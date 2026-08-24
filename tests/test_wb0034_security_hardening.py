@@ -70,6 +70,19 @@ def test_run_id_fields_accept_structured_value_and_plan_placeholder() -> None:
     )
 
 
+def test_evidence_validator_rejects_credential_shaped_run_id(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text(
+        "run_id: npm_abcdefghijklmnopqrstuvwxyz0123456789\n",
+        encoding="utf-8",
+    )
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("run_id field" in error for error in result.errors)
+
+
 def test_evidence_yaml_excessive_nesting_fails_closed(tmp_path: Path) -> None:
     evidence = tmp_path / "evidence.yaml"
     nested = "value: 1\n"
