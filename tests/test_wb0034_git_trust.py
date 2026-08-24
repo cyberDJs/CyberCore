@@ -38,6 +38,15 @@ def _init_origin(tmp_path: Path, repo: Path) -> Path:
     return origin
 
 
+def _configure_canonical_identity(repo: Path) -> None:
+    project = repo / ".cybercore/project.yaml"
+    project.parent.mkdir(parents=True, exist_ok=True)
+    project.write_text(
+        "version: 1\nidentity:\n  repository: git:github.com/cyberDJs/CyberCore\n",
+        encoding="utf-8",
+    )
+
+
 def test_trusted_main_fails_closed_when_origin_main_ref_is_dangling(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     remote_ref = repo / ".git/refs/remotes/origin/main"
@@ -81,3 +90,30 @@ def test_trusted_main_blocks_when_origin_refresh_fails(tmp_path: Path) -> None:
 
     assert commit is None
     assert any("refresh trusted origin/main" in error for error in errors)
+
+
+def test_trusted_main_rejects_origin_that_violates_canonical_repository_identity(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _configure_canonical_identity(repo)
+    _run_git(repo, "remote", "add", "origin", "https://github.com/attacker/CyberCore.git")
+
+    errors: list[str] = []
+    commit = _git_main_commit(repo, errors)
+
+    assert commit is None
+    assert any("repository identity policy rejected trusted main" in error for error in errors)
+
+
+def test_trusted_main_rejects_path_fallback_when_canonical_identity_is_configured(
+    tmp_path: Path,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _configure_canonical_identity(repo)
+
+    errors: list[str] = []
+    commit = _git_main_commit(repo, errors)
+
+    assert commit is None
+    assert any("repository identity policy rejected trusted main" in error for error in errors)
