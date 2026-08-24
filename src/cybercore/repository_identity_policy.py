@@ -26,6 +26,11 @@ class RepositoryIdentityPolicyResult:
         return asdict(self)
 
 
+_REQUIRED_OPERATION_IDENTITIES = {
+    "WB-0034 trusted-main resolution": "git:github.com/cyberDJs/CyberCore",
+}
+
+
 def _configured_repository_identity(repo: Path) -> str | None:
     project = repo.expanduser().resolve() / ".cybercore" / "project.yaml"
     try:
@@ -107,13 +112,35 @@ def enforce_configured_repository_identity_policy(
     *,
     operation: str,
 ) -> RepositoryIdentityPolicyResult | None:
-    """Enforce identity when a canonical policy is configured.
+    """Enforce repository identity for identity-sensitive operations.
 
-    Repositories without identity.repository retain backward-compatible behavior.
-    Once configured, identity-sensitive operations fail closed on fallback or mismatch.
+    Most legacy operations retain backward-compatible behavior when
+    identity.repository is not configured. Operations listed in
+    _REQUIRED_OPERATION_IDENTITIES are stronger trust boundaries: their
+    canonical identity is pinned in code and must also be declared exactly in
+    project state, so removing or rewriting the checkout's identity setting
+    cannot downgrade enforcement.
     """
     resolved = repo.expanduser().resolve()
-    if _configured_repository_identity(resolved) is None:
+    configured_identity = _configured_repository_identity(resolved)
+    required_identity = _REQUIRED_OPERATION_IDENTITIES.get(operation)
+
+    if required_identity is not None:
+        if configured_identity != required_identity:
+            observed = configured_identity or "not configured"
+            raise RepositoryIdentityPolicyError(
+                f"{operation} requires pinned canonical repository identity "
+                f"{required_identity}; configured identity is {observed}."
+            )
+        result = evaluate_repository_identity_policy(resolved)
+        if not result.compliant or result.actual_identity != required_identity:
+            raise RepositoryIdentityPolicyError(
+                f"{operation} rejected by repository identity policy: {result.message} "
+                f"Required {required_identity}, got {result.actual_identity}."
+            )
+        return result
+
+    if configured_identity is None:
         return None
     result = evaluate_repository_identity_policy(resolved)
     if not result.compliant:
