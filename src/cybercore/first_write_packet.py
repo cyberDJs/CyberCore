@@ -20,6 +20,10 @@ from cybercore.first_write_evidence import (
     validate_first_write_evidence,
 )
 from cybercore.first_write_manifest import validate_first_write_manifest
+from cybercore.repository_identity_policy import (
+    RepositoryIdentityPolicyError,
+    enforce_configured_repository_identity_policy,
+)
 
 
 EXPECTED_ARTIFACTS = {"index.html", "cybercore-version.json"}
@@ -203,6 +207,15 @@ def _git_head(repository_root: Path, errors: list[str]) -> str | None:
 
 
 def _git_main_commit(repository_root: Path, errors: list[str]) -> str | None:
+    try:
+        enforce_configured_repository_identity_policy(
+            repository_root,
+            operation="WB-0034 trusted-main resolution",
+        )
+    except RepositoryIdentityPolicyError as exc:
+        errors.append(f"repository identity policy rejected trusted main: {exc}")
+        return None
+
     remote_ref = "refs/remotes/origin/main"
     origin_exists = _git_origin_remote_exists(repository_root)
     if origin_exists is None:
