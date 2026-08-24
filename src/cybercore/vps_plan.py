@@ -83,19 +83,19 @@ DENIED_LITERAL_PATTERNS = (
     "BEGIN EC PRIVATE KEY",
     "BEGIN DSA PRIVATE KEY",
     "BEGIN PRIVATE KEY",
-    "password:",
-    "password=",
-    "rootpass:",
-    "rootpass=",
-    "api_key:",
-    "api_key=",
-    "x-api-key:",
     "authorization: bearer",
-    "private_key:",
-    "totp_seed:",
-    "recovery_code:",
-    "session_cookie:",
 )
+DENIED_SECRET_LABELS = (
+    "password",
+    "rootpass",
+    "api_key",
+    "x-api-key",
+    "private_key",
+    "totp_seed",
+    "recovery_code",
+    "session_cookie",
+)
+DENIED_SECRET_SEPARATORS = (":", "=")
 
 
 class _LosslessSafeLoader(yaml.SafeLoader):
@@ -170,6 +170,11 @@ def _reject_denied_literals(text: str, context: str, errors: list[str]) -> None:
         compacted_pattern = "".join(lowered_pattern.split())
         if lowered_pattern in lowered or compacted_pattern in compacted:
             errors.append(f"{context} contains denied secret-like literal pattern: {pattern}")
+    for label in DENIED_SECRET_LABELS:
+        for separator in DENIED_SECRET_SEPARATORS:
+            token = f"{label}{separator}"
+            if token in compacted:
+                errors.append(f"{context} contains denied secret-like literal pattern: {token}")
 
 
 def _reject_denied_loaded_scalars(
