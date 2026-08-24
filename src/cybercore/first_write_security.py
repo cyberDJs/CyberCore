@@ -49,13 +49,20 @@ APPROVED_REFERENCE_VALUE_RE = re.compile(
     r")$"
 )
 
+WB0034_RUN_ID_RE = re.compile(r"^[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9]{6,16}$")
+APPROVED_RUN_ID_PLACEHOLDERS = {"WB0034-FIRST-STAGING-WRITE-PLAN"}
+
 
 def _reference_value_is_allowlisted(value: str) -> bool:
     return APPROVED_REFERENCE_VALUE_RE.fullmatch(value) is not None
 
 
-def _scan_parsed_reference_fields(document: object, label: str) -> tuple[str, ...]:
-    """Validate every parsed ``*reference`` field independent of YAML syntax."""
+def _run_id_value_is_allowlisted(value: str) -> bool:
+    return value in APPROVED_RUN_ID_PLACEHOLDERS or WB0034_RUN_ID_RE.fullmatch(value) is not None
+
+
+def _scan_parsed_policy_fields(document: object, label: str) -> tuple[str, ...]:
+    """Validate security-sensitive parsed fields independent of YAML syntax."""
 
     errors: list[str] = []
     pending: list[tuple[str, object]] = [("$", document)]
@@ -77,6 +84,11 @@ def _scan_parsed_reference_fields(document: object, label: str) -> tuple[str, ..
                     if not isinstance(child, str) or not _reference_value_is_allowlisted(child):
                         errors.append(
                             f"{label} reference field {child_path} uses a non-allowlisted value"
+                        )
+                if isinstance(key, str) and key.lower() == "run_id":
+                    if not isinstance(child, str) or not _run_id_value_is_allowlisted(child):
+                        errors.append(
+                            f"{label} run_id field {child_path} must use the structured WB-0034 format"
                         )
                 pending.append((child_path, child))
 
@@ -123,13 +135,13 @@ def scan_first_write_yaml_text(text: str, label: str) -> tuple[str, ...]:
 
     # YAML permits equivalent mappings to be expressed with explicit keys,
     # flow mappings, quoted scalars, and other layouts that a line regex cannot
-    # recognize. Parse the document and validate every reference field in the
-    # normalized object graph so syntax cannot bypass the allowlist.
+    # recognize. Parse the document and validate security-sensitive fields in
+    # the normalized object graph so syntax cannot bypass policy.
     try:
         parsed = yaml.safe_load(text)
     except (RecursionError, yaml.YAMLError) as exc:
         errors.append(f"{label} cannot be parsed safely for reference validation: {exc}")
     else:
-        errors.extend(_scan_parsed_reference_fields(parsed, label))
+        errors.extend(_scan_parsed_policy_fields(parsed, label))
 
     return tuple(errors)
