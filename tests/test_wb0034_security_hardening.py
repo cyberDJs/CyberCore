@@ -53,6 +53,33 @@ def test_evidence_metadata_reference_rejects_digest_shaped_suffix(length: int) -
 
 
 @pytest.mark.parametrize(
+    "field_name",
+    [
+        "effect_verifier_reference",
+        "target_capability_reference",
+        "deploy_identity_scope_reference",
+        "authorization_reference",
+    ],
+)
+def test_bare_commit_hash_is_rejected_outside_source_commit_reference(field_name: str) -> None:
+    errors = scan_first_write_yaml_text(
+        f"{field_name}: {'a' * 40}\n",
+        "test packet",
+    )
+
+    assert any("non-allowlisted value" in error for error in errors)
+
+
+def test_bare_commit_hash_is_allowed_for_source_commit_reference() -> None:
+    errors = scan_first_write_yaml_text(
+        f"source_commit_reference: {'a' * 40}\n",
+        "test packet",
+    )
+
+    assert errors == ()
+
+
+@pytest.mark.parametrize(
     "value",
     [
         "npm_abcdefghijklmnopqrstuvwxyz0123456789",
