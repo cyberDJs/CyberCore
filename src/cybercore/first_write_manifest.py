@@ -20,7 +20,10 @@ from yaml.tokens import (
     FlowSequenceStartToken,
 )
 
-from cybercore.first_write_security import scan_first_write_yaml_text
+from cybercore.first_write_security import (
+    scan_first_write_sensitive_text,
+    scan_first_write_yaml_text,
+)
 
 
 MAX_YAML_NESTING_DEPTH = 64
@@ -111,10 +114,11 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
         errors.append(f"missing WB-0034 manifest: {path}")
         return None
 
-    security_errors = scan_first_write_yaml_text(text, "manifest")
-    if security_errors:
-        errors.extend(security_errors)
+    sensitive_errors = scan_first_write_sensitive_text(text, "manifest")
+    if sensitive_errors:
+        errors.extend(sensitive_errors)
         return None
+    errors.extend(scan_first_write_yaml_text(text, "manifest"))
 
     depth = 0
     try:
