@@ -24,6 +24,7 @@ from cybercore.first_write_security import scan_first_write_yaml_text
 
 
 EXPECTED_ARTIFACTS = {"index.html", "cybercore-version.json"}
+EXPECTED_INDEX_HTML_SHA256 = "adb2223914ce442411dbb2f9e4149d0d369a7ceb7615ae6a5b1012fbb0db8948"
 EXPECTED_ROLLBACK_METHOD = "no_overwrite_unique_directory_scoped_delete_if_authorized"
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$")
 HEX64_RE = re.compile(r"^[0-9a-fA-F]{64}$")
@@ -306,7 +307,12 @@ def validate_first_write_evidence(
                 if not isinstance(value, str) or not HEX64_RE.fullmatch(value):
                     errors.append(f"evidence artifact hash for {name} must be sha256 hex")
                 else:
-                    artifact_hashes[name] = value.lower()
+                    normalized_digest = value.lower()
+                    artifact_hashes[name] = normalized_digest
+                    if name == "index.html" and normalized_digest != EXPECTED_INDEX_HTML_SHA256:
+                        errors.append(
+                            "evidence index.html sha256 must equal the fixed WB-0034 safe canary payload digest"
+                        )
 
     deployment = _require_mapping(document, "deployment", errors)
     protocol_value: str | None = None
