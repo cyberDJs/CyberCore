@@ -90,9 +90,8 @@ def _scan_parsed_policy_fields(document: object, label: str) -> tuple[str, ...]:
                 key_text = str(key) if isinstance(key, str) else repr(key)
                 child_path = f"{path}.{key_text}"
                 if isinstance(key, str) and key.lower().endswith("reference"):
-                    if (
-                        not isinstance(child, str)
-                        or not _reference_value_is_allowlisted(key, child)
+                    if not isinstance(child, str) or not _reference_value_is_allowlisted(
+                        key, child
                     ):
                         errors.append(
                             f"{label} reference field {child_path} uses a non-allowlisted value"
