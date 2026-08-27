@@ -95,6 +95,31 @@ def test_wb0034_rejects_repository_local_ssh_command_override(
         enforce_configured_repository_identity_policy(repo, operation=OPERATION)
 
 
+def test_wb0034_rejects_remote_vcs_helper_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_transport_env(monkeypatch)
+    repo = _repo(tmp_path)
+    _git(repo, "config", "remote.origin.vcs", "ext")
+    _git(repo, "config", "protocol.ext.allow", "always")
+
+    with pytest.raises(RepositoryIdentityPolicyError, match="transport rewrite/override"):
+        enforce_configured_repository_identity_policy(repo, operation=OPERATION)
+
+
+def test_wb0034_rejects_protocol_helper_allow_config(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_transport_env(monkeypatch)
+    repo = _repo(tmp_path)
+    _git(repo, "config", "protocol.ext.allow", "always")
+
+    with pytest.raises(RepositoryIdentityPolicyError, match="transport rewrite/override"):
+        enforce_configured_repository_identity_policy(repo, operation=OPERATION)
+
+
 def test_wb0034_rejects_git_url_rewrite_config(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
