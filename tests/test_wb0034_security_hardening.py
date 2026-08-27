@@ -6,7 +6,9 @@ from pathlib import Path
 import pytest
 
 from cybercore import first_write_evidence as evidence_module
+from cybercore.first_write import validate_first_write_readiness
 from cybercore.first_write_evidence import validate_first_write_evidence
+from cybercore.first_write_manifest import validate_first_write_manifest
 from cybercore.first_write_security import scan_first_write_yaml_text
 
 
@@ -118,6 +120,43 @@ def test_evidence_validator_rejects_credential_shaped_run_id(tmp_path: Path) -> 
 
     assert not result.ok
     assert any("run_id field" in error for error in result.errors)
+
+
+def test_readiness_does_not_echo_rejected_credential_scalar(tmp_path: Path) -> None:
+    secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(f"production_write_allowed: {secret}\n", encoding="utf-8")
+
+    result = validate_first_write_readiness(readiness)
+
+    assert not result.schema_ok
+    assert not result.ready
+    assert any("recognizable credential literal" in error for error in result.errors)
+    assert secret not in result.as_text()
+
+
+def test_manifest_does_not_echo_rejected_credential_scalar(tmp_path: Path) -> None:
+    secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+    manifest = tmp_path / "manifest.yaml"
+    manifest.write_text(f"production_write_allowed: {secret}\n", encoding="utf-8")
+
+    result = validate_first_write_manifest(manifest)
+
+    assert not result.ok
+    assert any("recognizable credential literal" in error for error in result.errors)
+    assert secret not in result.as_text()
+
+
+def test_evidence_does_not_echo_rejected_credential_scalar(tmp_path: Path) -> None:
+    secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text(f"secret_values_present: {secret}\n", encoding="utf-8")
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("recognizable credential literal" in error for error in result.errors)
+    assert secret not in result.as_text()
 
 
 def test_evidence_rejects_noncanonical_index_payload_digest(tmp_path: Path) -> None:
