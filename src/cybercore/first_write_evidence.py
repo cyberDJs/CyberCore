@@ -20,7 +20,10 @@ from yaml.tokens import (
     FlowSequenceStartToken,
 )
 
-from cybercore.first_write_security import scan_first_write_yaml_text
+from cybercore.first_write_security import (
+    scan_first_write_sensitive_text,
+    scan_first_write_yaml_text,
+)
 
 
 EXPECTED_ARTIFACTS = {"index.html", "cybercore-version.json"}
@@ -223,10 +226,11 @@ def validate_first_write_evidence(
     except UnicodeDecodeError:
         return FirstWriteEvidenceResult(False, ("evidence bundle must be UTF-8",), digest)
 
-    security_errors = scan_first_write_yaml_text(text, "evidence bundle")
-    if security_errors:
-        errors.extend(security_errors)
+    sensitive_errors = scan_first_write_sensitive_text(text, "evidence bundle")
+    if sensitive_errors:
+        errors.extend(sensitive_errors)
         return FirstWriteEvidenceResult(False, tuple(errors), digest)
+    errors.extend(scan_first_write_yaml_text(text, "evidence bundle"))
 
     if not _scan_safe_yaml_structure(text, errors):
         return FirstWriteEvidenceResult(False, tuple(errors), digest)
