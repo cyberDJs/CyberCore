@@ -114,16 +114,10 @@ def _scan_parsed_policy_fields(document: object, label: str) -> tuple[str, ...]:
     return tuple(errors)
 
 
-def scan_first_write_yaml_text(text: str, label: str) -> tuple[str, ...]:
-    """Reject raw-text and parsed constructs that may hide credentials."""
+def scan_first_write_sensitive_text(text: str, label: str) -> tuple[str, ...]:
+    """Detect raw secret-bearing material without parsing or echoing input values."""
 
     errors: list[str] = []
-
-    # WB-0034 machine artifacts are intentionally comment-free. This makes
-    # credentials hidden in comments impossible and keeps the approval packet
-    # deterministic for hashing and review.
-    if "#" in text:
-        errors.append(f"{label} forbids YAML comments")
 
     if PRIVATE_KEY_HEADER_RE.search(text):
         errors.append(f"{label} contains private-key material")
@@ -136,6 +130,22 @@ def scan_first_write_yaml_text(text: str, label: str) -> tuple[str, ...]:
 
     if CREDENTIAL_LITERAL_RE.search(text):
         errors.append(f"{label} contains a recognizable credential literal")
+
+    return tuple(errors)
+
+
+def scan_first_write_yaml_text(text: str, label: str) -> tuple[str, ...]:
+    """Reject raw-text and parsed constructs that may hide credentials."""
+
+    errors: list[str] = []
+
+    # WB-0034 machine artifacts are intentionally comment-free. This makes
+    # credentials hidden in comments impossible and keeps the approval packet
+    # deterministic for hashing and review.
+    if "#" in text:
+        errors.append(f"{label} forbids YAML comments")
+
+    errors.extend(scan_first_write_sensitive_text(text, label))
 
     # Keep the line-oriented check as defense in depth for the ordinary YAML
     # representation, but never rely on it as the authority boundary.
