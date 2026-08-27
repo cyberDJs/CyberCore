@@ -104,7 +104,7 @@ def test_wb0034_rejects_git_url_rewrite_config(
 
     with pytest.raises(
         RepositoryIdentityPolicyError,
-        match="canonical GitHub HTTPS origin|transport rewrite/override",
+        match="canonical GitHub HTTPS origin|transport rewrite/override|path fallback",
     ):
         enforce_configured_repository_identity_policy(repo, operation=OPERATION)
 
