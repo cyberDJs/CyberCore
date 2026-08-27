@@ -205,6 +205,11 @@ def validate_first_write_evidence(
         raw_bytes = path.read_bytes()
     except FileNotFoundError:
         return FirstWriteEvidenceResult(False, (f"missing evidence bundle: {path}",))
+    except OSError as exc:
+        return FirstWriteEvidenceResult(
+            False,
+            (f"evidence bundle cannot be read safely: {type(exc).__name__}",),
+        )
 
     digest = hashlib.sha256(raw_bytes).hexdigest()
     if expected_sha256 is not None:
