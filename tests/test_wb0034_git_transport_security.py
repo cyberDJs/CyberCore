@@ -45,6 +45,7 @@ def _clear_transport_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "GIT_SSH",
         "GIT_SSH_COMMAND",
         "GIT_PROXY_COMMAND",
+        "GIT_EXEC_PATH",
         "GIT_SSL_NO_VERIFY",
         "GIT_SSL_CAINFO",
         "GIT_SSL_CAPATH",
@@ -116,6 +117,18 @@ def test_wb0034_rejects_inherited_git_ssh_command(
     _clear_transport_env(monkeypatch)
     repo = _repo(tmp_path)
     monkeypatch.setenv("GIT_SSH_COMMAND", "/tmp/attacker-controlled-ssh")
+
+    with pytest.raises(RepositoryIdentityPolicyError, match="transport overrides"):
+        enforce_configured_repository_identity_policy(repo, operation=OPERATION)
+
+
+def test_wb0034_rejects_inherited_git_exec_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_transport_env(monkeypatch)
+    repo = _repo(tmp_path)
+    monkeypatch.setenv("GIT_EXEC_PATH", "/tmp/attacker-controlled-git-core")
 
     with pytest.raises(RepositoryIdentityPolicyError, match="transport overrides"):
         enforce_configured_repository_identity_policy(repo, operation=OPERATION)
