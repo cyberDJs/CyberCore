@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import os
 from pathlib import Path
+import subprocess
 
 import yaml
 
@@ -27,9 +29,28 @@ class RepositoryIdentityPolicyResult:
         return asdict(self)
 
 
+_WB0034_TRUSTED_MAIN_OPERATION = "WB-0034 trusted-main resolution"
 _REQUIRED_OPERATION_IDENTITIES = {
-    "WB-0034 trusted-main resolution": "git:github.com/cyberDJs/CyberCore",
+    _WB0034_TRUSTED_MAIN_OPERATION: "git:github.com/cyberDJs/CyberCore",
 }
+_WB0034_CANONICAL_HTTPS_ORIGINS = {
+    "https://github.com/cyberDJs/CyberCore",
+    "https://github.com/cyberDJs/CyberCore.git",
+}
+_WB0034_TRANSPORT_ENV_KEYS = (
+    "GIT_SSH",
+    "GIT_SSH_COMMAND",
+    "GIT_PROXY_COMMAND",
+    "GIT_SSL_NO_VERIFY",
+    "GIT_SSL_CAINFO",
+    "GIT_SSL_CAPATH",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+)
 
 
 class UniqueProjectKeyLoader(yaml.SafeLoader):
@@ -115,6 +136,96 @@ def _configured_repository_identity(repo: Path) -> str | None:
     return repository
 
 
+def _run_git_policy_query(repo: Path, *args: str) -> tuple[int, str]:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RepositoryIdentityPolicyError(
+            "WB-0034 cannot inspect Git transport configuration safely"
+        ) from exc
+    return completed.returncode, completed.stdout.strip()
+
+
+def _optional_git_config_value(repo: Path, *args: str) -> str | None:
+    returncode, output = _run_git_policy_query(repo, "config", *args)
+    if returncode == 1:
+        return None
+    if returncode != 0:
+        raise RepositoryIdentityPolicyError(
+            "WB-0034 cannot evaluate Git transport configuration safely"
+        )
+    return output or None
+
+
+def _enforce_wb0034_git_transport_policy(repo: Path) -> None:
+    """Fail closed on Git transport overrides before trusted-main refresh.
+
+    WB-0034 deliberately narrows the fetch transport to the canonical GitHub
+    HTTPS origin. SSH origins and effective Git/environment overrides that can
+    replace, proxy, rewrite, or weaken that transport are rejected before the
+    existing `git fetch origin` trust refresh is allowed to run.
+    """
+
+    returncode, origin = _run_git_policy_query(repo, "remote", "get-url", "origin")
+    if returncode != 0 or origin not in _WB0034_CANONICAL_HTTPS_ORIGINS:
+        raise RepositoryIdentityPolicyError(
+            "WB-0034 trusted-main refresh requires the exact canonical GitHub HTTPS origin"
+        )
+
+    inherited_overrides = sorted(
+        key for key in _WB0034_TRANSPORT_ENV_KEYS if os.environ.get(key, "").strip()
+    )
+    if inherited_overrides:
+        raise RepositoryIdentityPolicyError(
+            "WB-0034 trusted-main refresh rejects inherited Git/HTTP transport overrides: "
+            + ", ".join(inherited_overrides)
+        )
+
+    direct_config_checks = (
+        ("--get", "core.sshCommand"),
+        ("--get", "core.gitProxy"),
+        ("--get", "remote.origin.proxy"),
+        ("--get-regexp", r"^url\..*\.insteadof$"),
+    )
+    for query in direct_config_checks:
+        value = _optional_git_config_value(repo, *query)
+        if value is not None:
+            raise RepositoryIdentityPolicyError(
+                "WB-0034 trusted-main refresh rejects Git transport rewrite/override config"
+            )
+
+    canonical_url = "https://github.com/cyberDJs/CyberCore.git"
+    proxy = _optional_git_config_value(repo, "--get-urlmatch", "http.proxy", canonical_url)
+    if proxy is not None:
+        raise RepositoryIdentityPolicyError(
+            "WB-0034 trusted-main refresh rejects configured HTTP proxy transport"
+        )
+
+    ssl_verify = _optional_git_config_value(
+        repo,
+        "--get-urlmatch",
+        "http.sslVerify",
+        canonical_url,
+    )
+    if ssl_verify is not None and ssl_verify.lower() not in {"true", "yes", "on", "1"}:
+        raise RepositoryIdentityPolicyError(
+            "WB-0034 trusted-main refresh requires Git HTTPS certificate verification"
+        )
+
+    for option in ("http.sslCAInfo", "http.sslCAPath", "http.curloptResolve"):
+        value = _optional_git_config_value(repo, "--get-urlmatch", option, canonical_url)
+        if value is not None:
+            raise RepositoryIdentityPolicyError(
+                f"WB-0034 trusted-main refresh rejects custom Git transport option {option}"
+            )
+
+
 def expected_repository_identity(repo: Path) -> str:
     """Read the canonical repository identity from .cybercore/project.yaml."""
     resolved = repo.expanduser().resolve()
@@ -195,6 +306,8 @@ def enforce_configured_repository_identity_policy(
                 f"{operation} rejected by repository identity policy: {result.message} "
                 f"Required {required_identity}, got {result.actual_identity}."
             )
+        if operation == _WB0034_TRUSTED_MAIN_OPERATION:
+            _enforce_wb0034_git_transport_policy(resolved)
         return result
 
     if configured_identity is None:
