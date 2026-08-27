@@ -35,11 +35,18 @@ REFERENCE_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 
+_REFERENCE_EVIDENCE_ID = (
+    r"(?:"
+    r"[0-9]{8}(?:T[0-9]{6}Z)?(?:-[A-Za-z0-9]{6,16})?|"
+    r"[0-9a-fA-F]{40}|"
+    r"[0-9a-fA-F]{64}"
+    r")"
+)
 APPROVED_REFERENCE_VALUE_RE = re.compile(
     r"^(?:"
-    r"evidence:wb0034:[A-Za-z0-9][A-Za-z0-9._:-]{2,191}|"
-    r"approval:wb0034:[A-Za-z0-9][A-Za-z0-9._:-]{2,191}|"
-    r"\.\./evidence/[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.ya?ml|"
+    r"evidence:wb0034:[a-z0-9]+(?:-[a-z0-9]+){0,5}:" + _REFERENCE_EVIDENCE_ID + r"|"
+    r"approval:wb0034:[0-9]{8}T[0-9]{6}Z(?:-[A-Za-z0-9]{6,16})?|"
+    r"\.\./evidence/[A-Za-z0-9]+(?:-[A-Za-z0-9]+){0,15}\.ya?ml|"
     r"[0-9a-fA-F]{40}|"
     r"WB0034_[A-Z0-9_]{2,127}|"
     r"INTERSERVER_[A-Z0-9_]{2,127}|"
