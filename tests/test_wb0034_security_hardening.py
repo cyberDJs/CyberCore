@@ -114,3 +114,13 @@ def test_evidence_yaml_recursion_error_is_returned_as_failure(
 
     assert not result.ok
     assert any("invalid YAML" in error for error in result.errors)
+
+
+def test_evidence_yaml_unhashable_mapping_key_is_returned_as_failure(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text("? [a, b]\n: c\n", encoding="utf-8")
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("unhashable mapping key" in error for error in result.errors)
