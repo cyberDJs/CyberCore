@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -79,6 +80,25 @@ def test_evidence_validator_rejects_credential_shaped_run_id(tmp_path: Path) -> 
 
     assert not result.ok
     assert any("run_id field" in error for error in result.errors)
+
+
+def test_evidence_rejects_noncanonical_index_payload_digest(tmp_path: Path) -> None:
+    secret_bearing_payload = (
+        b"<!doctype html><p>api_key=ghp_abcdefghijklmnopqrstuvwxyz0123456789</p>\n"
+    )
+    secret_digest = hashlib.sha256(secret_bearing_payload).hexdigest()
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text(
+        "artifacts:\n"
+        f"  index.html: {secret_digest}\n"
+        f"  cybercore-version.json: {'f' * 64}\n",
+        encoding="utf-8",
+    )
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("fixed WB-0034 safe canary payload digest" in error for error in result.errors)
 
 
 def test_evidence_yaml_excessive_nesting_fails_closed(tmp_path: Path) -> None:
