@@ -35,13 +35,10 @@ REFERENCE_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 
-_REFERENCE_EVIDENCE_ID = (
-    r"(?:"
-    r"[0-9]{8}(?:T[0-9]{6}Z)?(?:-[A-Za-z0-9]{6,16})?|"
-    r"[0-9a-fA-F]{40}|"
-    r"[0-9a-fA-F]{64}"
-    r")"
-)
+# Evidence references are opaque metadata locators, not containers for commit
+# or digest material. Digest-shaped values are reserved for dedicated commit
+# and digest fields elsewhere in the WB-0034 schemas.
+_REFERENCE_EVIDENCE_ID = r"[0-9]{8}(?:T[0-9]{6}Z)?(?:-[A-Za-z0-9]{6,16})?"
 APPROVED_REFERENCE_VALUE_RE = re.compile(
     r"^(?:"
     r"evidence:wb0034:[a-z0-9]+(?:-[a-z0-9]+){0,5}:" + _REFERENCE_EVIDENCE_ID + r"|"
