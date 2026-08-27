@@ -99,6 +99,16 @@ def test_evidence_rejects_noncanonical_index_payload_digest(tmp_path: Path) -> N
     assert any("fixed WB-0034 safe canary payload digest" in error for error in result.errors)
 
 
+def test_evidence_directory_read_error_is_returned_as_failure(tmp_path: Path) -> None:
+    evidence = tmp_path / "bundle.yaml"
+    evidence.mkdir()
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("cannot be read safely" in error for error in result.errors)
+
+
 def test_evidence_yaml_excessive_nesting_fails_closed(tmp_path: Path) -> None:
     evidence = tmp_path / "evidence.yaml"
     nested = "value: 1\n"
