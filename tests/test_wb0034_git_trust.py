@@ -129,12 +129,12 @@ def test_trusted_main_rejects_missing_pinned_canonical_identity(tmp_path: Path) 
     assert any("requires pinned canonical repository identity" in error for error in errors)
 
 
-def test_trusted_main_rejects_reformatted_pinned_canonical_identity(tmp_path: Path) -> None:
+def test_trusted_main_rejects_lossy_quoted_canonical_identity(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     project = repo / ".cybercore/project.yaml"
     project.parent.mkdir(parents=True, exist_ok=True)
     project.write_text(
-        "version: 1\nidentity:\n    repository: git:github.com/cyberDJs/CyberCore\n",
+        "version: 1\nidentity:\n  repository: \"'git:github.com/cyberDJs/CyberCore'\"\n",
         encoding="utf-8",
     )
     _run_git(repo, "remote", "add", "origin", "https://github.com/cyberDJs/CyberCore.git")
@@ -143,7 +143,48 @@ def test_trusted_main_rejects_reformatted_pinned_canonical_identity(tmp_path: Pa
     commit = _git_main_commit(repo, errors)
 
     assert commit is None
-    assert any("requires pinned canonical repository identity" in error for error in errors)
+    assert any("normalized git: form" in error for error in errors)
+
+
+def test_trusted_main_rejects_duplicate_identity_mapping(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    project = repo / ".cybercore/project.yaml"
+    project.parent.mkdir(parents=True, exist_ok=True)
+    project.write_text(
+        "version: 1\n"
+        "identity:\n"
+        "  repository: git:github.com/cyberDJs/CyberCore\n"
+        "identity:\n"
+        "  repository: git:github.com/attacker/CyberCore\n",
+        encoding="utf-8",
+    )
+    _run_git(repo, "remote", "add", "origin", "https://github.com/cyberDJs/CyberCore.git")
+
+    errors: list[str] = []
+    commit = _git_main_commit(repo, errors)
+
+    assert commit is None
+    assert any("duplicate mapping keys" in error for error in errors)
+
+
+def test_trusted_main_rejects_duplicate_repository_key(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    project = repo / ".cybercore/project.yaml"
+    project.parent.mkdir(parents=True, exist_ok=True)
+    project.write_text(
+        "version: 1\n"
+        "identity:\n"
+        "  repository: git:github.com/cyberDJs/CyberCore\n"
+        "  repository: git:github.com/attacker/CyberCore\n",
+        encoding="utf-8",
+    )
+    _run_git(repo, "remote", "add", "origin", "https://github.com/cyberDJs/CyberCore.git")
+
+    errors: list[str] = []
+    commit = _git_main_commit(repo, errors)
+
+    assert commit is None
+    assert any("duplicate mapping keys" in error for error in errors)
 
 
 def test_trusted_main_rejects_changed_pinned_canonical_identity(tmp_path: Path) -> None:
