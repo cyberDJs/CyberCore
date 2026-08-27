@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 
 from cybercore.first_write import validate_first_write_readiness
+from cybercore.first_write_evidence import EXPECTED_INDEX_HTML_SHA256
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,7 +68,7 @@ source_commit: {PINNED_SHA}
 run_id: {RUN_ID}
 destination: {DESTINATION}
 artifacts:
-  index.html: {"a" * 64}
+  index.html: {EXPECTED_INDEX_HTML_SHA256}
   cybercore-version.json: {"b" * 64}
 deployment:
   protocol: SFTP
