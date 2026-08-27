@@ -149,7 +149,7 @@ def _require_value(
 ) -> None:
     value = mapping.get(key)
     if type(value) is not type(expected) or value != expected:
-        errors.append(f"evidence requires {key}: {expected}; got {value!r}")
+        errors.append(f"evidence requires {key}: {expected}; received a different value")
 
 
 def _non_placeholder_reference(value: object) -> bool:
@@ -223,7 +223,10 @@ def validate_first_write_evidence(
     except UnicodeDecodeError:
         return FirstWriteEvidenceResult(False, ("evidence bundle must be UTF-8",), digest)
 
-    errors.extend(scan_first_write_yaml_text(text, "evidence bundle"))
+    security_errors = scan_first_write_yaml_text(text, "evidence bundle")
+    if security_errors:
+        errors.extend(security_errors)
+        return FirstWriteEvidenceResult(False, tuple(errors), digest)
 
     if not _scan_safe_yaml_structure(text, errors):
         return FirstWriteEvidenceResult(False, tuple(errors), digest)
