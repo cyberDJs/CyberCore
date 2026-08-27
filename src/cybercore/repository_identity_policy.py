@@ -76,6 +76,14 @@ def _configured_repository_identity(repo: Path) -> str | None:
         content = project.read_text(encoding="utf-8")
     except FileNotFoundError:
         return None
+    except UnicodeError as exc:
+        raise RepositoryIdentityPolicyError(
+            "Canonical project state is not valid UTF-8 text"
+        ) from exc
+    except OSError as exc:
+        raise RepositoryIdentityPolicyError(
+            "Canonical project state cannot be read safely"
+        ) from exc
 
     try:
         document = yaml.load(content, Loader=UniqueProjectKeyLoader)
