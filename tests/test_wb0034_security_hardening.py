@@ -89,9 +89,7 @@ def test_evidence_rejects_noncanonical_index_payload_digest(tmp_path: Path) -> N
     secret_digest = hashlib.sha256(secret_bearing_payload).hexdigest()
     evidence = tmp_path / "evidence.yaml"
     evidence.write_text(
-        "artifacts:\n"
-        f"  index.html: {secret_digest}\n"
-        f"  cybercore-version.json: {'f' * 64}\n",
+        f"artifacts:\n  index.html: {secret_digest}\n  cybercore-version.json: {'f' * 64}\n",
         encoding="utf-8",
     )
 
