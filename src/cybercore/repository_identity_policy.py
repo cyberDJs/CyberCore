@@ -192,6 +192,8 @@ def _enforce_wb0034_git_transport_policy(repo: Path) -> None:
         ("--get", "core.sshCommand"),
         ("--get", "core.gitProxy"),
         ("--get", "remote.origin.proxy"),
+        ("--get", "remote.origin.vcs"),
+        ("--get-regexp", r"^protocol\..*\.allow$"),
         ("--get-regexp", r"^url\..*\.insteadof$"),
     )
     for query in direct_config_checks:
