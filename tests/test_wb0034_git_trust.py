@@ -187,6 +187,33 @@ def test_trusted_main_rejects_duplicate_repository_key(tmp_path: Path) -> None:
     assert any("duplicate mapping keys" in error for error in errors)
 
 
+def test_trusted_main_rejects_non_utf8_project_state(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    project = repo / ".cybercore/project.yaml"
+    project.parent.mkdir(parents=True, exist_ok=True)
+    project.write_bytes(b"version: 1\nidentity:\n  repository: \xff\n")
+    _run_git(repo, "remote", "add", "origin", "https://github.com/cyberDJs/CyberCore.git")
+
+    errors: list[str] = []
+    commit = _git_main_commit(repo, errors)
+
+    assert commit is None
+    assert any("not valid UTF-8 text" in error for error in errors)
+
+
+def test_trusted_main_rejects_unreadable_project_state_path(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    project = repo / ".cybercore/project.yaml"
+    project.mkdir(parents=True)
+    _run_git(repo, "remote", "add", "origin", "https://github.com/cyberDJs/CyberCore.git")
+
+    errors: list[str] = []
+    commit = _git_main_commit(repo, errors)
+
+    assert commit is None
+    assert any("cannot be read safely" in error for error in errors)
+
+
 def test_trusted_main_rejects_changed_pinned_canonical_identity(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     _configure_identity(repo, "git:github.com/attacker/CyberCore")
