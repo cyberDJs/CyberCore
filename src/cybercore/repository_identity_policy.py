@@ -161,7 +161,9 @@ def _optional_git_config_value(repo: Path, *args: str) -> str | None:
         raise RepositoryIdentityPolicyError(
             "WB-0034 cannot evaluate Git transport configuration safely"
         )
-    return output or None
+    # A configured empty value is materially different from an absent value.
+    # In particular Git parses an empty boolean as false, so preserve it here.
+    return output
 
 
 def _enforce_wb0034_git_transport_policy(repo: Path) -> None:
@@ -212,11 +214,12 @@ def _enforce_wb0034_git_transport_policy(repo: Path) -> None:
 
     ssl_verify = _optional_git_config_value(
         repo,
+        "--bool",
         "--get-urlmatch",
         "http.sslVerify",
         canonical_url,
     )
-    if ssl_verify is not None and ssl_verify.lower() not in {"true", "yes", "on", "1"}:
+    if ssl_verify is not None and ssl_verify != "true":
         raise RepositoryIdentityPolicyError(
             "WB-0034 trusted-main refresh requires Git HTTPS certificate verification"
         )
