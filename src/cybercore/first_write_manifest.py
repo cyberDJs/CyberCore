@@ -111,7 +111,10 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
         errors.append(f"missing WB-0034 manifest: {path}")
         return None
 
-    errors.extend(scan_first_write_yaml_text(text, "manifest"))
+    security_errors = scan_first_write_yaml_text(text, "manifest")
+    if security_errors:
+        errors.extend(security_errors)
+        return None
 
     depth = 0
     try:
@@ -178,7 +181,7 @@ def _require_value(
 ) -> None:
     value = mapping.get(key)
     if type(value) is not type(expected) or value != expected:
-        errors.append(f"manifest requires {key}: {expected}; got {value!r}")
+        errors.append(f"manifest requires {key}: {expected}; received a different value")
 
 
 def _require_string_set(
