@@ -169,3 +169,15 @@ def test_wb0034_rejects_disabled_git_tls_verification(
 
     with pytest.raises(RepositoryIdentityPolicyError, match="transport overrides"):
         enforce_configured_repository_identity_policy(repo, operation=OPERATION)
+
+
+def test_wb0034_rejects_empty_configured_git_tls_verification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_transport_env(monkeypatch)
+    repo = _repo(tmp_path)
+    _git(repo, "config", "http.sslVerify", "")
+
+    with pytest.raises(RepositoryIdentityPolicyError, match="certificate verification"):
+        enforce_configured_repository_identity_policy(repo, operation=OPERATION)
