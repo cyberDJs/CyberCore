@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-import re
+
+import yaml
 
 from cybercore.operation_context_disclosure import DisclosureMode, sanitize_disclosure_text
 from cybercore.repository_identity import RepositoryIdentityDiagnostic, resolve_repository_identity
@@ -31,6 +32,44 @@ _REQUIRED_OPERATION_IDENTITIES = {
 }
 
 
+class UniqueProjectKeyLoader(yaml.SafeLoader):
+    """Safe YAML loader that rejects duplicate mapping keys."""
+
+
+def _construct_unique_project_mapping(
+    loader: UniqueProjectKeyLoader,
+    node: yaml.nodes.MappingNode,
+    deep: bool = False,
+) -> dict[object, object]:
+    mapping: dict[object, object] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        try:
+            duplicate = key in mapping
+        except TypeError as exc:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                "found an unhashable mapping key",
+                key_node.start_mark,
+            ) from exc
+        if duplicate:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"found duplicate key {key!r}",
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+UniqueProjectKeyLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_unique_project_mapping,
+)
+
+
 def _configured_repository_identity(repo: Path) -> str | None:
     project = repo.expanduser().resolve() / ".cybercore" / "project.yaml"
     try:
@@ -38,24 +77,34 @@ def _configured_repository_identity(repo: Path) -> str | None:
     except FileNotFoundError:
         return None
 
-    in_identity = False
-    for line in content.splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        if not line.startswith((" ", "\t")):
-            in_identity = line.strip() == "identity:"
-            continue
-        if not in_identity:
-            continue
-        match = re.fullmatch(r"\s{2}repository:\s*(.+?)\s*", line)
-        if match:
-            value = match.group(1).strip().strip("'\"")
-            if not value.startswith("git:"):
-                raise RepositoryIdentityPolicyError(
-                    "Canonical repository identity must use the normalized git: form"
-                )
-            return value
-    return None
+    try:
+        document = yaml.load(content, Loader=UniqueProjectKeyLoader)
+    except (yaml.YAMLError, RecursionError) as exc:
+        raise RepositoryIdentityPolicyError(
+            "Canonical project state is invalid YAML or contains duplicate mapping keys"
+        ) from exc
+
+    if not isinstance(document, dict):
+        raise RepositoryIdentityPolicyError("Canonical project state must be a YAML mapping")
+
+    identity = document.get("identity")
+    if identity is None:
+        return None
+    if not isinstance(identity, dict):
+        raise RepositoryIdentityPolicyError("Canonical project identity must be a YAML mapping")
+
+    repository = identity.get("repository")
+    if repository is None:
+        return None
+    if not isinstance(repository, str):
+        raise RepositoryIdentityPolicyError(
+            "Canonical repository identity must be a YAML string scalar"
+        )
+    if not repository.startswith("git:"):
+        raise RepositoryIdentityPolicyError(
+            "Canonical repository identity must use the normalized git: form"
+        )
+    return repository
 
 
 def expected_repository_identity(repo: Path) -> str:
