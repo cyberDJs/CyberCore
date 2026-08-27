@@ -145,7 +145,10 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
         errors.append(f"missing readiness artifact: {path}")
         return None
 
-    errors.extend(scan_first_write_yaml_text(text, "readiness"))
+    security_errors = scan_first_write_yaml_text(text, "readiness")
+    if security_errors:
+        errors.extend(security_errors)
+        return None
 
     depth = 0
     try:
@@ -228,7 +231,7 @@ def _require_value(
 ) -> None:
     value = mapping.get(key)
     if type(value) is not type(expected) or value != expected:
-        errors.append(f"readiness requires {key}: {expected}; got {value!r}")
+        errors.append(f"readiness requires {key}: {expected}; received a different value")
 
 
 def _require_string_set(
@@ -275,7 +278,7 @@ def _validate_blocked_until(document: dict[str, object], errors: list[str]) -> N
         seen.add(key)
         expected = EXPECTED_BLOCKED_UNTIL[key]
         if status != expected:
-            errors.append(f"blocked_until requires {key}: {expected}; got {status!r}")
+            errors.append(f"blocked_until requires {key}: {expected}; received a different value")
 
     missing = sorted(set(EXPECTED_BLOCKED_UNTIL) - seen)
     if missing:
@@ -496,7 +499,7 @@ def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
         )
         protocol = capability.get("deployment_protocol")
         if protocol not in {"UNVERIFIED", "SFTP", "SSH"}:
-            errors.append(f"unsupported deployment_protocol: {protocol!r}")
+            errors.append("unsupported deployment_protocol value")
         _require_value(capability, "capability_evidence_secret_values_recorded", False, errors)
         _require_value(capability, "capability_evidence_remote_write_performed", False, errors)
 
@@ -583,7 +586,7 @@ def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
             mapping = status_sources[key]
             actual = mapping.get(key) if mapping is not None else None
             if actual != expected:
-                blockers.append(f"{key} must become {expected}; current={actual!r}")
+                blockers.append(f"{key} must become {expected}; current value does not match")
 
         _append_supporting_evidence_blockers(
             capability,
