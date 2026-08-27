@@ -23,6 +23,14 @@ cybercore-canary-<run_id>/cybercore-version.json
 
 No parent canary directory is required and no other files are in scope.
 
+`index.html` is not free-form content. Its exact UTF-8 byte payload is:
+
+```html
+<!doctype html><title>CyberCore canary</title>
+```
+
+The payload ends with one LF byte and has SHA-256 `adb2223914ce442411dbb2f9e4149d0d369a7ceb7615ae6a5b1012fbb0db8948`. The WB-0034 evidence validator requires this exact digest, and the final packet independently requires the no-follow-read local bytes to match the evidence digest. Any changed, appended, credential-bearing, or otherwise noncanonical `index.html` therefore keeps the packet BLOCKED even if its changed digest is recorded consistently elsewhere.
+
 `cybercore-version.json` must contain only:
 
 ```json
@@ -58,14 +66,15 @@ All must be true before an authorization request is considered complete:
 14. Manifest, readiness, and evidence source paths are each captured once into a private packet snapshot before validation; later replacement of the original paths must not change the packet being validated or the upload input.
 15. The final manifest, readiness snapshot, evidence snapshot, trusted `main` commit, checked-out repository `HEAD`, and exact local deployment artifacts all agree; the manifest/evidence authorization, run id, destination, artifact set, protocol, deploy-identity scope, and rollback permission also match.
 16. The local artifact directory is traversed component-by-component without following symlinks, contains exactly the two approved files both before and after artifact reads, and both files are opened relative to that pinned directory without following links.
-17. The exact bytes of `cybercore-version.json` that are hashed for deployment pass strict marker-schema validation and bind repository, trusted-main commit, branch, UTC build time, environment, and run id to the final packet.
-18. A successful in-process packet validation returns a sealed `upload_input` containing the exact immutable bytes and deployment identity that were validated; a future uploader must consume only that object and must not reopen manifest, readiness, evidence, or artifact source paths before sending.
+17. The exact no-follow-read `index.html` bytes hash to the fixed WB-0034 safe-canary digest `adb2223914ce442411dbb2f9e4149d0d369a7ceb7615ae6a5b1012fbb0db8948`.
+18. The exact bytes of `cybercore-version.json` that are hashed for deployment pass strict marker-schema validation and bind repository, trusted-main commit, branch, UTC build time, environment, and run id to the final packet.
+19. A successful in-process packet validation returns a sealed `upload_input` containing the exact immutable bytes and deployment identity that were validated; a future uploader must consume only that object and must not reopen manifest, readiness, evidence, or artifact source paths before sending.
 
 ## Machine-artifact disclosure rule
 
 WB-0034 manifest, readiness, and evidence YAML are deterministic machine artifacts and are intentionally comment-free. Their raw text is scanned before YAML parsing. The validators reject YAML comments, credential-like assignments, the broader PEM/private-key header family including EC/DSA/PGP/encrypted key forms, and credential-bearing URLs such as `scheme://user:password@host`.
 
-This is stricter than ordinary YAML authoring by design: approval-packet data must not contain hidden comment-only credentials or secret-bearing URL/key forms.
+This is stricter than ordinary YAML authoring by design: approval-packet data must not contain hidden comment-only credentials or secret-bearing URL/key forms. The deployable `index.html` is protected more strictly still: it is constrained to one exact fixed payload rather than relying on credential-pattern detection.
 
 ## Planned execution sequence
 
@@ -82,6 +91,7 @@ This is stricter than ordinary YAML authoring by design: approval-packet data mu
 - require that artifact directory to contain exactly `index.html` and `cybercore-version.json` before reads;
 - open both artifact files relative to the already-open directory descriptor with no-follow semantics and require regular files;
 - compute SHA-256 and retain immutable `bytes` from those exact open file descriptors;
+- require the evidence-bound `index.html` digest to equal the fixed safe-canary digest and require the exact local no-follow-read bytes to match that digest;
 - re-list the pinned artifact directory after both reads, require the same exact two-entry set, and reject any concurrent directory-content change;
 - parse the retained `cybercore-version.json` bytes as strict UTF-8 JSON with duplicate-key rejection;
 - require the marker's exact six-field schema and require `repository=cyberDJs/CyberCore`, `commit=<trusted-main-HEAD>`, `branch=main`, `environment=interserver-shared-hosting-staging`, `run_id=<approved-run-id>`, and a valid UTC `built_at` timestamp;
@@ -108,7 +118,7 @@ This is stricter than ordinary YAML authoring by design: approval-packet data mu
 - confirm there is no intermediate destination component below the staging root;
 - record the sanitized preflight receipt.
 
-The legacy target validator and the standalone manifest/readiness validators are necessary component checks but are not sufficient for a final first-write authorization packet. The combined WB-0034 packet validator is the authoritative packet builder because it binds a single immutable document snapshot to trusted `main`, the checked-out source commit, the exact no-follow-read local artifact bytes, strict version-marker semantics, and the hash-bound evidence bundle.
+The legacy target validator and the standalone manifest/readiness validators are necessary component checks but are not sufficient for a final first-write authorization packet. The combined WB-0034 packet validator is the authoritative packet builder because it binds a single immutable document snapshot to trusted `main`, the checked-out source commit, the exact no-follow-read local artifact bytes, strict fixed-canary/version-marker semantics, and the hash-bound evidence bundle.
 
 Any failure stops the procedure.
 
@@ -139,6 +149,7 @@ The verifier must independently confirm:
 
 - `https://staging.eimyherrer.com/cybercore-canary-<run_id>/` returns success;
 - `https://staging.eimyherrer.com/cybercore-canary-<run_id>/cybercore-version.json` is reachable;
+- fetched `index.html` hashes to `adb2223914ce442411dbb2f9e4149d0d369a7ceb7615ae6a5b1012fbb0db8948`;
 - marker `repository` equals `cyberDJs/CyberCore`;
 - marker `commit` equals the exact approved source commit;
 - marker `branch` equals `main`;
@@ -186,6 +197,7 @@ Stop before mutation if any of these is true:
 - manifest, readiness, or evidence source paths would need to be re-read after their packet snapshot was captured;
 - a private packet snapshot differs from the bytes originally captured from its source path;
 - evidence-bundle SHA-256 does not match the readiness binding;
+- the evidence `index.html` digest differs from the fixed safe-canary digest;
 - any evidence artifact digest differs from the exact local file bytes retained for upload;
 - any local artifact-directory component is a symlink or cannot be opened with no-follow directory semantics;
 - the artifact directory differs from the exact approved two-file set either before or after artifact reads, or changes during validation;
