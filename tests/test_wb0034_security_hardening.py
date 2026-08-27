@@ -41,6 +41,17 @@ operator_authorization_reference: NOT_REQUIRED_FOR_PLAN_ONLY
     assert scan_first_write_yaml_text(text, "test packet") == ()
 
 
+@pytest.mark.parametrize("length", [40, 64])
+def test_evidence_metadata_reference_rejects_digest_shaped_suffix(length: int) -> None:
+    value = "a" * length
+    errors = scan_first_write_yaml_text(
+        f"effect_verifier_reference: evidence:wb0034:effect-verifier:{value}\n",
+        "test packet",
+    )
+
+    assert any("non-allowlisted value" in error for error in errors)
+
+
 @pytest.mark.parametrize(
     "value",
     [
