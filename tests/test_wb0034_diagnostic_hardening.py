@@ -5,6 +5,7 @@ from pathlib import Path
 
 from cybercore import first_write_packet as first_write_packet_module
 from cybercore.first_write import validate_first_write_readiness
+from cybercore.first_write_evidence import validate_first_write_evidence
 from cybercore.first_write_manifest import validate_first_write_manifest
 from cybercore.first_write_packet import validate_first_write_packet
 
@@ -124,3 +125,28 @@ def test_readiness_directory_and_invalid_utf8_are_validation_failures(tmp_path: 
     assert "cannot read readiness artifact" in directory_result.as_text()
     assert not utf8_result.schema_ok
     assert "cannot read readiness artifact" in utf8_result.as_text()
+
+
+def test_evidence_malformed_yaml_does_not_echo_opaque_scalar(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    opaque = "s3cr3tOpaqueValue"
+    evidence.write_text(f"version: [{opaque}\n", encoding="utf-8")
+
+    result = validate_first_write_evidence(evidence)
+
+    rendered = result.as_text()
+    assert not result.ok
+    assert opaque not in rendered
+    assert "invalid YAML" in rendered or "cannot be parsed safely" in rendered
+
+
+def test_evidence_redacts_unexpected_mapping_key(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text(f"version: 1\n{OPAQUE_SECRET}: value\n", encoding="utf-8")
+
+    result = validate_first_write_evidence(evidence)
+
+    rendered = result.as_text()
+    assert not result.ok
+    assert OPAQUE_SECRET not in rendered
+    assert "unexpected keys" in rendered
