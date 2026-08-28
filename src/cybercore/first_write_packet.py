@@ -56,6 +56,7 @@ class FirstWriteUploadInput:
     deploy_identity_scope_reference: str
     authorization_reference: str
     artifacts: tuple[ValidatedFirstWriteArtifact, ...]
+    endpoint_hostname: str | None = None
 
     def artifact_bytes(self, name: str) -> bytes:
         for artifact in self.artifacts:
@@ -237,9 +238,6 @@ def _git_main_commit(repository_root: Path, errors: list[str]) -> str | None:
             return None
         return remote_commit
 
-    # Local-main fallback is permitted only in repositories with no origin
-    # remote. A leftover origin/main ref without an origin remote is suspicious
-    # and must not silently become a trust source or be ignored.
     remote_ref_state = _git_ref_exists(repository_root, remote_ref)
     if remote_ref_state is None:
         errors.append("cannot verify origin/main ref state without an origin remote")
@@ -591,6 +589,12 @@ def _build_upload_input(
     if missing:
         errors.append(f"validated upload input is missing fields: {', '.join(missing)}")
         return None
+    if evidence.protocol == "FTPS_EXPLICIT" and not isinstance(evidence.endpoint_hostname, str):
+        errors.append("validated FTPS upload input is missing endpoint_hostname")
+        return None
+    if evidence.protocol != "FTPS_EXPLICIT" and evidence.endpoint_hostname is not None:
+        errors.append("non-FTPS upload input must not carry endpoint_hostname")
+        return None
     if set(artifacts) != EXPECTED_ARTIFACTS:
         errors.append("validated upload input does not contain the exact two approved artifacts")
         return None
@@ -609,6 +613,7 @@ def _build_upload_input(
         deploy_identity_scope_reference=cast(str, required["deploy_identity_scope_reference"]),
         authorization_reference=cast(str, required["authorization_reference"]),
         artifacts=sealed_artifacts,
+        endpoint_hostname=evidence.endpoint_hostname,
     )
 
 
