@@ -179,22 +179,26 @@ def _git_refresh_origin_main(repository_root: Path) -> bool:
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
     try:
-        completed = subprocess.run(
-            [
-                "git",
-                "fetch",
-                "--no-tags",
-                "--prune",
-                "origin",
-                "+refs/heads/main:refs/remotes/origin/main",
-            ],
-            cwd=repository_root,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            env=env,
-        )
+        with tempfile.TemporaryDirectory(prefix="cybercore-wb0034-hooks-") as hooks_dir:
+            completed = subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    f"core.hooksPath={hooks_dir}",
+                    "fetch",
+                    "--no-tags",
+                    "--no-write-fetch-head",
+                    "--no-recurse-submodules",
+                    "origin",
+                    "+refs/heads/main:refs/remotes/origin/main",
+                ],
+                cwd=repository_root,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                env=env,
+            )
     except (OSError, subprocess.SubprocessError):
         return False
     return completed.returncode == 0
