@@ -37,6 +37,15 @@ _WB0034_CANONICAL_HTTPS_ORIGINS = {
     "https://github.com/cyberDJs/CyberCore",
     "https://github.com/cyberDJs/CyberCore.git",
 }
+_WB0034_REPOSITORY_ENV_KEYS = (
+    "GIT_DIR",
+    "GIT_COMMON_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+)
 _WB0034_TRANSPORT_ENV_KEYS = (
     "GIT_SSH",
     "GIT_SSH_COMMAND",
@@ -79,7 +88,7 @@ def _construct_unique_project_mapping(
             raise yaml.constructor.ConstructorError(
                 "while constructing a mapping",
                 node.start_mark,
-                f"found duplicate key {key!r}",
+                "found a duplicate mapping key",
                 key_node.start_mark,
             )
         mapping[key] = loader.construct_object(value_node, deep=deep)
@@ -164,6 +173,18 @@ def _optional_git_config_value(repo: Path, *args: str) -> str | None:
     # A configured empty value is materially different from an absent value.
     # In particular Git parses an empty boolean as false, so preserve it here.
     return output
+
+
+def _enforce_wb0034_repository_selection_environment() -> None:
+    """Reject inherited variables that can redirect Git away from repository_root."""
+
+    inherited_overrides = sorted(key for key in _WB0034_REPOSITORY_ENV_KEYS if key in os.environ)
+    if inherited_overrides:
+        raise RepositoryIdentityPolicyError(
+            "WB-0034 trusted-main resolution rejects inherited Git repository-selection "
+            "overrides: "
+            + ", ".join(inherited_overrides)
+        )
 
 
 def _enforce_wb0034_git_transport_policy(repo: Path) -> None:
@@ -301,16 +322,22 @@ def enforce_configured_repository_identity_policy(
 
     if required_identity is not None:
         if configured_identity != required_identity:
-            observed = configured_identity or "not configured"
+            if configured_identity is None:
+                raise RepositoryIdentityPolicyError(
+                    f"{operation} requires pinned canonical repository identity "
+                    f"{required_identity}; configured identity is not configured."
+                )
             raise RepositoryIdentityPolicyError(
                 f"{operation} requires pinned canonical repository identity "
-                f"{required_identity}; configured identity is {observed}."
+                f"{required_identity}; configured identity does not match."
             )
+        if operation == _WB0034_TRUSTED_MAIN_OPERATION:
+            _enforce_wb0034_repository_selection_environment()
         result = evaluate_repository_identity_policy(resolved)
         if not result.compliant or result.actual_identity != required_identity:
             raise RepositoryIdentityPolicyError(
                 f"{operation} rejected by repository identity policy: {result.message} "
-                f"Required {required_identity}, got {result.actual_identity}."
+                "The resolved repository identity did not match the pinned canonical identity."
             )
         if operation == _WB0034_TRUSTED_MAIN_OPERATION:
             _enforce_wb0034_git_transport_policy(resolved)
