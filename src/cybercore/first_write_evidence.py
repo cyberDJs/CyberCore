@@ -354,8 +354,8 @@ def validate_first_write_evidence(
             errors,
         )
         protocol = deployment.get("protocol")
-        if protocol not in {"SFTP", "SSH"}:
-            errors.append("evidence deployment protocol must be SFTP or SSH")
+        if protocol not in {"SFTP", "SSH", "FTPS_EXPLICIT"}:
+            errors.append("evidence deployment protocol must be SFTP or SSH or FTPS_EXPLICIT")
         else:
             protocol_value = cast(str, protocol)
         capability_ref = deployment.get("target_capability_reference")
@@ -437,8 +437,8 @@ def validate_first_write_evidence(
             errors.append("authorization artifacts must equal the approved two-file artifact set")
 
         auth_protocol = authorization.get("protocol")
-        if auth_protocol not in {"SFTP", "SSH"}:
-            errors.append("authorization protocol must be SFTP or SSH")
+        if auth_protocol not in {"SFTP", "SSH", "FTPS_EXPLICIT"}:
+            errors.append("authorization protocol must be SFTP or SSH or FTPS_EXPLICIT")
         elif auth_protocol != protocol_value:
             errors.append("authorization protocol must equal deployment evidence protocol")
 
