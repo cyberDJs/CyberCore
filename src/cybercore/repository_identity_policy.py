@@ -182,8 +182,7 @@ def _enforce_wb0034_repository_selection_environment() -> None:
     if inherited_overrides:
         raise RepositoryIdentityPolicyError(
             "WB-0034 trusted-main resolution rejects inherited Git repository-selection "
-            "overrides: "
-            + ", ".join(inherited_overrides)
+            "overrides: " + ", ".join(inherited_overrides)
         )
 
 
