@@ -32,6 +32,7 @@ EXPECTED_ROLLBACK_METHOD = "no_overwrite_unique_directory_scoped_delete_if_autho
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$")
 HEX64_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 HEX40_RE = re.compile(r"^[0-9a-fA-F]{40}$")
+HOST_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 PLACEHOLDER_MARKERS = ("TBD", "UNKNOWN", "UNVERIFIED", "REQUIRED", "PLACEHOLDER")
 MAX_YAML_NESTING_DEPTH = 64
 YAML_NESTING_START_TOKENS = (
@@ -94,6 +95,7 @@ class FirstWriteEvidenceResult:
     effect_verifier_reference: str | None = None
     authorization_reference: str | None = None
     artifact_hashes: tuple[tuple[str, str], ...] = ()
+    endpoint_hostname: str | None = None
 
     def as_text(self) -> str:
         lines = [f"wb0034 evidence bundle: {'PASS' if self.ok else 'FAIL'}"]
@@ -159,6 +161,20 @@ def _non_placeholder_reference(value: object) -> bool:
         return False
     upper = value.upper()
     return not any(marker in upper for marker in PLACEHOLDER_MARKERS)
+
+
+def _validated_endpoint_hostname(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    hostname = value.strip()
+    if hostname != value or hostname != hostname.lower():
+        return None
+    if len(hostname) > 253 or hostname.endswith(".") or "." not in hostname:
+        return None
+    labels = hostname.split(".")
+    if any(HOST_LABEL_RE.fullmatch(label) is None for label in labels):
+        return None
+    return hostname
 
 
 def _string_set(value: object, errors: list[str], context: str) -> set[str]:
@@ -339,11 +355,13 @@ def validate_first_write_evidence(
     protocol_value: str | None = None
     target_capability_reference: str | None = None
     deploy_identity_scope_reference: str | None = None
+    endpoint_hostname_value: str | None = None
     if deployment is not None:
         _reject_unknown_keys(
             deployment,
             {
                 "protocol",
+                "endpoint_hostname",
                 "target_capability_reference",
                 "deploy_identity_scope_reference",
                 "production_write_excluded",
@@ -354,10 +372,19 @@ def validate_first_write_evidence(
             errors,
         )
         protocol = deployment.get("protocol")
-        if protocol not in {"SFTP", "SSH"}:
-            errors.append("evidence deployment protocol must be SFTP or SSH")
+        if protocol not in {"SFTP", "SSH", "FTPS_EXPLICIT"}:
+            errors.append("evidence deployment protocol must be SFTP or SSH or FTPS_EXPLICIT")
         else:
             protocol_value = cast(str, protocol)
+        endpoint_hostname = deployment.get("endpoint_hostname")
+        if protocol_value == "FTPS_EXPLICIT":
+            endpoint_hostname_value = _validated_endpoint_hostname(endpoint_hostname)
+            if endpoint_hostname_value is None:
+                errors.append(
+                    "FTPS_EXPLICIT deployment evidence requires a canonical lowercase endpoint_hostname"
+                )
+        elif endpoint_hostname is not None:
+            errors.append("endpoint_hostname is only permitted for FTPS_EXPLICIT")
         capability_ref = deployment.get("target_capability_reference")
         if not _non_placeholder_reference(capability_ref):
             errors.append("evidence requires a non-placeholder target capability reference")
@@ -412,6 +439,7 @@ def validate_first_write_evidence(
                 "destination",
                 "artifacts",
                 "protocol",
+                "endpoint_hostname",
                 "deploy_identity_scope_reference",
                 "rollback_permitted",
             },
@@ -437,10 +465,24 @@ def validate_first_write_evidence(
             errors.append("authorization artifacts must equal the approved two-file artifact set")
 
         auth_protocol = authorization.get("protocol")
-        if auth_protocol not in {"SFTP", "SSH"}:
-            errors.append("authorization protocol must be SFTP or SSH")
+        if auth_protocol not in {"SFTP", "SSH", "FTPS_EXPLICIT"}:
+            errors.append("authorization protocol must be SFTP or SSH or FTPS_EXPLICIT")
         elif auth_protocol != protocol_value:
             errors.append("authorization protocol must equal deployment evidence protocol")
+
+        auth_endpoint_hostname = authorization.get("endpoint_hostname")
+        if protocol_value == "FTPS_EXPLICIT":
+            normalized_auth_endpoint = _validated_endpoint_hostname(auth_endpoint_hostname)
+            if normalized_auth_endpoint is None:
+                errors.append(
+                    "FTPS_EXPLICIT authorization requires a canonical lowercase endpoint_hostname"
+                )
+            elif normalized_auth_endpoint != endpoint_hostname_value:
+                errors.append(
+                    "authorization endpoint_hostname must equal deployment evidence endpoint_hostname"
+                )
+        elif auth_endpoint_hostname is not None:
+            errors.append("authorization endpoint_hostname is only permitted for FTPS_EXPLICIT")
 
         auth_scope_ref = authorization.get("deploy_identity_scope_reference")
         if not _non_placeholder_reference(auth_scope_ref):
@@ -468,4 +510,5 @@ def validate_first_write_evidence(
         effect_verifier_reference,
         authorization_reference,
         tuple(sorted(artifact_hashes.items())),
+        endpoint_hostname_value,
     )
