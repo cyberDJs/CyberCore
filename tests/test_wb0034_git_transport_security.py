@@ -14,6 +14,7 @@ from cybercore.repository_identity_policy import (
 OPERATION = "WB-0034 trusted-main resolution"
 CANONICAL_IDENTITY = "git:github.com/cyberDJs/CyberCore"
 CANONICAL_HTTPS_ORIGIN = "https://github.com/cyberDJs/CyberCore.git"
+CANONICAL_HTTPS_ORIGIN_NO_DOTGIT = "https://github.com/cyberDJs/CyberCore"
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -65,6 +66,19 @@ def test_wb0034_accepts_canonical_https_transport_without_overrides(
 ) -> None:
     _clear_transport_env(monkeypatch)
     repo = _repo(tmp_path)
+
+    result = enforce_configured_repository_identity_policy(repo, operation=OPERATION)
+
+    assert result is not None
+    assert result.compliant
+
+
+def test_wb0034_accepts_canonical_https_transport_without_dotgit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_transport_env(monkeypatch)
+    repo = _repo(tmp_path, origin=CANONICAL_HTTPS_ORIGIN_NO_DOTGIT)
 
     result = enforce_configured_repository_identity_policy(repo, operation=OPERATION)
 
@@ -178,6 +192,23 @@ def test_wb0034_rejects_empty_configured_git_tls_verification(
     _clear_transport_env(monkeypatch)
     repo = _repo(tmp_path)
     _git(repo, "config", "http.sslVerify", "")
+
+    with pytest.raises(RepositoryIdentityPolicyError, match="certificate verification"):
+        enforce_configured_repository_identity_policy(repo, operation=OPERATION)
+
+
+def test_wb0034_rejects_url_scoped_tls_disable_for_actual_origin_without_dotgit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _clear_transport_env(monkeypatch)
+    repo = _repo(tmp_path, origin=CANONICAL_HTTPS_ORIGIN_NO_DOTGIT)
+    _git(
+        repo,
+        "config",
+        f"http.{CANONICAL_HTTPS_ORIGIN_NO_DOTGIT}.sslVerify",
+        "false",
+    )
 
     with pytest.raises(RepositoryIdentityPolicyError, match="certificate verification"):
         enforce_configured_repository_identity_policy(repo, operation=OPERATION)

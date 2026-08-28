@@ -225,7 +225,10 @@ def _enforce_wb0034_git_transport_policy(repo: Path) -> None:
                 "WB-0034 trusted-main refresh rejects Git transport rewrite/override config"
             )
 
-    canonical_url = "https://github.com/cyberDJs/CyberCore.git"
+    # URL-scoped Git transport configuration must be evaluated against the exact
+    # accepted origin value that the subsequent fetch will use. Git URL matching
+    # distinguishes the canonical origin forms with and without the `.git` suffix.
+    canonical_url = origin
     proxy = _optional_git_config_value(repo, "--get-urlmatch", "http.proxy", canonical_url)
     if proxy is not None:
         raise RepositoryIdentityPolicyError(
