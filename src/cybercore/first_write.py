@@ -133,7 +133,7 @@ def _collect_duplicate_keys(node: Node, errors: list[str]) -> None:
                 if key == "<<" or key_node.tag == YAML_MERGE_TAG:
                     errors.append("readiness forbids YAML merge keys")
                 if key in seen:
-                    errors.append(f"readiness contains duplicate YAML key: {key}")
+                    errors.append("readiness contains a duplicate YAML key")
                 seen.add(key)
             _collect_duplicate_keys(value_node, errors)
     elif isinstance(node, SequenceNode):
@@ -145,7 +145,10 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        errors.append(f"missing readiness artifact: {path}")
+        errors.append("missing readiness artifact")
+        return None
+    except (OSError, UnicodeError):
+        errors.append("cannot read readiness artifact")
         return None
 
     sensitive_errors = scan_first_write_sensitive_text(text, "readiness")
@@ -172,14 +175,14 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
                 errors.append("readiness forbids YAML aliases")
             elif isinstance(token, DirectiveToken):
                 errors.append("readiness forbids YAML directives")
-    except (RecursionError, yaml.YAMLError) as exc:
-        errors.append(f"readiness is invalid YAML: {exc}")
+    except (RecursionError, yaml.YAMLError):
+        errors.append("readiness is invalid YAML")
         return None
 
     try:
         node = yaml.compose(text, Loader=yaml.SafeLoader)
-    except (RecursionError, yaml.YAMLError) as exc:
-        errors.append(f"readiness is invalid YAML: {exc}")
+    except (RecursionError, yaml.YAMLError):
+        errors.append("readiness is invalid YAML")
         return None
 
     if node is not None:
@@ -191,8 +194,8 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
 
     try:
         loaded = yaml.safe_load(text)
-    except (RecursionError, yaml.YAMLError) as exc:
-        errors.append(f"readiness is invalid YAML: {exc}")
+    except (RecursionError, yaml.YAMLError):
+        errors.append("readiness is invalid YAML")
         return None
 
     if not isinstance(loaded, dict):
@@ -200,9 +203,8 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
         return None
 
     document = cast(dict[object, object], loaded)
-    non_string = [repr(key) for key in document if not isinstance(key, str)]
-    if non_string:
-        errors.append(f"readiness contains non-string top-level keys: {', '.join(non_string)}")
+    if any(not isinstance(key, str) for key in document):
+        errors.append("readiness contains non-string top-level keys")
         return None
 
     return cast(dict[str, object], document)
@@ -213,7 +215,7 @@ def _reject_unknown_keys(
 ) -> None:
     unexpected = sorted(key for key in mapping if key not in allowed)
     if unexpected:
-        errors.append(f"{context} contains unexpected keys: {', '.join(unexpected)}")
+        errors.append(f"{context} contains unexpected keys")
 
 
 def _require_mapping(
@@ -252,7 +254,7 @@ def _require_string_set(
     if missing:
         errors.append(f"readiness missing {key}: {', '.join(missing)}")
     if unexpected:
-        errors.append(f"readiness contains unexpected {key}: {', '.join(unexpected)}")
+        errors.append(f"readiness contains unexpected values in {key}")
     if len(actual) != len(actual_set):
         errors.append(f"readiness contains duplicate values in {key}")
 
@@ -274,7 +276,7 @@ def _validate_blocked_until(document: dict[str, object], errors: list[str]) -> N
             errors.append(f"blocked_until item {index} key must be a string")
             continue
         if key not in EXPECTED_BLOCKED_UNTIL:
-            errors.append(f"blocked_until contains unexpected key: {key}")
+            errors.append("blocked_until contains an unexpected key")
             continue
         if key in seen:
             errors.append(f"blocked_until contains duplicate key: {key}")
