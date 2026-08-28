@@ -251,3 +251,36 @@ def test_trusted_main_rejects_path_fallback_when_canonical_identity_is_configure
 
     assert commit is None
     assert any("repository identity policy rejected trusted main" in error for error in errors)
+
+
+@pytest.mark.parametrize("env_key", ["GIT_DIR", "GIT_COMMON_DIR"])
+def test_trusted_main_rejects_repository_selection_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    env_key: str,
+) -> None:
+    repo = _init_repo(tmp_path)
+    _configure_identity(repo)
+    _run_git(repo, "remote", "add", "origin", "https://github.com/cyberDJs/CyberCore.git")
+    monkeypatch.setenv(env_key, str(tmp_path / "redirected-git-state"))
+
+    errors: list[str] = []
+    commit = _git_main_commit(repo, errors)
+
+    assert commit is None
+    assert any("repository-selection" in error for error in errors)
+
+
+def test_trusted_main_redacts_rejected_configured_identity(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path)
+    rejected_identity = "git:npm_abcdefghijklmnopqrstuvwxyz0123456789"
+    _configure_identity(repo, rejected_identity)
+    _run_git(repo, "remote", "add", "origin", "https://github.com/cyberDJs/CyberCore.git")
+
+    errors: list[str] = []
+    commit = _git_main_commit(repo, errors)
+
+    rendered = "\n".join(errors)
+    assert commit is None
+    assert rejected_identity not in rendered
+    assert "configured identity does not match" in rendered
