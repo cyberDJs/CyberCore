@@ -3,28 +3,43 @@ version: 1
 target_id: interserver-shared-hosting-staging
 provider: InterServer
 environment_class: staging
-status: target_contract_draft
+status: target_identified_remote_write_blocked
 
 purpose: >-
-  Non-production staging target for CyberCore self-deployment loop validation.
+  Non-production staging target for the CyberCore self-deployment loop.
 
 production_boundary:
   production_domains:
     - eimyherrer.com
+  production_document_root: /home/eimyherr/domains/eimyherrer.com/public_html
   production_mutation_allowed: false
   production_credentials_allowed: false
   provider_mutation_allowed_without_explicit_approval: false
 
 staging_identity:
-  domain_or_url: TBD_NON_PRODUCTION_STAGING_URL
-  document_root: TBD_NON_PRODUCTION_STAGING_PATH
-  deployment_user_scope: staging_path_only
-  capability_status: UNKNOWN_UNTIL_VERIFIED
+  domain_or_url: https://staging.eimyherrer.com
+  document_root: /home/eimyherr/domains/staging.eimyherrer.com/public_html
+  public_origin: 162.250.126.107
+  authoritative_dns: Cloudflare
+  dns_proxy_mode: dns_only
+  document_root_non_overlap_verified: true
+  deployment_user_scope: staging_path_only_pending_verification
+  capability_status: TARGET_IDENTITY_VERIFIED_DEPLOY_PROTOCOL_PENDING
 
 allowed_modes:
   - plan_only
   - dry_run
   - staging_apply_after_explicit_operator_approval
+
+first_write_policy:
+  artifact_class: static_two_file_canary
+  destination_pattern: cybercore-canary-<run_id>/
+  destination_is_direct_child_of_staging_root: true
+  overwrite_allowed: false
+  symlink_promotion_allowed: false
+  reject_existing_destination: true
+  reject_symlink_destination: true
+  production_wide_credential_reuse_preapproved: false
 
 secret_policy:
   plaintext_secrets_in_repository: denied
@@ -51,10 +66,10 @@ required_preflight:
   - verify_operator_authorization_for_first_remote_write
 
 rollback:
-  preferred: immutable_release_directory_with_current_symlink
-  fallback:
+  preferred: no_overwrite_unique_directory_scoped_delete_if_authorized
+  future_options:
+    - immutable_release_directory_with_current_symlink
     - timestamped_backup_before_overwrite
-    - no_overwrite_upload_to_new_staging_path
   block_if_no_rollback_for_nontrivial_change: true
 
 evidence:
@@ -75,5 +90,7 @@ evidence:
 current_gate_state:
   live_staging_deploy: blocked
   reason: >-
-    Staging URL, staging path, deployment protocol, target capability, secret aliases,
-    rollback method, and effect verifier are not yet verified.
+    WB-0033 verified target identity, DNS, TLS, and document-root isolation. The first
+    remote write remains blocked until deployment protocol, least-privilege deploy
+    identity/credential scope, secret-alias readiness, rollback execution semantics,
+    effect verifier, exact source commit, and fresh operator authorization are verified.

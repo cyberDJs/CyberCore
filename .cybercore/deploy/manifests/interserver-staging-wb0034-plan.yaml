@@ -1,0 +1,39 @@
+version: 1
+
+run_id: WB0034-FIRST-STAGING-WRITE-PLAN
+repository: cyberDJs/CyberCore
+source_branch: main
+source_commit: TBD
+
+target_id: interserver-shared-hosting-staging
+deploy_mode: plan_only
+rollback_mode: no_remote_write
+
+effect_verifier:
+  mode: planned
+  required_before_remote_write: true
+  checks:
+    - staging_url_returns_success
+    - deployed_version_marker_matches_source_commit
+    - write_scope_matches_approved_staging_destination
+    - no_denied_path_is_touched
+    - receipt_is_stored_without_secrets
+
+operator_authorization_reference: NOT_REQUIRED_FOR_PLAN_ONLY
+
+planned_remote_destination: cybercore-canary-<run_id>/
+planned_rollback_mode_after_authorization: no_overwrite_unique_directory_scoped_delete_if_authorized
+planned_artifacts:
+  - index.html
+  - cybercore-version.json
+
+secret_aliases_required:
+  - INTERSERVER_STAGING_HOST
+  - INTERSERVER_STAGING_USER
+  - INTERSERVER_STAGING_PORT
+  - INTERSERVER_STAGING_SSH_KEY_OR_SFTP_PASSWORD
+
+secret_values_allowed: false
+remote_write_requested: false
+remote_write_allowed: false
+production_write_allowed: false

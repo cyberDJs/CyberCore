@@ -1,0 +1,231 @@
+from __future__ import annotations
+
+import hashlib
+from pathlib import Path
+
+import pytest
+
+from cybercore import first_write_evidence as evidence_module
+from cybercore.first_write import validate_first_write_readiness
+from cybercore.first_write_evidence import validate_first_write_evidence
+from cybercore.first_write_manifest import validate_first_write_manifest
+from cybercore.first_write_security import scan_first_write_yaml_text
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature",
+        "npm_abcdefghijklmnopqrstuvwxyz0123456789",
+        "pypi-AgEIcHlwaS5vcmcCJGE5YmNkZWYwMTIzNDU2Nzg5",
+        "AKIAIOSFODNN7EXAMPLE",
+    ],
+)
+def test_reference_fields_reject_bearer_or_credential_literals(value: str) -> None:
+    errors = scan_first_write_yaml_text(
+        f"authorization_reference: {value}\n",
+        "test packet",
+    )
+
+    assert any("non-allowlisted value" in error for error in errors)
+
+
+def test_reference_fields_accept_only_expected_wb0034_reference_forms() -> None:
+    text = """target_capability_reference: evidence:wb0034:sftp-capability:20260823
+deploy_identity_scope_reference: evidence:wb0034:deploy-identity-scope:20260823
+effect_verifier_reference: evidence:wb0034:effect-verifier:20260823
+authorization_reference: approval:wb0034:20260823T164800Z
+evidence_bundle_reference: ../evidence/wb0034-first-write.yaml
+source_commit_reference: 0123456789abcdef0123456789abcdef01234567
+operator_authorization_reference: NOT_REQUIRED_FOR_PLAN_ONLY
+"""
+
+    assert scan_first_write_yaml_text(text, "test packet") == ()
+
+
+@pytest.mark.parametrize("length", [40, 64])
+def test_evidence_metadata_reference_rejects_digest_shaped_suffix(length: int) -> None:
+    value = "a" * length
+    errors = scan_first_write_yaml_text(
+        f"effect_verifier_reference: evidence:wb0034:effect-verifier:{value}\n",
+        "test packet",
+    )
+
+    assert any("non-allowlisted value" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    [
+        "effect_verifier_reference",
+        "target_capability_reference",
+        "deploy_identity_scope_reference",
+        "authorization_reference",
+    ],
+)
+def test_bare_commit_hash_is_rejected_outside_source_commit_reference(field_name: str) -> None:
+    errors = scan_first_write_yaml_text(
+        f"{field_name}: {'a' * 40}\n",
+        "test packet",
+    )
+
+    assert any("non-allowlisted value" in error for error in errors)
+
+
+def test_bare_commit_hash_is_allowed_for_source_commit_reference() -> None:
+    errors = scan_first_write_yaml_text(
+        f"source_commit_reference: {'a' * 40}\n",
+        "test packet",
+    )
+
+    assert errors == ()
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "npm_abcdefghijklmnopqrstuvwxyz0123456789",
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature",
+        "pypi-AgEIcHlwaS5vcmcCJGE5YmNkZWYwMTIzNDU2Nzg5",
+    ],
+)
+def test_run_id_fields_reject_credential_shaped_values(value: str) -> None:
+    errors = scan_first_write_yaml_text(
+        f"run_id: {value}\nauthorization:\n  run_id: {value}\n",
+        "test packet",
+    )
+
+    assert any("run_id field" in error for error in errors)
+
+
+def test_run_id_fields_accept_structured_value_and_plan_placeholder() -> None:
+    assert scan_first_write_yaml_text("run_id: 20260824T063800Z-a1b2c3\n", "test packet") == ()
+    assert (
+        scan_first_write_yaml_text(
+            "run_id: WB0034-FIRST-STAGING-WRITE-PLAN\n",
+            "test packet",
+        )
+        == ()
+    )
+
+
+def test_evidence_validator_rejects_credential_shaped_run_id(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text(
+        "run_id: npm_abcdefghijklmnopqrstuvwxyz0123456789\n",
+        encoding="utf-8",
+    )
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("run_id field" in error for error in result.errors)
+
+
+def test_readiness_does_not_echo_rejected_credential_scalar(tmp_path: Path) -> None:
+    secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+    readiness = tmp_path / "readiness.yaml"
+    readiness.write_text(f"production_write_allowed: {secret}\n", encoding="utf-8")
+
+    result = validate_first_write_readiness(readiness)
+
+    assert not result.schema_ok
+    assert not result.ready
+    assert any("recognizable credential literal" in error for error in result.errors)
+    assert secret not in result.as_text()
+
+
+def test_manifest_does_not_echo_rejected_credential_scalar(tmp_path: Path) -> None:
+    secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+    manifest = tmp_path / "manifest.yaml"
+    manifest.write_text(f"production_write_allowed: {secret}\n", encoding="utf-8")
+
+    result = validate_first_write_manifest(manifest)
+
+    assert not result.ok
+    assert any("recognizable credential literal" in error for error in result.errors)
+    assert secret not in result.as_text()
+
+
+def test_evidence_does_not_echo_rejected_credential_scalar(tmp_path: Path) -> None:
+    secret = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text(f"secret_values_present: {secret}\n", encoding="utf-8")
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("recognizable credential literal" in error for error in result.errors)
+    assert secret not in result.as_text()
+
+
+def test_evidence_rejects_noncanonical_index_payload_digest(tmp_path: Path) -> None:
+    secret_bearing_payload = (
+        b"<!doctype html><p>api_key=ghp_abcdefghijklmnopqrstuvwxyz0123456789</p>\n"
+    )
+    secret_digest = hashlib.sha256(secret_bearing_payload).hexdigest()
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text(
+        f"artifacts:\n  index.html: {secret_digest}\n  cybercore-version.json: {'f' * 64}\n",
+        encoding="utf-8",
+    )
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("fixed WB-0034 safe canary payload digest" in error for error in result.errors)
+
+
+def test_evidence_directory_read_error_is_returned_as_failure(tmp_path: Path) -> None:
+    evidence = tmp_path / "bundle.yaml"
+    evidence.mkdir()
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("cannot be read safely" in error for error in result.errors)
+
+
+def test_evidence_yaml_excessive_nesting_fails_closed(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    nested = "value: 1\n"
+    for index in reversed(range(70)):
+        nested = (
+            f"level_{index}:\n"
+            + "\n".join(f"  {line}" if line else line for line in nested.splitlines())
+            + "\n"
+        )
+    evidence.write_text(nested, encoding="utf-8")
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("safe YAML nesting depth" in error for error in result.errors)
+
+
+def test_evidence_yaml_recursion_error_is_returned_as_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text("version: 1\n", encoding="utf-8")
+
+    def raise_recursion(*args: object, **kwargs: object) -> object:
+        raise RecursionError("synthetic recursion limit")
+
+    monkeypatch.setattr(evidence_module.yaml, "load", raise_recursion)
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("invalid YAML" in error for error in result.errors)
+
+
+def test_evidence_yaml_unhashable_mapping_key_is_returned_as_failure(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text("? [a, b]\n: c\n", encoding="utf-8")
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("unhashable mapping key" in error for error in result.errors)
