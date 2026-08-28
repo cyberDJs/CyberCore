@@ -8,6 +8,7 @@ from cybercore.first_write_evidence import (
     EXPECTED_INDEX_HTML_SHA256,
     validate_first_write_evidence,
 )
+from cybercore.first_write_packet import _build_upload_input
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +21,7 @@ SCOPE_REF = "evidence:wb0034:ftps-path-scope:20260829"
 ARTIFACT_REF = "evidence:wb0034:artifact-sha256:20260829"
 VERIFIER_REF = "evidence:wb0034:effect-verifier:20260829"
 AUTH_REF = "approval:wb0034:20260829T120000Z-ftps01"
+ENDPOINT_HOSTNAME = "staging-node.example.net"
 
 
 def _evidence_text(protocol: str) -> str:
@@ -34,6 +36,7 @@ artifacts:
   cybercore-version.json: {"b" * 64}
 deployment:
   protocol: {protocol}
+  endpoint_hostname: {ENDPOINT_HOSTNAME}
   target_capability_reference: {CAPABILITY_REF}
   deploy_identity_scope_reference: {SCOPE_REF}
   production_write_excluded: true
@@ -55,6 +58,7 @@ authorization:
     - index.html
     - cybercore-version.json
   protocol: {protocol}
+  endpoint_hostname: {ENDPOINT_HOSTNAME}
   deploy_identity_scope_reference: {SCOPE_REF}
   rollback_permitted: true
 secret_values_present: false
@@ -102,6 +106,7 @@ def test_explicit_ftps_is_accepted_by_evidence_validator(tmp_path: Path) -> None
 
     assert result.ok, result.as_text()
     assert result.protocol == "FTPS_EXPLICIT"
+    assert result.endpoint_hostname == ENDPOINT_HOSTNAME
 
 
 def test_plain_ftp_is_rejected_by_evidence_validator(tmp_path: Path) -> None:
@@ -122,6 +127,50 @@ def test_implicit_ftps_is_rejected_by_evidence_validator(tmp_path: Path) -> None
 
     assert not result.ok
     assert any("FTPS_EXPLICIT" in error for error in result.errors)
+
+
+def test_explicit_ftps_requires_endpoint_binding(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    text = _evidence_text("FTPS_EXPLICIT")
+    text = text.replace(f"  endpoint_hostname: {ENDPOINT_HOSTNAME}\n", "", 1)
+    evidence.write_text(text, encoding="utf-8")
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("requires a canonical lowercase endpoint_hostname" in error for error in result.errors)
+
+
+def test_explicit_ftps_rejects_authorized_endpoint_mismatch(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    text = _evidence_text("FTPS_EXPLICIT")
+    marker = f"  endpoint_hostname: {ENDPOINT_HOSTNAME}\n  deploy_identity_scope_reference:"
+    replacement = "  endpoint_hostname: other-node.example.net\n  deploy_identity_scope_reference:"
+    text = text.replace(marker, replacement, 1)
+    evidence.write_text(text, encoding="utf-8")
+
+    result = validate_first_write_evidence(evidence)
+
+    assert not result.ok
+    assert any("must equal deployment evidence endpoint_hostname" in error for error in result.errors)
+
+
+def test_ftps_endpoint_is_sealed_into_upload_input(tmp_path: Path) -> None:
+    evidence = tmp_path / "evidence.yaml"
+    evidence.write_text(_evidence_text("FTPS_EXPLICIT"), encoding="utf-8")
+    result = validate_first_write_evidence(evidence)
+    assert result.ok, result.as_text()
+
+    errors: list[str] = []
+    artifacts = {
+        "index.html": (EXPECTED_INDEX_HTML_SHA256, b"safe-canary"),
+        "cybercore-version.json": ("b" * 64, b"{}"),
+    }
+    upload_input = _build_upload_input(result, artifacts, errors)
+
+    assert errors == []
+    assert upload_input is not None
+    assert upload_input.endpoint_hostname == ENDPOINT_HOSTNAME
 
 
 def test_hash_bound_explicit_ftps_can_clear_component_readiness(tmp_path: Path) -> None:
