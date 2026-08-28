@@ -66,7 +66,7 @@ def _construct_unique_mapping(
             raise yaml.constructor.ConstructorError(
                 "while constructing a mapping",
                 node.start_mark,
-                f"found duplicate key {key!r}",
+                "found a duplicate mapping key",
                 key_node.start_mark,
             )
         mapping[key] = loader.construct_object(value_node, deep=deep)
@@ -142,9 +142,8 @@ def _require_mapping(
 def _reject_unknown_keys(
     mapping: dict[str, object], allowed: set[str], context: str, errors: list[str]
 ) -> None:
-    unexpected = sorted(key for key in mapping if key not in allowed)
-    if unexpected:
-        errors.append(f"{context} contains unexpected keys: {', '.join(unexpected)}")
+    if any(key not in allowed for key in mapping):
+        errors.append(f"{context} contains unexpected keys")
 
 
 def _require_value(
@@ -192,8 +191,8 @@ def _scan_safe_yaml_structure(text: str, errors: list[str]) -> bool:
                 errors.append("evidence bundle forbids YAML aliases")
             elif isinstance(token, DirectiveToken):
                 errors.append("evidence bundle forbids YAML directives")
-    except (RecursionError, yaml.YAMLError) as exc:
-        errors.append(f"evidence bundle is invalid YAML: {exc}")
+    except (RecursionError, yaml.YAMLError):
+        errors.append("evidence bundle is invalid YAML")
         return False
     return True
 
@@ -207,7 +206,7 @@ def validate_first_write_evidence(
     try:
         raw_bytes = path.read_bytes()
     except FileNotFoundError:
-        return FirstWriteEvidenceResult(False, (f"missing evidence bundle: {path}",))
+        return FirstWriteEvidenceResult(False, ("missing evidence bundle",))
     except OSError as exc:
         return FirstWriteEvidenceResult(
             False,
@@ -237,8 +236,14 @@ def validate_first_write_evidence(
 
     try:
         loaded = yaml.load(text, Loader=UniqueKeyLoader)
-    except (RecursionError, yaml.YAMLError) as exc:
-        errors.append(f"evidence bundle is invalid YAML: {exc}")
+    except RecursionError:
+        errors.append("evidence bundle is invalid YAML")
+        return FirstWriteEvidenceResult(False, tuple(errors), digest)
+    except yaml.constructor.ConstructorError:
+        errors.append("evidence bundle contains a duplicate or unhashable mapping key")
+        return FirstWriteEvidenceResult(False, tuple(errors), digest)
+    except yaml.YAMLError:
+        errors.append("evidence bundle is invalid YAML")
         return FirstWriteEvidenceResult(False, tuple(errors), digest)
 
     if not isinstance(loaded, dict):
@@ -310,12 +315,16 @@ def validate_first_write_evidence(
             errors.append("evidence artifacts contains non-string keys")
         else:
             artifact_map = cast(dict[str, object], raw_artifacts)
-            artifacts = set(artifact_map)
-            if artifacts != EXPECTED_ARTIFACTS:
+            artifact_names = set(artifact_map)
+            if artifact_names != EXPECTED_ARTIFACTS:
                 errors.append(
                     "evidence artifacts must be exactly index.html and cybercore-version.json"
                 )
-            for name, value in artifact_map.items():
+            artifacts = artifact_names & EXPECTED_ARTIFACTS
+            for name in sorted(EXPECTED_ARTIFACTS):
+                if name not in artifact_map:
+                    continue
+                value = artifact_map[name]
                 if not isinstance(value, str) or not HEX64_RE.fullmatch(value):
                     errors.append(f"evidence artifact hash for {name} must be sha256 hex")
                 else:
