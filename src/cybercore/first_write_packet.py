@@ -20,6 +20,7 @@ from cybercore.first_write_evidence import (
     validate_first_write_evidence,
 )
 from cybercore.first_write_manifest import validate_first_write_manifest
+from cybercore.first_write_security import scan_first_write_sensitive_text
 from cybercore.repository_identity_policy import (
     RepositoryIdentityPolicyError,
     enforce_configured_repository_identity_policy,
@@ -81,8 +82,8 @@ def _read_document_once(path: Path, label: str, errors: list[str]) -> bytes | No
     try:
         with path.open("rb") as handle:
             data = handle.read(MAX_PACKET_DOCUMENT_BYTES + 1)
-    except OSError as exc:
-        errors.append(f"cannot read {label}: {exc}")
+    except OSError:
+        errors.append(f"cannot read {label}")
         return None
     if len(data) > MAX_PACKET_DOCUMENT_BYTES:
         errors.append(f"{label} exceeds packet document size limit")
@@ -101,8 +102,8 @@ def _decode_document(raw_bytes: bytes, label: str, errors: list[str]) -> str | N
 def _parse_mapping_text(text: str, label: str, errors: list[str]) -> dict[str, object] | None:
     try:
         loaded = yaml.safe_load(text)
-    except (RecursionError, yaml.YAMLError) as exc:
-        errors.append(f"cannot parse {label}: {exc}")
+    except (RecursionError, yaml.YAMLError):
+        errors.append(f"cannot parse {label}: invalid YAML")
         return None
     if not isinstance(loaded, dict):
         errors.append(f"{label} must be a YAML mapping")
@@ -268,12 +269,11 @@ def _open_artifact_directory_no_follow(artifact_dir: Path, errors: list[str]) ->
             next_fd = os.open(component, directory_flags, dir_fd=current_fd)
             os.close(current_fd)
             current_fd = next_fd
-    except OSError as exc:
+    except OSError:
         if current_fd is not None:
             os.close(current_fd)
         errors.append(
-            "deployment artifact directory contains a symlink, missing path, or invalid "
-            f"directory component: {exc}"
+            "deployment artifact directory contains a symlink, missing path, or invalid directory component"
         )
         return None
     return current_fd
@@ -307,8 +307,8 @@ def _read_artifact_no_follow(
                 errors.append(f"deployment artifact exceeds size limit while reading: {name}")
                 return None
         return digest.hexdigest(), bytes(data)
-    except OSError as exc:
-        errors.append(f"cannot open deployment artifact without following links {name}: {exc}")
+    except OSError:
+        errors.append(f"cannot open deployment artifact without following links: {name}")
         return None
     finally:
         if file_fd is not None:
@@ -321,10 +321,7 @@ def _check_artifact_entries(entries: set[str], label: str, errors: list[str]) ->
     if missing:
         errors.append(f"deployment artifact directory {label} is missing: {', '.join(missing)}")
     if unexpected:
-        errors.append(
-            f"deployment artifact directory {label} contains unexpected entries: "
-            + ", ".join(unexpected)
-        )
+        errors.append(f"deployment artifact directory {label} contains unexpected entries")
 
 
 def _local_artifacts(
@@ -339,8 +336,8 @@ def _local_artifacts(
     try:
         try:
             before_entries = set(os.listdir(directory_fd))
-        except OSError as exc:
-            errors.append(f"cannot list deployment artifact directory before reads: {exc}")
+        except OSError:
+            errors.append("cannot list deployment artifact directory before reads")
             return {}
         _check_artifact_entries(before_entries, "before reads", errors)
 
@@ -351,8 +348,8 @@ def _local_artifacts(
 
         try:
             after_entries = set(os.listdir(directory_fd))
-        except OSError as exc:
-            errors.append(f"cannot list deployment artifact directory after reads: {exc}")
+        except OSError:
+            errors.append("cannot list deployment artifact directory after reads")
             return artifacts
         _check_artifact_entries(after_entries, "after reads", errors)
         if after_entries != before_entries:
@@ -367,7 +364,7 @@ def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
         if key in result:
-            raise ValueError(f"duplicate JSON key: {key}")
+            raise ValueError("duplicate JSON key")
         result[key] = value
     return result
 
@@ -387,8 +384,8 @@ def _validate_version_marker(
 
     try:
         loaded = json.loads(text, object_pairs_hook=_unique_json_object)
-    except (json.JSONDecodeError, ValueError) as exc:
-        errors.append(f"cybercore-version.json is invalid or ambiguous JSON: {exc}")
+    except (json.JSONDecodeError, ValueError):
+        errors.append("cybercore-version.json is invalid or ambiguous JSON")
         return
 
     if not isinstance(loaded, dict):
@@ -407,9 +404,7 @@ def _validate_version_marker(
         if missing:
             errors.append(f"cybercore-version.json is missing keys: {', '.join(missing)}")
         if unexpected:
-            errors.append(
-                f"cybercore-version.json contains unexpected keys: {', '.join(unexpected)}"
-            )
+            errors.append("cybercore-version.json contains unexpected keys")
 
     expected_values = {
         "repository": "cyberDJs/CyberCore",
@@ -421,7 +416,7 @@ def _validate_version_marker(
     for key, expected in expected_values.items():
         actual = document.get(key)
         if actual != expected:
-            errors.append(f"cybercore-version.json {key} must equal {expected!r}; got {actual!r}")
+            errors.append(f"cybercore-version.json {key} does not match the required packet value")
 
     built_at = document.get("built_at")
     if not isinstance(built_at, str) or not built_at.strip():
@@ -516,8 +511,8 @@ def _validate_private_packet_snapshot(
         for snapshot, expected, label in snapshots:
             try:
                 observed = snapshot.read_bytes()
-            except OSError as exc:
-                errors.append(f"cannot verify private {label} snapshot integrity: {exc}")
+            except OSError:
+                errors.append(f"cannot verify private {label} snapshot integrity")
                 continue
             if observed != expected:
                 errors.append(f"private {label} snapshot changed during validation")
@@ -538,6 +533,14 @@ def _capture_packet_documents(
     manifest_text = _decode_document(manifest_bytes, "manifest", errors)
     readiness_text = _decode_document(readiness_bytes, "readiness", errors)
     if manifest_text is None or readiness_text is None:
+        return None
+
+    sensitive_errors = (
+        *scan_first_write_sensitive_text(manifest_text, "manifest"),
+        *scan_first_write_sensitive_text(readiness_text, "readiness"),
+    )
+    if sensitive_errors:
+        errors.extend(sensitive_errors)
         return None
 
     manifest = _parse_mapping_text(manifest_text, "manifest", errors)
