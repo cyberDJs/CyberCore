@@ -319,9 +319,9 @@ def _append_supporting_evidence_blockers(
 ) -> None:
     if capability is not None:
         if capability.get("deployment_protocol_status") == "VERIFIED":
-            if capability.get("deployment_protocol") not in {"SFTP", "SSH"}:
+            if capability.get("deployment_protocol") not in {"SFTP", "SSH", "FTPS_EXPLICIT"}:
                 blockers.append(
-                    "deployment_protocol_status VERIFIED requires deployment_protocol SFTP or SSH"
+                    "deployment_protocol_status VERIFIED requires deployment_protocol SFTP or SSH or FTPS_EXPLICIT"
                 )
         if capability.get("target_capability_status") == "VERIFIED" and not _has_evidence_reference(
             capability.get("target_capability_reference")
@@ -504,7 +504,7 @@ def validate_first_write_readiness(path: Path) -> FirstWriteReadinessResult:
             errors,
         )
         protocol = capability.get("deployment_protocol")
-        if protocol not in {"UNVERIFIED", "SFTP", "SSH"}:
+        if protocol not in {"UNVERIFIED", "SFTP", "SSH", "FTPS_EXPLICIT"}:
             errors.append("unsupported deployment_protocol value")
         _require_value(capability, "capability_evidence_secret_values_recorded", False, errors)
         _require_value(capability, "capability_evidence_remote_write_performed", False, errors)
