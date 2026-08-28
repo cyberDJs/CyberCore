@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" role="img" aria-labelledby="title desc">
+  <title id="title">CyberCore capability map</title>
+  <desc id="desc">Eight CyberCore capabilities: context, evidence, confidence, memory, curiosity, sentinel, provider boundaries, and governed execution.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#081321"/>
+      <stop offset="1" stop-color="#0c1930"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#16f2d2"/>
+      <stop offset="0.5" stop-color="#5f7cff"/>
+      <stop offset="1" stop-color="#ff4fd8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1280" height="420" rx="24" fill="url(#bg)"/>
+  <rect x="1" y="1" width="1278" height="418" rx="23" fill="none" stroke="#25395f" stroke-width="2"/>
+
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif">
+    <text x="48" y="48" fill="#f7fbff" font-size="22" font-weight="800">Core capability map</text>
+    <text x="48" y="76" fill="#93a9c9" font-size="15">Context and evidence stay separate from provider-specific execution.</text>
+
+    <g transform="translate(48 104)">
+      <g>
+        <rect width="282" height="118" rx="16" fill="#0e1b2e" stroke="#25395f"/>
+        <path d="M0 0h282" stroke="#16f2d2" stroke-width="4"/>
+        <text x="20" y="34" fill="#16f2d2" font-size="12" font-weight="800" letter-spacing="2">01 · CONTEXT</text>
+        <text x="20" y="61" fill="#f7fbff" font-size="18" font-weight="750">Context Engine</text>
+        <text x="20" y="84" fill="#93a9c9" font-size="13">Why it exists, what changed,</text>
+        <text x="20" y="102" fill="#93a9c9" font-size="13">and what depends on it.</text>
+      </g>
+
+      <g transform="translate(298 0)">
+        <rect width="282" height="118" rx="16" fill="#0e1b2e" stroke="#25395f"/>
+        <path d="M0 0h282" stroke="#2ed9bf" stroke-width="4"/>
+        <text x="20" y="34" fill="#2ed9bf" font-size="12" font-weight="800" letter-spacing="2">02 · EVIDENCE</text>
+        <text x="20" y="61" fill="#f7fbff" font-size="18" font-weight="750">Evidence &amp; Provenance</text>
+        <text x="20" y="84" fill="#93a9c9" font-size="13">Claims remain traceable to</text>
+        <text x="20" y="102" fill="#93a9c9" font-size="13">observations and sources.</text>
+      </g>
+
+      <g transform="translate(596 0)">
+        <rect width="282" height="118" rx="16" fill="#0e1b2e" stroke="#25395f"/>
+        <path d="M0 0h282" stroke="#5f7cff" stroke-width="4"/>
+        <text x="20" y="34" fill="#5f7cff" font-size="12" font-weight="800" letter-spacing="2">03 · CONFIDENCE</text>
+        <text x="20" y="61" fill="#f7fbff" font-size="18" font-weight="750">Confidence-aware reasoning</text>
+        <text x="20" y="84" fill="#93a9c9" font-size="13">Unknown stays unknown instead</text>
+        <text x="20" y="102" fill="#93a9c9" font-size="13">of becoming invented certainty.</text>
+      </g>
+
+      <g transform="translate(894 0)">
+        <rect width="282" height="118" rx="16" fill="#0e1b2e" stroke="#25395f"/>
+        <path d="M0 0h282" stroke="#7f68ff" stroke-width="4"/>
+        <text x="20" y="34" fill="#7f68ff" font-size="12" font-weight="800" letter-spacing="2">04 · MEMORY</text>
+        <text x="20" y="61" fill="#f7fbff" font-size="18" font-weight="750">Operational Memory</text>
+        <text x="20" y="84" fill="#93a9c9" font-size="13">Decisions, approvals, history,</text>
+        <text x="20" y="102" fill="#93a9c9" font-size="13">and verification survive sessions.</text>
+      </g>
+
+      <g transform="translate(0 136)">
+        <rect width="282" height="118" rx="16" fill="#0e1b2e" stroke="#25395f"/>
+        <path d="M0 0h282" stroke="#9b5cff" stroke-width="4"/>
+        <text x="20" y="34" fill="#9b5cff" font-size="12" font-weight="800" letter-spacing="2">05 · CURIOSITY</text>
+        <text x="20" y="61" fill="#f7fbff" font-size="18" font-weight="750">Curiosity Engine</text>
+        <text x="20" y="84" fill="#93a9c9" font-size="13">Find drift, stale systems, risk,</text>
+        <text x="20" y="102" fill="#93a9c9" font-size="13">waste, and optimization paths.</text>
+      </g>
+
+      <g transform="translate(298 136)">
+        <rect width="282" height="118" rx="16" fill="#0e1b2e" stroke="#25395f"/>
+        <path d="M0 0h282" stroke="#c653ea" stroke-width="4"/>
+        <text x="20" y="34" fill="#c653ea" font-size="12" font-weight="800" letter-spacing="2">06 · SENTINEL</text>
+        <text x="20" y="61" fill="#f7fbff" font-size="18" font-weight="750">Diagnosis &amp; repair paths</text>
+        <text x="20" y="84" fill="#93a9c9" font-size="13">Explain failure first, then prepare</text>
+        <text x="20" y="102" fill="#93a9c9" font-size="13">bounded and reviewable action.</text>
+      </g>
+
+      <g transform="translate(596 136)">
+        <rect width="282" height="118" rx="16" fill="#0e1b2e" stroke="#25395f"/>
+        <path d="M0 0h282" stroke="#e352dc" stroke-width="4"/>
+        <text x="20" y="34" fill="#e352dc" font-size="12" font-weight="800" letter-spacing="2">07 · PROVIDERS</text>
+        <text x="20" y="61" fill="#f7fbff" font-size="18" font-weight="750">Provider boundaries</text>
+        <text x="20" y="84" fill="#93a9c9" font-size="13">Durable capabilities remain above</text>
+        <text x="20" y="102" fill="#93a9c9" font-size="13">replaceable APIs and drivers.</text>
+      </g>
+
+      <g transform="translate(894 136)">
+        <rect width="282" height="118" rx="16" fill="#0e1b2e" stroke="#25395f"/>
+        <path d="M0 0h282" stroke="#ff4fd8" stroke-width="4"/>
+        <text x="20" y="34" fill="#ff4fd8" font-size="12" font-weight="800" letter-spacing="2">08 · EXECUTION</text>
+        <text x="20" y="61" fill="#f7fbff" font-size="18" font-weight="750">Governed Execution</text>
+        <text x="20" y="84" fill="#93a9c9" font-size="13">Explicit authority before mutation;</text>
+        <text x="20" y="102" fill="#93a9c9" font-size="13">verification after the change.</text>
+      </g>
+    </g>
+
+    <path d="M48 384h1176" stroke="url(#accent)" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+  </g>
+</svg>
