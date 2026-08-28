@@ -19,7 +19,7 @@ CAPABILITY_REF = "evidence:wb0034:ftps-explicit-capability:20260829"
 SCOPE_REF = "evidence:wb0034:ftps-path-scope:20260829"
 ARTIFACT_REF = "evidence:wb0034:artifact-sha256:20260829"
 VERIFIER_REF = "evidence:wb0034:effect-verifier:20260829"
-AUTH_REF = "approval:wb0034:ftps-explicit:20260829"
+AUTH_REF = "approval:wb0034:20260829T120000Z-ftps01"
 
 
 def _evidence_text(protocol: str) -> str:
