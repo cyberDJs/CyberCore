@@ -99,7 +99,7 @@ def _collect_duplicate_keys(node: Node, errors: list[str]) -> None:
                 if key == "<<" or key_node.tag == YAML_MERGE_TAG:
                     errors.append("manifest forbids YAML merge keys")
                 if key in seen:
-                    errors.append(f"manifest contains duplicate YAML key: {key}")
+                    errors.append("manifest contains a duplicate YAML key")
                 seen.add(key)
             _collect_duplicate_keys(value_node, errors)
     elif isinstance(node, SequenceNode):
@@ -111,7 +111,10 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        errors.append(f"missing WB-0034 manifest: {path}")
+        errors.append("missing WB-0034 manifest")
+        return None
+    except (OSError, UnicodeError):
+        errors.append("cannot read WB-0034 manifest")
         return None
 
     sensitive_errors = scan_first_write_sensitive_text(text, "manifest")
@@ -138,14 +141,14 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
                 errors.append("manifest forbids YAML aliases")
             elif isinstance(token, DirectiveToken):
                 errors.append("manifest forbids YAML directives")
-    except (RecursionError, yaml.YAMLError) as exc:
-        errors.append(f"manifest is invalid YAML: {exc}")
+    except (RecursionError, yaml.YAMLError):
+        errors.append("manifest is invalid YAML")
         return None
 
     try:
         node = yaml.compose(text, Loader=yaml.SafeLoader)
-    except (RecursionError, yaml.YAMLError) as exc:
-        errors.append(f"manifest is invalid YAML: {exc}")
+    except (RecursionError, yaml.YAMLError):
+        errors.append("manifest is invalid YAML")
         return None
 
     if node is not None:
@@ -157,8 +160,8 @@ def _load_document(path: Path, errors: list[str]) -> dict[str, object] | None:
 
     try:
         loaded = yaml.safe_load(text)
-    except (RecursionError, yaml.YAMLError) as exc:
-        errors.append(f"manifest is invalid YAML: {exc}")
+    except (RecursionError, yaml.YAMLError):
+        errors.append("manifest is invalid YAML")
         return None
 
     if not isinstance(loaded, dict):
@@ -177,7 +180,7 @@ def _reject_unknown_keys(
 ) -> None:
     unexpected = sorted(key for key in mapping if key not in allowed)
     if unexpected:
-        errors.append(f"{context} contains unexpected keys: {', '.join(unexpected)}")
+        errors.append(f"{context} contains unexpected keys")
 
 
 def _require_value(
@@ -202,7 +205,7 @@ def _require_string_set(
     if missing:
         errors.append(f"manifest missing {key}: {', '.join(missing)}")
     if unexpected:
-        errors.append(f"manifest contains unexpected {key}: {', '.join(unexpected)}")
+        errors.append(f"manifest contains unexpected values in {key}")
     if len(actual) != len(actual_set):
         errors.append(f"manifest contains duplicate values in {key}")
 
