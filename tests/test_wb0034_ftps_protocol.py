@@ -138,7 +138,9 @@ def test_explicit_ftps_requires_endpoint_binding(tmp_path: Path) -> None:
     result = validate_first_write_evidence(evidence)
 
     assert not result.ok
-    assert any("requires a canonical lowercase endpoint_hostname" in error for error in result.errors)
+    assert any(
+        "requires a canonical lowercase endpoint_hostname" in error for error in result.errors
+    )
 
 
 def test_explicit_ftps_rejects_authorized_endpoint_mismatch(tmp_path: Path) -> None:
@@ -152,7 +154,9 @@ def test_explicit_ftps_rejects_authorized_endpoint_mismatch(tmp_path: Path) -> N
     result = validate_first_write_evidence(evidence)
 
     assert not result.ok
-    assert any("must equal deployment evidence endpoint_hostname" in error for error in result.errors)
+    assert any(
+        "must equal deployment evidence endpoint_hostname" in error for error in result.errors
+    )
 
 
 def test_ftps_endpoint_is_sealed_into_upload_input(tmp_path: Path) -> None:
