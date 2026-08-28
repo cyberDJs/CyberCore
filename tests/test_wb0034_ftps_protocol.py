@@ -73,15 +73,23 @@ def _ready_text(evidence_digest: str) -> str:
         .replace("secret_alias_status: UNKNOWN", "secret_alias_status: VERIFIED")
         .replace("rollback_status: UNKNOWN", "rollback_status: VERIFIED")
         .replace("effect_verifier_status: UNKNOWN", "effect_verifier_status: VERIFIED")
-        .replace("operator_authorization_status: UNKNOWN", "operator_authorization_status: APPROVED")
+        .replace(
+            "operator_authorization_status: UNKNOWN", "operator_authorization_status: APPROVED"
+        )
         .replace("WB0034_DEPLOYMENT_PROTOCOL_READ_ONLY_VERIFICATION_REQUIRED", CAPABILITY_REF)
         .replace("WB0034_DEPLOY_IDENTITY_SCOPE_VERIFICATION_REQUIRED", SCOPE_REF)
         .replace("source_commit_reference: TBD", f"source_commit_reference: {PINNED_SHA}")
         .replace("WB0034_ARTIFACT_HASHES_REQUIRED", ARTIFACT_REF)
         .replace("rollback_tested: false", "rollback_tested: true")
         .replace("WB0034_EFFECT_VERIFIER_IMPLEMENTATION_REQUIRED", VERIFIER_REF)
-        .replace("authorization_reference: REQUIRED_BEFORE_REMOTE_WRITE", f"authorization_reference: {AUTH_REF}")
-        .replace("evidence_bundle_reference: WB0034_EVIDENCE_BUNDLE_REQUIRED", "evidence_bundle_reference: ../evidence/wb0034-ftps.yaml")
+        .replace(
+            "authorization_reference: REQUIRED_BEFORE_REMOTE_WRITE",
+            f"authorization_reference: {AUTH_REF}",
+        )
+        .replace(
+            "evidence_bundle_reference: WB0034_EVIDENCE_BUNDLE_REQUIRED",
+            "evidence_bundle_reference: ../evidence/wb0034-ftps.yaml",
+        )
         .replace("evidence_bundle_sha256: TBD", f"evidence_bundle_sha256: {evidence_digest}")
     )
 
