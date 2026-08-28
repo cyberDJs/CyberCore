@@ -45,6 +45,7 @@ _WB0034_REPOSITORY_ENV_KEYS = (
     "GIT_OBJECT_DIRECTORY",
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
     "GIT_NAMESPACE",
+    "GIT_CONFIG",
 )
 _WB0034_TRANSPORT_ENV_KEYS = (
     "GIT_SSH",
@@ -176,13 +177,13 @@ def _optional_git_config_value(repo: Path, *args: str) -> str | None:
 
 
 def _enforce_wb0034_repository_selection_environment() -> None:
-    """Reject inherited variables that can redirect Git away from repository_root."""
+    """Reject inherited variables that can redirect repository or config queries."""
 
     inherited_overrides = sorted(key for key in _WB0034_REPOSITORY_ENV_KEYS if key in os.environ)
     if inherited_overrides:
         raise RepositoryIdentityPolicyError(
             "WB-0034 trusted-main resolution rejects inherited Git repository-selection "
-            "overrides: " + ", ".join(inherited_overrides)
+            "or config-selection overrides: " + ", ".join(inherited_overrides)
         )
 
 
