@@ -58,9 +58,7 @@ class FirstWriteRollbackPartialMutation:
 
 
 class FirstWriteRollbackMutationError(FirstWriteRuntimeError):
-    def __init__(
-        self, message: str, partial_state: FirstWriteRollbackPartialMutation
-    ) -> None:
+    def __init__(self, message: str, partial_state: FirstWriteRollbackPartialMutation) -> None:
         super().__init__(message)
         self.partial_state = partial_state
 
@@ -100,9 +98,7 @@ def _default_ftps_factory(context: ssl.SSLContext) -> _RollbackFtpsClient:
 def _tls_version(client: _RollbackFtpsClient) -> str:
     version = getattr(client.sock, "version", None)
     if not callable(version):
-        raise FirstWriteRuntimeError(
-            "FTPS control channel did not expose TLS version evidence"
-        )
+        raise FirstWriteRuntimeError("FTPS control channel did not expose TLS version evidence")
     value = version()
     if not isinstance(value, str) or not value.startswith("TLS"):
         raise FirstWriteRuntimeError("FTPS control channel is not TLS protected")
@@ -219,9 +215,7 @@ def execute_first_write_rollback(
     try:
         credential = credential_loader()
     except FirstWriteRuntimeError as exc:
-        return FirstWriteRollbackResult(
-            False, (str(exc),), upload_input=upload_input
-        )
+        return FirstWriteRollbackResult(False, (str(exc),), upload_input=upload_input)
 
     if credential.endpoint_hostname != upload_input.endpoint_hostname:
         return FirstWriteRollbackResult(
@@ -317,9 +311,7 @@ def execute_first_write_rollback(
             if parent_after_errors:
                 raise FirstWriteRuntimeError(parent_after_errors[0])
             if remains:
-                raise FirstWriteRuntimeError(
-                    "rollback target still exists after directory removal"
-                )
+                raise FirstWriteRuntimeError("rollback target still exists after directory removal")
 
             return FirstWriteRollbackReceipt(
                 source_commit=upload_input.source_commit,
@@ -357,9 +349,7 @@ def execute_first_write_rollback(
                         directory_removal_uncertain=directory_removal_attempted,
                     ),
                 ) from None
-            raise FirstWriteRuntimeError(
-                "FTPS rollback failed before any delete attempt"
-            ) from None
+            raise FirstWriteRuntimeError("FTPS rollback failed before any delete attempt") from None
         finally:
             try:
                 client.quit()
@@ -380,7 +370,5 @@ def execute_first_write_rollback(
             partial_state=exc.partial_state,
         )
     except FirstWriteRuntimeError as exc:
-        return FirstWriteRollbackResult(
-            False, (str(exc),), upload_input=upload_input
-        )
+        return FirstWriteRollbackResult(False, (str(exc),), upload_input=upload_input)
     return FirstWriteRollbackResult(True, (), receipt, upload_input)
