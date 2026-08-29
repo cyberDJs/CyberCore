@@ -96,7 +96,15 @@ class FakeFtps:
         return self.cwd_path
 
     def mlsd(self, path: str = "", facts=None):
-        return iter(())
+        names = set(self.files.get(self.cwd_path, {}))
+        prefix = "/" if self.cwd_path == "/" else f"{self.cwd_path}/"
+        for candidate in self.files:
+            if candidate == self.cwd_path or not candidate.startswith(prefix):
+                continue
+            remainder = candidate[len(prefix) :]
+            if remainder and "/" not in remainder:
+                names.add(remainder)
+        return iter((name, {}) for name in sorted(names))
 
     def sendcmd(self, cmd: str) -> str:
         _, name = cmd.split(" ", 1)
@@ -304,6 +312,7 @@ def test_runner_executes_validated_packet_and_loads_secret_once(
     assert loads == 1
     assert result.receipt is not None
     assert result.receipt.destination == upload_input.destination
+    assert result.upload_input is upload_input
 
 
 
@@ -314,6 +323,25 @@ def test_username_drift_blocks_before_connect() -> None:
     with pytest.raises(runtime.FirstWriteRuntimeError, match="username"):
         runtime.upload_first_write_ftps(upload_input, credential, ftp_factory=lambda _: fake)
     assert fake.connected_host == ""
+
+
+class FailingListFtps(FakeFtps):
+    def mlsd(self, path: str = "", facts=None):
+        raise ftplib.error_perm("550 permission denied")
+
+
+def test_absence_check_fails_closed_when_parent_listing_is_unavailable() -> None:
+    upload_input = _sealed_input()
+    fake = FailingListFtps()
+    credential = runtime.FirstWriteFtpsCredential(
+        HOST, "ccwb34@eimyherrer.com", 21, PASSWORD
+    )
+    with pytest.raises(runtime.FirstWriteRuntimeError, match="data channel verification failed"):
+        runtime.upload_first_write_ftps(
+            upload_input, credential, ftp_factory=lambda _: fake
+        )
+    assert fake.mkd_calls == []
+    assert fake.stor_calls == []
 
 def test_port_drift_blocks_before_connect() -> None:
     upload_input = _sealed_input()

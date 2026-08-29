@@ -27,7 +27,7 @@ The runner must fail closed unless all of these are true:
 6. TLS peer and hostname verification remain enabled through `ssl.create_default_context()`.
 7. The control channel is upgraded with `AUTH TLS`; data protection uses `PROT P`; passive mode is enabled.
 8. The authenticated FTPS root reports `PWD=/` and a protected `MLSD` data-channel operation succeeds before mutation.
-9. Destination is exactly `cybercore-canary-<run_id>/`, is a direct child, and is absent before `MKD`.
+9. Destination is exactly `cybercore-canary-<run_id>/`, is a direct child, and successful protected `MLSD` parent enumeration proves it absent before `MKD`; ambiguous `550` errors are never treated as proof of absence.
 10. The sealed artifact set is exactly `index.html` and `cybercore-version.json`, and their in-memory bytes still hash to their sealed SHA-256 values.
 11. Each artifact is absent before `STOR` and is read back over FTPS after upload to verify the sealed SHA-256.
 12. Credential values never enter ordinary receipts, exception text, repository files, command arguments, or effect-verifier requests.
@@ -58,7 +58,7 @@ It does not implement remote delete, rename, chmod, chown, traversal, production
 
 If the destination exists, the uploader stops before `MKD`. If a failure happens after `MKD`, the runtime does not broaden authority by deleting or repairing the remote directory. The partial state must be preserved for a separately authorized exact-path rollback procedure.
 
-Individual file `STOR` is preceded by an absence check and occurs only inside a newly created unique directory. The directory-level `MKD` is the primary fail-if-exists boundary. The post-upload FTPS hash check detects byte drift but is not the independent effect verifier.
+Individual file `STOR` is preceded by a successful protected parent-directory `MLSD` absence check and occurs only inside a newly created unique directory. The directory-level `MKD` is the primary fail-if-exists boundary. The post-upload FTPS hash check detects byte drift but is not the independent effect verifier.
 
 ## Independent HTTPS effect verifier
 
@@ -83,7 +83,7 @@ WB-0035 unit tests use an in-memory fake FTPS server and fake HTTPS fetcher. The
 - the Keychain credential password is excluded from representation;
 - the runner does not load the secret before fresh authorization;
 - authorization-reference mismatch blocks execution;
-- valid same-process execution invokes the credential loader exactly once;
+- valid same-process execution invokes the credential loader exactly once and returns the same sealed in-memory `upload_input` for effect verification;
 - HTTPS verification passes only for exact served bytes/marker;
 - redirects, hash drift, and marker drift fail closed.
 

@@ -52,7 +52,7 @@ Controls: the previously verified DirectAdmin account is chrooted to the staging
 
 Threat: an existing canary or file is replaced.
 
-Controls: destination absence is checked with `MLST` and `MKD` must create a unique directory. Each file is checked absent before `STOR`. The primary exclusivity boundary is the newly created unique directory. There is no claim of a server-side atomic `O_EXCL` equivalent for `STOR`; post-upload hashes verify resulting bytes. A future server capability that provides stronger atomic file creation may supersede this implementation.
+Controls: destination absence is proved by a successful protected `MLSD` enumeration of the parent and `MKD` must create a unique directory. Ambiguous `550` responses are not accepted as absence evidence. Each file is likewise proved absent by successful protected `MLSD` before `STOR`. The primary exclusivity boundary is the newly created unique directory. There is no claim of a server-side atomic `O_EXCL` equivalent for `STOR`; post-upload hashes verify resulting bytes. A future server capability that provides stronger atomic file creation may supersede this implementation.
 
 ### Partial failure
 

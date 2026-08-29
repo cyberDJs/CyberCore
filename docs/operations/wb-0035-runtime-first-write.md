@@ -19,7 +19,7 @@ Status: `CODE PATH ONLY — NO REMOTE WRITE AUTHORITY`
 5. Pass the exact authorization reference bound into that packet.
 6. Supply `load_interserver_staging_ftps_credential` as the credential loader.
 7. If the runner returns `executed=false`, stop. Do not retry with a broader credential or alternate protocol.
-8. If the runner returns `executed=true`, call `verify_first_write_effect(...)` using the same in-memory sealed upload input/approved identities retained by the execution workflow.
+8. If the runner returns `executed=true`, require `result.upload_input` to be non-null and call `verify_first_write_effect(result.upload_input)` directly; do not reopen packet or artifact paths.
 9. Store only sanitized receipt fields and hashes in evidence.
 10. If effect verification fails, preserve remote state and use only a separately authorized exact-run-directory rollback.
 

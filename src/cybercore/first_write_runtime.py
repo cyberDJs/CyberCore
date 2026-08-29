@@ -78,6 +78,7 @@ class FirstWriteExecutionResult:
     executed: bool
     errors: tuple[str, ...]
     receipt: FirstWriteFtpsUploadReceipt | None = None
+    upload_input: FirstWriteUploadInput | None = field(default=None, repr=False)
 
 
 def validate_first_write_upload_input(upload_input: FirstWriteUploadInput) -> tuple[str, ...]:
@@ -120,12 +121,11 @@ def _tls_version(client: _FtpsClient) -> str:
 
 def _assert_missing(client: _FtpsClient, name: str) -> None:
     try:
-        client.sendcmd(f"MLST {name}")
-    except ftplib.error_perm as exc:
-        if str(exc).startswith("550"):
-            return
+        entries = {entry_name for entry_name, _facts in client.mlsd()}
+    except ftplib.all_errors:
         raise FirstWriteRuntimeError("cannot prove remote path absence") from None
-    raise FirstWriteRuntimeError("remote path already exists; no-overwrite gate blocked")
+    if name in entries:
+        raise FirstWriteRuntimeError("remote path already exists; no-overwrite gate blocked")
 
 
 def _hash_remote_file(client: _FtpsClient, name: str) -> str:
@@ -266,4 +266,4 @@ def execute_first_write_ftps(
         receipt = upload_first_write_ftps(upload_input, credential, ftp_factory=ftp_factory)
     except FirstWriteRuntimeError as exc:
         return FirstWriteExecutionResult(False, (str(exc),))
-    return FirstWriteExecutionResult(True, (), receipt)
+    return FirstWriteExecutionResult(True, (), receipt, upload_input)
