@@ -18,32 +18,37 @@ The WB-0035 uploader previously performed an absence check followed by ordinary 
 
 Consequently the prior "no-overwrite" claim was not proven under concurrency, and non-destructive rollback alone cannot make that writer safe: an overwrite may already have altered pre-existing content.
 
+A later Codex pass identified a second boundary issue: `validate_first_write_packet(...)` can execute `git fetch origin`, so a blocker after validation can still create network activity and invoke configured Git credential helpers.
+
 ## Final WB-0036 control
 
-`execute_first_write_ftps(...)` now fails closed after validating:
+`execute_first_write_ftps(...)` now returns `ATOMIC_NO_OVERWRITE_BLOCKER` as its first operational action, before packet validation and therefore before any validator-side Git remote access.
 
-- final sealed packet readiness;
-- literal `remote_write_authorized is True`;
-- exact authorization reference;
-- `FTPS_EXPLICIT` protocol;
-- run id, destination, artifact set and sealed artifact digests.
+The blocked first-write entry point performs no:
 
-It then returns `ATOMIC_NO_OVERWRITE_BLOCKER` before invoking the credential loader or FTPS factory. Therefore the current first-write path performs no credential read, network connection, `MKD`, `STOR`, rename, delete, or other remote mutation.
+- packet validation or `git fetch`;
+- Git credential-helper activity caused by packet validation;
+- staging credential read;
+- FTPS factory invocation or network connection;
+- `MKD`, `STOR`, rename, delete, or other remote mutation.
 
-This gate is unconditional. No public boolean, capability token, or caller-supplied exclusivity claim can enable the old mutation sequence.
+The gate is unconditional. No public boolean, authorization reference, capability token, packet contents, FTPS factory, or caller-supplied exclusivity claim can enable the old mutation sequence.
+
+Pure sealed-input validation remains available separately through `validate_first_write_upload_input(...)`; it is not part of the blocked execution path.
 
 ## Evidence
 
-Regression tests require an otherwise authorized valid packet to remain blocked while proving:
+Regression tests replace the packet validator with a function that raises if called and require the blocked runner to return normally while proving:
 
+- packet-validator call count is zero;
 - credential loader call count is zero;
 - FTPS factory call count is zero;
 - `executed=False`;
 - `remote_mutation_possible=False`;
-- no mutation receipt or partial mutation state exists;
-- sealed-input validation and authorization gates still fail closed before the blocker when invalid.
+- no upload receipt, sealed upload input, or partial mutation state is produced;
+- the same blocker is returned even with false or mismatched write-authority arguments.
 
-The read-only recovery tests separately prove zero remote mutation across present, absent, interrupted and malformed target states.
+Direct helper tests separately preserve coverage for sealed-input protocol and artifact-digest validation. The read-only recovery tests prove zero remote mutation across present, absent, interrupted and malformed target states.
 
 ## Future writer requirement
 
