@@ -149,7 +149,9 @@ def upload_first_write_ftps(
     if credential.endpoint_hostname != upload_input.endpoint_hostname:
         raise FirstWriteRuntimeError("credential endpoint does not match sealed FTPS endpoint")
     if credential.username != EXPECTED_USERNAME:
-        raise FirstWriteRuntimeError("credential username does not match the verified staging identity")
+        raise FirstWriteRuntimeError(
+            "credential username does not match the verified staging identity"
+        )
     if credential.port != EXPECTED_PORT:
         raise FirstWriteRuntimeError("explicit FTPS first-write runtime requires port 21")
     if not credential.username or not credential.password:
