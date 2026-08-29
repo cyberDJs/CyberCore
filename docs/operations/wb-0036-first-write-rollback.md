@@ -1,103 +1,54 @@
-# WB-0036 — Non-destructive first-write rollback operation
+# WB-0036 — Non-destructive first-write recovery
 
 Date: 2026-08-29
-Status: `RUNTIME DEFINED — REMOTE MUTATION NOT PART OF ROLLBACK`
+Status: `RECOVERY RUNTIME DEFINED — FIRST WRITE BLOCKED`
 
 ## Authority and supersession
 
-For the WB-0034 first staging canary only, this document supersedes the destructive `## Rollback` procedure in `docs/operations/wb-0034-first-staging-deployment-mop.md`. All other WB-0034 first-write constraints remain unchanged.
+For the WB-0034 first staging canary, this document supersedes the destructive rollback procedure in `docs/operations/wb-0034-first-staging-deployment-mop.md`.
 
-The superseded delete procedure must not be used for this first-write canary unless a later separately reviewed maintenance design explicitly restores physical cleanup with a real concurrency-safe mechanism.
+It also supersedes any earlier claim that the current FTPS `MKD` + `STOR` sequence provides a proven no-overwrite first write under concurrent access.
 
-## Purpose
+## Recovery model
 
-Recover safely from the first WB-0034 staging canary write without deleting, renaming, overwriting, or otherwise mutating remote content.
+The recovery runtime is read-only. It may inspect the exact sealed canary path and report whether cleanup is required, but it performs no delete, rename, upload, chmod, chown, or other remote mutation.
 
-The first write is isolated in a unique no-overwrite directory and does not replace existing staging content. Therefore immediate rollback means **stop and do not promote**, while preserving the canary for evidence.
+If a canary exists after a future write attempt:
 
-## Inputs
+1. stop;
+2. do not promote;
+3. preserve evidence;
+4. inspect only the exact sealed path;
+5. record whether physical cleanup is required;
+6. perform no automated cleanup.
 
-The rollback runner consumes the original sealed `FirstWriteUploadInput` from the first-write flow. The destination is not accepted as an independent free-form argument.
+## Current first-write blocker
 
-Required runtime gates:
+FTP `STOR` replaces an existing pathname. An MLSD absence check followed by `STOR` is therefore not an atomic create-if-absent operation. Another session can create or replace the pathname between proof and mutation. Similar pathname races exist around `MKD` and subsequent operations.
 
-1. sealed upload input passes `validate_first_write_upload_input`;
-2. protocol is exactly `FTPS_EXPLICIT`;
-3. sealed endpoint is exactly `staging.eimyherrer.com`;
-4. `rollback_authorized is True` literally;
-5. authorization reference equals `rollback_authorization_reference(upload_input)`;
-6. credential endpoint is exactly `staging.eimyherrer.com`;
-7. credential username equals `ccwb34@eimyherrer.com`;
-8. port equals `21`;
-9. TLS certificate and hostname verification remain enabled;
-10. effective FTPS root is `/` for the path-scoped account;
-11. when present, the target is positively proven by MLSD as `type=dir`;
-12. every present approved artifact is positively proven by MLSD as `type=file`;
-13. target contents contain no names outside the two approved canary artifacts.
+For that reason `execute_first_write_ftps(...)` now stops after validating the packet, literal write authority, authorization reference, protocol and sealed input. It returns `ATOMIC_NO_OVERWRITE_BLOCKER` **before credential loading and before opening an FTPS connection**.
 
-## Authorization string
+No current approval string can bypass this technical gate.
 
-For a sealed run, derive the exact rollback reference with:
+## What can unblock first write
 
-```python
-rollback_authorization_reference(upload_input)
-```
+A later engineering block must provide one of these and prove it independently:
 
-Its form is:
+- an atomic server-side create-if-absent mechanism compatible with the exact approved deployment artifact contract; or
+- real exclusive mutation access covering the exact staging scope for the complete mutation interval.
 
-```text
-approval:wb0036:rollback:<run_id>:<source_commit>
-```
+A boolean, policy token, operator statement, prior directory listing, or ordinary path check is not enough.
 
-A human/operator approval must explicitly cover that exact run before the recovery procedure is entered with `rollback_authorized=True`.
+Pure FTP `STOU` may be investigated as a future primitive because it creates a server-selected unique filename, but adopting it would require a separately reviewed artifact/destination contract; it is not silently substituted here.
 
-This authorization does **not** authorize physical cleanup. Automated cleanup is intentionally unavailable in WB-0036.
+## Rollback authorization
 
-## Recovery sequence
+The run-scoped rollback reference remains:
 
-The runtime performs only this read-only sequence:
+`approval:wb0036:rollback:<run_id>:<source_commit>`
 
-1. connect only to `staging.eimyherrer.com`;
-2. enforce explicit TLS + protected passive mode;
-3. prove root `/`;
-4. list the root and locate the exact sealed destination as `type=dir`;
-5. if absent, return idempotent logical rollback with `cleanup_required=False`;
-6. if present, list the exact target by root-relative absolute path;
-7. fail closed on any unexpected name or any entry not positively proven as `type=file`;
-8. preserve the canary unchanged for evidence;
-9. return logical rollback with `cleanup_required=True` and the observed approved artifact names;
-10. disconnect.
+It authorizes entry into read-only recovery inspection only. It does not authorize physical cleanup.
 
-The rollback runtime contains no `DELE`, `RMD`, `RNFR`, `RNTO`, upload, chmod, chown, or generic remote-path mutation operation.
+## Live canary status
 
-## Why physical deletion is not automated
-
-FTP/FTPS pathnames are resolved at command time. A second session can rename or replace a pathname after an MLSD inspection but before a subsequent delete/rename command. The protocol does not provide an atomic compare-and-delete operation bound to the inspected directory identity.
-
-Therefore:
-
-- an MLSD proof followed by `DELE`/`RMD` is not sufficient;
-- absolute paths remove mutable-CWD escape but do not remove pathname replacement races;
-- a policy token claiming exclusive access is not a technical exclusivity mechanism;
-- first-write recovery must not perform destructive or availability-changing remote mutation.
-
-Physical cleanup may be designed later as a separate maintenance operation only when real exclusive mutation access or an identity-preserving server-side primitive is available and independently verified.
-
-## Effect-verification failure
-
-If the first-write upload occurs but independent HTTPS effect verification fails:
-
-1. stop the run;
-2. perform no additional upload or promotion;
-3. invoke the logical rollback inspection if fresh rollback authority is available;
-4. preserve the isolated canary directory for evidence;
-5. record whether later cleanup is required;
-6. do not delete or rename anything automatically.
-
-This leaves pre-existing staging content untouched because the first-write contract is additive and no-overwrite.
-
-## First live canary sequence
-
-After WB-0036 is merged, the final first-write packet must be regenerated from the new canonical `main` commit. Only then can a fresh first-write authorization be requested.
-
-A first-write authorization does not automatically authorize rollback. A rollback authorization does not authorize physical cleanup.
+**BLOCKED.** Do not request or execute the first staging canary write until a concurrency-safe writer has been implemented, tested, reviewed, and merged. Once that exists, regenerate the final packet from the then-current canonical `main` commit and request fresh exact write authority.
