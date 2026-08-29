@@ -62,9 +62,9 @@ Control: the runtime marks destination creation as potentially mutating before s
 
 ### Partial failure
 
-Threat: automatic cleanup deletes the wrong path or broadens authority.
+Threat: a transfer or FTP reply fails after remote mutation, including protocol replies/listings that cannot be decoded as UTF-8, and the caller loses evidence that remote state may already have changed.
 
-Control: uploader performs no automatic delete. If failure occurs after destination creation or after a destination-creation attempt with unknown outcome, partial state is preserved for the separately authorized exact-run-directory rollback procedure.
+Control: uploader performs no automatic delete. FTP transport/protocol errors and `UnicodeDecodeError` are routed through the same sanitized fail-closed handling. If failure occurs after destination creation, during `STOR`, during post-upload retrieval, or after a destination-creation attempt with unknown outcome, the same sealed `upload_input` and partial mutation state are preserved for independent inspection and the separately authorized exact-run-directory rollback procedure.
 
 ### False-positive deployment verification
 
