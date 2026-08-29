@@ -165,9 +165,7 @@ def _execute(
     auth_ref: str = AUTH,
 ):
     upload_input = upload_input or _sealed_input()
-    credential = credential or runtime.FirstWriteFtpsCredential(
-        HOST, USERNAME, 21, PASSWORD
-    )
+    credential = credential or runtime.FirstWriteFtpsCredential(HOST, USERNAME, 21, PASSWORD)
     monkeypatch.setattr(
         runtime,
         "validate_first_write_packet",
@@ -251,9 +249,7 @@ def test_bounded_ftps_upload_uses_only_sealed_bytes(
 
 def test_endpoint_drift_blocks_before_connect(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeFtps()
-    credential = runtime.FirstWriteFtpsCredential(
-        "other.example", USERNAME, 21, PASSWORD
-    )
+    credential = runtime.FirstWriteFtpsCredential("other.example", USERNAME, 21, PASSWORD)
     result, _ = _execute(monkeypatch, fake, credential=credential)
     assert not result.executed
     assert fake.connected_host == ""
