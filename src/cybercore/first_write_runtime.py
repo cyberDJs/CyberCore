@@ -38,7 +38,6 @@ class _FtpsClient(Protocol):
     def mlsd(
         self, path: str = "", facts: list[str] | None = None
     ) -> Iterable[tuple[str, dict[str, str]]]: ...
-    def sendcmd(self, cmd: str) -> str: ...
     def mkd(self, dirname: str) -> str: ...
     def cwd(self, dirname: str) -> object: ...
     def storbinary(self, cmd: str, fp: io.BytesIO, blocksize: int = 8192) -> object: ...
@@ -74,11 +73,43 @@ class FirstWriteFtpsUploadReceipt:
 
 
 @dataclass(frozen=True)
+class FirstWritePartialMutation:
+    source_commit: str
+    run_id: str
+    destination: str
+    endpoint_hostname: str
+    protocol: str
+    destination_created: bool
+    uploaded_artifacts: tuple[str, ...]
+    active_artifact: str | None = None
+
+
+class FirstWriteMutationError(FirstWriteRuntimeError):
+    def __init__(self, message: str, partial_state: FirstWritePartialMutation) -> None:
+        super().__init__(message)
+        self.partial_state = partial_state
+
+
+@dataclass(frozen=True)
 class FirstWriteExecutionResult:
     executed: bool
     errors: tuple[str, ...]
     receipt: FirstWriteFtpsUploadReceipt | None = None
     upload_input: FirstWriteUploadInput | None = field(default=None, repr=False)
+    remote_mutation_possible: bool = False
+    partial_state: FirstWritePartialMutation | None = None
+
+
+class _WriteCapability:
+    __slots__ = ("upload_input",)
+
+    def __init__(self, guard: object, upload_input: FirstWriteUploadInput) -> None:
+        if guard is not _WRITE_CAPABILITY_GUARD:
+            raise FirstWriteRuntimeError("FTPS write capability is not authorized")
+        self.upload_input = upload_input
+
+
+_WRITE_CAPABILITY_GUARD = object()
 
 
 def validate_first_write_upload_input(upload_input: FirstWriteUploadInput) -> tuple[str, ...]:
@@ -137,12 +168,33 @@ def _hash_remote_file(client: _FtpsClient, name: str) -> str:
     return digest.hexdigest()
 
 
-def upload_first_write_ftps(
+def _partial_state(
     upload_input: FirstWriteUploadInput,
+    credential: FirstWriteFtpsCredential,
+    *,
+    destination_created: bool,
+    uploaded: list[str],
+    active_artifact: str | None,
+) -> FirstWritePartialMutation:
+    return FirstWritePartialMutation(
+        source_commit=upload_input.source_commit,
+        run_id=upload_input.run_id,
+        destination=upload_input.destination,
+        endpoint_hostname=credential.endpoint_hostname,
+        protocol=upload_input.protocol,
+        destination_created=destination_created,
+        uploaded_artifacts=tuple(uploaded),
+        active_artifact=active_artifact,
+    )
+
+
+def _upload_first_write_ftps(
+    capability: _WriteCapability,
     credential: FirstWriteFtpsCredential,
     *,
     ftp_factory: FtpsFactory = _default_ftps_factory,
 ) -> FirstWriteFtpsUploadReceipt:
+    upload_input = capability.upload_input
     errors = validate_first_write_upload_input(upload_input)
     if errors:
         raise FirstWriteRuntimeError("; ".join(errors))
@@ -164,6 +216,7 @@ def upload_first_write_ftps(
     destination = upload_input.destination[:-1]
     created_directory = False
     uploaded: list[str] = []
+    active_artifact: str | None = None
     try:
         client.connect(credential.endpoint_hostname, credential.port, timeout=15)
         client.auth()
@@ -192,16 +245,15 @@ def upload_first_write_ftps(
 
         artifacts = sorted(upload_input.artifacts, key=lambda item: item.name)
         for artifact in artifacts:
+            active_artifact = artifact.name
             _assert_missing(client, artifact.name)
-            try:
-                client.storbinary(
-                    f"STOR {artifact.name}",
-                    io.BytesIO(artifact.content),
-                    blocksize=64 * 1024,
-                )
-            except ftplib.all_errors:
-                raise FirstWriteRuntimeError("FTPS artifact upload failed") from None
+            client.storbinary(
+                f"STOR {artifact.name}",
+                io.BytesIO(artifact.content),
+                blocksize=64 * 1024,
+            )
             uploaded.append(artifact.name)
+            active_artifact = None
             if _hash_remote_file(client, artifact.name) != artifact.sha256:
                 raise FirstWriteRuntimeError("uploaded artifact hash does not match sealed bytes")
 
@@ -214,14 +266,35 @@ def upload_first_write_ftps(
             tls_version=tls_version,
             artifact_sha256=tuple((artifact.name, artifact.sha256) for artifact in artifacts),
         )
-    except FirstWriteRuntimeError:
+    except FirstWriteMutationError:
+        raise
+    except FirstWriteRuntimeError as exc:
+        if created_directory:
+            raise FirstWriteMutationError(
+                str(exc),
+                _partial_state(
+                    upload_input,
+                    credential,
+                    destination_created=True,
+                    uploaded=uploaded,
+                    active_artifact=active_artifact,
+                ),
+            ) from None
         raise
     except ftplib.all_errors:
-        stage = "after destination creation" if created_directory else "before destination creation"
-        count = len(uploaded)
-        raise FirstWriteRuntimeError(
-            f"FTPS first-write failed {stage}; uploaded artifact count={count}"
-        ) from None
+        state = _partial_state(
+            upload_input,
+            credential,
+            destination_created=created_directory,
+            uploaded=uploaded,
+            active_artifact=active_artifact,
+        )
+        if created_directory:
+            raise FirstWriteMutationError(
+                "FTPS first-write failed after destination creation; remote mutation may be partial",
+                state,
+            ) from None
+        raise FirstWriteRuntimeError("FTPS first-write failed before destination creation") from None
     finally:
         try:
             client.quit()
@@ -254,7 +327,7 @@ def execute_first_write_ftps(
             False, tuple(packet.errors) or ("final packet is BLOCKED",)
         )
     upload_input = packet.upload_input
-    if not remote_write_authorized:
+    if remote_write_authorized is not True:
         return FirstWriteExecutionResult(False, ("fresh remote-write authorization is required",))
     if authorization_reference != upload_input.authorization_reference:
         return FirstWriteExecutionResult(
@@ -263,9 +336,18 @@ def execute_first_write_ftps(
     if upload_input.protocol != EXPECTED_PROTOCOL:
         return FirstWriteExecutionResult(False, ("sealed packet protocol is not FTPS_EXPLICIT",))
 
+    capability = _WriteCapability(_WRITE_CAPABILITY_GUARD, upload_input)
     try:
         credential = credential_loader()
-        receipt = upload_first_write_ftps(upload_input, credential, ftp_factory=ftp_factory)
+        receipt = _upload_first_write_ftps(capability, credential, ftp_factory=ftp_factory)
+    except FirstWriteMutationError as exc:
+        return FirstWriteExecutionResult(
+            False,
+            (str(exc),),
+            upload_input=upload_input,
+            remote_mutation_possible=True,
+            partial_state=exc.partial_state,
+        )
     except FirstWriteRuntimeError as exc:
-        return FirstWriteExecutionResult(False, (str(exc),))
+        return FirstWriteExecutionResult(False, (str(exc),), upload_input=upload_input)
     return FirstWriteExecutionResult(True, (), receipt, upload_input)
