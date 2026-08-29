@@ -304,9 +304,7 @@ def test_delete_reply_loss_preserves_partial_mutation_state() -> None:
     assert result.partial_state is not None
     assert result.partial_state.active_artifact == "cybercore-version.json"
     assert result.partial_state.deleted_artifacts == ()
-    assert fake.delete_calls == [
-        f"/{upload_input.destination[:-1]}/cybercore-version.json"
-    ]
+    assert fake.delete_calls == [f"/{upload_input.destination[:-1]}/cybercore-version.json"]
     assert PASSWORD not in repr(result)
 
 
