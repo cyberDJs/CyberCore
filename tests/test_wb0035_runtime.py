@@ -155,6 +155,15 @@ class PartialStoreFailFtps(FakeFtps):
         raise ftplib.error_temp("426 transfer aborted")
 
 
+class PartialStoreDecodeFailFtps(FakeFtps):
+    def storbinary(self, cmd: str, fp, blocksize: int = 8192):
+        _, name = cmd.split(" ", 1)
+        self.stor_calls.append(name)
+        payload = fp.read()
+        self.files[self.cwd_path][name] = payload[:3]
+        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+
+
 class MkdReplyLostFtps(FakeFtps):
     def mkd(self, dirname: str) -> str:
         super().mkd(dirname)
@@ -358,6 +367,25 @@ def test_partial_stor_failure_preserves_remote_mutation_state_and_sealed_input(
     assert not result.partial_state.destination_creation_uncertain
     assert result.partial_state.active_artifact == "cybercore-version.json"
     assert result.partial_state.uploaded_artifacts == ()
+    destination = f"/cybercore-canary-{RUN_ID}"
+    assert fake.files[destination]["cybercore-version.json"]
+
+
+def test_partial_stor_decode_failure_preserves_remote_mutation_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    upload_input = _sealed_input()
+    fake = PartialStoreDecodeFailFtps()
+    result, _ = _execute(monkeypatch, fake, upload_input=upload_input)
+
+    assert not result.executed
+    assert result.remote_mutation_possible
+    assert result.upload_input is upload_input
+    assert result.partial_state is not None
+    assert result.partial_state.destination_created
+    assert result.partial_state.active_artifact == "cybercore-version.json"
+    assert result.partial_state.uploaded_artifacts == ()
+    assert "UnicodeDecodeError" not in repr(result)
     destination = f"/cybercore-canary-{RUN_ID}"
     assert fake.files[destination]["cybercore-version.json"]
 
