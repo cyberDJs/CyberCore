@@ -17,6 +17,7 @@ from cybercore.first_write_packet import (
 
 EXPECTED_PROTOCOL = "FTPS_EXPLICIT"
 EXPECTED_PORT = 21
+EXPECTED_USERNAME = "ccwb34@eimyherrer.com"
 EXPECTED_ARTIFACTS = {"index.html", "cybercore-version.json"}
 RUN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{5,95}\Z")
 
@@ -147,6 +148,8 @@ def upload_first_write_ftps(
         raise FirstWriteRuntimeError("; ".join(errors))
     if credential.endpoint_hostname != upload_input.endpoint_hostname:
         raise FirstWriteRuntimeError("credential endpoint does not match sealed FTPS endpoint")
+    if credential.username != EXPECTED_USERNAME:
+        raise FirstWriteRuntimeError("credential username does not match the verified staging identity")
     if credential.port != EXPECTED_PORT:
         raise FirstWriteRuntimeError("explicit FTPS first-write runtime requires port 21")
     if not credential.username or not credential.password:

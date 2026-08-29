@@ -169,7 +169,7 @@ def test_existing_destination_blocks_without_write() -> None:
     upload_input = _sealed_input()
     fake = FakeFtps()
     fake.files[f"/cybercore-canary-{RUN_ID}"] = {}
-    credential = runtime.FirstWriteFtpsCredential(HOST, "user", 21, PASSWORD)
+    credential = runtime.FirstWriteFtpsCredential(HOST, "ccwb34@eimyherrer.com", 21, PASSWORD)
     with pytest.raises(runtime.FirstWriteRuntimeError, match="already exists"):
         runtime.upload_first_write_ftps(upload_input, credential, ftp_factory=lambda _: fake)
     assert fake.mkd_calls == []
@@ -190,7 +190,7 @@ def test_runner_does_not_load_secret_without_fresh_write_authorization(
     def credential_loader():
         nonlocal loaded
         loaded = True
-        return runtime.FirstWriteFtpsCredential(HOST, "user", 21, PASSWORD)
+        return runtime.FirstWriteFtpsCredential(HOST, "ccwb34@eimyherrer.com", 21, PASSWORD)
 
     result = runtime.execute_first_write_ftps(
         Path("manifest"),
@@ -220,7 +220,7 @@ def test_runner_binds_exact_authorization_reference(monkeypatch: pytest.MonkeyPa
         Path("artifacts"),
         remote_write_authorized=True,
         authorization_reference="approval:wrong",
-        credential_loader=lambda: runtime.FirstWriteFtpsCredential(HOST, "user", 21, PASSWORD),
+        credential_loader=lambda: runtime.FirstWriteFtpsCredential(HOST, "ccwb34@eimyherrer.com", 21, PASSWORD),
         ftp_factory=lambda _: FakeFtps(),
     )
     assert not result.executed
@@ -288,7 +288,7 @@ def test_runner_executes_validated_packet_and_loads_secret_once(
     def credential_loader():
         nonlocal loads
         loads += 1
-        return runtime.FirstWriteFtpsCredential(HOST, "user", 21, PASSWORD)
+        return runtime.FirstWriteFtpsCredential(HOST, "ccwb34@eimyherrer.com", 21, PASSWORD)
 
     result = runtime.execute_first_write_ftps(
         Path("manifest"),
@@ -306,10 +306,19 @@ def test_runner_executes_validated_packet_and_loads_secret_once(
     assert result.receipt.destination == upload_input.destination
 
 
+
+def test_username_drift_blocks_before_connect() -> None:
+    upload_input = _sealed_input()
+    fake = FakeFtps()
+    credential = runtime.FirstWriteFtpsCredential(HOST, "eimyherr", 21, PASSWORD)
+    with pytest.raises(runtime.FirstWriteRuntimeError, match="username"):
+        runtime.upload_first_write_ftps(upload_input, credential, ftp_factory=lambda _: fake)
+    assert fake.connected_host == ""
+
 def test_port_drift_blocks_before_connect() -> None:
     upload_input = _sealed_input()
     fake = FakeFtps()
-    credential = runtime.FirstWriteFtpsCredential(HOST, "user", 990, PASSWORD)
+    credential = runtime.FirstWriteFtpsCredential(HOST, "ccwb34@eimyherrer.com", 990, PASSWORD)
     with pytest.raises(runtime.FirstWriteRuntimeError, match="port 21"):
         runtime.upload_first_write_ftps(upload_input, credential, ftp_factory=lambda _: fake)
     assert fake.connected_host == ""
@@ -331,7 +340,7 @@ def test_sealed_artifact_digest_drift_blocks_before_connect() -> None:
         endpoint_hostname=upload_input.endpoint_hostname,
     )
     fake = FakeFtps()
-    credential = runtime.FirstWriteFtpsCredential(HOST, "user", 21, PASSWORD)
+    credential = runtime.FirstWriteFtpsCredential(HOST, "ccwb34@eimyherrer.com", 21, PASSWORD)
     with pytest.raises(runtime.FirstWriteRuntimeError, match="digest mismatch"):
         runtime.upload_first_write_ftps(tampered, credential, ftp_factory=lambda _: fake)
     assert fake.connected_host == ""

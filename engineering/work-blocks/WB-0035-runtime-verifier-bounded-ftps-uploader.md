@@ -23,7 +23,7 @@ The runner must fail closed unless all of these are true:
 2. The caller passes `remote_write_authorized=true` explicitly.
 3. The caller-supplied authorization reference exactly equals the sealed packet authorization reference.
 4. The sealed protocol is exactly `FTPS_EXPLICIT`.
-5. The runtime credential endpoint exactly equals the sealed `endpoint_hostname` and port is exactly `21`.
+5. The runtime credential endpoint exactly equals the sealed `endpoint_hostname`, username equals the verified dedicated identity `ccwb34@eimyherrer.com`, and port is exactly `21`.
 6. TLS peer and hostname verification remain enabled through `ssl.create_default_context()`.
 7. The control channel is upgraded with `AUTH TLS`; data protection uses `PROT P`; passive mode is enabled.
 8. The authenticated FTPS root reports `PWD=/` and a protected `MLSD` data-channel operation succeeds before mutation.
@@ -77,7 +77,7 @@ The verifier does not use the FTPS credential and therefore provides an independ
 WB-0035 unit tests use an in-memory fake FTPS server and fake HTTPS fetcher. They prove:
 
 - only sealed bytes are uploaded;
-- endpoint and port drift block before connection;
+- endpoint, username, and port drift block before connection;
 - existing destination blocks before mutation;
 - sealed digest drift blocks before connection;
 - the Keychain credential password is excluded from representation;

@@ -34,7 +34,7 @@ Controls: the public runner re-runs `validate_first_write_packet(...)` in-proces
 
 Threat: a valid credential is sent to another FTPS server.
 
-Controls: protocol must be `FTPS_EXPLICIT`; credential hostname must equal sealed `endpoint_hostname`; port is fixed to 21; TLS peer and hostname verification are mandatory.
+Controls: protocol must be `FTPS_EXPLICIT`; credential hostname must equal sealed `endpoint_hostname`; username must equal the verified dedicated identity `ccwb34@eimyherrer.com`; port is fixed to 21; TLS peer and hostname verification are mandatory.
 
 ### Plaintext downgrade
 
