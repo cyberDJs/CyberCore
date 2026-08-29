@@ -16,7 +16,7 @@ USERNAME = "ccwb34@eimyherrer.com"
 PASSWORD = "unit-test-only-secret"
 
 
-def _sealed_input() -> FirstWriteUploadInput:
+def _sealed_input(*, endpoint_hostname: str = HOST) -> FirstWriteUploadInput:
     index = b"<!doctype html><title>CyberCore canary</title>\n"
     marker = (
         json.dumps(
@@ -48,7 +48,7 @@ def _sealed_input() -> FirstWriteUploadInput:
         deploy_identity_scope_reference="evidence:wb0034:scope:ftps",
         authorization_reference="approval:wb0034:first-write:test",
         artifacts=artifacts,
-        endpoint_hostname=HOST,
+        endpoint_hostname=endpoint_hostname,
     )
 
 
@@ -96,38 +96,31 @@ class FakeRollbackFtps:
         return self.cwd_path
 
     def mlsd(self, path: str = "", facts=None):
+        listing_path = path or self.cwd_path
         entries: list[tuple[str, dict[str, str]]] = []
-        for name in sorted(self.files.get(self.cwd_path, {})):
+        for name in sorted(self.files.get(listing_path, {})):
             entries.append((name, {"type": "file"}))
-        prefix = "/" if self.cwd_path == "/" else f"{self.cwd_path}/"
+        prefix = "/" if listing_path == "/" else f"{listing_path}/"
         for candidate in sorted(self.directories):
-            if candidate in {"/", self.cwd_path} or not candidate.startswith(prefix):
+            if candidate in {"/", listing_path} or not candidate.startswith(prefix):
                 continue
             remainder = candidate[len(prefix) :]
             if remainder and "/" not in remainder:
                 entries.append((remainder, {"type": "dir"}))
         return iter(entries)
 
-    def cwd(self, dirname: str):
-        if dirname == "/":
-            self.cwd_path = "/"
-            return "ok"
-        candidate = f"/{dirname}" if self.cwd_path == "/" else f"{self.cwd_path}/{dirname}"
-        if candidate not in self.directories:
-            raise ftplib.error_perm("550 missing")
-        self.cwd_path = candidate
-        return "ok"
-
     def delete(self, filename: str):
         self.delete_calls.append(filename)
-        if filename not in self.files.get(self.cwd_path, {}):
+        directory, _, name = filename.rpartition("/")
+        directory = directory or self.cwd_path
+        if name not in self.files.get(directory, {}):
             raise ftplib.error_perm("550 missing")
-        del self.files[self.cwd_path][filename]
+        del self.files[directory][name]
         return "ok"
 
     def rmd(self, dirname: str):
         self.rmd_calls.append(dirname)
-        path = f"/{dirname}"
+        path = dirname if dirname.startswith("/") else f"/{dirname}"
         if self.files.get(path):
             raise ftplib.error_perm("550 not empty")
         self.files.pop(path, None)
@@ -151,6 +144,14 @@ class RmdReplyLostFtps(FakeRollbackFtps):
     def rmd(self, dirname: str):
         super().rmd(dirname)
         raise ftplib.error_temp("421 connection lost after RMD")
+
+
+class MissingFileTypeFtps(FakeRollbackFtps):
+    def mlsd(self, path: str = "", facts=None):
+        entries = list(super().mlsd(path, facts))
+        if path and path != "/":
+            return iter((name, {}) for name, _entry_facts in entries)
+        return iter(entries)
 
 
 def _execute(
@@ -201,18 +202,34 @@ def test_rollback_requires_exact_run_scoped_authorization_reference() -> None:
     assert "authorization reference" in result.errors[0]
 
 
-def test_rollback_deletes_only_sealed_artifacts_and_exact_directory() -> None:
+def test_alternate_sealed_endpoint_blocks_before_loading_secret_or_connect() -> None:
+    upload_input = _sealed_input(endpoint_hostname="other.example")
+    fake = FakeRollbackFtps(upload_input)
+
+    result, loads = _execute(fake, upload_input=upload_input)
+
+    assert not result.rolled_back
+    assert loads == 0
+    assert fake.connected_host == ""
+    assert "approved staging endpoint" in result.errors[0]
+
+
+def test_rollback_deletes_only_absolute_sealed_artifact_paths_and_exact_directory() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
     result, loads = _execute(fake, upload_input=upload_input)
 
+    target = f"/{upload_input.destination[:-1]}"
     assert result.rolled_back, result.errors
     assert loads == 1
     assert result.upload_input is upload_input
     assert fake.protected and fake.passive
-    assert fake.delete_calls == ["cybercore-version.json", "index.html"]
-    assert fake.rmd_calls == [upload_input.destination[:-1]]
-    assert f"/{upload_input.destination[:-1]}" not in fake.directories
+    assert fake.delete_calls == [
+        f"{target}/cybercore-version.json",
+        f"{target}/index.html",
+    ]
+    assert fake.rmd_calls == [target]
+    assert target not in fake.directories
     assert result.receipt is not None
     assert result.receipt.deleted_artifacts == ("cybercore-version.json", "index.html")
 
@@ -226,7 +243,7 @@ def test_rollback_allows_missing_artifact_for_interrupted_upload() -> None:
     result, _loads = _execute(fake, upload_input=upload_input)
 
     assert result.rolled_back, result.errors
-    assert fake.delete_calls == ["cybercore-version.json"]
+    assert fake.delete_calls == [f"{destination}/cybercore-version.json"]
     assert destination not in fake.directories
 
 
@@ -262,6 +279,19 @@ def test_unexpected_entry_blocks_before_any_delete() -> None:
     assert fake.rmd_calls == []
 
 
+def test_missing_mlsd_file_type_blocks_before_any_delete() -> None:
+    upload_input = _sealed_input()
+    fake = MissingFileTypeFtps(upload_input)
+
+    result, _loads = _execute(fake, upload_input=upload_input)
+
+    assert not result.rolled_back
+    assert not result.remote_mutation_possible
+    assert "positively proven" in result.errors[0]
+    assert fake.delete_calls == []
+    assert fake.rmd_calls == []
+
+
 def test_delete_reply_loss_preserves_partial_mutation_state() -> None:
     upload_input = _sealed_input()
     fake = DeleteReplyLostFtps(upload_input)
@@ -274,6 +304,9 @@ def test_delete_reply_loss_preserves_partial_mutation_state() -> None:
     assert result.partial_state is not None
     assert result.partial_state.active_artifact == "cybercore-version.json"
     assert result.partial_state.deleted_artifacts == ()
+    assert fake.delete_calls == [
+        f"/{upload_input.destination[:-1]}/cybercore-version.json"
+    ]
     assert PASSWORD not in repr(result)
 
 
@@ -290,4 +323,5 @@ def test_rmd_reply_loss_marks_directory_removal_uncertain() -> None:
     assert result.partial_state.directory_removal_attempted
     assert result.partial_state.directory_removal_uncertain
     assert result.partial_state.deleted_artifacts == ("cybercore-version.json", "index.html")
+    assert fake.rmd_calls == [destination]
     assert destination not in fake.directories
