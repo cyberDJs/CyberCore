@@ -26,9 +26,9 @@ If a canary exists after a future write attempt:
 
 FTP `STOR` replaces an existing pathname. An MLSD absence check followed by `STOR` is therefore not an atomic create-if-absent operation. Another session can create or replace the pathname between proof and mutation. Similar pathname races exist around `MKD` and subsequent operations.
 
-For that reason `execute_first_write_ftps(...)` now stops after validating the packet, literal write authority, authorization reference, protocol and sealed input. It returns `ATOMIC_NO_OVERWRITE_BLOCKER` **before credential loading and before opening an FTPS connection**.
+Packet validation is also not guaranteed offline because it can consult the Git remote. Therefore `execute_first_write_ftps(...)` now returns `ATOMIC_NO_OVERWRITE_BLOCKER` immediately, **before packet validation, `git fetch`, Git credential helpers, staging credential loading, or FTPS connection setup**.
 
-No current approval string can bypass this technical gate.
+No current approval string or caller-supplied parameter can bypass this technical gate.
 
 ## What can unblock first write
 
