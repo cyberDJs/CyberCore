@@ -1,4 +1,4 @@
-# Security review — WB-0036 rollback runtime and first-write readiness
+# Security review — WB-0036 recovery and first-write safety
 
 Date: 2026-08-29
 Scope: repository implementation only
@@ -6,103 +6,56 @@ Remote staging mutation during review: `NONE`
 
 ## Security objective
 
-Provide a safe recovery path for the WB-0034 first staging canary without turning CyberCore into a generic remote deletion or rename client.
+Remove destructive rollback races and prevent the first-write runtime from claiming no-overwrite when FTP semantics do not provide it atomically.
 
-## Final recovery model
+## Recovery result
 
-The first canary write is additive, unique, and no-overwrite. It does not replace existing staging content and is not itself a promotion action.
+Automated rollback is logical and read-only. It performs no `DELE`, `RMD`, `RNFR`, `RNTO`, upload, chmod or chown operation. Any created canary is preserved for evidence and later separately authorized maintenance.
 
-Immediate rollback is therefore **logical and non-destructive**:
+## Upload TOCTOU finding
 
-- stop;
-- do not promote;
-- inspect only the exact sealed canary path;
-- preserve any created canary for evidence;
-- report whether later cleanup is required;
-- perform no remote delete or rename.
+The WB-0035 uploader previously performed an absence check followed by ordinary FTP `STOR`. By FTP semantics, `STOR` replaces a pathname that exists when the command is applied. A concurrent actor can therefore create or replace the pathname after the absence check. The same class of race can affect the directory pathname between `MKD` and later operations.
 
-Physical cleanup is excluded from the automated first-write rollback contract.
+Consequently the prior "no-overwrite" claim was not proven under concurrency, and non-destructive rollback alone cannot make that writer safe: an overwrite may already have altered pre-existing content.
 
-## Primary threats considered
+## Final WB-0036 control
 
-### Endpoint substitution
+`execute_first_write_ftps(...)` now fails closed after validating:
 
-Risk: a synthetic sealed input redirects a valid run-scoped rollback approval to another FTPS server.
+- final sealed packet readiness;
+- literal `remote_write_authorized is True`;
+- exact authorization reference;
+- `FTPS_EXPLICIT` protocol;
+- run id, destination, artifact set and sealed artifact digests.
 
-Control: both `FirstWriteUploadInput.endpoint_hostname` and the loaded credential endpoint must equal the fixed approved hostname `staging.eimyherrer.com`. The runtime connects to that constant, not a caller-selected hostname.
+It then returns `ATOMIC_NO_OVERWRITE_BLOCKER` before invoking the credential loader or FTPS factory. Therefore the current first-write path performs no credential read, network connection, `MKD`, `STOR`, rename, delete, or other remote mutation.
 
-### Path expansion
+This gate is unconditional. No public boolean, capability token, or caller-supplied exclusivity claim can enable the old mutation sequence.
 
-Risk: caller supplies a broader path or different destination.
+## Evidence
 
-Control: the rollback function receives the sealed `FirstWriteUploadInput`; there is no independent path argument. Inspection is restricted to the exact direct-child `cybercore-canary-<run_id>/` path already validated by the first-write contract.
+Regression tests require an otherwise authorized valid packet to remain blocked while proving:
 
-### Path-identity TOCTOU
+- credential loader call count is zero;
+- FTPS factory call count is zero;
+- `executed=False`;
+- `remote_mutation_possible=False`;
+- no mutation receipt or partial mutation state exists;
+- sealed-input validation and authorization gates still fail closed before the blocker when invalid.
 
-Risk: after MLSD validates a directory, another FTPS session renames/replaces that pathname before a later `DELE`, `RMD`, or rename command, causing mutation of a different object.
+The read-only recovery tests separately prove zero remote mutation across present, absent, interrupted and malformed target states.
 
-Control: the final rollback runtime performs no `DELE`, `RMD`, `RNFR`, or `RNTO` command. There is therefore no mutation whose target can be swapped between proof and effect.
+## Future writer requirement
 
-This removes the race class instead of attempting to paper over it with a policy-only exclusive-access token.
+Live first-write readiness requires a separately reviewed mechanism that supplies either:
 
-### Unexpected or unclassified content
+1. atomic create-if-absent semantics for the approved artifact contract, or
+2. independently verified exclusive mutation access for the complete write interval.
 
-Risk: the canary pathname contains content not created by the run, or MLSD metadata is insufficient to classify an approved-name entry.
-
-Control: inspection requires the target to be positively proven as MLSD `type=dir`; contents may contain only the two approved canary names; every present approved entry must be positively proven as MLSD `type=file`. Any mismatch fails closed with zero remote mutation.
-
-### Reusing write authority as rollback authority
-
-Risk: a valid first-write approval is reused for rollback.
-
-Control: rollback uses a distinct deterministic reference:
-
-`approval:wb0036:rollback:<run_id>:<source_commit>`
-
-and requires literal boolean authorization. The reference authorizes entry into the recovery procedure only; it does not authorize physical cleanup.
-
-### Credential scope drift
-
-Risk: recovery connects using a different or production-capable identity.
-
-Control: endpoint, username and port remain bound to the WB-0034 path-scoped FTPS identity. Credential loading occurs only after sealed-input endpoint and authorization validation.
-
-### Secret disclosure
-
-Risk: password or credential material leaks through receipts, errors, reprs, docs, or review evidence.
-
-Control: credentials are used only inside the runtime connection path; result objects retain the sealed upload input but never the credential; regression tests assert the password does not appear in result representations.
-
-### Destructive API growth
-
-Risk: rollback evolves into generic cleanup functionality.
-
-Control: the final `_RollbackFtpsClient` protocol exposes no delete, remove-directory, rename, upload, chmod, chown, or generic mutation primitive. Physical cleanup requires a separate future design and authority boundary.
-
-## Codex security-review evolution
-
-The review sequence found four substantive issues in the destructive prototype:
-
-1. alternate endpoint substitution;
-2. mutable-CWD deletion escape;
-3. missing positive MLSD file-type proof;
-4. unavoidable pathname TOCTOU between inspection and deletion even with absolute paths.
-
-The first three were repaired directly. The fourth changed the architecture: automated physical deletion was removed entirely from first-write rollback.
-
-Regression coverage now proves that logical rollback invokes no `DELE`, `RMD`, or rename primitive under success, interrupted-upload, already-absent, unexpected-entry, malformed-type, and listing-failure paths.
-
-## Residual risks
-
-- The isolated canary may remain reachable at its unique staging URL until later maintenance cleanup.
-- Logical rollback restores the pre-existing staging application's behavior because the first-write contract never overwrites or promotes existing content, but it does not restore byte-for-byte filesystem pre-state while the isolated canary remains.
-- A future physical-cleanup design will need a real exclusive-access or identity-preserving server-side mechanism; policy assertions alone are insufficient.
-- Authorization references remain policy bindings, not cryptographic capabilities.
-
-These residual risks are preferable to automated destructive cleanup with an unclosable FTP pathname race.
+Ordinary MLSD checks, policy assertions, or human statements are insufficient. FTP `STOU` is a possible research direction because it creates a server-selected unique file, but it does not preserve the current exact pre-authorized filename/directory contract and therefore is not adopted in this block.
 
 ## Readiness conclusion
 
-Repository readiness can become PASS after focused tests, CI, CodeQL and fresh Codex review are green on one exact repaired head.
+WB-0036 can become repository-safe and merge-ready once tests, CI, CodeQL and fresh exact-head review are green. It does **not** make the staging canary executable.
 
-Live staging write authority remains a separate user gate after the final WB-0036 merge commit is known and a new exact packet is assembled. A failed first-write verification must stop and preserve the isolated run; it must not automatically delete or rename remote content.
+After merge, a new engineering block must solve the atomic/exclusive writer problem before any fresh staging-write authority is requested. Production scope remains untouched.
