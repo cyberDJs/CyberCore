@@ -8,7 +8,7 @@ import io
 from pathlib import Path
 import re
 import ssl
-from typing import Protocol
+from typing import Protocol, cast
 
 from cybercore.first_write_packet import (
     FirstWriteUploadInput,
@@ -104,7 +104,7 @@ def validate_first_write_upload_input(upload_input: FirstWriteUploadInput) -> tu
 
 
 def _default_ftps_factory(context: ssl.SSLContext) -> _FtpsClient:
-    return ftplib.FTP_TLS(context=context, timeout=15)
+    return cast(_FtpsClient, ftplib.FTP_TLS(context=context, timeout=15))
 
 
 def _tls_version(client: _FtpsClient) -> str:
