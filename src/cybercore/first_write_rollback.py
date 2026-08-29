@@ -18,6 +18,7 @@ from cybercore.first_write_runtime import (
     validate_first_write_upload_input,
 )
 
+EXPECTED_ENDPOINT = "staging.eimyherrer.com"
 ROLLBACK_AUTH_PREFIX = "approval:wb0036:rollback"
 
 
@@ -33,7 +34,6 @@ class _RollbackFtpsClient(Protocol):
     def mlsd(
         self, path: str = "", facts: list[str] | None = None
     ) -> Iterable[tuple[str, dict[str, str]]]: ...
-    def cwd(self, dirname: str) -> object: ...
     def delete(self, filename: str) -> object: ...
     def rmd(self, dirname: str) -> object: ...
     def quit(self) -> object: ...
@@ -105,9 +105,11 @@ def _tls_version(client: _RollbackFtpsClient) -> str:
     return value
 
 
-def _list_entries(client: _RollbackFtpsClient) -> list[tuple[str, dict[str, str]]]:
+def _list_entries(
+    client: _RollbackFtpsClient, path: str = ""
+) -> list[tuple[str, dict[str, str]]]:
     try:
-        return list(client.mlsd())
+        return list(client.mlsd(path))
     except FTPS_OPERATION_ERRORS:
         raise FirstWriteRuntimeError(
             "cannot prove rollback directory contents over protected FTPS"
@@ -127,9 +129,8 @@ def _validate_parent_target(
         return False, ()
     if len(matches) != 1:
         return True, ("rollback target appears more than once in parent listing",)
-    entry_type = _entry_type(matches[0][1])
-    if entry_type is not None and entry_type not in {"dir", "cdir", "pdir"}:
-        return True, ("rollback target is not a directory",)
+    if _entry_type(matches[0][1]) != "dir":
+        return True, ("rollback target is not positively proven to be a directory",)
     return True, ()
 
 
@@ -146,9 +147,10 @@ def _validate_target_contents(
 
     errors: list[str] = []
     for name, facts in entries:
-        entry_type = _entry_type(facts)
-        if entry_type is not None and entry_type != "file":
-            errors.append(f"rollback target entry is not a regular file: {name}")
+        if _entry_type(facts) != "file":
+            errors.append(
+                f"rollback target entry is not positively proven to be a regular file: {name}"
+            )
     if errors:
         return (), tuple(errors)
     return tuple(sorted(names)), ()
@@ -187,7 +189,7 @@ def execute_first_write_rollback(
     """Delete only the exact sealed first-write canary directory.
 
     Missing approved artifacts are allowed because rollback must also recover an interrupted
-    upload. Any unexpected entry or non-file target entry blocks deletion.
+    upload. Any unexpected entry or unproven file type blocks deletion.
     """
 
     input_errors = validate_first_write_upload_input(upload_input)
@@ -197,6 +199,12 @@ def execute_first_write_rollback(
         return FirstWriteRollbackResult(
             False,
             ("first-write rollback requires FTPS_EXPLICIT",),
+            upload_input=upload_input,
+        )
+    if upload_input.endpoint_hostname != EXPECTED_ENDPOINT:
+        return FirstWriteRollbackResult(
+            False,
+            ("sealed rollback endpoint is not the approved staging endpoint",),
             upload_input=upload_input,
         )
     if rollback_authorized is not True:
@@ -217,10 +225,10 @@ def execute_first_write_rollback(
     except FirstWriteRuntimeError as exc:
         return FirstWriteRollbackResult(False, (str(exc),), upload_input=upload_input)
 
-    if credential.endpoint_hostname != upload_input.endpoint_hostname:
+    if credential.endpoint_hostname != EXPECTED_ENDPOINT:
         return FirstWriteRollbackResult(
             False,
-            ("credential endpoint does not match sealed FTPS endpoint",),
+            ("credential endpoint is not the approved staging endpoint",),
             upload_input=upload_input,
         )
     if credential.username != EXPECTED_USERNAME:
@@ -246,12 +254,13 @@ def execute_first_write_rollback(
         context.verify_mode = ssl.CERT_REQUIRED
         client = ftp_factory(context)
         destination = upload_input.destination[:-1]
+        target_path = f"/{destination}"
         deleted: list[str] = []
         active_artifact: str | None = None
         mutation_attempted = False
         directory_removal_attempted = False
         try:
-            client.connect(credential.endpoint_hostname, credential.port, timeout=15)
+            client.connect(EXPECTED_ENDPOINT, credential.port, timeout=15)
             client.auth()
             client.login(credential.username, credential.password)
             client.prot_p()
@@ -271,20 +280,14 @@ def execute_first_write_rollback(
                     source_commit=upload_input.source_commit,
                     run_id=upload_input.run_id,
                     destination=upload_input.destination,
-                    endpoint_hostname=credential.endpoint_hostname,
+                    endpoint_hostname=EXPECTED_ENDPOINT,
                     protocol=upload_input.protocol,
                     deleted_artifacts=(),
                     already_absent=True,
                     remote_write_performed=False,
                 )
 
-            client.cwd(destination)
-            if client.pwd().rstrip("/") != f"/{destination}":
-                raise FirstWriteRuntimeError(
-                    "FTPS server did not enter the exact rollback destination"
-                )
-
-            contents = _list_entries(client)
+            contents = _list_entries(client, target_path)
             present, content_errors = _validate_target_contents(contents)
             if content_errors:
                 raise FirstWriteRuntimeError(content_errors[0])
@@ -292,19 +295,18 @@ def execute_first_write_rollback(
             for name in present:
                 active_artifact = name
                 mutation_attempted = True
-                client.delete(name)
+                client.delete(f"{target_path}/{name}")
                 deleted.append(name)
                 active_artifact = None
 
-            if _list_entries(client):
+            if _list_entries(client, target_path):
                 raise FirstWriteRuntimeError(
                     "rollback target is not empty after bounded artifact deletion"
                 )
 
-            client.cwd("/")
             directory_removal_attempted = True
             mutation_attempted = True
-            client.rmd(destination)
+            client.rmd(target_path)
 
             parent_after = _list_entries(client)
             remains, parent_after_errors = _validate_parent_target(parent_after, destination)
@@ -317,7 +319,7 @@ def execute_first_write_rollback(
                 source_commit=upload_input.source_commit,
                 run_id=upload_input.run_id,
                 destination=upload_input.destination,
-                endpoint_hostname=credential.endpoint_hostname,
+                endpoint_hostname=EXPECTED_ENDPOINT,
                 protocol=upload_input.protocol,
                 deleted_artifacts=tuple(deleted),
             )
