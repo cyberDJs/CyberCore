@@ -1,4 +1,4 @@
-# WB-0036 — First-write rollback runtime and live-write readiness
+# WB-0036 — First-write recovery and upload safety gate
 
 Date: 2026-08-29
 Status: `IMPLEMENTATION — REMOTE WRITE BLOCKED`
@@ -8,105 +8,63 @@ Branch: `wb-0036-rollback-runtime-readiness`
 
 ## Goal
 
-Close the last repository-side safety gap before the first WB-0034 staging canary write:
-
-1. provide a bounded recovery runtime for the exact sealed canary run;
-2. make immediate rollback non-destructive so FTP path races cannot delete or rename unrelated content;
-3. define the final evidence/readiness gates for the first staging canary write.
+Close repository-side recovery hazards and make unsafe first-write behavior fail closed.
 
 This work block does not perform a staging write, delete, rename, or production mutation.
 
 ## Recovery decision
 
-The first WB-0034 write is additive and isolated:
-
-`cybercore-canary-<run_id>/`
-
-It never overwrites the existing staging root and is not a promotion step. Therefore the immediate safe rollback is **logical rollback**:
+Immediate rollback is logical and non-destructive:
 
 - stop the run;
 - do not promote or broaden scope;
-- inspect the exact sealed canary path read-only;
-- preserve the isolated canary for evidence when it exists;
-- report `cleanup_required=True` for later maintenance;
+- inspect only the exact sealed canary path read-only;
+- preserve any isolated canary for evidence;
+- report whether later cleanup is required;
 - perform no `DELE`, `RMD`, `RNFR`, or `RNTO` operation.
 
-Physical cleanup is intentionally outside the automated first-write recovery contract. It requires a separately designed and authorized maintenance path with a real concurrency/exclusive-access guarantee. A policy token alone is not accepted as proof of exclusive access.
+Physical cleanup is outside the automated first-write recovery contract and requires a separately reviewed concurrency-safe maintenance mechanism.
 
-This decision supersedes the earlier WB-0036 destructive-delete prototype after Codex identified an unavoidable FTP pathname TOCTOU race between inspection and mutation.
+## Upload safety finding
 
-## Bounded runtime
+Fresh Codex review identified that the merged WB-0035 FTPS uploader cannot truthfully guarantee no-overwrite under concurrent access. FTP `STOR` replaces an existing pathname, so an absence check followed by `STOR` has a TOCTOU window. The directory can likewise be replaced between `MKD` and later pathname-based operations.
 
-The runtime:
+WB-0036 therefore changes `execute_first_write_ftps(...)` to fail closed after packet, authority, protocol, and sealed-input validation but **before credential loading or any network operation**.
 
-- consumes only the sealed `FirstWriteUploadInput`;
-- requires `FTPS_EXPLICIT` and the existing path-scoped identity;
-- pins both sealed input and credential to `staging.eimyherrer.com`;
-- requires `rollback_authorized is True`;
-- requires an exact run-scoped rollback authorization reference;
-- loads the credential only after input, endpoint and authorization gates pass;
-- verifies TLS, protected passive mode, and FTPS root `/`;
-- requires the target to be positively proven as MLSD `type=dir` when present;
-- lists the exact sealed target using its root-relative absolute path;
-- rejects every unexpected entry and every approved-name entry not positively proven as MLSD `type=file`;
-- allows missing approved artifacts so interrupted uploads can be inspected;
-- returns idempotent logical rollback when the exact directory is already absent;
-- reports whether later physical cleanup is required;
-- contains no remote mutation primitive in the rollback protocol surface.
+The current runtime cannot perform a staging upload even when `remote_write_authorized=True`. It returns `ATOMIC_NO_OVERWRITE_BLOCKER` until CyberCore has either:
 
-There is no generic path, recursive delete, chmod, chown, rename, upload, production operation, or automated physical cleanup in the rollback API.
+1. an atomic create-if-absent writer, or
+2. independently verified exclusive mutation access implemented as a real technical mechanism.
 
-## Fresh rollback authority
+A boolean, policy token, or operator assertion alone is not accepted as exclusivity evidence.
 
-The exact authorization reference is derived from the sealed run:
+## Recovery runtime
 
-`approval:wb0036:rollback:<run_id>:<source_commit>`
-
-This reference is separate from the first-write authorization reference. A first-write approval never implicitly authorizes rollback, and a rollback approval never authorizes another run.
-
-The authorization gates entry into the recovery procedure. It does not grant physical cleanup authority.
+The rollback runtime remains read-only and bounded to the sealed `FirstWriteUploadInput`. It verifies endpoint, identity, TLS/root scope, MLSD target type, approved artifact names and positive file-type evidence, then reports logical rollback state without remote mutation.
 
 ## Test requirements
 
-Focused tests cover:
+Regression coverage proves:
 
-- literal-boolean authority;
-- exact run-scoped authorization reference;
-- alternate sealed endpoint rejection before secret loading or connect;
-- present canary logical rollback with zero remote mutation;
-- interrupted upload preservation for evidence with zero remote mutation;
-- idempotent already-absent target;
-- unexpected-entry fail-closed behavior;
-- missing MLSD file type fail-closed behavior;
-- protected-listing failure with `remote_mutation_possible=False`;
-- explicit proof that `DELE`, `RMD`, and rename primitives are never invoked;
-- secret exclusion from result representations.
+- literal-boolean write and rollback authority gates;
+- exact authorization-reference binding;
+- sealed input validation before any credential or network use;
+- an otherwise fully authorized first write is blocked by the atomic no-overwrite gate;
+- credential loader and FTPS factory are not invoked by the blocked writer;
+- logical rollback performs zero delete/rename/upload operations;
+- effect verification and secret-exclusion behavior remain covered.
 
-## Final live-write readiness after merge
+## Readiness
 
-WB-0036 can only make the repository side ready. A concrete first-write packet must be regenerated from the final canonical merge commit after this block lands.
+After this PR merges, CyberCore will be **safe but not live-write ready**.
 
-The first live staging write remains blocked until all of these are current and exact:
-
-- final canonical `main` commit selected as `source_commit`;
-- final packet validates READY against that exact commit;
-- two artifact hashes match the sealed packet;
-- endpoint is exactly `staging.eimyherrer.com`;
-- protocol is `FTPS_EXPLICIT`;
-- identity is `ccwb34@eimyherrer.com` on port 21;
-- deploy identity scope evidence is current;
-- effect verifier is available;
-- non-destructive logical rollback runtime is available;
-- fresh explicit first staging canary write authority names the exact run;
-- no production/provider/DNS/TLS/firewall scope is added.
-
-A failed first-write effect verification must stop promotion and preserve the isolated run for evidence. It must not trigger automated deletion.
+The next engineering block must implement and independently verify a concurrency-safe first-write mechanism. Only after that mechanism has code, tests, docs, CI, CodeQL and review evidence may a concrete first staging canary packet and fresh write authority be requested.
 
 ## Authority boundary
 
-Allowed in this block: repository branch changes, tests, docs, PR/review repair.
+Allowed: repository branch changes, tests, docs, PR/review repair.
 
-Not authorized by this block:
+Not authorized:
 
 - staging upload;
 - staging delete or rename;
@@ -114,4 +72,4 @@ Not authorized by this block:
 - production access or mutation;
 - provider/account/credential changes;
 - DNS/TLS/firewall changes;
-- canonical merge without a separate merge approval.
+- canonical merge without separate merge approval.
