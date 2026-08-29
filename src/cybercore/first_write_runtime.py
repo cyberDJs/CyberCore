@@ -294,7 +294,9 @@ def _upload_first_write_ftps(
                 "FTPS first-write failed after destination creation; remote mutation may be partial",
                 state,
             ) from None
-        raise FirstWriteRuntimeError("FTPS first-write failed before destination creation") from None
+        raise FirstWriteRuntimeError(
+            "FTPS first-write failed before destination creation"
+        ) from None
     finally:
         try:
             client.quit()
