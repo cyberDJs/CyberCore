@@ -20,6 +20,7 @@ EXPECTED_PORT = 21
 EXPECTED_USERNAME = "ccwb34@eimyherrer.com"
 EXPECTED_ARTIFACTS = {"index.html", "cybercore-version.json"}
 RUN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{5,95}\Z")
+FTPS_OPERATION_ERRORS = ftplib.all_errors + (UnicodeDecodeError,)
 
 
 class FirstWriteRuntimeError(RuntimeError):
@@ -142,7 +143,7 @@ def _tls_version(client: _FtpsClient) -> str:
 def _assert_missing(client: _FtpsClient, name: str) -> None:
     try:
         entries = {entry_name for entry_name, _facts in client.mlsd()}
-    except ftplib.all_errors:
+    except FTPS_OPERATION_ERRORS:
         raise FirstWriteRuntimeError("cannot prove remote path absence") from None
     if name in entries:
         raise FirstWriteRuntimeError("remote path already exists; no-overwrite gate blocked")
@@ -152,7 +153,7 @@ def _hash_remote_file(client: _FtpsClient, name: str) -> str:
     digest = hashlib.sha256()
     try:
         client.retrbinary(f"RETR {name}", digest.update, blocksize=64 * 1024)
-    except ftplib.all_errors:
+    except FTPS_OPERATION_ERRORS:
         raise FirstWriteRuntimeError("cannot verify uploaded artifact bytes over FTPS") from None
     return digest.hexdigest()
 
@@ -265,7 +266,7 @@ def execute_first_write_ftps(
                 )
             try:
                 next(iter(client.mlsd()), None)
-            except ftplib.all_errors:
+            except FTPS_OPERATION_ERRORS:
                 raise FirstWriteRuntimeError(
                     "protected passive FTPS data channel verification failed"
                 ) from None
@@ -320,7 +321,7 @@ def execute_first_write_ftps(
                     ),
                 ) from None
             raise
-        except ftplib.all_errors:
+        except FTPS_OPERATION_ERRORS:
             if destination_create_attempted:
                 state = _partial_state(
                     upload_input,
