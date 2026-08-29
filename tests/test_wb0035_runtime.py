@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ftplib
 import hashlib
 import json
 from pathlib import Path
@@ -24,7 +23,7 @@ PASSWORD = "unit-test-only-secret"
 USERNAME = "ccwb34@eimyherrer.com"
 
 
-def _sealed_input() -> FirstWriteUploadInput:
+def _sealed_input(*, protocol: str = "FTPS_EXPLICIT") -> FirstWriteUploadInput:
     index = b"<!doctype html><title>CyberCore canary</title>\n"
     marker = (
         json.dumps(
@@ -52,7 +51,7 @@ def _sealed_input() -> FirstWriteUploadInput:
         source_commit=COMMIT,
         run_id=RUN_ID,
         destination=f"cybercore-canary-{RUN_ID}/",
-        protocol="FTPS_EXPLICIT",
+        protocol=protocol,
         deploy_identity_scope_reference="evidence:wb0034:scope:ftps",
         authorization_reference=AUTH,
         artifacts=artifacts,
@@ -60,138 +59,31 @@ def _sealed_input() -> FirstWriteUploadInput:
     )
 
 
-class FakeSock:
-    def version(self) -> str:
-        return "TLSv1.3"
-
-
-class FakeFtps:
-    def __init__(self) -> None:
-        self.sock = FakeSock()
-        self.cwd_path = "/"
-        self.files: dict[str, dict[str, bytes]] = {"/": {}}
-        self.mkd_calls: list[str] = []
-        self.stor_calls: list[str] = []
-        self.connected_host = ""
-        self.protected = False
-        self.passive = False
-
-    def connect(self, host: str, port: int, timeout: float | None = None):
-        self.connected_host = host
-        return "ok"
-
-    def auth(self):
-        return "ok"
-
-    def login(self, user: str, passwd: str):
-        return "ok"
-
-    def prot_p(self):
-        self.protected = True
-        return "ok"
-
-    def set_pasv(self, val: bool):
-        self.passive = val
-        return None
-
-    def pwd(self) -> str:
-        return self.cwd_path
-
-    def mlsd(self, path: str = "", facts=None):
-        names = set(self.files.get(self.cwd_path, {}))
-        prefix = "/" if self.cwd_path == "/" else f"{self.cwd_path}/"
-        for candidate in self.files:
-            if candidate == self.cwd_path or not candidate.startswith(prefix):
-                continue
-            remainder = candidate[len(prefix) :]
-            if remainder and "/" not in remainder:
-                names.add(remainder)
-        return iter((name, {}) for name in sorted(names))
-
-    def mkd(self, dirname: str) -> str:
-        self.mkd_calls.append(dirname)
-        path = f"/{dirname}"
-        if path in self.files:
-            raise ftplib.error_perm("550 exists")
-        self.files[path] = {}
-        return path
-
-    def cwd(self, dirname: str):
-        path = f"/{dirname}" if self.cwd_path == "/" else f"{self.cwd_path}/{dirname}"
-        if path not in self.files:
-            raise ftplib.error_perm("550 missing")
-        self.cwd_path = path
-        return "ok"
-
-    def storbinary(self, cmd: str, fp, blocksize: int = 8192):
-        _, name = cmd.split(" ", 1)
-        self.stor_calls.append(name)
-        self.files[self.cwd_path][name] = fp.read()
-        return "ok"
-
-    def retrbinary(self, cmd: str, callback, blocksize: int = 8192):
-        _, name = cmd.split(" ", 1)
-        callback(self.files[self.cwd_path][name])
-        return "ok"
-
-    def quit(self):
-        return "ok"
-
-    def close(self):
-        return None
-
-
-class FailingListFtps(FakeFtps):
-    def mlsd(self, path: str = "", facts=None):
-        raise ftplib.error_perm("550 permission denied")
-
-
-class PartialStoreFailFtps(FakeFtps):
-    def storbinary(self, cmd: str, fp, blocksize: int = 8192):
-        _, name = cmd.split(" ", 1)
-        self.stor_calls.append(name)
-        payload = fp.read()
-        self.files[self.cwd_path][name] = payload[:3]
-        raise ftplib.error_temp("426 transfer aborted")
-
-
-class PartialStoreDecodeFailFtps(FakeFtps):
-    def storbinary(self, cmd: str, fp, blocksize: int = 8192):
-        _, name = cmd.split(" ", 1)
-        self.stor_calls.append(name)
-        payload = fp.read()
-        self.files[self.cwd_path][name] = payload[:3]
-        raise UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
-
-
-class MkdReplyLostFtps(FakeFtps):
-    def mkd(self, dirname: str) -> str:
-        super().mkd(dirname)
-        raise ftplib.error_temp("421 connection lost after MKD")
-
-
 def _execute(
     monkeypatch: pytest.MonkeyPatch,
-    fake: FakeFtps,
     *,
     upload_input: FirstWriteUploadInput | None = None,
-    credential: runtime.FirstWriteFtpsCredential | None = None,
     authorized: bool = True,
     auth_ref: str = AUTH,
 ):
     upload_input = upload_input or _sealed_input()
-    credential = credential or runtime.FirstWriteFtpsCredential(HOST, USERNAME, 21, PASSWORD)
     monkeypatch.setattr(
         runtime,
         "validate_first_write_packet",
         lambda *_args: FirstWritePacketResult(True, (), upload_input),
     )
     loads = 0
+    factories = 0
 
     def loader():
         nonlocal loads
         loads += 1
-        return credential
+        return runtime.FirstWriteFtpsCredential(HOST, USERNAME, 21, PASSWORD)
+
+    def factory(_context):
+        nonlocal factories
+        factories += 1
+        raise AssertionError("FTPS factory must not run while atomic no-overwrite is unproven")
 
     result = runtime.execute_first_write_ftps(
         Path("manifest"),
@@ -201,9 +93,9 @@ def _execute(
         remote_write_authorized=authorized,
         authorization_reference=auth_ref,
         credential_loader=loader,
-        ftp_factory=lambda _: fake,
+        ftp_factory=factory,
     )
-    return result, loads
+    return result, loads, factories
 
 
 def test_module_exposes_no_direct_mutating_uploader_or_capability_token() -> None:
@@ -213,104 +105,62 @@ def test_module_exposes_no_direct_mutating_uploader_or_capability_token() -> Non
     assert not hasattr(runtime, "_WRITE_CAPABILITY_GUARD")
 
 
-def test_runner_requires_literal_true_and_does_not_load_secret(
+def test_runner_requires_literal_true_before_atomic_blocker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    result, loads = _execute(
+    result, loads, factories = _execute(
         monkeypatch,
-        FakeFtps(),
         authorized=cast(bool, "false"),
     )
     assert not result.executed
+    assert "authorization" in result.errors[0]
     assert loads == 0
+    assert factories == 0
     assert not result.remote_mutation_possible
 
 
-def test_runner_false_does_not_load_secret(monkeypatch: pytest.MonkeyPatch) -> None:
-    result, loads = _execute(monkeypatch, FakeFtps(), authorized=False)
-    assert not result.executed
-    assert loads == 0
-
-
-def test_runner_binds_exact_authorization_reference(
+def test_runner_binds_exact_authorization_reference_before_atomic_blocker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    result, loads = _execute(monkeypatch, FakeFtps(), auth_ref="approval:wrong")
+    result, loads, factories = _execute(monkeypatch, auth_ref="approval:wrong")
     assert not result.executed
-    assert loads == 0
     assert "authorization reference" in result.errors[0]
+    assert loads == 0
+    assert factories == 0
 
 
-def test_bounded_ftps_upload_uses_only_sealed_bytes(
+def test_authorized_first_write_is_fail_closed_before_secret_or_network(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     upload_input = _sealed_input()
-    fake = FakeFtps()
-    result, loads = _execute(monkeypatch, fake, upload_input=upload_input)
+    result, loads, factories = _execute(monkeypatch, upload_input=upload_input)
 
-    assert result.executed, result.errors
-    assert loads == 1
+    assert not result.executed
     assert result.upload_input is upload_input
-    destination = f"/cybercore-canary-{RUN_ID}"
-    assert fake.mkd_calls == [f"cybercore-canary-{RUN_ID}"]
-    assert set(fake.files[destination]) == {"index.html", "cybercore-version.json"}
-    assert fake.files[destination]["index.html"] == upload_input.artifact_bytes("index.html")
-    assert fake.protected and fake.passive
-    assert result.receipt is not None
-    assert result.receipt.tls_version == "TLSv1.3"
-
-
-def test_endpoint_drift_blocks_before_connect(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = FakeFtps()
-    credential = runtime.FirstWriteFtpsCredential("other.example", USERNAME, 21, PASSWORD)
-    result, _ = _execute(monkeypatch, fake, credential=credential)
-    assert not result.executed
-    assert fake.connected_host == ""
+    assert result.errors == (runtime.ATOMIC_NO_OVERWRITE_BLOCKER,)
+    assert "atomic no-overwrite" in result.errors[0]
+    assert loads == 0
+    assert factories == 0
     assert not result.remote_mutation_possible
+    assert result.partial_state is None
+    assert result.receipt is None
+    assert PASSWORD not in repr(result)
 
 
-def test_username_drift_blocks_before_connect(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = FakeFtps()
-    credential = runtime.FirstWriteFtpsCredential(HOST, "eimyherr", 21, PASSWORD)
-    result, _ = _execute(monkeypatch, fake, credential=credential)
-    assert not result.executed
-    assert fake.connected_host == ""
-    assert "username" in result.errors[0]
-
-
-def test_port_drift_blocks_before_connect(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = FakeFtps()
-    credential = runtime.FirstWriteFtpsCredential(HOST, USERNAME, 990, PASSWORD)
-    result, _ = _execute(monkeypatch, fake, credential=credential)
-    assert not result.executed
-    assert fake.connected_host == ""
-    assert "port 21" in result.errors[0]
-
-
-def test_existing_destination_blocks_without_write(
+def test_protocol_drift_blocks_before_secret_or_network(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake = FakeFtps()
-    fake.files[f"/cybercore-canary-{RUN_ID}"] = {}
-    result, _ = _execute(monkeypatch, fake)
+    result, loads, factories = _execute(
+        monkeypatch,
+        upload_input=_sealed_input(protocol="SFTP"),
+    )
     assert not result.executed
-    assert fake.mkd_calls == []
-    assert fake.stor_calls == []
-    assert not result.remote_mutation_possible
+    assert "FTPS_EXPLICIT" in result.errors[0]
+    assert loads == 0
+    assert factories == 0
 
 
-def test_absence_check_fails_closed_when_parent_listing_is_unavailable(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    fake = FailingListFtps()
-    result, _ = _execute(monkeypatch, fake)
-    assert not result.executed
-    assert fake.mkd_calls == []
-    assert fake.stor_calls == []
-    assert not result.remote_mutation_possible
-
-
-def test_sealed_artifact_digest_drift_blocks_before_connect(
+def test_sealed_artifact_digest_drift_blocks_before_atomic_blocker(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     upload_input = _sealed_input()
@@ -327,74 +177,14 @@ def test_sealed_artifact_digest_drift_blocks_before_connect(
         artifacts=tuple(bad_artifacts),
         endpoint_hostname=upload_input.endpoint_hostname,
     )
-    fake = FakeFtps()
-    result, _ = _execute(monkeypatch, fake, upload_input=tampered)
+
+    result, loads, factories = _execute(monkeypatch, upload_input=tampered)
+
     assert not result.executed
-    assert fake.connected_host == ""
     assert "digest mismatch" in result.errors[0]
-
-
-def test_mkd_reply_loss_preserves_possible_remote_mutation_and_sealed_input(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    upload_input = _sealed_input()
-    fake = MkdReplyLostFtps()
-    result, _ = _execute(monkeypatch, fake, upload_input=upload_input)
-
-    assert not result.executed
-    assert result.remote_mutation_possible
-    assert result.upload_input is upload_input
-    assert result.partial_state is not None
-    assert not result.partial_state.destination_created
-    assert result.partial_state.destination_creation_uncertain
-    assert result.partial_state.uploaded_artifacts == ()
-    assert result.partial_state.active_artifact is None
-    assert f"/cybercore-canary-{RUN_ID}" in fake.files
-
-
-def test_partial_stor_failure_preserves_remote_mutation_state_and_sealed_input(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    upload_input = _sealed_input()
-    fake = PartialStoreFailFtps()
-    result, _ = _execute(monkeypatch, fake, upload_input=upload_input)
-
-    assert not result.executed
-    assert result.remote_mutation_possible
-    assert result.upload_input is upload_input
-    assert result.partial_state is not None
-    assert result.partial_state.destination_created
-    assert not result.partial_state.destination_creation_uncertain
-    assert result.partial_state.active_artifact == "cybercore-version.json"
-    assert result.partial_state.uploaded_artifacts == ()
-    destination = f"/cybercore-canary-{RUN_ID}"
-    assert fake.files[destination]["cybercore-version.json"]
-
-
-def test_partial_stor_decode_failure_preserves_remote_mutation_state(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    upload_input = _sealed_input()
-    fake = PartialStoreDecodeFailFtps()
-    result, _ = _execute(monkeypatch, fake, upload_input=upload_input)
-
-    assert not result.executed
-    assert result.remote_mutation_possible
-    assert result.upload_input is upload_input
-    assert result.partial_state is not None
-    assert result.partial_state.destination_created
-    assert result.partial_state.active_artifact == "cybercore-version.json"
-    assert result.partial_state.uploaded_artifacts == ()
-    assert "UnicodeDecodeError" not in repr(result)
-    destination = f"/cybercore-canary-{RUN_ID}"
-    assert fake.files[destination]["cybercore-version.json"]
-
-
-def test_partial_state_contains_no_secret(monkeypatch: pytest.MonkeyPatch) -> None:
-    result, _ = _execute(monkeypatch, PartialStoreFailFtps())
-    assert PASSWORD not in repr(result)
-    assert result.partial_state is not None
-    assert PASSWORD not in repr(result.partial_state)
+    assert loads == 0
+    assert factories == 0
+    assert not result.remote_mutation_possible
 
 
 def test_https_effect_verifier_matches_served_bytes_and_marker() -> None:
