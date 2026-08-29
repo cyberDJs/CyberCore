@@ -7,14 +7,14 @@ Related decision: `ADR-0007`
 
 ## Scope reviewed
 
-- same-process packet-to-uploader handoff;
+- same-process packet-to-write handoff;
 - explicit-FTPS transport configuration;
 - endpoint/port binding;
 - destination and artifact bounding;
 - macOS Keychain alias retrieval;
 - upload self-integrity check;
 - independent HTTPS effect verification;
-- failure behavior before and after remote directory creation.
+- failure behavior before, during, and after remote directory creation.
 
 ## Threats and controls
 
@@ -26,9 +26,9 @@ Controls: the Keychain password is read through a captured stdout pipe rather th
 
 ### Authorization bypass
 
-Threat: a caller invokes the uploader with a stale packet or without a fresh write approval.
+Threat: a caller invokes a mutating transport with a stale packet or without a fresh write approval.
 
-Controls: the public runner re-runs `validate_first_write_packet(...)` in-process, requires `remote_write_authorized=true`, and requires exact authorization-reference equality before loading the credential.
+Controls: `execute_first_write_ftps(...)` re-runs `validate_first_write_packet(...)` in-process, requires `remote_write_authorized is True`, requires exact authorization-reference equality, validates the sealed upload input, and only then loads the credential. The mutating FTPS routine is a local closure inside the authorized runner; there is no module-level mutation capability token or direct mutating uploader callable for another module to invoke.
 
 ### Endpoint substitution
 
@@ -54,11 +54,17 @@ Threat: an existing canary or file is replaced.
 
 Controls: destination absence is proved by a successful protected `MLSD` enumeration of the parent and `MKD` must create a unique directory. Ambiguous `550` responses are not accepted as absence evidence. Each file is likewise proved absent by successful protected `MLSD` before `STOR`. The primary exclusivity boundary is the newly created unique directory. There is no claim of a server-side atomic `O_EXCL` equivalent for `STOR`; post-upload hashes verify resulting bytes. A future server capability that provides stronger atomic file creation may supersede this implementation.
 
+### Unknown-outcome mutation
+
+Threat: a mutating command succeeds remotely but its success response is lost, causing the client to report a false pre-mutation state.
+
+Control: the runtime marks destination creation as potentially mutating before sending `MKD`. If `MKD` raises after dispatch, the result is conservatively reported with `remote_mutation_possible=true`, the same sealed `upload_input`, and partial state with `destination_creation_uncertain=true`. The caller must preserve remote state for independent inspection or separately authorized rollback; it must not assume the destination is absent.
+
 ### Partial failure
 
 Threat: automatic cleanup deletes the wrong path or broadens authority.
 
-Control: uploader performs no automatic delete. If failure occurs after destination creation, partial state is preserved for the separately authorized exact-run-directory rollback procedure.
+Control: uploader performs no automatic delete. If failure occurs after destination creation or after a destination-creation attempt with unknown outcome, partial state is preserved for the separately authorized exact-run-directory rollback procedure.
 
 ### False-positive deployment verification
 
