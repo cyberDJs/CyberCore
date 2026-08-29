@@ -29,9 +29,11 @@ Physical cleanup is outside the automated first-write recovery contract and requ
 
 Fresh Codex review identified that the merged WB-0035 FTPS uploader cannot truthfully guarantee no-overwrite under concurrent access. FTP `STOR` replaces an existing pathname, so an absence check followed by `STOR` has a TOCTOU window. The directory can likewise be replaced between `MKD` and later pathname-based operations.
 
-WB-0036 therefore changes `execute_first_write_ftps(...)` to fail closed after packet, authority, protocol, and sealed-input validation but **before credential loading or any network operation**.
+A subsequent review also established that packet validation can run `git fetch origin`, so a blocker placed after packet validation still permits a network connection and Git credential-helper activity.
 
-The current runtime cannot perform a staging upload even when `remote_write_authorized=True`. It returns `ATOMIC_NO_OVERWRITE_BLOCKER` until CyberCore has either:
+WB-0036 therefore changes `execute_first_write_ftps(...)` to return `ATOMIC_NO_OVERWRITE_BLOCKER` **before packet validation, credential loading, Git remote access, FTPS factory use, or any other network operation**.
+
+The current runtime cannot perform a staging upload regardless of `remote_write_authorized`, authorization reference, packet contents, or caller-supplied FTPS factory. It remains blocked until CyberCore has either:
 
 1. an atomic create-if-absent writer, or
 2. independently verified exclusive mutation access implemented as a real technical mechanism.
@@ -46,11 +48,11 @@ The rollback runtime remains read-only and bounded to the sealed `FirstWriteUplo
 
 Regression coverage proves:
 
-- literal-boolean write and rollback authority gates;
-- exact authorization-reference binding;
-- sealed input validation before any credential or network use;
-- an otherwise fully authorized first write is blocked by the atomic no-overwrite gate;
-- credential loader and FTPS factory are not invoked by the blocked writer;
+- the blocked first-write runner does not call packet validation;
+- therefore it cannot trigger validator-side `git fetch` or Git credential helpers;
+- credential loader and FTPS factory are not invoked;
+- the blocker is unconditional for write-authority arguments while the unsafe writer is disabled;
+- sealed-input validation remains directly covered as a pure helper;
 - logical rollback performs zero delete/rename/upload operations;
 - effect verification and secret-exclusion behavior remain covered.
 
