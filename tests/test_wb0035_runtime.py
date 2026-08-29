@@ -228,7 +228,9 @@ def test_runner_binds_exact_authorization_reference(monkeypatch: pytest.MonkeyPa
         Path("artifacts"),
         remote_write_authorized=True,
         authorization_reference="approval:wrong",
-        credential_loader=lambda: runtime.FirstWriteFtpsCredential(HOST, "ccwb34@eimyherrer.com", 21, PASSWORD),
+        credential_loader=lambda: runtime.FirstWriteFtpsCredential(
+            HOST, "ccwb34@eimyherrer.com", 21, PASSWORD
+        ),
         ftp_factory=lambda _: FakeFtps(),
     )
     assert not result.executed
@@ -315,7 +317,6 @@ def test_runner_executes_validated_packet_and_loads_secret_once(
     assert result.upload_input is upload_input
 
 
-
 def test_username_drift_blocks_before_connect() -> None:
     upload_input = _sealed_input()
     fake = FakeFtps()
@@ -333,15 +334,12 @@ class FailingListFtps(FakeFtps):
 def test_absence_check_fails_closed_when_parent_listing_is_unavailable() -> None:
     upload_input = _sealed_input()
     fake = FailingListFtps()
-    credential = runtime.FirstWriteFtpsCredential(
-        HOST, "ccwb34@eimyherrer.com", 21, PASSWORD
-    )
+    credential = runtime.FirstWriteFtpsCredential(HOST, "ccwb34@eimyherrer.com", 21, PASSWORD)
     with pytest.raises(runtime.FirstWriteRuntimeError, match="data channel verification failed"):
-        runtime.upload_first_write_ftps(
-            upload_input, credential, ftp_factory=lambda _: fake
-        )
+        runtime.upload_first_write_ftps(upload_input, credential, ftp_factory=lambda _: fake)
     assert fake.mkd_calls == []
     assert fake.stor_calls == []
+
 
 def test_port_drift_blocks_before_connect() -> None:
     upload_input = _sealed_input()
