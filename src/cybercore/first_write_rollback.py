@@ -105,9 +105,7 @@ def _tls_version(client: _RollbackFtpsClient) -> str:
     return value
 
 
-def _list_entries(
-    client: _RollbackFtpsClient, path: str = ""
-) -> list[tuple[str, dict[str, str]]]:
+def _list_entries(client: _RollbackFtpsClient, path: str = "") -> list[tuple[str, dict[str, str]]]:
     try:
         return list(client.mlsd(path))
     except FTPS_OPERATION_ERRORS:
