@@ -15,14 +15,17 @@ Required runtime gates:
 
 1. sealed upload input passes `validate_first_write_upload_input`;
 2. protocol is exactly `FTPS_EXPLICIT`;
-3. `rollback_authorized is True` literally;
-4. authorization reference equals `rollback_authorization_reference(upload_input)`;
-5. credential endpoint equals the sealed endpoint;
-6. credential username equals `ccwb34@eimyherrer.com`;
-7. port equals `21`;
-8. TLS certificate and hostname verification remain enabled;
-9. effective FTPS root is `/` for the path-scoped account;
-10. target contents contain no names outside the two approved canary artifacts.
+3. sealed endpoint is exactly `staging.eimyherrer.com`;
+4. `rollback_authorized is True` literally;
+5. authorization reference equals `rollback_authorization_reference(upload_input)`;
+6. credential endpoint is exactly `staging.eimyherrer.com`;
+7. credential username equals `ccwb34@eimyherrer.com`;
+8. port equals `21`;
+9. TLS certificate and hostname verification remain enabled;
+10. effective FTPS root is `/` for the path-scoped account;
+11. the target is positively proven by MLSD as `type=dir`;
+12. every present approved artifact is positively proven by MLSD as `type=file`;
+13. target contents contain no names outside the two approved canary artifacts.
 
 ## Authorization string
 
@@ -38,26 +41,25 @@ Its form is:
 approval:wb0036:rollback:<run_id>:<source_commit>
 ```
 
-A human/operator approval must explicitly cover that exact run before the runtime may be called with `rollback_authorized=True`.
+A human/operator approval must explicitly cover that exact run before the runtime may be called with `rollback_authorized=True`. The runtime independently pins the endpoint, so a synthetic packet cannot redirect an otherwise valid run approval to another FTPS server.
 
 ## Deletion sequence
 
 The runtime performs only this bounded sequence:
 
-1. connect to the sealed FTPS endpoint;
+1. connect only to `staging.eimyherrer.com`;
 2. enforce explicit TLS + protected passive mode;
 3. prove root `/`;
-4. list the root and locate the exact sealed destination;
+4. list the root and locate the exact sealed destination as `type=dir`;
 5. if absent, return idempotent success with no mutation;
-6. enter the exact destination;
-7. list contents and fail closed on any unexpected entry or non-file entry;
-8. delete present approved artifacts in deterministic order;
-9. prove the directory is empty;
-10. return to `/`;
-11. remove only the exact sealed destination;
-12. prove the destination is absent from the parent listing.
+6. list the exact target by root-relative absolute path;
+7. fail closed on any unexpected name or any entry not positively proven as `type=file`;
+8. issue `DELE` for present approved artifacts using root-relative absolute sealed paths such as `/cybercore-canary-<run_id>/index.html`;
+9. list the same absolute target path and prove it empty;
+10. issue `RMD` only for `/cybercore-canary-<run_id>`;
+11. prove the destination is absent from the root listing.
 
-The runtime never recursively removes a directory and never accepts a caller-selected filename to delete.
+The runtime never relies on a mutable session working directory for deletion, never recursively removes a directory and never accepts a caller-selected filename to delete.
 
 ## Partial or ambiguous outcomes
 
