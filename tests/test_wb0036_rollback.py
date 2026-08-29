@@ -70,6 +70,7 @@ class FakeRollbackFtps:
         }
         self.delete_calls: list[str] = []
         self.rmd_calls: list[str] = []
+        self.rename_calls: list[tuple[str, str]] = []
         self.connected_host = ""
         self.protected = False
         self.passive = False
@@ -111,21 +112,15 @@ class FakeRollbackFtps:
 
     def delete(self, filename: str):
         self.delete_calls.append(filename)
-        directory, _, name = filename.rpartition("/")
-        directory = directory or self.cwd_path
-        if name not in self.files.get(directory, {}):
-            raise ftplib.error_perm("550 missing")
-        del self.files[directory][name]
-        return "ok"
+        raise AssertionError("logical rollback must never call DELE")
 
     def rmd(self, dirname: str):
         self.rmd_calls.append(dirname)
-        path = dirname if dirname.startswith("/") else f"/{dirname}"
-        if self.files.get(path):
-            raise ftplib.error_perm("550 not empty")
-        self.files.pop(path, None)
-        self.directories.remove(path)
-        return "ok"
+        raise AssertionError("logical rollback must never call RMD")
+
+    def rename(self, fromname: str, toname: str):
+        self.rename_calls.append((fromname, toname))
+        raise AssertionError("logical rollback must never call RNFR/RNTO")
 
     def quit(self):
         return "ok"
@@ -134,24 +129,17 @@ class FakeRollbackFtps:
         return None
 
 
-class DeleteReplyLostFtps(FakeRollbackFtps):
-    def delete(self, filename: str):
-        super().delete(filename)
-        raise ftplib.error_temp("421 connection lost after DELE")
-
-
-class RmdReplyLostFtps(FakeRollbackFtps):
-    def rmd(self, dirname: str):
-        super().rmd(dirname)
-        raise ftplib.error_temp("421 connection lost after RMD")
-
-
 class MissingFileTypeFtps(FakeRollbackFtps):
     def mlsd(self, path: str = "", facts=None):
         entries = list(super().mlsd(path, facts))
         if path and path != "/":
             return iter((name, {}) for name, _entry_facts in entries)
         return iter(entries)
+
+
+class ListingFailureFtps(FakeRollbackFtps):
+    def mlsd(self, path: str = "", facts=None):
+        raise ftplib.error_temp("421 listing unavailable")
 
 
 def _execute(
@@ -184,6 +172,12 @@ def _execute(
     return result, loads
 
 
+def _assert_no_mutation(fake: FakeRollbackFtps) -> None:
+    assert fake.delete_calls == []
+    assert fake.rmd_calls == []
+    assert fake.rename_calls == []
+
+
 def test_rollback_requires_literal_true_before_loading_secret() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
@@ -191,6 +185,7 @@ def test_rollback_requires_literal_true_before_loading_secret() -> None:
     assert not result.rolled_back
     assert loads == 0
     assert fake.connected_host == ""
+    _assert_no_mutation(fake)
 
 
 def test_rollback_requires_exact_run_scoped_authorization_reference() -> None:
@@ -200,6 +195,7 @@ def test_rollback_requires_exact_run_scoped_authorization_reference() -> None:
     assert not result.rolled_back
     assert loads == 0
     assert "authorization reference" in result.errors[0]
+    _assert_no_mutation(fake)
 
 
 def test_alternate_sealed_endpoint_blocks_before_loading_secret_or_connect() -> None:
@@ -212,74 +208,83 @@ def test_alternate_sealed_endpoint_blocks_before_loading_secret_or_connect() -> 
     assert loads == 0
     assert fake.connected_host == ""
     assert "approved staging endpoint" in result.errors[0]
+    _assert_no_mutation(fake)
 
 
-def test_rollback_deletes_only_absolute_sealed_artifact_paths_and_exact_directory() -> None:
+def test_present_canary_establishes_logical_rollback_without_mutation() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
+    target = f"/{upload_input.destination[:-1]}"
+    before = dict(fake.files[target])
+
     result, loads = _execute(fake, upload_input=upload_input)
 
-    target = f"/{upload_input.destination[:-1]}"
     assert result.rolled_back, result.errors
     assert loads == 1
     assert result.upload_input is upload_input
+    assert not result.remote_mutation_possible
     assert fake.protected and fake.passive
-    assert fake.delete_calls == [
-        f"{target}/cybercore-version.json",
-        f"{target}/index.html",
-    ]
-    assert fake.rmd_calls == [target]
-    assert target not in fake.directories
+    assert fake.files[target] == before
+    _assert_no_mutation(fake)
     assert result.receipt is not None
-    assert result.receipt.deleted_artifacts == ("cybercore-version.json", "index.html")
+    assert result.receipt.target_present
+    assert result.receipt.cleanup_required
+    assert not result.receipt.already_absent
+    assert not result.receipt.remote_write_performed
+    assert result.receipt.recovery_mode == "logical-no-promote"
+    assert result.receipt.present_artifacts == ("cybercore-version.json", "index.html")
 
 
-def test_rollback_allows_missing_artifact_for_interrupted_upload() -> None:
+def test_interrupted_upload_is_preserved_for_evidence_without_mutation() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
-    destination = f"/{upload_input.destination[:-1]}"
-    del fake.files[destination]["index.html"]
+    target = f"/{upload_input.destination[:-1]}"
+    del fake.files[target]["index.html"]
 
     result, _loads = _execute(fake, upload_input=upload_input)
 
     assert result.rolled_back, result.errors
-    assert fake.delete_calls == [f"{destination}/cybercore-version.json"]
-    assert destination not in fake.directories
+    assert result.receipt is not None
+    assert result.receipt.target_present
+    assert result.receipt.cleanup_required
+    assert result.receipt.present_artifacts == ("cybercore-version.json",)
+    assert "cybercore-version.json" in fake.files[target]
+    _assert_no_mutation(fake)
 
 
 def test_rollback_is_idempotent_when_exact_directory_is_already_absent() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
-    destination = f"/{upload_input.destination[:-1]}"
-    fake.files.pop(destination)
-    fake.directories.remove(destination)
+    target = f"/{upload_input.destination[:-1]}"
+    fake.files.pop(target)
+    fake.directories.remove(target)
 
     result, _loads = _execute(fake, upload_input=upload_input)
 
     assert result.rolled_back, result.errors
     assert result.receipt is not None
     assert result.receipt.already_absent
+    assert not result.receipt.target_present
+    assert not result.receipt.cleanup_required
     assert not result.receipt.remote_write_performed
-    assert fake.delete_calls == []
-    assert fake.rmd_calls == []
+    _assert_no_mutation(fake)
 
 
-def test_unexpected_entry_blocks_before_any_delete() -> None:
+def test_unexpected_entry_blocks_without_remote_mutation() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
-    destination = f"/{upload_input.destination[:-1]}"
-    fake.files[destination]["do-not-delete.txt"] = b"owned by someone else"
+    target = f"/{upload_input.destination[:-1]}"
+    fake.files[target]["do-not-touch.txt"] = b"owned by someone else"
 
     result, _loads = _execute(fake, upload_input=upload_input)
 
     assert not result.rolled_back
     assert not result.remote_mutation_possible
     assert "unexpected entries" in result.errors[0]
-    assert fake.delete_calls == []
-    assert fake.rmd_calls == []
+    _assert_no_mutation(fake)
 
 
-def test_missing_mlsd_file_type_blocks_before_any_delete() -> None:
+def test_missing_mlsd_file_type_blocks_without_remote_mutation() -> None:
     upload_input = _sealed_input()
     fake = MissingFileTypeFtps(upload_input)
 
@@ -288,38 +293,17 @@ def test_missing_mlsd_file_type_blocks_before_any_delete() -> None:
     assert not result.rolled_back
     assert not result.remote_mutation_possible
     assert "positively proven" in result.errors[0]
-    assert fake.delete_calls == []
-    assert fake.rmd_calls == []
+    _assert_no_mutation(fake)
 
 
-def test_delete_reply_loss_preserves_partial_mutation_state() -> None:
+def test_listing_failure_preserves_fail_closed_no_mutation_semantics() -> None:
     upload_input = _sealed_input()
-    fake = DeleteReplyLostFtps(upload_input)
+    fake = ListingFailureFtps(upload_input)
 
     result, _loads = _execute(fake, upload_input=upload_input)
 
     assert not result.rolled_back
-    assert result.remote_mutation_possible
-    assert result.upload_input is upload_input
-    assert result.partial_state is not None
-    assert result.partial_state.active_artifact == "cybercore-version.json"
-    assert result.partial_state.deleted_artifacts == ()
-    assert fake.delete_calls == [f"/{upload_input.destination[:-1]}/cybercore-version.json"]
+    assert not result.remote_mutation_possible
+    assert "cannot prove rollback canary state" in result.errors[0]
     assert PASSWORD not in repr(result)
-
-
-def test_rmd_reply_loss_marks_directory_removal_uncertain() -> None:
-    upload_input = _sealed_input()
-    fake = RmdReplyLostFtps(upload_input)
-    destination = f"/{upload_input.destination[:-1]}"
-
-    result, _loads = _execute(fake, upload_input=upload_input)
-
-    assert not result.rolled_back
-    assert result.remote_mutation_possible
-    assert result.partial_state is not None
-    assert result.partial_state.directory_removal_attempted
-    assert result.partial_state.directory_removal_uncertain
-    assert result.partial_state.deleted_artifacts == ("cybercore-version.json", "index.html")
-    assert fake.rmd_calls == [destination]
-    assert destination not in fake.directories
+    _assert_no_mutation(fake)
