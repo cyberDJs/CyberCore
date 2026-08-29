@@ -3,17 +3,13 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import cast
 
 import pytest
 
+from cybercore import first_write_packet as packet
 from cybercore import first_write_runtime as runtime
 from cybercore.first_write_effect import STAGING_ORIGIN, verify_first_write_effect
-from cybercore.first_write_packet import (
-    FirstWritePacketResult,
-    FirstWriteUploadInput,
-    ValidatedFirstWriteArtifact,
-)
+from cybercore.first_write_packet import FirstWriteUploadInput, ValidatedFirstWriteArtifact
 
 RUN_ID = "20260829T003500Z-a1b2c3"
 COMMIT = "a" * 40
@@ -59,19 +55,7 @@ def _sealed_input(*, protocol: str = "FTPS_EXPLICIT") -> FirstWriteUploadInput:
     )
 
 
-def _execute(
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    upload_input: FirstWriteUploadInput | None = None,
-    authorized: bool = True,
-    auth_ref: str = AUTH,
-):
-    upload_input = upload_input or _sealed_input()
-    monkeypatch.setattr(
-        runtime,
-        "validate_first_write_packet",
-        lambda *_args: FirstWritePacketResult(True, (), upload_input),
-    )
+def _execute(*, authorized: bool = True, auth_ref: str = AUTH):
     loads = 0
     factories = 0
 
@@ -105,68 +89,54 @@ def test_module_exposes_no_direct_mutating_uploader_or_capability_token() -> Non
     assert not hasattr(runtime, "_WRITE_CAPABILITY_GUARD")
 
 
-def test_runner_requires_literal_true_before_atomic_blocker(
+def test_first_write_blocker_precedes_packet_validation_and_all_network(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    result, loads, factories = _execute(
-        monkeypatch,
-        authorized=cast(bool, "false"),
-    )
-    assert not result.executed
-    assert "authorization" in result.errors[0]
-    assert loads == 0
-    assert factories == 0
-    assert not result.remote_mutation_possible
+    validations = 0
 
+    def forbidden_validation(*_args, **_kwargs):
+        nonlocal validations
+        validations += 1
+        raise AssertionError("blocked writer must not run packet validation or git fetch")
 
-def test_runner_binds_exact_authorization_reference_before_atomic_blocker(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    result, loads, factories = _execute(monkeypatch, auth_ref="approval:wrong")
-    assert not result.executed
-    assert "authorization reference" in result.errors[0]
-    assert loads == 0
-    assert factories == 0
+    monkeypatch.setattr(packet, "validate_first_write_packet", forbidden_validation)
 
-
-def test_authorized_first_write_is_fail_closed_before_secret_or_network(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    upload_input = _sealed_input()
-    result, loads, factories = _execute(monkeypatch, upload_input=upload_input)
+    result, loads, factories = _execute()
 
     assert not result.executed
-    assert result.upload_input is upload_input
     assert result.errors == (runtime.ATOMIC_NO_OVERWRITE_BLOCKER,)
-    assert "atomic no-overwrite" in result.errors[0]
+    assert validations == 0
     assert loads == 0
     assert factories == 0
+    assert result.upload_input is None
     assert not result.remote_mutation_possible
     assert result.partial_state is None
     assert result.receipt is None
     assert PASSWORD not in repr(result)
 
 
-def test_protocol_drift_blocks_before_secret_or_network(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    result, loads, factories = _execute(
-        monkeypatch,
-        upload_input=_sealed_input(protocol="SFTP"),
-    )
-    assert not result.executed
-    assert "FTPS_EXPLICIT" in result.errors[0]
-    assert loads == 0
-    assert factories == 0
+def test_first_write_blocker_is_unconditional_for_authority_arguments() -> None:
+    result_false, loads_false, factories_false = _execute(authorized=False)
+    result_wrong, loads_wrong, factories_wrong = _execute(auth_ref="approval:wrong")
+
+    assert result_false.errors == (runtime.ATOMIC_NO_OVERWRITE_BLOCKER,)
+    assert result_wrong.errors == (runtime.ATOMIC_NO_OVERWRITE_BLOCKER,)
+    assert loads_false == loads_wrong == 0
+    assert factories_false == factories_wrong == 0
+    assert not result_false.remote_mutation_possible
+    assert not result_wrong.remote_mutation_possible
 
 
-def test_sealed_artifact_digest_drift_blocks_before_atomic_blocker(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_upload_input_validator_still_rejects_protocol_drift() -> None:
+    errors = runtime.validate_first_write_upload_input(_sealed_input(protocol="SFTP"))
+    assert any("FTPS_EXPLICIT" in error for error in errors)
+
+
+def test_upload_input_validator_still_rejects_digest_drift() -> None:
     upload_input = _sealed_input()
-    bad_artifacts = list(upload_input.artifacts)
-    first = bad_artifacts[0]
-    bad_artifacts[0] = ValidatedFirstWriteArtifact(first.name, "0" * 64, first.content)
+    artifacts = list(upload_input.artifacts)
+    first = artifacts[0]
+    artifacts[0] = ValidatedFirstWriteArtifact(first.name, "0" * 64, first.content)
     tampered = FirstWriteUploadInput(
         source_commit=upload_input.source_commit,
         run_id=upload_input.run_id,
@@ -174,17 +144,12 @@ def test_sealed_artifact_digest_drift_blocks_before_atomic_blocker(
         protocol=upload_input.protocol,
         deploy_identity_scope_reference=upload_input.deploy_identity_scope_reference,
         authorization_reference=upload_input.authorization_reference,
-        artifacts=tuple(bad_artifacts),
+        artifacts=tuple(artifacts),
         endpoint_hostname=upload_input.endpoint_hostname,
     )
 
-    result, loads, factories = _execute(monkeypatch, upload_input=tampered)
-
-    assert not result.executed
-    assert "digest mismatch" in result.errors[0]
-    assert loads == 0
-    assert factories == 0
-    assert not result.remote_mutation_possible
+    errors = runtime.validate_first_write_upload_input(tampered)
+    assert any("digest mismatch" in error for error in errors)
 
 
 def test_https_effect_verifier_matches_served_bytes_and_marker() -> None:
