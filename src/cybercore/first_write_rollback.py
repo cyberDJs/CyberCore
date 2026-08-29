@@ -34,8 +34,6 @@ class _RollbackFtpsClient(Protocol):
     def mlsd(
         self, path: str = "", facts: list[str] | None = None
     ) -> Iterable[tuple[str, dict[str, str]]]: ...
-    def delete(self, filename: str) -> object: ...
-    def rmd(self, dirname: str) -> object: ...
     def quit(self) -> object: ...
     def close(self) -> object: ...
 
@@ -45,34 +43,18 @@ CredentialLoader = Callable[[], FirstWriteFtpsCredential]
 
 
 @dataclass(frozen=True)
-class FirstWriteRollbackPartialMutation:
-    source_commit: str
-    run_id: str
-    destination: str
-    endpoint_hostname: str
-    protocol: str
-    deleted_artifacts: tuple[str, ...]
-    active_artifact: str | None = None
-    directory_removal_attempted: bool = False
-    directory_removal_uncertain: bool = False
-
-
-class FirstWriteRollbackMutationError(FirstWriteRuntimeError):
-    def __init__(self, message: str, partial_state: FirstWriteRollbackPartialMutation) -> None:
-        super().__init__(message)
-        self.partial_state = partial_state
-
-
-@dataclass(frozen=True)
 class FirstWriteRollbackReceipt:
     source_commit: str
     run_id: str
     destination: str
     endpoint_hostname: str
     protocol: str
-    deleted_artifacts: tuple[str, ...]
+    target_present: bool
+    present_artifacts: tuple[str, ...]
+    cleanup_required: bool
     already_absent: bool = False
-    remote_write_performed: bool = True
+    remote_write_performed: bool = False
+    recovery_mode: str = "logical-no-promote"
 
 
 @dataclass(frozen=True)
@@ -82,7 +64,6 @@ class FirstWriteRollbackResult:
     receipt: FirstWriteRollbackReceipt | None = None
     upload_input: FirstWriteUploadInput | None = field(default=None, repr=False)
     remote_mutation_possible: bool = False
-    partial_state: FirstWriteRollbackPartialMutation | None = None
 
 
 def rollback_authorization_reference(upload_input: FirstWriteUploadInput) -> str:
@@ -110,7 +91,7 @@ def _list_entries(client: _RollbackFtpsClient, path: str = "") -> list[tuple[str
         return list(client.mlsd(path))
     except FTPS_OPERATION_ERRORS:
         raise FirstWriteRuntimeError(
-            "cannot prove rollback directory contents over protected FTPS"
+            "cannot prove rollback canary state over protected FTPS"
         ) from None
 
 
@@ -154,28 +135,6 @@ def _validate_target_contents(
     return tuple(sorted(names)), ()
 
 
-def _partial_state(
-    upload_input: FirstWriteUploadInput,
-    credential: FirstWriteFtpsCredential,
-    *,
-    deleted_artifacts: list[str],
-    active_artifact: str | None,
-    directory_removal_attempted: bool,
-    directory_removal_uncertain: bool = False,
-) -> FirstWriteRollbackPartialMutation:
-    return FirstWriteRollbackPartialMutation(
-        source_commit=upload_input.source_commit,
-        run_id=upload_input.run_id,
-        destination=upload_input.destination,
-        endpoint_hostname=credential.endpoint_hostname,
-        protocol=upload_input.protocol,
-        deleted_artifacts=tuple(deleted_artifacts),
-        active_artifact=active_artifact,
-        directory_removal_attempted=directory_removal_attempted,
-        directory_removal_uncertain=directory_removal_uncertain,
-    )
-
-
 def execute_first_write_rollback(
     upload_input: FirstWriteUploadInput,
     *,
@@ -184,10 +143,14 @@ def execute_first_write_rollback(
     credential_loader: CredentialLoader,
     ftp_factory: RollbackFtpsFactory = _default_ftps_factory,
 ) -> FirstWriteRollbackResult:
-    """Delete only the exact sealed first-write canary directory.
+    """Establish the safe first-write rollback posture without remote mutation.
 
-    Missing approved artifacts are allowed because rollback must also recover an interrupted
-    upload. Any unexpected entry or unproven file type blocks deletion.
+    The WB-0034 first write is additive and isolated in a unique no-overwrite canary
+    directory. Its immediate recovery action is therefore logical rollback: stop,
+    do not promote, preserve the isolated run for evidence, and report whether later
+    physical cleanup is required. Automated DELE/RMD/RNTO operations are intentionally
+    absent because FTP path identity cannot be bound atomically against concurrent
+    rename/swap races.
     """
 
     input_errors = validate_first_write_upload_input(upload_input)
@@ -246,17 +209,13 @@ def execute_first_write_rollback(
             False, ("FTPS credential is incomplete",), upload_input=upload_input
         )
 
-    def run_authorized_rollback() -> FirstWriteRollbackReceipt:
+    def establish_logical_rollback() -> FirstWriteRollbackReceipt:
         context = ssl.create_default_context()
         context.check_hostname = True
         context.verify_mode = ssl.CERT_REQUIRED
         client = ftp_factory(context)
         destination = upload_input.destination[:-1]
         target_path = f"/{destination}"
-        deleted: list[str] = []
-        active_artifact: str | None = None
-        mutation_attempted = False
-        directory_removal_attempted = False
         try:
             client.connect(EXPECTED_ENDPOINT, credential.port, timeout=15)
             client.auth()
@@ -280,9 +239,10 @@ def execute_first_write_rollback(
                     destination=upload_input.destination,
                     endpoint_hostname=EXPECTED_ENDPOINT,
                     protocol=upload_input.protocol,
-                    deleted_artifacts=(),
+                    target_present=False,
+                    present_artifacts=(),
+                    cleanup_required=False,
                     already_absent=True,
-                    remote_write_performed=False,
                 )
 
             contents = _list_entries(client, target_path)
@@ -290,66 +250,22 @@ def execute_first_write_rollback(
             if content_errors:
                 raise FirstWriteRuntimeError(content_errors[0])
 
-            for name in present:
-                active_artifact = name
-                mutation_attempted = True
-                client.delete(f"{target_path}/{name}")
-                deleted.append(name)
-                active_artifact = None
-
-            if _list_entries(client, target_path):
-                raise FirstWriteRuntimeError(
-                    "rollback target is not empty after bounded artifact deletion"
-                )
-
-            directory_removal_attempted = True
-            mutation_attempted = True
-            client.rmd(target_path)
-
-            parent_after = _list_entries(client)
-            remains, parent_after_errors = _validate_parent_target(parent_after, destination)
-            if parent_after_errors:
-                raise FirstWriteRuntimeError(parent_after_errors[0])
-            if remains:
-                raise FirstWriteRuntimeError("rollback target still exists after directory removal")
-
             return FirstWriteRollbackReceipt(
                 source_commit=upload_input.source_commit,
                 run_id=upload_input.run_id,
                 destination=upload_input.destination,
                 endpoint_hostname=EXPECTED_ENDPOINT,
                 protocol=upload_input.protocol,
-                deleted_artifacts=tuple(deleted),
+                target_present=True,
+                present_artifacts=present,
+                cleanup_required=True,
             )
-        except FirstWriteRollbackMutationError:
-            raise
-        except FirstWriteRuntimeError as exc:
-            if mutation_attempted:
-                raise FirstWriteRollbackMutationError(
-                    str(exc),
-                    _partial_state(
-                        upload_input,
-                        credential,
-                        deleted_artifacts=deleted,
-                        active_artifact=active_artifact,
-                        directory_removal_attempted=directory_removal_attempted,
-                    ),
-                ) from None
+        except FirstWriteRuntimeError:
             raise
         except FTPS_OPERATION_ERRORS:
-            if mutation_attempted:
-                raise FirstWriteRollbackMutationError(
-                    "FTPS rollback failed after a bounded delete attempt; remote mutation may be partial",
-                    _partial_state(
-                        upload_input,
-                        credential,
-                        deleted_artifacts=deleted,
-                        active_artifact=active_artifact,
-                        directory_removal_attempted=directory_removal_attempted,
-                        directory_removal_uncertain=directory_removal_attempted,
-                    ),
-                ) from None
-            raise FirstWriteRuntimeError("FTPS rollback failed before any delete attempt") from None
+            raise FirstWriteRuntimeError(
+                "FTPS rollback inspection failed; no remote mutation was attempted"
+            ) from None
         finally:
             try:
                 client.quit()
@@ -360,15 +276,7 @@ def execute_first_write_rollback(
                     pass
 
     try:
-        receipt = run_authorized_rollback()
-    except FirstWriteRollbackMutationError as exc:
-        return FirstWriteRollbackResult(
-            False,
-            (str(exc),),
-            upload_input=upload_input,
-            remote_mutation_possible=True,
-            partial_state=exc.partial_state,
-        )
+        receipt = establish_logical_rollback()
     except FirstWriteRuntimeError as exc:
         return FirstWriteRollbackResult(False, (str(exc),), upload_input=upload_input)
     return FirstWriteRollbackResult(True, (), receipt, upload_input)
