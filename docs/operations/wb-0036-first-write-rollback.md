@@ -3,6 +3,12 @@
 Date: 2026-08-29
 Status: `RUNTIME DEFINED — REMOTE MUTATION NOT PART OF ROLLBACK`
 
+## Authority and supersession
+
+For the WB-0034 first staging canary only, this document supersedes the destructive `## Rollback` procedure in `docs/operations/wb-0034-first-staging-deployment-mop.md`. All other WB-0034 first-write constraints remain unchanged.
+
+The superseded delete procedure must not be used for this first-write canary unless a later separately reviewed maintenance design explicitly restores physical cleanup with a real concurrency-safe mechanism.
+
 ## Purpose
 
 Recover safely from the first WB-0034 staging canary write without deleting, renaming, overwriting, or otherwise mutating remote content.
