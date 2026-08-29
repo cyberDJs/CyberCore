@@ -7,10 +7,7 @@ import hashlib
 from pathlib import Path
 import re
 
-from cybercore.first_write_packet import (
-    FirstWriteUploadInput,
-    validate_first_write_packet,
-)
+from cybercore.first_write_packet import FirstWriteUploadInput
 
 EXPECTED_PROTOCOL = "FTPS_EXPLICIT"
 EXPECTED_PORT = 21
@@ -117,59 +114,19 @@ def execute_first_write_ftps(
     credential_loader: CredentialLoader,
     ftp_factory: FtpsFactory | None = None,
 ) -> FirstWriteExecutionResult:
-    """Validate the sealed first-write request and fail closed before remote mutation.
+    """Fail closed before packet validation, credentials, or any network operation.
 
     The prior FTPS implementation used an absence check followed by MKD/STOR. FTP STOR
     replaces an existing pathname, so another session could race the check and cause an
-    overwrite. Until CyberCore has an atomic create-if-absent writer or independently
-    verified exclusive access, this entry point intentionally performs no credential load,
-    network connection, directory creation, upload, rename, or delete.
+    overwrite. Packet validation may itself consult the Git remote, so while the writer is
+    blocked this entry point must return before validation as well as before FTPS activity.
 
-    ``credential_loader`` and ``ftp_factory`` remain in the signature for compatibility with
-    the merged WB-0035 call contract; they are deliberately not invoked.
+    The parameters remain in the signature for compatibility with the merged WB-0035 call
+    contract. None of them is evaluated by this blocked execution path.
     """
 
-    packet = validate_first_write_packet(
-        manifest_path,
-        readiness_path,
-        repository_root,
-        artifact_dir,
-    )
-    if not packet.ready or packet.upload_input is None:
-        return FirstWriteExecutionResult(
-            False, tuple(packet.errors) or ("final packet is BLOCKED",)
-        )
-
-    upload_input = packet.upload_input
-    if remote_write_authorized is not True:
-        return FirstWriteExecutionResult(
-            False,
-            ("fresh remote-write authorization is required",),
-            upload_input=upload_input,
-        )
-    if authorization_reference != upload_input.authorization_reference:
-        return FirstWriteExecutionResult(
-            False,
-            ("authorization reference does not match sealed packet",),
-            upload_input=upload_input,
-        )
-    if upload_input.protocol != EXPECTED_PROTOCOL:
-        return FirstWriteExecutionResult(
-            False,
-            ("sealed packet protocol is not FTPS_EXPLICIT",),
-            upload_input=upload_input,
-        )
-
-    input_errors = validate_first_write_upload_input(upload_input)
-    if input_errors:
-        return FirstWriteExecutionResult(False, input_errors, upload_input=upload_input)
-
-    # Safety gate from WB-0036 security review. This is intentionally unconditional until
-    # a real atomic no-overwrite or independently verified exclusive-access mechanism exists.
-    # Do not move credential loading or any network operation above this return.
     return FirstWriteExecutionResult(
         False,
         (ATOMIC_NO_OVERWRITE_BLOCKER,),
-        upload_input=upload_input,
         remote_mutation_possible=False,
     )
