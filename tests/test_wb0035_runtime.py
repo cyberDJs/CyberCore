@@ -155,6 +155,12 @@ class PartialStoreFailFtps(FakeFtps):
         raise ftplib.error_temp("426 transfer aborted")
 
 
+class MkdReplyLostFtps(FakeFtps):
+    def mkd(self, dirname: str) -> str:
+        super().mkd(dirname)
+        raise ftplib.error_temp("421 connection lost after MKD")
+
+
 def _execute(
     monkeypatch: pytest.MonkeyPatch,
     fake: FakeFtps,
@@ -191,13 +197,11 @@ def _execute(
     return result, loads
 
 
-def test_public_mutating_uploader_is_not_exposed() -> None:
+def test_module_exposes_no_direct_mutating_uploader_or_capability_token() -> None:
     assert not hasattr(runtime, "upload_first_write_ftps")
-
-
-def test_capability_cannot_be_constructed_without_guard() -> None:
-    with pytest.raises(runtime.FirstWriteRuntimeError, match="capability"):
-        runtime._WriteCapability(object(), _sealed_input())
+    assert not hasattr(runtime, "_upload_first_write_ftps")
+    assert not hasattr(runtime, "_WriteCapability")
+    assert not hasattr(runtime, "_WRITE_CAPABILITY_GUARD")
 
 
 def test_runner_requires_literal_true_and_does_not_load_secret(
@@ -321,6 +325,24 @@ def test_sealed_artifact_digest_drift_blocks_before_connect(
     assert "digest mismatch" in result.errors[0]
 
 
+def test_mkd_reply_loss_preserves_possible_remote_mutation_and_sealed_input(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    upload_input = _sealed_input()
+    fake = MkdReplyLostFtps()
+    result, _ = _execute(monkeypatch, fake, upload_input=upload_input)
+
+    assert not result.executed
+    assert result.remote_mutation_possible
+    assert result.upload_input is upload_input
+    assert result.partial_state is not None
+    assert not result.partial_state.destination_created
+    assert result.partial_state.destination_creation_uncertain
+    assert result.partial_state.uploaded_artifacts == ()
+    assert result.partial_state.active_artifact is None
+    assert f"/cybercore-canary-{RUN_ID}" in fake.files
+
+
 def test_partial_stor_failure_preserves_remote_mutation_state_and_sealed_input(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -333,6 +355,7 @@ def test_partial_stor_failure_preserves_remote_mutation_state_and_sealed_input(
     assert result.upload_input is upload_input
     assert result.partial_state is not None
     assert result.partial_state.destination_created
+    assert not result.partial_state.destination_creation_uncertain
     assert result.partial_state.active_artifact == "cybercore-version.json"
     assert result.partial_state.uploaded_artifacts == ()
     destination = f"/cybercore-canary-{RUN_ID}"
