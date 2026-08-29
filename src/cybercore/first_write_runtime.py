@@ -303,9 +303,7 @@ def execute_first_write_ftps(
                 endpoint_hostname=credential.endpoint_hostname,
                 protocol=upload_input.protocol,
                 tls_version=tls_version,
-                artifact_sha256=tuple(
-                    (artifact.name, artifact.sha256) for artifact in artifacts
-                ),
+                artifact_sha256=tuple((artifact.name, artifact.sha256) for artifact in artifacts),
             )
         except FirstWriteMutationError:
             raise
