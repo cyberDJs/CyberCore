@@ -64,10 +64,16 @@ class LongRunStateStore:
             db.execute(
                 "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    state.run_id, state.manifest_digest, state.status, state.step_index,
-                    state.consecutive_failures, state.last_step_fingerprint,
-                    state.duplicate_count, state.evaluator_score,
-                    state.started_at, state.updated_at,
+                    state.run_id,
+                    state.manifest_digest,
+                    state.status,
+                    state.step_index,
+                    state.consecutive_failures,
+                    state.last_step_fingerprint,
+                    state.duplicate_count,
+                    state.evaluator_score,
+                    state.started_at,
+                    state.updated_at,
                 ),
             )
 
@@ -83,10 +89,16 @@ class LongRunStateStore:
                 consecutive_failures=?, last_step_fingerprint=?, duplicate_count=?,
                 evaluator_score=?, started_at=?, updated_at=? WHERE run_id=?""",
                 (
-                    state.manifest_digest, state.status, state.step_index,
-                    state.consecutive_failures, state.last_step_fingerprint,
-                    state.duplicate_count, state.evaluator_score,
-                    state.started_at, state.updated_at, state.run_id,
+                    state.manifest_digest,
+                    state.status,
+                    state.step_index,
+                    state.consecutive_failures,
+                    state.last_step_fingerprint,
+                    state.duplicate_count,
+                    state.evaluator_score,
+                    state.started_at,
+                    state.updated_at,
+                    state.run_id,
                 ),
             )
 
