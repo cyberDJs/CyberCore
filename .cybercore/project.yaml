@@ -165,7 +165,7 @@ completed:
     verification: 66_passed
   - artifact: WB-0020
     pull_request: 24
-    merge_commit: 5ac0db5278acc957b952e8385c5b9e3915060521a
+    merge_commit: 5ac0db5278acc57710f4987ba34e605cdaaf2ec3
     verification: 78_passed
   - artifact: WB-0021
     pull_request: 25
@@ -241,7 +241,7 @@ completed:
     verification: ci_99_codeql_96_manual_review_passed
   - artifact: WB-0030-staging-readiness-gate
     pull_request: 49
-    merge_commit: 2de294bb3334e4194769f3c2d366d578859dab31132
+    merge_commit: 2de294bb3334e4194769f3b883d58a2e5e3a8ea5
     verification: ci_135_codeql_132_codex_no_major_issues_manual_review_passed
   - artifact: PR49-post-merge-reconciliation-and-WB0031-kickoff
     pull_request: 50
