@@ -26,6 +26,10 @@ _MLST_RCHAR = frozenset(
 )
 _MLST_SCHAR = _MLST_RCHAR | {"="}
 
+# ftplib joins physical FTP control lines with LF. Other Unicode/Python
+# line-breaking characters must never be promoted into synthetic FTP lines.
+_MLST_FORBIDDEN_LINE_BREAKS = frozenset("\r\v\f\x1c\x1d\x1e\x85\u2028\u2029")
+
 
 class _RollbackFtpsClient(Protocol):
     sock: object
@@ -111,7 +115,12 @@ def _probe_exact_path(client: _RollbackFtpsClient, path: str, *, expected_type: 
             "cannot prove rollback target metadata over protected FTPS"
         ) from None
 
-    response_lines = response.splitlines()
+    if any(char in _MLST_FORBIDDEN_LINE_BREAKS for char in response):
+        raise FirstWriteRuntimeError(
+            "MLST control response contains invalid line-breaking characters"
+        )
+
+    response_lines = response.split("\n")
     if (
         len(response_lines) != 3
         or not response_lines[0].startswith("250-")
