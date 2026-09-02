@@ -89,17 +89,32 @@ def test_operator_start_resume_and_event_ledger_survive_reconstruction(tmp_path:
     assert context.state_db == tmp_path / ".cybercore" / "longrun" / "operator-test.sqlite"
 
     reconstructed = load_operator_context(tmp_path, profile=profile, mission=mission)
-    second = resume_longrun(reconstructed, max_steps=2)
+    second = resume_longrun(reconstructed, max_steps=1)
     assert second.status == "RUNNING"
-    assert second.step_index == 3
+    assert second.step_index == 2
 
     events = inspect_events(reconstructed)
-    assert [event.kind for event in events] == ["RUN_STARTED", "STEP_RESULT", "STEP_RESULT", "STEP_RESULT"]
+    assert [event.kind for event in events] == ["RUN_STARTED", "STEP_RESULT", "STEP_RESULT"]
+    step_events = [event for event in events if event.kind == "STEP_RESULT"]
     assert all(
         event.payload.get("evidence", {}).get("independent_evaluation") is False
-        for event in events
-        if event.kind == "STEP_RESULT"
+        for event in step_events
     )
+    assert all(event.payload.get("evidence", {}).get("sha256") for event in step_events)
+
+
+def test_harness_blocks_instead_of_padding_after_useful_targets_are_exhausted(tmp_path: Path):
+    profile, mission = _contract(tmp_path)
+    context = load_operator_context(tmp_path, profile=profile, mission=mission)
+    start_longrun(context, max_steps=2)
+
+    blocked = resume_longrun(context, max_steps=1)
+
+    assert blocked.status == "BLOCKED"
+    assert blocked.step_index == 2
+    events = inspect_events(context)
+    assert events[-1].kind == "STEP_BLOCKED"
+    assert events[-1].payload["reason"] == "non-positive expected value"
 
 
 def test_operator_start_refuses_existing_run(tmp_path: Path):
