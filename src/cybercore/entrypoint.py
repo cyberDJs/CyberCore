@@ -362,7 +362,7 @@ def _run_context(argv: list[str]) -> int:
     paths = RuntimePaths.discover(args.repo)
     context = collect_trusted_operation_context(
         paths.repo,
-        operation="post_merge_transition" if args.operation == "post_merge_transition" else args.operation,
+        operation=args.operation,
         risk=args.risk,
         expected_branch=args.expected_branch,
         expected_commit=args.expected_commit,
