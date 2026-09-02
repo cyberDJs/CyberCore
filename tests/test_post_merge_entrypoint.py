@@ -175,3 +175,24 @@ def test_post_merge_terminal_rejects_successor_fields(capsys) -> None:
 
     assert result == 2
     assert "cannot declare a successor" in capsys.readouterr().err
+
+
+def test_post_merge_terminal_rejects_empty_required_values(capsys) -> None:
+    for option in ("--completed-artifact", "--verification", "--next-action"):
+        arguments = _terminal_args()
+        arguments[arguments.index(option) + 1] = "   "
+
+        result = entrypoint.main(["post-merge", "22", *arguments, "--write"])
+
+        assert result == 2
+        assert "contract values must be non-empty strings" in capsys.readouterr().err
+
+
+def test_post_merge_terminal_rejects_empty_next_task(capsys) -> None:
+    arguments = _terminal_args()
+    arguments[arguments.index("--next-task") + 1] = ""
+
+    result = entrypoint.main(["post-merge", "22", *arguments, "--write"])
+
+    assert result == 2
+    assert "--next-task values must be non-empty strings" in capsys.readouterr().err
