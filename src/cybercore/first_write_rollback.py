@@ -113,7 +113,7 @@ def _probe_exact_path(client: _RollbackFtpsClient, path: str, *, expected_type: 
             key, value = item.split("=", 1)
             facts[key.lower()] = value
 
-    if reported_path.rstrip("/") != path.rstrip("/"):
+    if reported_path != path:
         raise FirstWriteRuntimeError("MLST metadata record does not match the sealed target path")
     if _entry_type(facts) != expected_type:
         raise FirstWriteRuntimeError(
