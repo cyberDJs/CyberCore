@@ -12,6 +12,8 @@ Remove destructive rollback races and prevent the first-write runtime from claim
 
 Automated rollback is logical and read-only. It performs no `DELE`, `RMD`, `RNFR`, `RNTO`, upload, chmod or chown operation. Any created canary is preserved for evidence and later separately authorized maintenance.
 
+Recovery inspection is bounded to the exact sealed canary path. Presence/type is checked with `MLST /cybercore-canary-<run_id>`; the staging parent is never enumerated. Only a positively proven directory is inspected further with `MLSD` on that exact target path.
+
 ## Upload TOCTOU finding
 
 The WB-0035 uploader previously performed an absence check followed by ordinary FTP `STOR`. By FTP semantics, `STOR` replaces a pathname that exists when the command is applied. A concurrent actor can therefore create or replace the pathname after the absence check. The same class of race can affect the directory pathname between `MKD` and later operations.
@@ -19,6 +21,8 @@ The WB-0035 uploader previously performed an absence check followed by ordinary 
 Consequently the prior "no-overwrite" claim was not proven under concurrency, and non-destructive rollback alone cannot make that writer safe: an overwrite may already have altered pre-existing content.
 
 A later Codex pass identified a second boundary issue: `validate_first_write_packet(...)` can execute `git fetch origin`, so a blocker after validation can still create network activity and invoke configured Git credential helpers.
+
+A ready-triggered review identified a recovery-scope issue: bare parent `MLSD` materialized unrelated staging-root metadata. WB-0036 now uses exact-path `MLST` instead, keeping recovery work and evidence bounded to the sealed target.
 
 ## Final WB-0036 control
 
@@ -48,7 +52,7 @@ Regression tests replace the packet validator with a function that raises if cal
 - no upload receipt, sealed upload input, or partial mutation state is produced;
 - the same blocker is returned even with false or mismatched write-authority arguments.
 
-Direct helper tests separately preserve coverage for sealed-input protocol and artifact-digest validation. The read-only recovery tests prove zero remote mutation across present, absent, interrupted and malformed target states.
+Direct helper tests separately preserve coverage for sealed-input protocol and artifact-digest validation. Read-only recovery tests prove zero remote mutation across present, absent, interrupted and malformed target states, plus exact-target `MLST`/`MLSD` behavior with no staging-parent enumeration.
 
 ## Future writer requirement
 
