@@ -21,6 +21,16 @@ class RunState:
     updated_at: float
 
 
+@dataclass(frozen=True, slots=True)
+class RunEvent:
+    id: int
+    run_id: str
+    step_index: int
+    kind: str
+    payload: dict[str, object]
+    created_at: float
+
+
 class LongRunStateStore:
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -141,6 +151,32 @@ class LongRunStateStore:
         with self._connect() as db:
             row = db.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
         return RunState(**dict(row)) if row else None
+
+    def list_events(self, run_id: str, *, limit: int = 100) -> list[RunEvent]:
+        if limit < 1 or limit > 1000:
+            raise ValueError("event limit must be between 1 and 1000")
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT id, run_id, step_index, kind, payload, created_at "
+                "FROM events WHERE run_id = ? ORDER BY id DESC LIMIT ?",
+                (run_id, limit),
+            ).fetchall()
+        events: list[RunEvent] = []
+        for row in reversed(rows):
+            payload = json.loads(row["payload"])
+            if not isinstance(payload, dict):
+                raise RuntimeError("stored LongRun event payload is not an object")
+            events.append(
+                RunEvent(
+                    id=row["id"],
+                    run_id=row["run_id"],
+                    step_index=row["step_index"],
+                    kind=row["kind"],
+                    payload=payload,
+                    created_at=row["created_at"],
+                )
+            )
+        return events
 
     def save(self, state: RunState) -> None:
         with self._connect() as db:
