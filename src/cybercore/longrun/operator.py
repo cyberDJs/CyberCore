@@ -49,7 +49,7 @@ def load_operator_context(
     db_path = (
         _resolve(repo, state_db)
         if state_db is not None
-        else repo / ".cybercore" / "longrun" / f"{manifest.run_id}.sqlite"
+        else (repo / ".cybercore" / "longrun" / f"{manifest.run_id}.sqlite").resolve()
     )
     if not _within_repo(db_path, repo):
         raise ValueError("LongRun state database must remain inside the repository sandbox")
