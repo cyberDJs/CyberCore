@@ -144,6 +144,18 @@ def test_operator_rejects_state_database_outside_repo_sandbox(tmp_path: Path):
         load_operator_context(tmp_path, profile=profile, mission=mission, state_db=outside)
 
 
+def test_operator_rejects_default_state_path_through_external_symlink(tmp_path: Path):
+    profile, mission = _contract(tmp_path)
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    (tmp_path / ".cybercore").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="repository sandbox"):
+        load_operator_context(tmp_path, profile=profile, mission=mission)
+
+    assert not (outside / "longrun" / "operator-test.sqlite").exists()
+
+
 def test_cli_status_for_missing_run_does_not_create_database(tmp_path: Path, capsys):
     profile, mission = _contract(tmp_path)
     state_db = tmp_path / ".cybercore" / "longrun" / "operator-test.sqlite"
