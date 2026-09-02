@@ -31,6 +31,7 @@ class _RollbackFtpsClient(Protocol):
     def prot_p(self) -> object: ...
     def set_pasv(self, val: bool) -> object: ...
     def pwd(self) -> str: ...
+    def sendcmd(self, cmd: str) -> str: ...
     def mlsd(
         self, path: str = "", facts: list[str] | None = None
     ) -> Iterable[tuple[str, dict[str, str]]]: ...
@@ -86,7 +87,7 @@ def _tls_version(client: _RollbackFtpsClient) -> str:
     return value
 
 
-def _list_entries(client: _RollbackFtpsClient, path: str = "") -> list[tuple[str, dict[str, str]]]:
+def _list_entries(client: _RollbackFtpsClient, path: str) -> list[tuple[str, dict[str, str]]]:
     try:
         return list(client.mlsd(path))
     except FTPS_OPERATION_ERRORS:
@@ -100,17 +101,45 @@ def _entry_type(facts: dict[str, str]) -> str | None:
     return value.lower() if isinstance(value, str) else None
 
 
-def _validate_parent_target(
-    entries: list[tuple[str, dict[str, str]]], destination: str
-) -> tuple[bool, tuple[str, ...]]:
-    matches = [(name, facts) for name, facts in entries if name == destination]
-    if not matches:
-        return False, ()
-    if len(matches) != 1:
-        return True, ("rollback target appears more than once in parent listing",)
-    if _entry_type(matches[0][1]) != "dir":
-        return True, ("rollback target is not positively proven to be a directory",)
-    return True, ()
+def _probe_exact_target(client: _RollbackFtpsClient, target_path: str) -> bool:
+    """Probe only the sealed target with MLST; never enumerate the staging parent."""
+
+    try:
+        response = client.sendcmd(f"MLST {target_path}")
+    except ftplib.error_perm as exc:
+        if str(exc).lstrip().startswith("550"):
+            return False
+        raise FirstWriteRuntimeError(
+            "cannot prove rollback target metadata over protected FTPS"
+        ) from None
+    except FTPS_OPERATION_ERRORS:
+        raise FirstWriteRuntimeError(
+            "cannot prove rollback target metadata over protected FTPS"
+        ) from None
+
+    fact_lines: list[tuple[str, str]] = []
+    for raw_line in response.splitlines():
+        line = raw_line.strip()
+        facts_text, separator, reported_path = line.partition(" ")
+        if separator and "=" in facts_text and ";" in facts_text:
+            fact_lines.append((facts_text, reported_path.strip()))
+
+    if len(fact_lines) != 1:
+        raise FirstWriteRuntimeError("MLST did not return exactly one target metadata record")
+
+    facts_text, reported_path = fact_lines[0]
+    facts: dict[str, str] = {}
+    for item in facts_text.split(";"):
+        if not item or "=" not in item:
+            continue
+        key, value = item.split("=", 1)
+        facts[key.lower()] = value
+
+    if reported_path.rstrip("/") != target_path.rstrip("/"):
+        raise FirstWriteRuntimeError("MLST metadata record does not match the sealed target path")
+    if _entry_type(facts) != "dir":
+        raise FirstWriteRuntimeError("rollback target is not positively proven to be a directory")
+    return True
 
 
 def _validate_target_contents(
@@ -228,11 +257,7 @@ def execute_first_write_rollback(
                     "FTPS identity is not rooted at the approved staging root"
                 )
 
-            parent_entries = _list_entries(client)
-            exists, parent_errors = _validate_parent_target(parent_entries, destination)
-            if parent_errors:
-                raise FirstWriteRuntimeError(parent_errors[0])
-            if not exists:
+            if not _probe_exact_target(client, target_path):
                 return FirstWriteRollbackReceipt(
                     source_commit=upload_input.source_commit,
                     run_id=upload_input.run_id,
