@@ -114,7 +114,49 @@ class LongRunEngine:
                 {"reason": watchdog.reason},
             )
 
-        proposal = self.planner(state)
+        try:
+            proposal = self.planner(state)
+        except Exception as exc:
+            now = self.clock()
+            elapsed = now - state.started_at
+            failed = replace(
+                state,
+                status=(
+                    "STOPPED"
+                    if elapsed >= self.manifest.maximum_wall_seconds
+                    else state.status
+                ),
+                step_index=state.step_index + 1,
+                consecutive_failures=state.consecutive_failures + 1,
+                updated_at=now,
+            )
+            payload: dict[str, object] = {
+                "exception_type": type(exc).__name__,
+                "status": failed.status,
+            }
+            if failed.status == "STOPPED":
+                payload["terminal_reason"] = "maximum wall budget exhausted during planning"
+            self._persist_transition(failed, "PLANNER_EXCEPTION", payload)
+            raise
+
+        now = self.clock()
+        elapsed = now - state.started_at
+        watchdog = evaluate_watchdog(
+            elapsed_seconds=elapsed,
+            maximum_wall_seconds=self.manifest.maximum_wall_seconds,
+            consecutive_failures=state.consecutive_failures,
+            max_consecutive_failures=self.manifest.max_consecutive_failures,
+            duplicate_count=state.duplicate_count,
+            max_duplicate_steps=self.manifest.max_duplicate_steps,
+        )
+        if watchdog.action == "STOP":
+            stopped = replace(state, status="STOPPED", updated_at=now)
+            return self._persist_transition(
+                stopped,
+                "WATCHDOG_STOP",
+                {"reason": watchdog.reason, "phase": "post_planning"},
+            )
+
         allowed, reason = authorize_step(
             proposal,
             allowed_effects=self.manifest.allowed_effects,
@@ -177,7 +219,7 @@ class LongRunEngine:
         ):
             new_state = replace(new_state, status="COMPLETED")
 
-        payload: dict[str, object] = {
+        payload = {
             "fingerprint": proposal.fingerprint,
             "success": result.success,
             "evaluator_score": result.evaluator_score,
