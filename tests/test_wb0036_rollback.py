@@ -60,9 +60,7 @@ class FakeRollbackFtps:
         self.target = f"/{upload_input.destination[:-1]}"
         self.directories = {"/", self.target}
         self.files = {
-            self.target: {
-                artifact.name: artifact.content for artifact in upload_input.artifacts
-            }
+            self.target: {artifact.name: artifact.content for artifact in upload_input.artifacts}
         }
         self.mlst_calls: list[str] = []
         self.delete_calls: list[str] = []
@@ -257,10 +255,7 @@ def test_recovery_probes_only_sealed_canary_and_approved_artifacts():
         f"{target}/cybercore-version.json",
         f"{target}/index.html",
     ]
-    assert all(
-        "do-not-touch" not in path and "unrelated" not in path
-        for path in fake.mlst_calls
-    )
+    assert all("do-not-touch" not in path and "unrelated" not in path for path in fake.mlst_calls)
     _assert_no_mutation(fake)
 
 
@@ -276,9 +271,6 @@ def test_metadata_failure_preserves_fail_closed_no_mutation_semantics():
     inp = _sealed_input()
     fake = MetadataFailureFtps(inp)
     result, _ = _execute(fake, upload_input=inp)
-    assert (
-        not result.rolled_back
-        and "cannot prove rollback target metadata" in result.errors[0]
-    )
+    assert not result.rolled_back and "cannot prove rollback target metadata" in result.errors[0]
     assert PASSWORD not in repr(result)
     _assert_no_mutation(fake)
