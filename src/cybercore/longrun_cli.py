@@ -76,6 +76,7 @@ def run_longrun(argv: list[str]) -> int:
         profile=args.profile,
         mission=args.mission,
         state_db=args.state_db,
+        require_existing_state=args.longrun_command != "start",
     )
 
     if args.longrun_command == "start":
