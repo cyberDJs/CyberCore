@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: current source-of-truth reconciliation
-  active_artifact: PR69-CURRENT-SOT-RECONCILIATION
-  branch: docs/post-pr65-pr68-sot-reconciliation
-  pull_request: 69
-  last_verified_main: 8b555ffad19d44e8badff457d754efdb91e0bca8
+  milestone: PR69 post-merge source-of-truth closeout
+  active_artifact: PR69-POST-MERGE-SOT-CLOSEOUT
+  branch: docs/pr69-post-merge-sot-closeout
+  pull_request: 77
+  last_verified_main: 41a0994b3cef083f15b8280724dd788cd31a880e
 
 status:
   ccl_specification: complete_draft
@@ -41,7 +41,7 @@ status:
   checkpoint_persistence: verified
   verification_evidence: verified
   idempotent_canonical_memory: verified
-  post_merge_state_transition: drift_repair_in_progress_pr69
+  post_merge_state_transition: pr69_closeout_in_progress
   remote_aware_repository_identity: verified
   repository_identity_diagnostics: verified
   repository_identity_policy: verified
@@ -61,6 +61,7 @@ status:
   readme_landing_page: verified
   caser_e_google_drive_workspace: initialized
   caser_e_evidence_mirror: verified_noncanonical
+  caser_e_evidence_mirror_freshness: stale_after_pr76_merge
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
   pr38_post_merge_reconciliation: merged
@@ -128,15 +129,19 @@ status:
   governed_execution_bridge: canonical
   pr72_longrun_operator_runtime: merged_verified_canonical
   longrun_operator_runtime: canonical
+  pr76_longrun_independent_evaluation_acceptance: merged_verified_canonical
+  longrun_independent_evaluation_acceptance: canonical
   wb0035_identifier: conflict_needs_review
   wb0036_identifier: conflict_needs_review
   wb0037_identifier: conflict_needs_review
   pr61_old_wb0035_vps_vikunja: open_draft_identity_conflict_needs_review
   pr67_mcp_foundation: open_draft_requires_current_main_revalidation
+  pr74_cyber_voice_intelligence_bridge: open_draft_requires_current_main_revalidation
+  pr75_cyber_voice_live_acceptance_repair: open_draft_requires_current_main_revalidation
   pr45_staging_plan: open_stale_needs_supersession_review
   pr13_structured_registry: open_stale_needs_supersession_review
   pr5_provider_framework: open_stale_needs_supersession_review
-  pr69_post_pr65_pr68_sot_reconciliation: active_candidate_requires_exact_head_regating
+  pr69_post_pr65_pr68_sot_reconciliation: merged_verified
 
 completed:
   - artifact: WB-0015
@@ -299,17 +304,26 @@ completed:
     pull_request: 72
     merge_commit: 8b555ffad19d44e8badff457d754efdb91e0bca8
     verification: merged_verified
+  - artifact: PR69-CURRENT-SOT-RECONCILIATION
+    pull_request: 69
+    merge_commit: cb3d705f82d53a1302f9f2ca80615325b1509468
+    verification: ci_636_codeql_635_fresh_codex_review_completed
+  - artifact: WB-LR0003-independent-evaluation-acceptance
+    pull_request: 76
+    merge_commit: 41a0994b3cef083f15b8280724dd788cd31a880e
+    verification: merged_verified_canonical
 
 next:
-  - verify PR69 on the new exact head with CI, CodeQL and fresh independent review; do not merge without explicit operator approval
-  - reconcile PR67 MCP Foundation with current canonical main and re-run exact-head gates before readiness
+  - verify PR77 on its exact head with CI, CodeQL and fresh independent review; do not merge without explicit operator approval
+  - reconcile open candidates PR75, PR74 and PR67 against resulting canonical main before readiness; this inventory does not imply merge priority
   - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
   - review stale open PRs 61, 45, 13 and 5 before any closure or reuse
   - remediate the six high-severity transitive visual-toolchain npm audit findings in a separately reviewed maintenance change
   - design a separate concurrency-safe first-write mechanism before requesting any future live staging-write authority
+  - refresh the verified non-canonical CASER-E evidence mirror after this closeout becomes canonical
   - keep production application mutation prohibited without a separate production MOP and explicit Jan Kočí approval
   - preserve Cloudflare as authoritative DNS and DirectAdmin as hosting/SSL control plane
-  - preserve GitHub as canonical product state and Google Drive CASER-E as verified non-canonical evidence/archive/collaboration layer
+  - preserve GitHub as canonical product state and Google Drive CASER-E as non-canonical evidence/archive/collaboration layer
 
 rules:
   state_first: true
