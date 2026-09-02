@@ -54,9 +54,7 @@ def test_accelerated_harness_crash_resume_replan_and_complete(tmp_path: Path):
     assert persisted.step_index == 1
     assert persisted.consecutive_failures == 1
 
-    reconstructed = harness.engine(
-        _manifest(), LongRunStateStore(tmp_path / "state.sqlite")
-    )
+    reconstructed = harness.engine(_manifest(), LongRunStateStore(tmp_path / "state.sqlite"))
     completed = reconstructed.run_step()
 
     assert completed.status == "COMPLETED"
@@ -81,8 +79,9 @@ def test_missing_independent_evaluator_blocks_before_execution(tmp_path: Path):
         _manifest(),
         LongRunStateStore(tmp_path / "state.sqlite"),
         planner=lambda state: _proposal(),
-        executor=lambda proposal: executed.append(proposal)
-        or StepResult(True, {"proof": "should-not-run"}),
+        executor=lambda proposal: (
+            executed.append(proposal) or StepResult(True, {"proof": "should-not-run"})
+        ),
     )
 
     state = engine.run_step()
