@@ -26,12 +26,21 @@ def _resolve(repo: Path, path: Path) -> Path:
     return expanded.resolve() if expanded.is_absolute() else (repo / expanded).resolve()
 
 
+def _within_repo(path: Path, repo: Path) -> bool:
+    try:
+        path.relative_to(repo)
+    except ValueError:
+        return False
+    return True
+
+
 def load_operator_context(
     repo: Path,
     *,
     profile: Path,
     mission: Path,
     state_db: Path | None = None,
+    require_existing_state: bool = False,
 ) -> LongRunOperatorContext:
     repo = repo.expanduser().resolve()
     profile_path = _resolve(repo, profile)
@@ -42,22 +51,16 @@ def load_operator_context(
         if state_db is not None
         else repo / ".cybercore" / "longrun" / f"{manifest.run_id}.sqlite"
     )
+    if not _within_repo(db_path, repo):
+        raise ValueError("LongRun state database must remain inside the repository sandbox")
     return LongRunOperatorContext(
         repo=repo,
         manifest=manifest,
-        store=LongRunStateStore(db_path),
+        store=LongRunStateStore(db_path, create=not require_existing_state),
         state_db=db_path,
         profile_path=profile_path,
         mission_path=mission_path,
     )
-
-
-def _within_repo(path: Path, repo: Path) -> bool:
-    try:
-        path.relative_to(repo)
-    except ValueError:
-        return False
-    return True
 
 
 def _deterministic_targets(context: LongRunOperatorContext) -> tuple[Path, ...]:
