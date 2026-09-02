@@ -95,6 +95,7 @@ status:
   wb0033_bounded_provider_mutations: verified
   pr55_wb0034_first_staging_deployment_preflight: merged_verified
   wb0034_first_staging_deployment_preflight: merged_verified_remote_write_blocked
+  first_write_readiness_schema: implemented
   pr63_wb0034_ftps_path_scoped_identity: merged_verified
   first_write_artifact_plan: static_two_file_canary
   first_write_destination_shape: direct_child_unique_directory
