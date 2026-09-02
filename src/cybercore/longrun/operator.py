@@ -5,6 +5,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from cybercore.longrun.engine import LongRunEngine, StepResult
+from cybercore.longrun.evaluation import EvaluationResult, evidence_digest
 from cybercore.longrun.governor import StepProposal
 from cybercore.longrun.loader import load_manifest
 from cybercore.longrun.manifest import LongRunManifest
@@ -128,14 +129,24 @@ def deterministic_engine(context: LongRunOperatorContext) -> LongRunEngine:
         data = target.read_bytes()
         return StepResult(
             success=True,
-            evaluator_score=0.0,
             evidence={
                 "harness": "deterministic-repo-integrity",
                 "path": target.relative_to(context.repo).as_posix(),
                 "sha256": sha256(data).hexdigest(),
                 "size": len(data),
-                "independent_evaluation": False,
             },
+        )
+
+    def evaluator(proposal: StepProposal, result: StepResult) -> EvaluationResult:
+        return EvaluationResult(
+            evaluator_id="cybercore.deterministic-repo-integrity-judge",
+            evaluator_version="1",
+            score=0.0,
+            verdict="FAIL",
+            reasons=(
+                "deterministic repository integrity evidence is not independent mission acceptance",
+            ),
+            evidence_digest=evidence_digest(result.evidence),
         )
 
     return LongRunEngine(
@@ -143,6 +154,7 @@ def deterministic_engine(context: LongRunOperatorContext) -> LongRunEngine:
         context.store,
         planner=planner,
         executor=executor,
+        evaluator=evaluator,
     )
 
 

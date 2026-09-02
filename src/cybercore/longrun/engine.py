@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, replace
 import time
 from typing import Callable
 
+from cybercore.longrun.evaluation import EvaluationResult, evidence_digest
 from cybercore.longrun.governor import StepProposal, authorize_step
 from cybercore.longrun.manifest import LongRunManifest
 from cybercore.longrun.state import LongRunStateStore, RunState
@@ -13,12 +15,12 @@ from cybercore.longrun.watchdog import evaluate_watchdog
 @dataclass(frozen=True, slots=True)
 class StepResult:
     success: bool
-    evaluator_score: float
     evidence: dict[str, object]
 
 
 Planner = Callable[[RunState], StepProposal]
 Executor = Callable[[StepProposal], StepResult]
+Evaluator = Callable[[StepProposal, StepResult], EvaluationResult]
 Clock = Callable[[], float]
 
 
@@ -30,13 +32,17 @@ class LongRunEngine:
         *,
         planner: Planner,
         executor: Executor,
+        evaluator: Evaluator | None = None,
         clock: Clock = time.time,
     ) -> None:
         manifest.validate()
+        if evaluator is executor:
+            raise ValueError("executor and independent evaluator must be different callbacks")
         self.manifest = manifest
         self.store = store
         self.planner = planner
         self.executor = executor
+        self.evaluator = evaluator
         self.clock = clock
 
     def _initial_state(self) -> RunState:
@@ -168,6 +174,17 @@ class LongRunEngine:
                 {"fingerprint": proposal.fingerprint, "reason": reason},
             )
 
+        if self.manifest.independent_evaluation_required and self.evaluator is None:
+            blocked = replace(state, status="BLOCKED", updated_at=self.clock())
+            return self._persist_transition(
+                blocked,
+                "EVALUATION_BLOCKED",
+                {
+                    "fingerprint": proposal.fingerprint,
+                    "reason": "independent evaluator is required but not configured",
+                },
+            )
+
         duplicate_count = (
             state.duplicate_count + 1 if proposal.fingerprint == state.last_step_fingerprint else 0
         )
@@ -195,13 +212,150 @@ class LongRunEngine:
             raise
 
         now = self.clock()
+        try:
+            evidence_snapshot = deepcopy(result.evidence)
+            result_evidence_digest = evidence_digest(evidence_snapshot)
+        except (TypeError, ValueError) as exc:
+            failed = replace(
+                state,
+                step_index=state.step_index + 1,
+                consecutive_failures=state.consecutive_failures + 1,
+                last_step_fingerprint=proposal.fingerprint,
+                duplicate_count=duplicate_count,
+                updated_at=now,
+            )
+            self._persist_transition(
+                failed,
+                "STEP_PERSISTENCE_FAILURE",
+                {
+                    "fingerprint": proposal.fingerprint,
+                    "exception_type": type(exc).__name__,
+                    "reason": "step result evidence is not canonical JSON",
+                    "value": proposal.value,
+                },
+            )
+            raise RuntimeError("step result evidence is not canonical JSON") from exc
+
+        if self.manifest.evidence_required and not evidence_snapshot:
+            blocked = replace(
+                state,
+                status="BLOCKED",
+                step_index=state.step_index + 1,
+                last_step_fingerprint=proposal.fingerprint,
+                duplicate_count=duplicate_count,
+                updated_at=now,
+            )
+            return self._persist_transition(
+                blocked,
+                "EVALUATION_BLOCKED",
+                {
+                    "fingerprint": proposal.fingerprint,
+                    "reason": "executor evidence is required but empty",
+                    "evidence_digest": result_evidence_digest,
+                },
+            )
+
+        evaluation: EvaluationResult | None = None
+        if self.evaluator is not None:
+            evaluator_result = StepResult(
+                success=result.success,
+                evidence=deepcopy(evidence_snapshot),
+            )
+            try:
+                evaluation = self.evaluator(proposal, evaluator_result)
+            except Exception as exc:
+                now = self.clock()
+                failed = replace(
+                    state,
+                    step_index=state.step_index + 1,
+                    consecutive_failures=state.consecutive_failures + 1,
+                    last_step_fingerprint=proposal.fingerprint,
+                    duplicate_count=duplicate_count,
+                    updated_at=now,
+                )
+                self._persist_transition(
+                    failed,
+                    "EVALUATION_EXCEPTION",
+                    {
+                        "fingerprint": proposal.fingerprint,
+                        "exception_type": type(exc).__name__,
+                        "evidence_digest": result_evidence_digest,
+                    },
+                )
+                raise
+
+            try:
+                evaluator_evidence_digest = evidence_digest(evaluator_result.evidence)
+            except (TypeError, ValueError):
+                evaluator_evidence_digest = None
+            if evaluator_evidence_digest != result_evidence_digest:
+                blocked = replace(
+                    state,
+                    status="BLOCKED",
+                    step_index=state.step_index + 1,
+                    last_step_fingerprint=proposal.fingerprint,
+                    duplicate_count=duplicate_count,
+                    updated_at=self.clock(),
+                )
+                return self._persist_transition(
+                    blocked,
+                    "EVALUATION_INVALID",
+                    {
+                        "fingerprint": proposal.fingerprint,
+                        "reason": "evaluator mutated executor evidence snapshot",
+                        "evidence_digest": result_evidence_digest,
+                    },
+                )
+
+            if not isinstance(evaluation, EvaluationResult):
+                blocked = replace(
+                    state,
+                    status="BLOCKED",
+                    step_index=state.step_index + 1,
+                    last_step_fingerprint=proposal.fingerprint,
+                    duplicate_count=duplicate_count,
+                    updated_at=self.clock(),
+                )
+                return self._persist_transition(
+                    blocked,
+                    "EVALUATION_INVALID",
+                    {
+                        "fingerprint": proposal.fingerprint,
+                        "reason": "evaluator returned an invalid result type",
+                        "evidence_digest": result_evidence_digest,
+                    },
+                )
+
+            try:
+                evaluation.validate(expected_evidence_digest=result_evidence_digest)
+            except ValueError as exc:
+                blocked = replace(
+                    state,
+                    status="BLOCKED",
+                    step_index=state.step_index + 1,
+                    last_step_fingerprint=proposal.fingerprint,
+                    duplicate_count=duplicate_count,
+                    updated_at=self.clock(),
+                )
+                return self._persist_transition(
+                    blocked,
+                    "EVALUATION_INVALID",
+                    {
+                        "fingerprint": proposal.fingerprint,
+                        "reason": str(exc),
+                        "evidence_digest": result_evidence_digest,
+                    },
+                )
+
+        now = self.clock()
+        evaluated_score = evaluation.score if evaluation is not None else 0.0
         new_state = replace(
             state,
             step_index=state.step_index + 1,
             consecutive_failures=0 if result.success else state.consecutive_failures + 1,
             last_step_fingerprint=proposal.fingerprint,
             duplicate_count=duplicate_count,
-            evaluator_score=max(state.evaluator_score, result.evaluator_score),
+            evaluator_score=max(state.evaluator_score, evaluated_score),
             updated_at=now,
         )
 
@@ -209,22 +363,26 @@ class LongRunEngine:
         terminal_reason: str | None = None
         if elapsed >= self.manifest.maximum_wall_seconds:
             new_state = replace(new_state, status="STOPPED")
-            terminal_reason = "maximum wall budget exhausted after execution"
+            terminal_reason = "maximum wall budget exhausted after evaluation"
         elif (
             result.success
-            and result.evaluator_score >= self.manifest.evaluator_threshold
+            and evaluation is not None
+            and evaluation.verdict == "PASS"
+            and evaluation.score >= self.manifest.evaluator_threshold
             and elapsed >= self.manifest.minimum_wall_seconds
         ):
             new_state = replace(new_state, status="COMPLETED")
 
-        payload = {
+        payload: dict[str, object] = {
             "fingerprint": proposal.fingerprint,
             "success": result.success,
-            "evaluator_score": result.evaluator_score,
             "value": proposal.value,
-            "evidence": result.evidence,
+            "evidence": evidence_snapshot,
+            "evidence_digest": result_evidence_digest,
             "status": new_state.status,
         }
+        if evaluation is not None:
+            payload["evaluation"] = evaluation.event_payload()
         if terminal_reason is not None:
             payload["terminal_reason"] = terminal_reason
 

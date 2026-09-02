@@ -79,6 +79,8 @@ def test_loader_composes_profile_and_mission_into_immutable_manifest(tmp_path: P
     assert manifest.run_id == "operator-test"
     assert manifest.objective == "prove deterministic operator resume behavior"
     assert manifest.allowed_effects == ("read", "sandbox_write")
+    assert manifest.evidence_required is True
+    assert manifest.independent_evaluation_required is True
     assert manifest.metadata == {"benchmark": "TEST-001", "longrun_profile": "test"}
     assert manifest.digest == load_manifest(profile, mission).digest
 
@@ -122,11 +124,14 @@ def test_operator_start_resume_and_event_ledger_survive_reconstruction(tmp_path:
     events = inspect_events(reconstructed)
     assert [event.kind for event in events] == ["RUN_STARTED", "STEP_RESULT", "STEP_RESULT"]
     step_events = [event for event in events if event.kind == "STEP_RESULT"]
-    assert all(
-        event.payload.get("evidence", {}).get("independent_evaluation") is False
-        for event in step_events
-    )
     assert all(event.payload.get("evidence", {}).get("sha256") for event in step_events)
+    for event in step_events:
+        evaluation = event.payload["evaluation"]
+        assert evaluation["evaluator_id"] == "cybercore.deterministic-repo-integrity-judge"
+        assert evaluation["verdict"] == "FAIL"
+        assert evaluation["score"] == 0.0
+        assert evaluation["evidence_digest"] == event.payload["evidence_digest"]
+        assert evaluation["evaluation_digest"]
 
 
 def test_harness_blocks_instead_of_padding_after_useful_targets_are_exhausted(tmp_path: Path):
@@ -239,3 +244,4 @@ def test_cli_longrun_start_status_resume_and_events(tmp_path: Path, capsys):
     assert main(common + ["events", *contract, "--limit", "10"]) == 0
     events = json.loads(capsys.readouterr().out)
     assert [event["kind"] for event in events] == ["RUN_STARTED", "STEP_RESULT", "STEP_RESULT"]
+    assert all(event.get("payload", {}).get("evaluation") for event in events[1:])
