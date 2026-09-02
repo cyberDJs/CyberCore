@@ -1,0 +1,6 @@
+# Managed by CyberCore WB-0038B/WB-0038C.
+# Exact privilege allowlist for the dedicated cybercore-exec identity.
+
+Defaults:cybercore-exec env_reset
+cybercore-exec ALL=(root) NOPASSWD: /usr/local/libexec/cybercore-exec/vikunja-backup-install
+cybercore-exec ALL=(root) NOPASSWD: /usr/bin/systemctl start vikunja-backup.service
