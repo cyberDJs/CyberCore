@@ -80,6 +80,25 @@ def _replace_optional(pattern: str, replacement: str, content: str, label: str) 
     return updated
 
 
+def _require_non_empty(label: str, value: str | None) -> str:
+    if value is None:
+        raise PostMergeTransitionError(f"{label} is required")
+    normalized = value.strip()
+    if not normalized:
+        raise PostMergeTransitionError(f"{label} must be non-empty")
+    return normalized
+
+
+def _normalize_non_empty_items(label: str, values: tuple[str, ...]) -> tuple[str, ...]:
+    normalized: list[str] = []
+    for value in values:
+        item = value.strip()
+        if not item:
+            raise PostMergeTransitionError(f"{label} must not contain empty values")
+        normalized.append(item)
+    return tuple(normalized)
+
+
 def _set_status(current: str, key: str, value: str) -> str:
     pattern = rf"(?m)^  {re.escape(key)}: .+$"
     if re.search(pattern, current):
@@ -87,7 +106,7 @@ def _set_status(current: str, key: str, value: str) -> str:
     marker = "\ncompleted:\n"
     if marker not in current:
         raise PostMergeTransitionError("Unable to update capability status")
-    return current.replace(marker, f"  {key}: {value}\n{marker}", 1)
+    return current.replace(marker, f"\n  {key}: {value}{marker}", 1)
 
 
 def _set_current(current: str, key: str, value: str) -> str:
@@ -97,7 +116,7 @@ def _set_current(current: str, key: str, value: str) -> str:
     marker = "\nstatus:\n"
     if marker not in current:
         raise PostMergeTransitionError("Unable to update current project state")
-    return current.replace(marker, f"  {key}: {value}\n{marker}", 1)
+    return current.replace(marker, f"\n  {key}: {value}{marker}", 1)
 
 
 def _set_project_state_checkpoint(
@@ -127,7 +146,7 @@ def _set_project_state_checkpoint(
             count=1,
             flags=re.MULTILINE,
         )
-    return current
+    raise PostMergeTransitionError("Unable to update Project State checkpoint")
 
 
 def _replace_next_tasks(current: str, next_tasks: tuple[str, ...]) -> str:
@@ -420,6 +439,12 @@ def plan_post_merge_state_update(
     next_scope: tuple[str, ...] = (),
     next_tasks: tuple[str, ...] = (),
 ) -> PostMergeStatePlan:
+    completed_artifact = _require_non_empty("completed artifact", completed_artifact)
+    verification = _require_non_empty("verification", verification)
+    next_action = _require_non_empty("next action", next_action)
+    next_scope = _normalize_non_empty_items("next scope", next_scope)
+    next_tasks = _normalize_non_empty_items("next tasks", next_tasks)
+
     if terminal:
         if (
             any(
@@ -438,8 +463,11 @@ def plan_post_merge_state_update(
                 "Terminal closeout cannot declare a successor work block contract"
             )
     else:
-        if next_artifact is None or next_milestone is None or next_branch is None:
-            raise PostMergeTransitionError("Successor state contract is incomplete")
+        next_artifact = _require_non_empty("next artifact", next_artifact)
+        next_milestone = _require_non_empty("next milestone", next_milestone)
+        next_branch = _require_non_empty("next branch", next_branch)
+        if next_objective is not None:
+            next_objective = _require_non_empty("next objective", next_objective)
         if next_objective is not None and not next_scope:
             raise PostMergeTransitionError("A next objective requires at least one scope item")
 
