@@ -71,7 +71,10 @@ def _require_string_list(mapping: dict[str, Any], key: str, *, label: str) -> tu
     value = mapping.get(key)
     if not isinstance(value, list) or not value or not all(isinstance(item, str) for item in value):
         raise ValueError(f"{label}.{key} must be a non-empty string list")
-    return tuple(item.strip() for item in value if item.strip())
+    cleaned = tuple(item.strip() for item in value)
+    if not all(cleaned):
+        raise ValueError(f"{label}.{key} cannot contain blank values")
+    return cleaned
 
 
 def load_manifest(profile_path: Path, mission_path: Path) -> LongRunManifest:
