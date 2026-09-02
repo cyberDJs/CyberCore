@@ -19,6 +19,10 @@ dependencies = [
 
 [project.optional-dependencies]
 orchestration = ["langgraph>=1.2,<2"]
+voice-local = [
+    "sherpa-onnx>=1.13.6,<2",
+    "sounddevice>=0.5.6,<0.6",
+]
 dev = [
     "build>=1.2,<2",
     "langgraph>=1.2,<2",
@@ -29,7 +33,7 @@ dev = [
 ]
 
 [project.scripts]
-cybercore = "cybercore.entrypoint:main"
+cybercore = "cybercore.voice_entrypoint:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cybercore"]
