@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 from dataclasses import dataclass
 import importlib
 import json
 from pathlib import Path
+import threading
+import time
 from typing import Any
 
+from cybercore.voice.adapters import VadState
 from cybercore.voice.devices import (
     AudioDeviceError,
     LocalVoiceDependencyError,
     SoundDeviceInput,
     SoundDeviceTransport,
     list_audio_devices,
+    native_input_sample_rate_hz,
     validate_audio_settings,
 )
 from cybercore.voice.local_config import (
@@ -143,12 +148,15 @@ def run_local_voice_doctor(
     if sd is not None:
         try:
             validate_audio_settings(resolved_config.audio, sounddevice_module=sd)
+            input_rate = native_input_sample_rate_hz(resolved_config.audio, sounddevice_module=sd)
             devices = list_audio_devices(sounddevice_module=sd)
             checks.append(
                 VoiceDoctorCheck(
                     "audio",
                     "pass",
-                    f"input/output settings accepted; discovered {len(devices)} device(s)",
+                    "input/output settings accepted; "
+                    f"capture {input_rate} Hz -> model {resolved_config.audio.sample_rate_hz} Hz; "
+                    f"discovered {len(devices)} device(s)",
                 )
             )
         except (AudioDeviceError, LocalVoiceDependencyError, OSError, RuntimeError) as exc:
@@ -230,6 +238,30 @@ class LocalSpeechRuntime:
             self.transport.close()
             self._opened = False
 
+    def _reset_vad(self, reason: str) -> None:
+        reset = getattr(self.provider.vad, "reset", None)
+        if not callable(reset):
+            if self.realtime.state is not RealtimeState.CANCELLED:
+                self.realtime.cancel(f"VAD reset unavailable: {reason}")
+            raise RuntimeError("local voice VAD does not support reset")
+        try:
+            reset()
+        except Exception:
+            if self.realtime.state is not RealtimeState.CANCELLED:
+                self.realtime.cancel(f"VAD reset failed: {reason}")
+            raise
+
+    def _input_preroll_frame_limit(self) -> int:
+        block_ms = int(getattr(getattr(self.config, "audio", None), "block_ms", 80))
+        return max(1, round(500 / block_ms))
+
+    def _begin_listening_with_preroll(self, preroll: deque[Any], speech_frame: Any) -> None:
+        self.realtime.start_listening()
+        self._reset_vad("input pre-roll replay started")
+        for buffered in (*preroll, speech_frame):
+            self.realtime.receive_input(buffered)
+        preroll.clear()
+
     def capture_utterance(
         self,
         *,
@@ -241,32 +273,87 @@ class LocalSpeechRuntime:
             raise RuntimeError("local speech runtime is cancelled")
         self.open()
         frames = 0
+        preroll: deque[Any] = deque(maxlen=self._input_preroll_frame_limit())
         while max_frames is None or frames < max_frames:
             frame = self.audio_input.read_frame()
-            self.realtime.receive_input(frame)
             frames += 1
+
+            if self.realtime.state is RealtimeState.IDLE:
+                vad = self.provider.vad.evaluate(frame)
+                if vad.state is not VadState.SPEECH:
+                    preroll.append(frame)
+                    continue
+                self._begin_listening_with_preroll(preroll, frame)
+            else:
+                self.realtime.receive_input(frame)
+
             if bool(getattr(self.provider.stt, "endpoint_detected", False)):
                 if self.realtime.state in {RealtimeState.LISTENING, RealtimeState.INTERRUPTED}:
-                    return self.realtime.finish_utterance(
+                    utterance = self.realtime.finish_utterance(
                         actor_id=actor_id,
                         utterance_id=utterance_id,
                     )
+                    self._reset_vad("input turn finalized")
+                    return utterance
         return None
+
+    def _begin_speaking_with_live_input(self, text: str) -> None:
+        stop = threading.Event()
+        errors: list[Exception] = []
+        block_ms = int(getattr(getattr(self.config, "audio", None), "block_ms", 80))
+        idle_sleep = max(0.005, min(0.05, block_ms / 4000))
+
+        def pump_input() -> None:
+            while not stop.is_set():
+                try:
+                    incoming = self.audio_input.read_frame_if_available()
+                    if incoming is None:
+                        time.sleep(idle_sleep)
+                except Exception as exc:
+                    errors.append(exc)
+                    stop.set()
+
+        thread = threading.Thread(
+            target=pump_input,
+            name="cybercore-voice-input-pump",
+            daemon=True,
+        )
+        thread.start()
+        try:
+            self.realtime.begin_speaking(text)
+        finally:
+            stop.set()
+            thread.join(timeout=max(1.0, block_ms / 1000 * 4))
+
+        if thread.is_alive():
+            self.realtime.cancel("microphone pump did not stop after TTS synthesis")
+            raise RuntimeError("microphone input pump did not stop")
+        if errors:
+            if self.realtime.state is not RealtimeState.CANCELLED:
+                self.realtime.cancel("microphone input failed during TTS synthesis")
+            raise errors[0]
+
+    def _drain_microphone_input(self, reason: str) -> None:
+        try:
+            while self.audio_input.read_frame_if_available() is not None:
+                pass
+        except Exception:
+            if self.realtime.state is not RealtimeState.CANCELLED:
+                self.realtime.cancel(f"microphone input failed while {reason}")
+            raise
 
     def speak(self, text: str) -> bool:
         self.open()
-        self.realtime.begin_speaking(text)
-        while self.realtime.state is RealtimeState.SPEAKING:
-            incoming = self.audio_input.read_frame_if_available()
-            if incoming is not None:
-                self.realtime.receive_input(incoming)
-                if self.realtime.state is RealtimeState.INTERRUPTED:
-                    return True
+        self._begin_speaking_with_live_input(text)
+        self._drain_microphone_input("preparing local half-duplex playback")
 
+        while self.realtime.state is RealtimeState.SPEAKING:
+            self._drain_microphone_input("draining local half-duplex playback input")
             if self.realtime.output_buffer.snapshot().frame_count == 0:
                 self.realtime.pump_synthesis(max_frames=1)
             if self.realtime.state is RealtimeState.SPEAKING:
                 self.realtime.send_next_output()
+            self._drain_microphone_input("draining local half-duplex playback input")
         return self.realtime.state is RealtimeState.INTERRUPTED
 
     def cancel(self, reason: str = "operator cancellation") -> None:
@@ -289,6 +376,7 @@ def run_local_voice_session(
         local.open()
         while local.session.status is not SessionStatus.CANCELLED:
             turn += 1
+            print("CYBER VOICE: LISTENING")
             utterance = local.capture_utterance(
                 actor_id=actor_id,
                 utterance_id=f"local:{local.session.session_id}:{turn}",
@@ -309,7 +397,10 @@ def run_local_voice_session(
 
             interrupted = False
             if local.realtime.state is RealtimeState.PROCESSING and response.message.strip():
+                print("CYBER VOICE: SPEAKING")
                 interrupted = local.speak(response.message)
+                if interrupted:
+                    print("CYBER VOICE: INTERRUPTED")
             if once and not interrupted:
                 return 0
         return 0

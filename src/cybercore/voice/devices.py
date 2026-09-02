@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from array import array
 from dataclasses import dataclass
 import importlib
+import sys
 from typing import Any
 
 from cybercore.voice.audio import AudioEncoding, AudioFormat, AudioFrame
@@ -95,6 +97,88 @@ def list_audio_devices(*, sounddevice_module: Any | None = None) -> tuple[AudioD
     return tuple(result)
 
 
+def _resolve_input_device(sd: Any, device: int | str | None) -> tuple[int, Any]:
+    devices = sd.query_devices()
+    if device is None:
+        default_pair = getattr(getattr(sd, "default", object()), "device", (None, None))
+        try:
+            default_input = default_pair[0]
+        except (TypeError, IndexError) as exc:
+            raise AudioDeviceError("no default input device is available") from exc
+        if default_input is None:
+            raise AudioDeviceError("no default input device is available")
+        try:
+            index = int(default_input)
+        except (TypeError, ValueError) as exc:
+            raise AudioDeviceError("no default input device is available") from exc
+    elif isinstance(device, int):
+        index = device
+    else:
+        matches = [
+            (index, item)
+            for index, item in enumerate(devices)
+            if str(item.get("name", "")) == device and int(item.get("max_input_channels", 0)) > 0
+        ]
+        if len(matches) != 1:
+            raise AudioDeviceError(f"input device name must resolve exactly once: {device}")
+        return matches[0]
+
+    if index < 0 or index >= len(devices):
+        raise AudioDeviceError(f"input device index is out of range: {index}")
+    item = devices[index]
+    if int(item.get("max_input_channels", 0)) <= 0:
+        raise AudioDeviceError(f"device {index} has no input channels")
+    return index, item
+
+
+def native_input_sample_rate_hz(
+    config: LocalAudioConfig,
+    *,
+    sounddevice_module: Any | None = None,
+) -> int:
+    sd = _load_sounddevice(sounddevice_module)
+    _, item = _resolve_input_device(sd, config.input_device)
+    sample_rate = round(float(item.get("default_samplerate", 0.0)))
+    if sample_rate <= 0:
+        raise AudioDeviceError("input device reported an invalid native sample rate")
+    return sample_rate
+
+
+def resample_pcm_s16le_mono(payload: bytes, source_rate_hz: int, target_rate_hz: int) -> bytes:
+    if source_rate_hz <= 0 or target_rate_hz <= 0:
+        raise ValueError("sample rates must be positive")
+    if len(payload) % 2:
+        raise ValueError("PCM_S16LE payload must contain complete samples")
+    if source_rate_hz == target_rate_hz or not payload:
+        return payload
+
+    samples = array("h")
+    samples.frombytes(payload)
+    if sys.byteorder == "big":
+        samples.byteswap()
+    source = list(samples)
+    output_count = max(1, round(len(source) * target_rate_hz / source_rate_hz))
+
+    output: list[int]
+    if len(source) == 1:
+        output = [source[0]] * output_count
+    else:
+        ratio = source_rate_hz / target_rate_hz
+        output = []
+        for index in range(output_count):
+            position = min(index * ratio, len(source) - 1)
+            left = int(position)
+            right = min(left + 1, len(source) - 1)
+            fraction = position - left
+            value = round(source[left] + (source[right] - source[left]) * fraction)
+            output.append(max(-32768, min(32767, value)))
+
+    pcm = array("h", output)
+    if sys.byteorder == "big":
+        pcm.byteswap()
+    return pcm.tobytes()
+
+
 def validate_audio_settings(
     config: LocalAudioConfig,
     *,
@@ -102,11 +186,12 @@ def validate_audio_settings(
 ) -> None:
     sd = _load_sounddevice(sounddevice_module)
     try:
+        input_sample_rate = native_input_sample_rate_hz(config, sounddevice_module=sd)
         sd.check_input_settings(
             device=config.input_device,
             channels=config.channels,
             dtype="int16",
-            samplerate=config.sample_rate_hz,
+            samplerate=input_sample_rate,
         )
         sd.check_output_settings(
             device=config.output_device,
@@ -114,6 +199,8 @@ def validate_audio_settings(
             dtype="int16",
             samplerate=config.sample_rate_hz,
         )
+    except AudioDeviceError:
+        raise
     except Exception as exc:
         raise AudioDeviceError(f"audio device settings are not supported: {exc}") from exc
 
@@ -129,6 +216,12 @@ class SoundDeviceInput:
         self._sd = _load_sounddevice(sounddevice_module)
         self._stream: Any | None = None
         self._sequence = 0
+        self._device_sample_rate_hz = native_input_sample_rate_hz(
+            config, sounddevice_module=self._sd
+        )
+        self._device_frames_per_block = max(
+            1, round(self._device_sample_rate_hz * config.block_ms / 1000)
+        )
 
     @property
     def audio_format(self) -> AudioFormat:
@@ -139,12 +232,16 @@ class SoundDeviceInput:
             encoding=AudioEncoding.PCM_S16LE,
         )
 
+    @property
+    def device_sample_rate_hz(self) -> int:
+        return self._device_sample_rate_hz
+
     def start(self) -> None:
         if self._stream is not None:
             return
         stream = self._sd.RawInputStream(
-            samplerate=self.config.sample_rate_hz,
-            blocksize=self.config.frames_per_block,
+            samplerate=self._device_sample_rate_hz,
+            blocksize=self._device_frames_per_block,
             device=self.config.input_device,
             channels=self.config.channels,
             dtype="int16",
@@ -160,14 +257,17 @@ class SoundDeviceInput:
 
     def read_frame(self) -> AudioFrame:
         stream = self._ensure_stream()
-        data, overflowed = stream.read(self.config.frames_per_block)
+        data, overflowed = stream.read(self._device_frames_per_block)
         if overflowed:
             raise AudioInputOverflowError(
                 "microphone input overflowed; audio frame rejected instead of hiding loss"
             )
+        payload = resample_pcm_s16le_mono(
+            bytes(data), self._device_sample_rate_hz, self.config.sample_rate_hz
+        )
         frame = AudioFrame(
             sequence=self._sequence,
-            payload=bytes(data),
+            payload=payload,
             format=self.audio_format,
         )
         self._sequence += 1
@@ -176,7 +276,7 @@ class SoundDeviceInput:
     def read_frame_if_available(self) -> AudioFrame | None:
         stream = self._ensure_stream()
         available = int(getattr(stream, "read_available", 0))
-        if available < self.config.frames_per_block:
+        if available < self._device_frames_per_block:
             return None
         return self.read_frame()
 
