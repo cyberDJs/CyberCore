@@ -124,6 +124,8 @@ def load_manifest(profile_path: Path, mission_path: Path) -> LongRunManifest:
         checkpoint_every_steps=checkpoint_every_steps,
         max_consecutive_failures=_require_int(profile, "max_consecutive_failures", label="profile"),
         max_duplicate_steps=_require_int(profile, "max_duplicate_steps", label="profile"),
+        evidence_required=bool(policy["evidence_required"]),
+        independent_evaluation_required=bool(policy["independent_evaluation_required"]),
         allowed_effects=_require_string_list(profile, "allowed_effects", label="profile"),
         prohibited_effects=_require_string_list(profile, "prohibited_effects", label="profile"),
         metadata=metadata,
