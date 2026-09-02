@@ -174,6 +174,33 @@ def test_terminal_plan_clears_predecessor_tasks_when_none_declared(tmp_path: Pat
     assert "old task" not in plan.kernel_content
 
 
+def test_terminal_plan_records_completion_when_next_list_is_already_empty(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    kernel_path = repo / ".cybercore" / "project.yaml"
+    kernel_path.write_text(
+        kernel_path.read_text(encoding="utf-8").replace(
+            "next:\n  - old task\n",
+            "next: []\n",
+        ),
+        encoding="utf-8",
+    )
+
+    plan = plan_post_merge_state_update(
+        repo,
+        _preview(),
+        completed_artifact="WB-0018",
+        verification="52_passed",
+        next_action="Stop with no scheduled successor task.",
+        terminal=True,
+    )
+
+    assert "  - artifact: WB-0018\n" in plan.kernel_content
+    assert "    pull_request: 22\n" in plan.kernel_content
+    assert "    merge_commit: 1e174e9\n" in plan.kernel_content
+    assert "    verification: 52_passed\n" in plan.kernel_content
+    assert "next: []\n" in plan.kernel_content
+
+
 def test_terminal_plan_rejects_successor_contract(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
 
