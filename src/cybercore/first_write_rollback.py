@@ -22,8 +22,7 @@ ROLLBACK_AUTH_PREFIX = "approval:wb0036:rollback"
 
 # RFC 3659 section 2.1 character classes used by MLSx facts.
 _MLST_RCHAR = frozenset(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    ",.:!@#$%^&()-_+?/\\'\""
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789,.:!@#$%^&()-_+?/\\'\""
 )
 _MLST_SCHAR = _MLST_RCHAR | {"="}
 
@@ -116,9 +115,7 @@ def _probe_exact_path(client: _RollbackFtpsClient, path: str, *, expected_type: 
     if (
         len(response_lines) != 3
         or not response_lines[0].startswith("250-")
-        or not (
-            response_lines[-1] == "250" or response_lines[-1].startswith("250 ")
-        )
+        or not (response_lines[-1] == "250" or response_lines[-1].startswith("250 "))
     ):
         raise FirstWriteRuntimeError("MLST did not return a completed 250 control response")
 
