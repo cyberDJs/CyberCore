@@ -70,7 +70,9 @@ def test_loader_composes_profile_and_mission_into_immutable_manifest(tmp_path: P
 def test_loader_rejects_disabled_required_policy(tmp_path: Path):
     profile, mission = _contract(tmp_path)
     profile.write_text(
-        _PROFILE.replace("independent_evaluation_required: true", "independent_evaluation_required: false"),
+        _PROFILE.replace(
+            "independent_evaluation_required: true", "independent_evaluation_required: false"
+        ),
         encoding="utf-8",
     )
 
