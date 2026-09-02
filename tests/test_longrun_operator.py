@@ -78,6 +78,14 @@ def test_loader_rejects_disabled_required_policy(tmp_path: Path):
         load_manifest(profile, mission)
 
 
+def test_loader_rejects_run_identifier_path_traversal(tmp_path: Path):
+    profile, mission = _contract(tmp_path)
+    mission.write_text(_MISSION.replace("operator-test", "../../../escape"), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="mission.run_id"):
+        load_manifest(profile, mission)
+
+
 def test_operator_start_resume_and_event_ledger_survive_reconstruction(tmp_path: Path):
     profile, mission = _contract(tmp_path)
     context = load_operator_context(tmp_path, profile=profile, mission=mission)
