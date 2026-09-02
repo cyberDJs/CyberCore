@@ -147,7 +147,10 @@ def test_terminal_plan_closes_without_successor_self_reference(tmp_path: Path) -
     assert "last_verified_main: 1e174e9" in plan.kernel_content
     assert "Canonical main ref: GitHub `main` (resolve live)" in plan.project_state_content
     assert "Last verified canonical checkpoint: `1e174e9`" in plan.project_state_content
-    assert "Current coordination artifact: none — terminal canonical state" in plan.project_state_content
+    assert (
+        "Current coordination artifact: none — terminal canonical state"
+        in plan.project_state_content
+    )
     assert "- Active branch: `main`" in plan.project_state_content
     assert "- Active work block: `none`" in plan.project_state_content
     assert "- Work block: idle" in plan.project_state_content
