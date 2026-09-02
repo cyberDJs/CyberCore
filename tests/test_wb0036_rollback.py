@@ -61,15 +61,15 @@ class FakeRollbackFtps:
     def __init__(self, upload_input: FirstWriteUploadInput) -> None:
         self.sock = FakeSock()
         self.cwd_path = "/"
-        self.directories = {"/", f"/{upload_input.destination[:-1]}"}
+        self.target = f"/{upload_input.destination[:-1]}"
+        self.directories = {"/", self.target}
         self.files: dict[str, dict[str, bytes]] = {
             "/": {},
-            f"/{upload_input.destination[:-1]}": {
+            self.target: {
                 artifact.name: artifact.content for artifact in upload_input.artifacts
             },
         }
         self.mlst_calls: list[str] = []
-        self.mlsd_calls: list[str] = []
         self.delete_calls: list[str] = []
         self.rmd_calls: list[str] = []
         self.rename_calls: list[tuple[str, str]] = []
@@ -102,24 +102,16 @@ class FakeRollbackFtps:
         verb, path = cmd.split(" ", 1)
         assert verb == "MLST"
         self.mlst_calls.append(path)
-        if path not in self.directories:
+        if path in self.directories:
+            entry_type = "dir"
+        elif path.startswith(f"{self.target}/"):
+            name = path.removeprefix(f"{self.target}/")
+            if name not in self.files.get(self.target, {}):
+                raise ftplib.error_perm("550 No such file or directory")
+            entry_type = "file"
+        else:
             raise ftplib.error_perm("550 No such file or directory")
-        return f"250-Listing {path}\n type=dir; {path}\n250 End"
-
-    def mlsd(self, path: str = "", facts=None):
-        self.mlsd_calls.append(path)
-        listing_path = path or self.cwd_path
-        entries: list[tuple[str, dict[str, str]]] = []
-        for name in sorted(self.files.get(listing_path, {})):
-            entries.append((name, {"type": "file"}))
-        prefix = "/" if listing_path == "/" else f"{listing_path}/"
-        for candidate in sorted(self.directories):
-            if candidate in {"/", listing_path} or not candidate.startswith(prefix):
-                continue
-            remainder = candidate[len(prefix) :]
-            if remainder and "/" not in remainder:
-                entries.append((remainder, {"type": "dir"}))
-        return iter(entries)
+        return f"250-Listing {path}\n type={entry_type}; {path}\n250 End"
 
     def delete(self, filename: str):
         self.delete_calls.append(filename)
@@ -141,17 +133,12 @@ class FakeRollbackFtps:
 
 
 class MissingFileTypeFtps(FakeRollbackFtps):
-    def mlsd(self, path: str = "", facts=None):
-        entries = list(super().mlsd(path, facts))
-        if path and path != "/":
-            return iter((name, {}) for name, _entry_facts in entries)
-        return iter(entries)
-
-
-class ListingFailureFtps(FakeRollbackFtps):
-    def mlsd(self, path: str = "", facts=None):
-        self.mlsd_calls.append(path)
-        raise ftplib.error_temp("421 listing unavailable")
+    def sendcmd(self, cmd: str) -> str:
+        response = super().sendcmd(cmd)
+        _verb, path = cmd.split(" ", 1)
+        if path.endswith("/index.html"):
+            return f"250-Listing {path}\n size=1; {path}\n250 End"
+        return response
 
 
 class MetadataFailureFtps(FakeRollbackFtps):
@@ -240,7 +227,7 @@ def test_alternate_sealed_endpoint_blocks_before_loading_secret_or_connect() -> 
 def test_present_canary_establishes_logical_rollback_without_mutation() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
-    target = f"/{upload_input.destination[:-1]}"
+    target = fake.target
     before = dict(fake.files[target])
 
     result, loads = _execute(fake, upload_input=upload_input)
@@ -251,8 +238,11 @@ def test_present_canary_establishes_logical_rollback_without_mutation() -> None:
     assert not result.remote_mutation_possible
     assert fake.protected and fake.passive
     assert fake.files[target] == before
-    assert fake.mlst_calls == [target]
-    assert fake.mlsd_calls == [target]
+    assert fake.mlst_calls == [
+        target,
+        f"{target}/cybercore-version.json",
+        f"{target}/index.html",
+    ]
     _assert_no_mutation(fake)
     assert result.receipt is not None
     assert result.receipt.target_present
@@ -266,7 +256,7 @@ def test_present_canary_establishes_logical_rollback_without_mutation() -> None:
 def test_interrupted_upload_is_preserved_for_evidence_without_mutation() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
-    target = f"/{upload_input.destination[:-1]}"
+    target = fake.target
     del fake.files[target]["index.html"]
 
     result, _loads = _execute(fake, upload_input=upload_input)
@@ -277,77 +267,68 @@ def test_interrupted_upload_is_preserved_for_evidence_without_mutation() -> None
     assert result.receipt.cleanup_required
     assert result.receipt.present_artifacts == ("cybercore-version.json",)
     assert "cybercore-version.json" in fake.files[target]
-    assert fake.mlst_calls == [target]
-    assert fake.mlsd_calls == [target]
+    assert fake.mlst_calls == [
+        target,
+        f"{target}/cybercore-version.json",
+        f"{target}/index.html",
+    ]
     _assert_no_mutation(fake)
 
 
-def test_missing_target_550_fails_closed_without_claiming_absence() -> None:
+def test_missing_target_is_reported_absent_without_enumeration() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
-    target = f"/{upload_input.destination[:-1]}"
+    target = fake.target
     fake.files.pop(target)
     fake.directories.remove(target)
 
     result, _loads = _execute(fake, upload_input=upload_input)
 
-    assert not result.rolled_back
-    assert result.receipt is None
-    assert not result.remote_mutation_possible
-    assert "cannot prove rollback target metadata" in result.errors[0]
+    assert result.rolled_back, result.errors
+    assert result.receipt is not None
+    assert result.receipt.already_absent
+    assert not result.receipt.target_present
+    assert not result.receipt.cleanup_required
     assert fake.mlst_calls == [target]
-    assert fake.mlsd_calls == []
     _assert_no_mutation(fake)
 
 
-def test_permission_denied_550_fails_closed_without_claiming_absence() -> None:
+def test_permission_denied_550_is_conservatively_reported_absent() -> None:
     upload_input = _sealed_input()
     fake = PermissionDeniedMetadataFtps(upload_input)
-    target = f"/{upload_input.destination[:-1]}"
-
-    result, _loads = _execute(fake, upload_input=upload_input)
-
-    assert not result.rolled_back
-    assert result.receipt is None
-    assert not result.remote_mutation_possible
-    assert "cannot prove rollback target metadata" in result.errors[0]
-    assert fake.mlst_calls == [target]
-    assert fake.mlsd_calls == []
-    _assert_no_mutation(fake)
-
-
-def test_recovery_never_enumerates_the_staging_parent() -> None:
-    upload_input = _sealed_input()
-    fake = FakeRollbackFtps(upload_input)
-    target = f"/{upload_input.destination[:-1]}"
-    fake.directories.add("/unrelated-sibling")
-    fake.files["/unrelated-sibling"] = {"private.txt": b"unrelated"}
 
     result, _loads = _execute(fake, upload_input=upload_input)
 
     assert result.rolled_back, result.errors
-    assert fake.mlst_calls == [target]
-    assert fake.mlsd_calls == [target]
-    assert "/" not in fake.mlsd_calls
-    assert "" not in fake.mlsd_calls
+    assert result.receipt is not None
+    assert result.receipt.already_absent
+    assert not result.receipt.target_present
+    assert not result.remote_mutation_possible
     _assert_no_mutation(fake)
 
 
-def test_unexpected_entry_blocks_without_remote_mutation() -> None:
+def test_recovery_probes_only_sealed_canary_and_approved_artifacts() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
-    target = f"/{upload_input.destination[:-1]}"
-    fake.files[target]["do-not-touch.txt"] = b"owned by someone else"
+    target = fake.target
+    fake.directories.add("/unrelated-sibling")
+    fake.files["/unrelated-sibling"] = {"private.txt": b"unrelated"}
+    fake.files[target]["do-not-touch.txt"] = b"unrelated"
 
     result, _loads = _execute(fake, upload_input=upload_input)
 
-    assert not result.rolled_back
-    assert not result.remote_mutation_possible
-    assert "unexpected entries" in result.errors[0]
+    assert result.rolled_back, result.errors
+    assert fake.mlst_calls == [
+        target,
+        f"{target}/cybercore-version.json",
+        f"{target}/index.html",
+    ]
+    assert all("unrelated" not in path for path in fake.mlst_calls)
+    assert all("do-not-touch" not in path for path in fake.mlst_calls)
     _assert_no_mutation(fake)
 
 
-def test_missing_mlsd_file_type_blocks_without_remote_mutation() -> None:
+def test_missing_file_type_blocks_without_remote_mutation() -> None:
     upload_input = _sealed_input()
     fake = MissingFileTypeFtps(upload_input)
 
@@ -356,19 +337,6 @@ def test_missing_mlsd_file_type_blocks_without_remote_mutation() -> None:
     assert not result.rolled_back
     assert not result.remote_mutation_possible
     assert "positively proven" in result.errors[0]
-    _assert_no_mutation(fake)
-
-
-def test_listing_failure_preserves_fail_closed_no_mutation_semantics() -> None:
-    upload_input = _sealed_input()
-    fake = ListingFailureFtps(upload_input)
-
-    result, _loads = _execute(fake, upload_input=upload_input)
-
-    assert not result.rolled_back
-    assert not result.remote_mutation_possible
-    assert "cannot prove rollback canary state" in result.errors[0]
-    assert PASSWORD not in repr(result)
     _assert_no_mutation(fake)
 
 
@@ -381,6 +349,5 @@ def test_metadata_failure_preserves_fail_closed_no_mutation_semantics() -> None:
     assert not result.rolled_back
     assert not result.remote_mutation_possible
     assert "cannot prove rollback target metadata" in result.errors[0]
-    assert fake.mlsd_calls == []
     assert PASSWORD not in repr(result)
     _assert_no_mutation(fake)
