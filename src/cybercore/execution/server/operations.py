@@ -21,8 +21,10 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
     "vikunja.backup.install": OperationSpec(
         name="vikunja.backup.install",
         argv=(
-            "/usr/bin/sudo",
-            "-n",
+            "/usr/bin/systemd-run",
+            "--unit=cybercore-vikunja-backup-install",
+            "--wait",
+            "--collect",
             "/usr/local/libexec/cybercore-exec/vikunja-backup-install",
         ),
         mutating=True,
@@ -31,8 +33,6 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
     "vikunja.backup.run": OperationSpec(
         name="vikunja.backup.run",
         argv=(
-            "/usr/bin/sudo",
-            "-n",
             "/usr/bin/systemctl",
             "start",
             "vikunja-backup.service",
