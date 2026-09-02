@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 
 from cybercore.longrun.engine import LongRunEngine, StepResult
+from cybercore.longrun.evaluation import EvaluationResult, evidence_digest
 from cybercore.longrun.governor import StepProposal, authorize_step
 from cybercore.longrun.manifest import LongRunManifest
 from cybercore.longrun.state import LongRunStateStore
@@ -34,12 +35,28 @@ def _proposal(*, fingerprint="step-1", effect="read", value_gain=2.0):
     )
 
 
+def _evaluator(*, score=0.5, verdict="FAIL"):
+    def evaluate(proposal, result):
+        return EvaluationResult(
+            evaluator_id="tests.independent-judge",
+            evaluator_version="1",
+            score=score,
+            verdict=verdict,
+            reasons=(f"evaluated {proposal.fingerprint}",),
+            evidence_digest=evidence_digest(result.evidence),
+        )
+
+    return evaluate
+
+
 def test_manifest_digest_is_stable_and_immutable_contract_changes_digest():
     first = _manifest()
     same = _manifest()
     changed = _manifest(objective="different mission")
+    changed_policy = _manifest(independent_evaluation_required=False)
     assert first.digest == same.digest
     assert first.digest != changed.digest
+    assert first.digest != changed_policy.digest
 
 
 def test_manifest_rejects_effect_overlap():
@@ -100,9 +117,16 @@ def test_engine_resumes_from_sqlite_checkpoint(tmp_path: Path):
         return _proposal(fingerprint=f"step-{state.step_index + 1}")
 
     def executor(proposal):
-        return StepResult(True, 0.5, {"proof": proposal.fingerprint})
+        return StepResult(True, {"proof": proposal.fingerprint})
 
-    first_engine = LongRunEngine(manifest, store, planner=planner, executor=executor, clock=clock)
+    first_engine = LongRunEngine(
+        manifest,
+        store,
+        planner=planner,
+        executor=executor,
+        evaluator=_evaluator(score=0.5),
+        clock=clock,
+    )
     state = first_engine.run_step()
     assert state.step_index == 1
 
@@ -111,6 +135,7 @@ def test_engine_resumes_from_sqlite_checkpoint(tmp_path: Path):
         LongRunStateStore(tmp_path / "state.sqlite"),
         planner=planner,
         executor=executor,
+        evaluator=_evaluator(score=0.5),
         clock=clock,
     )
     resumed = second_engine.run_step()
@@ -124,7 +149,8 @@ def test_engine_refuses_changed_manifest_after_checkpoint(tmp_path: Path):
         original,
         store,
         planner=lambda state: _proposal(),
-        executor=lambda proposal: StepResult(True, 1.0, {}),
+        executor=lambda proposal: StepResult(True, {"proof": proposal.fingerprint}),
+        evaluator=_evaluator(),
     )
     engine.load_or_create()
 
@@ -133,7 +159,8 @@ def test_engine_refuses_changed_manifest_after_checkpoint(tmp_path: Path):
         changed,
         store,
         planner=lambda state: _proposal(),
-        executor=lambda proposal: StepResult(True, 1.0, {}),
+        executor=lambda proposal: StepResult(True, {"proof": proposal.fingerprint}),
+        evaluator=_evaluator(),
     )
     with pytest.raises(RuntimeError, match="immutable mission contract"):
         changed_engine.load_or_create()
@@ -146,21 +173,24 @@ def test_engine_blocks_prohibited_effect_before_executor(tmp_path: Path):
         _manifest(),
         store,
         planner=lambda state: _proposal(effect="production_write"),
-        executor=lambda proposal: executed.append(proposal) or StepResult(True, 1.0, {}),
+        executor=lambda proposal: executed.append(proposal)
+        or StepResult(True, {"proof": proposal.fingerprint}),
+        evaluator=_evaluator(),
     )
     state = engine.run_step()
     assert state.status == "BLOCKED"
     assert executed == []
 
 
-def test_completion_requires_score_and_minimum_wall_budget(tmp_path: Path):
+def test_completion_requires_independent_pass_and_minimum_wall_budget(tmp_path: Path):
     store = LongRunStateStore(tmp_path / "state.sqlite")
-    times = iter([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    times = iter([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
     engine = LongRunEngine(
         _manifest(minimum_wall_seconds=5, evaluator_threshold=0.9),
         store,
         planner=lambda state: _proposal(fingerprint=f"step-{state.step_index}"),
-        executor=lambda proposal: StepResult(True, 0.95, {"verified": True}),
+        executor=lambda proposal: StepResult(True, {"verified": True}),
+        evaluator=_evaluator(score=0.95, verdict="PASS"),
         clock=lambda: next(times),
     )
     state = engine.run_step()
@@ -169,14 +199,32 @@ def test_completion_requires_score_and_minimum_wall_budget(tmp_path: Path):
     assert state.status == "COMPLETED"
 
 
+def test_high_score_fail_verdict_cannot_complete(tmp_path: Path):
+    store = LongRunStateStore(tmp_path / "state.sqlite")
+    engine = LongRunEngine(
+        _manifest(evaluator_threshold=0.9),
+        store,
+        planner=lambda state: _proposal(),
+        executor=lambda proposal: StepResult(True, {"verified": True}),
+        evaluator=_evaluator(score=1.0, verdict="FAIL"),
+        clock=lambda: 0.0,
+    )
+
+    state = engine.run_step()
+
+    assert state.status == "RUNNING"
+    assert state.evaluator_score == 1.0
+
+
 def test_result_after_maximum_wall_budget_stops_instead_of_completing(tmp_path: Path):
     store = LongRunStateStore(tmp_path / "state.sqlite")
-    times = iter([0.0, 8.0, 9.0, 11.0])
+    times = iter([0.0, 8.0, 9.0, 11.0, 12.0])
     engine = LongRunEngine(
         _manifest(maximum_wall_seconds=10, evaluator_threshold=0.9),
         store,
         planner=lambda state: _proposal(),
-        executor=lambda proposal: StepResult(True, 1.0, {"verified": True}),
+        executor=lambda proposal: StepResult(True, {"verified": True}),
+        evaluator=_evaluator(score=1.0, verdict="PASS"),
         clock=lambda: next(times),
     )
 
@@ -187,7 +235,7 @@ def test_result_after_maximum_wall_budget_stops_instead_of_completing(tmp_path: 
         payload = db.execute(
             "SELECT payload FROM events WHERE kind = 'STEP_RESULT' ORDER BY id DESC LIMIT 1"
         ).fetchone()[0]
-    assert "maximum wall budget exhausted after execution" in payload
+    assert "maximum wall budget exhausted after evaluation" in payload
 
 
 def test_maximum_wall_budget_is_rechecked_after_planning_before_executor(tmp_path: Path):
@@ -198,7 +246,9 @@ def test_maximum_wall_budget_is_rechecked_after_planning_before_executor(tmp_pat
         _manifest(maximum_wall_seconds=10),
         store,
         planner=lambda state: _proposal(),
-        executor=lambda proposal: executed.append(proposal) or StepResult(True, 1.0, {}),
+        executor=lambda proposal: executed.append(proposal)
+        or StepResult(True, {"proof": proposal.fingerprint}),
+        evaluator=_evaluator(),
         clock=lambda: next(times),
     )
 
@@ -220,7 +270,8 @@ def test_save_with_event_is_atomic_when_payload_serialization_fails(tmp_path: Pa
         _manifest(),
         store,
         planner=lambda state: _proposal(),
-        executor=lambda proposal: StepResult(True, 1.0, {}),
+        executor=lambda proposal: StepResult(True, {"proof": proposal.fingerprint}),
+        evaluator=_evaluator(),
         clock=lambda: 0.0,
     )
     state = engine.load_or_create()
@@ -241,11 +292,12 @@ def test_nonserializable_result_is_persisted_as_failed_attempt(tmp_path: Path):
         _manifest(),
         store,
         planner=lambda state: _proposal(),
-        executor=lambda proposal: StepResult(True, 1.0, {"bad": object()}),
+        executor=lambda proposal: StepResult(True, {"bad": object()}),
+        evaluator=_evaluator(),
         clock=lambda: next(times),
     )
 
-    with pytest.raises(RuntimeError, match="not JSON serializable"):
+    with pytest.raises(RuntimeError, match="not canonical JSON"):
         engine.run_step()
 
     persisted = store.load("marathon-test")
@@ -268,7 +320,8 @@ def test_planner_exception_is_persisted_as_failed_attempt(tmp_path: Path):
         _manifest(),
         store,
         planner=planner,
-        executor=lambda proposal: StepResult(True, 1.0, {}),
+        executor=lambda proposal: StepResult(True, {"proof": proposal.fingerprint}),
+        evaluator=_evaluator(),
         clock=lambda: next(times),
     )
 
@@ -296,6 +349,7 @@ def test_executor_exception_is_persisted_as_failed_attempt(tmp_path: Path):
         store,
         planner=lambda state: _proposal(),
         executor=executor,
+        evaluator=_evaluator(),
         clock=lambda: next(times),
     )
 
