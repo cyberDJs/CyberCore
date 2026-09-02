@@ -12,6 +12,7 @@ license = { text = "Apache-2.0" }
 authors = [{ name = "CyberDJS" }]
 dependencies = [
     "jsonschema>=4.23",
+    "mcp>=2,<3",
     "PyYAML>=6.0.2,<7",
     "rich>=13.9",
     "zstandard>=0.23",
@@ -30,6 +31,7 @@ dev = [
 
 [project.scripts]
 cybercore = "cybercore.entrypoint:main"
+cybercore-mcp = "cybercore.mcp.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cybercore"]
