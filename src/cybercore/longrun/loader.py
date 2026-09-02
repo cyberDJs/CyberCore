@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any
 
 import yaml
@@ -28,6 +29,7 @@ _POLICY_KEYS = {
     "immutable_mission_required",
     "fail_closed_on_unknown_effect",
 }
+_RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 def _load_mapping(path: Path, *, label: str) -> dict[str, Any]:
@@ -97,6 +99,10 @@ def load_manifest(profile_path: Path, mission_path: Path) -> LongRunManifest:
         if policy.get(key) is not True:
             raise ValueError(f"profile.policy.{key} must be true for operator runtime")
 
+    run_id = _require_string(mission, "run_id", label="mission")
+    if _RUN_ID.fullmatch(run_id) is None:
+        raise ValueError("mission.run_id must use only letters, digits, dot, underscore, or hyphen")
+
     raw_metadata = mission.get("metadata", {})
     if not isinstance(raw_metadata, dict) or not all(
         isinstance(key, str) and isinstance(value, str) for key, value in raw_metadata.items()
@@ -105,13 +111,17 @@ def load_manifest(profile_path: Path, mission_path: Path) -> LongRunManifest:
     metadata = dict(raw_metadata)
     metadata["longrun_profile"] = profile_name
 
+    checkpoint_every_steps = _require_int(profile, "checkpoint_every_steps", label="profile")
+    if checkpoint_every_steps != 1:
+        raise ValueError("operator runtime currently requires checkpoint_every_steps=1")
+
     manifest = LongRunManifest(
-        run_id=_require_string(mission, "run_id", label="mission"),
+        run_id=run_id,
         objective=_require_string(mission, "objective", label="mission"),
         minimum_wall_seconds=_require_int(profile, "minimum_wall_seconds", label="profile"),
         maximum_wall_seconds=_require_int(profile, "maximum_wall_seconds", label="profile"),
         evaluator_threshold=_require_float(profile, "evaluator_threshold", label="profile"),
-        checkpoint_every_steps=_require_int(profile, "checkpoint_every_steps", label="profile"),
+        checkpoint_every_steps=checkpoint_every_steps,
         max_consecutive_failures=_require_int(profile, "max_consecutive_failures", label="profile"),
         max_duplicate_steps=_require_int(profile, "max_duplicate_steps", label="profile"),
         allowed_effects=_require_string_list(profile, "allowed_effects", label="profile"),
