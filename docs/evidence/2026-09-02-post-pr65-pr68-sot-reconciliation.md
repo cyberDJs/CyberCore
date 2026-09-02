@@ -4,18 +4,18 @@
 
 Repository and evidence-state reconciliation only. No staging, provider, DNS, TLS, credential, billing, production, application, VPS, or remote-write mutation is authorized or performed by this change.
 
-The initial PR #69 reconciliation was opened after PR #65 and PR #68. While review was in progress, canonical `main` advanced through PR #70, PR #66, PR #73 and PR #71. This evidence record therefore extends the same reconciliation to the current canonical state rather than freezing an obsolete snapshot.
+The initial PR #69 reconciliation was opened after PR #65 and PR #68. While review was in progress, canonical `main` advanced through PR #70, PR #66, PR #73, PR #71 and PR #72. This evidence record therefore extends the same reconciliation to the current canonical state rather than freezing an obsolete snapshot.
 
 ## Canonical source
 
 - Repository: `cyberDJs/CyberCore`
 - Canonical branch: `main`
-- Canonical main observed for this reconciliation: `111ef0f09f44894278499d9ffaca9ab18eccf404`
+- Canonical main observed for this reconciliation: `8b555ffad19d44e8badff457d754efdb91e0bca8`
 - Google Drive `CyberCore/CASER-E`: evidence/archive/collaboration mirror, not canonical product state
 - Coordination PR: #69
 - Coordination branch: `docs/post-pr65-pr68-sot-reconciliation`
 
-A compare from the original PR #69 base `f245e89030a573ae3594a44ad42a828245bb2bba` to current `main@111ef0f09f44894278499d9ffaca9ab18eccf404` shows `main` 29 commits ahead and no changes to the three PR #69 reconciliation files. The reconciliation can therefore remain a minimal state/evidence-only branch update without a history rewrite or unrelated code rebase.
+PR #72 did not modify the three PR #69 reconciliation files, so the reconciliation remains a minimal state/evidence-only branch update without a history rewrite or unrelated code rebase.
 
 ## Canonical changes missing from the prior state snapshot
 
@@ -31,7 +31,8 @@ Relevant merged work now includes:
 - PR #70 — Cyber Voice Realtime Foundation — merged as `65682cbe2f129048ea6c672107c3208d44cbe4ea`;
 - PR #66 — WB-LR0001 Durable autonomous LongRun runtime — merged as `1ada318abcd93c7980cc6adc975afb0decefbbec`;
 - PR #73 — WB-0038 Cyber Voice Local Speech Runtime — merged as `a206c5d0758fc604d0bec5fb26dfd96b33469f62`;
-- PR #71 — WB-0037 governed execution bridge v1 — merged as current `main@111ef0f09f44894278499d9ffaca9ab18eccf404`.
+- PR #71 — WB-0037 governed execution bridge v1 — merged as `111ef0f09f44894278499d9ffaca9ab18eccf404`;
+- PR #72 — WB-LR0002 LongRun Operator Runtime — merged as current `main@8b555ffad19d44e8badff457d754efdb91e0bca8`.
 
 PR #65 exact approved head was `e239ce48cb18a7152adcaa006b8cc74c49c646f2`; CI #585 and CodeQL #584 passed and the fresh exact-head Codex review completed before merge.
 
@@ -49,6 +50,12 @@ Canonical state includes the first bounded 16h+ durable LongRun control-plane sl
 
 The merge explicitly does not grant production writes, credential/permission/billing mutation, remote deployment, provider binding, or distributed queue infrastructure.
 
+### PR #72 — LongRun Operator Runtime
+
+Canonical state now also includes the operator-facing LongRun slice: strict YAML mission/profile loading to immutable `LongRunManifest`, repo-sandboxed SQLite state, `longrun start|resume|status|events`, durable event-ledger inspection, deterministic read-only repository-integrity evidence, safe `run_id` handling, and fail-closed useful-work exhaustion.
+
+The merge explicitly excludes model/provider binding, independent evaluator authority, production writes, credential/permission/billing mutation, deployment/runtime promotion, branch-protection changes, and distributed queue infrastructure. The deterministic harness cannot impersonate an independent evaluator.
+
 ### PR #73 — Cyber Voice Local Speech Runtime
 
 Canonical state now includes the local/offline speech reference runtime: read-only audio-device discovery, local PCM microphone/speaker transport, sherpa-onnx VAD/streaming STT/VITS TTS adapters, local session bridging into the governed realtime runtime, strict local model/device configuration, and voice CLI commands.
@@ -57,7 +64,7 @@ The merge explicitly excludes automatic model downloads, cloud speech credential
 
 ### PR #71 — governed execution bridge v1
 
-Canonical state now includes a constrained SSH execution transport for bounded already-approved actions with exact target, plan, revision and authorization binding, allowlisted operations, `shell=False`, execution receipts, and separation between execution receipt and independent verification.
+Canonical state includes a constrained SSH execution transport for bounded already-approved actions with exact target, plan, revision and authorization binding, allowlisted operations, `shell=False`, execution receipts, and separation between execution receipt and independent verification.
 
 The merge does not itself authorize deployment, VPS mutation, secret creation, arbitrary shell, arbitrary sudo, arbitrary hosts, or production mutation.
 
@@ -68,7 +75,7 @@ The merge does not itself authorize deployment, VPS mutation, secret creation, a
 - PR #65 recovery is read-only and MLST-only; it performs no delete, rename, upload, chmod or chown.
 - A future live staging write requires a separately reviewed atomic create-if-absent mechanism or independently verified exclusive mutation access plus fresh explicit operator authority.
 - Production mutation remains outside current authority.
-- PR #69 does not authorize any execution path introduced or proposed by LongRun, Cyber Voice, MCP, governed execution, PR #72, or stale provider work.
+- PR #69 does not authorize any execution path introduced by LongRun, Cyber Voice, MCP, governed execution, or stale provider work.
 
 ## Google Drive reconciliation
 
@@ -78,13 +85,12 @@ The native Google Doc `CyberCore SOT Reconciliation — post PR65 / PR68` was cr
 
 The earlier machine-readable state incorrectly retained `caser_e_evidence_mirror: reconciliation_pending` and instructed operators to create a mirror that already existed. PR #69 corrects that state to `verified_noncanonical` and removes the duplicate mirror action from the `next` queue.
 
-The Drive artifact remains an evidence mirror only. GitHub `main` remains canonical product state.
+The Drive artifact remains an evidence mirror only. GitHub `main` remains canonical product state. Its content must follow the current GitHub state and must not override it.
 
 ## Open pull-request reality
 
 Current open CyberCore PRs observed during this reconciliation:
 
-- #72 — WB-LR0002 LongRun Operator Runtime — open/non-draft candidate created from `main@1ada318...` and requiring current-main reconciliation;
 - #69 — this source-of-truth reconciliation candidate;
 - #67 — CyberCore MCP Foundation v0.1 — draft candidate created from an older main and requiring current-main reconciliation;
 - #61 — old draft `WB-0035` InterServer VPS + Vikunja plan — historical identity collision; no provider order/payment action is authorized by this reconciliation;
@@ -92,7 +98,7 @@ Current open CyberCore PRs observed during this reconciliation:
 - #13 — old structured registry v0 draft — stale/supersession review required;
 - #5 — old provider-framework draft — stale/supersession review required.
 
-PR #66, PR #71 and PR #73 are no longer open candidates; they are merged and canonical. No unrelated open PR is merged, closed, renumbered, rebased, deployed, or provider-executed by this reconciliation.
+PR #66, PR #71, PR #72 and PR #73 are no longer open candidates; they are merged and canonical. No unrelated open PR is merged, closed, renumbered, rebased, deployed, or provider-executed by this reconciliation.
 
 ## Identity conflicts
 
@@ -131,13 +137,12 @@ PR #69 explicitly preserves this debt in both human-readable and machine-readabl
 
 ## Reconciliation decision
 
-Current canonical state must reflect `main@111ef0f09f44894278499d9ffaca9ab18eccf404`, PR #73 and PR #71 as merged canonical work, PR #72 as a new current-main reconciliation candidate, the verified non-canonical CASER-E mirror, the WB-0037 historical identifier collision, and the still-open visual-toolchain security debt.
+Current canonical state must reflect `main@8b555ffad19d44e8badff457d754efdb91e0bca8`, PR #72 as merged canonical LongRun Operator Runtime, the verified non-canonical CASER-E mirror, the WB-0035/WB-0036/WB-0037 historical identifier collisions, and the still-open visual-toolchain security debt.
 
 Priority order after this reconciliation candidate:
 
 1. run exact-head CI, CodeQL and a fresh independent review for PR #69; merge only with separate explicit operator approval;
-2. reconcile/revalidate PR #72 LongRun Operator Runtime against current canonical main;
-3. reconcile/revalidate PR #67 MCP Foundation against current canonical main;
-4. resolve WB-0035/WB-0036/WB-0037 collisions and stale PRs (#61, #45, #13, #5) through explicit supersession/renumber/closure decisions;
-5. remediate the six high-severity transitive visual-toolchain `npm audit` findings in a separately reviewed maintenance change;
-6. start a separate engineering block for concurrency-safe first-write semantics before requesting any live staging-write authority.
+2. reconcile/revalidate PR #67 MCP Foundation against current canonical main;
+3. resolve WB-0035/WB-0036/WB-0037 collisions and stale PRs (#61, #45, #13, #5) through explicit supersession/renumber/closure decisions;
+4. remediate the six high-severity transitive visual-toolchain `npm audit` findings in a separately reviewed maintenance change;
+5. start a separate engineering block for concurrency-safe first-write semantics before requesting any live staging-write authority.
