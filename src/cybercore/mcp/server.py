@@ -110,7 +110,9 @@ def _sanitize_output(value: object) -> object:
         sanitized: dict[str, object] = {}
         for key, item in value.items():
             name = str(key)
-            sanitized[name] = "[REDACTED]" if _is_secret_output_key(name) else _sanitize_output(item)
+            sanitized[name] = (
+                "[REDACTED]" if _is_secret_output_key(name) else _sanitize_output(item)
+            )
         return sanitized
     if isinstance(value, (list, tuple)):
         return [_sanitize_output(item) for item in value]
