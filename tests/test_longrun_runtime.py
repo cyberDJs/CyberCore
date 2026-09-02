@@ -173,8 +173,9 @@ def test_engine_blocks_prohibited_effect_before_executor(tmp_path: Path):
         _manifest(),
         store,
         planner=lambda state: _proposal(effect="production_write"),
-        executor=lambda proposal: executed.append(proposal)
-        or StepResult(True, {"proof": proposal.fingerprint}),
+        executor=lambda proposal: (
+            executed.append(proposal) or StepResult(True, {"proof": proposal.fingerprint})
+        ),
         evaluator=_evaluator(),
     )
     state = engine.run_step()
@@ -246,8 +247,9 @@ def test_maximum_wall_budget_is_rechecked_after_planning_before_executor(tmp_pat
         _manifest(maximum_wall_seconds=10),
         store,
         planner=lambda state: _proposal(),
-        executor=lambda proposal: executed.append(proposal)
-        or StepResult(True, {"proof": proposal.fingerprint}),
+        executor=lambda proposal: (
+            executed.append(proposal) or StepResult(True, {"proof": proposal.fingerprint})
+        ),
         evaluator=_evaluator(),
         clock=lambda: next(times),
     )
