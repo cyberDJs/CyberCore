@@ -143,6 +143,31 @@ class TrailingSlashMetadataFtps(FakeRollbackFtps):
         return response
 
 
+class TrailingSpaceMetadataFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        response = super().sendcmd(cmd)
+        _, path = cmd.split(" ", 1)
+        if path.endswith("/index.html"):
+            return response.replace(f" {path}\n", f" {path} \n")
+        return response
+
+
+class NonCompletedMlstReplyFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        _, path = cmd.split(" ", 1)
+        self.mlst_calls.append(path)
+        return f"150-Listing {path}\n type=file; {path}\n150 Continue"
+
+
+class DuplicateTypeFactsFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        response = super().sendcmd(cmd)
+        _, path = cmd.split(" ", 1)
+        if path.endswith("/index.html"):
+            return f"250-Listing {path}\n type=dir;TYPE=file; {path}\n250 End"
+        return response
+
+
 class MetadataFailureFtps(FakeRollbackFtps):
     def sendcmd(self, cmd: str) -> str:
         _, path = cmd.split(" ", 1)
@@ -274,6 +299,33 @@ def test_mlst_reported_path_requires_literal_equality():
     result, _ = _execute(fake, upload_input=inp)
     assert not result.rolled_back and result.receipt is None
     assert "does not match the sealed target path" in result.errors[0]
+    _assert_no_mutation(fake)
+
+
+def test_mlst_reported_path_preserves_trailing_whitespace():
+    inp = _sealed_input()
+    fake = TrailingSpaceMetadataFtps(inp)
+    result, _ = _execute(fake, upload_input=inp)
+    assert not result.rolled_back and result.receipt is None
+    assert "does not match the sealed target path" in result.errors[0]
+    _assert_no_mutation(fake)
+
+
+def test_mlst_requires_completed_250_reply():
+    inp = _sealed_input()
+    fake = NonCompletedMlstReplyFtps(inp)
+    result, _ = _execute(fake, upload_input=inp)
+    assert not result.rolled_back and result.receipt is None
+    assert "completed 250 reply" in result.errors[0]
+    _assert_no_mutation(fake)
+
+
+def test_mlst_rejects_duplicate_case_insensitive_facts():
+    inp = _sealed_input()
+    fake = DuplicateTypeFactsFtps(inp)
+    result, _ = _execute(fake, upload_input=inp)
+    assert not result.rolled_back and result.receipt is None
+    assert "duplicate facts" in result.errors[0]
     _assert_no_mutation(fake)
 
 
