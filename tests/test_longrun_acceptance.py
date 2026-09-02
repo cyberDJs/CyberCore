@@ -6,7 +6,7 @@ import pytest
 
 from cybercore.longrun.acceptance import AcceleratedAcceptanceHarness, SimulatedClock
 from cybercore.longrun.engine import LongRunEngine, StepResult
-from cybercore.longrun.evaluation import EvaluationResult
+from cybercore.longrun.evaluation import EvaluationResult, evidence_digest
 from cybercore.longrun.governor import StepProposal
 from cybercore.longrun.manifest import LongRunManifest
 from cybercore.longrun.state import LongRunStateStore
@@ -119,6 +119,40 @@ def test_tampered_evaluation_digest_blocks_completion(tmp_path: Path):
     events = engine.store.list_events("acceptance-test")
     assert events[-1].kind == "EVALUATION_INVALID"
     assert "digest does not match" in events[-1].payload["reason"]
+
+
+def test_evaluator_cannot_mutate_executor_evidence_snapshot(tmp_path: Path):
+    executor_evidence = {"proof": {"value": "original"}}
+
+    def evaluator(proposal, result):
+        bound_digest = evidence_digest(result.evidence)
+        proof = result.evidence["proof"]
+        assert isinstance(proof, dict)
+        proof["value"] = "tampered"
+        return EvaluationResult(
+            evaluator_id="tests.mutating-judge",
+            evaluator_version="1",
+            score=1.0,
+            verdict="PASS",
+            reasons=("mutated evaluator input after binding its original digest",),
+            evidence_digest=bound_digest,
+        )
+
+    engine = LongRunEngine(
+        _manifest(),
+        LongRunStateStore(tmp_path / "state.sqlite"),
+        planner=lambda state: _proposal(),
+        executor=lambda proposal: StepResult(True, executor_evidence),
+        evaluator=evaluator,
+    )
+
+    state = engine.run_step()
+
+    assert state.status == "BLOCKED"
+    assert executor_evidence == {"proof": {"value": "original"}}
+    events = engine.store.list_events("acceptance-test")
+    assert events[-1].kind == "EVALUATION_INVALID"
+    assert events[-1].payload["reason"] == "evaluator mutated executor evidence snapshot"
 
 
 def test_empty_executor_evidence_blocks_before_evaluator(tmp_path: Path):
