@@ -27,7 +27,7 @@ current:
   active_artifact: PR69-POST-MERGE-SOT-CLOSEOUT
   branch: docs/pr69-post-merge-sot-closeout
   pull_request: 77
-  last_verified_main: cb3d705f82d53a1302f9f2ca80615325b1509468
+  last_verified_main: 41a0994b3cef083f15b8280724dd788cd31a880e
 
 status:
   ccl_specification: complete_draft
@@ -61,7 +61,7 @@ status:
   readme_landing_page: verified
   caser_e_google_drive_workspace: initialized
   caser_e_evidence_mirror: verified_noncanonical
-  caser_e_evidence_mirror_freshness: stale_after_pr69_merge
+  caser_e_evidence_mirror_freshness: stale_after_pr76_merge
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
   pr38_post_merge_reconciliation: merged
@@ -129,6 +129,8 @@ status:
   governed_execution_bridge: canonical
   pr72_longrun_operator_runtime: merged_verified_canonical
   longrun_operator_runtime: canonical
+  pr76_longrun_independent_evaluation_acceptance: merged_canonical
+  longrun_independent_evaluation_acceptance: canonical
   wb0035_identifier: conflict_needs_review
   wb0036_identifier: conflict_needs_review
   wb0037_identifier: conflict_needs_review
@@ -136,7 +138,6 @@ status:
   pr67_mcp_foundation: open_draft_requires_current_main_revalidation
   pr74_cyber_voice_intelligence_bridge: open_draft_requires_current_main_revalidation
   pr75_cyber_voice_live_acceptance_repair: open_draft_requires_current_main_revalidation
-  pr76_longrun_independent_evaluation_acceptance: open_requires_current_main_revalidation
   pr45_staging_plan: open_stale_needs_supersession_review
   pr13_structured_registry: open_stale_needs_supersession_review
   pr5_provider_framework: open_stale_needs_supersession_review
@@ -307,10 +308,14 @@ completed:
     pull_request: 69
     merge_commit: cb3d705f82d53a1302f9f2ca80615325b1509468
     verification: ci_636_codeql_635_fresh_codex_review_completed
+  - artifact: WB-LR0003-independent-evaluation-acceptance
+    pull_request: 76
+    merge_commit: 41a0994b3cef083f15b8280724dd788cd31a880e
+    verification: merged_canonical
 
 next:
   - verify PR77 on its exact head with CI, CodeQL and fresh independent review; do not merge without explicit operator approval
-  - reconcile open candidates PR76, PR75, PR74 and PR67 against resulting canonical main before readiness; this inventory does not imply merge priority
+  - reconcile open candidates PR75, PR74 and PR67 against resulting canonical main before readiness; this inventory does not imply merge priority
   - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
   - review stale open PRs 61, 45, 13 and 5 before any closure or reuse
   - remediate the six high-severity transitive visual-toolchain npm audit findings in a separately reviewed maintenance change
