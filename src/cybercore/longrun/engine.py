@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, replace
 import time
 from typing import Callable
@@ -212,7 +213,8 @@ class LongRunEngine:
 
         now = self.clock()
         try:
-            result_evidence_digest = evidence_digest(result.evidence)
+            evidence_snapshot = deepcopy(result.evidence)
+            result_evidence_digest = evidence_digest(evidence_snapshot)
         except (TypeError, ValueError) as exc:
             failed = replace(
                 state,
@@ -234,7 +236,7 @@ class LongRunEngine:
             )
             raise RuntimeError("step result evidence is not canonical JSON") from exc
 
-        if self.manifest.evidence_required and not result.evidence:
+        if self.manifest.evidence_required and not evidence_snapshot:
             blocked = replace(
                 state,
                 status="BLOCKED",
@@ -255,8 +257,12 @@ class LongRunEngine:
 
         evaluation: EvaluationResult | None = None
         if self.evaluator is not None:
+            evaluator_result = StepResult(
+                success=result.success,
+                evidence=deepcopy(evidence_snapshot),
+            )
             try:
-                evaluation = self.evaluator(proposal, result)
+                evaluation = self.evaluator(proposal, evaluator_result)
             except Exception as exc:
                 now = self.clock()
                 failed = replace(
@@ -277,6 +283,29 @@ class LongRunEngine:
                     },
                 )
                 raise
+
+            try:
+                evaluator_evidence_digest = evidence_digest(evaluator_result.evidence)
+            except (TypeError, ValueError):
+                evaluator_evidence_digest = None
+            if evaluator_evidence_digest != result_evidence_digest:
+                blocked = replace(
+                    state,
+                    status="BLOCKED",
+                    step_index=state.step_index + 1,
+                    last_step_fingerprint=proposal.fingerprint,
+                    duplicate_count=duplicate_count,
+                    updated_at=self.clock(),
+                )
+                return self._persist_transition(
+                    blocked,
+                    "EVALUATION_INVALID",
+                    {
+                        "fingerprint": proposal.fingerprint,
+                        "reason": "evaluator mutated executor evidence snapshot",
+                        "evidence_digest": result_evidence_digest,
+                    },
+                )
 
             if not isinstance(evaluation, EvaluationResult):
                 blocked = replace(
@@ -348,7 +377,7 @@ class LongRunEngine:
             "fingerprint": proposal.fingerprint,
             "success": result.success,
             "value": proposal.value,
-            "evidence": result.evidence,
+            "evidence": evidence_snapshot,
             "evidence_digest": result_evidence_digest,
             "status": new_state.status,
         }
