@@ -18,7 +18,7 @@ The previous `PROJECT_STATE.md` / `.cybercore/project.yaml` snapshot still descr
 Relevant merged work now includes:
 
 - PR #55 — WB-0034 first staging deployment preflight — merged as `090433264f4338828db293a327d5083bacf1813f`;
-- PR #63 — WB-0034 path-scoped explicit FTPS security amendment — merged before WB-0035 runtime;
+- PR #63 — WB-0034 path-scoped explicit FTPS security amendment — merged as `2f8b5b54ba8745871dd3a183c739a32473e8535a`;
 - PR #64 — `feat(wb0035): add bounded FTPS runtime and effect verifier` — merged as `f12eb91ea8dd718f9f3c2d366d578859dab31132`;
 - PR #68 — `feat(wb0036): Cyber Voice Foundation` — merged as `bb18ffedff43970e27fdd0e86ffeb469a8d465de`;
 - PR #65 — `fix(wb0036): make first-write recovery non-destructive and block unsafe FTPS writes` — merged as current `main@f245e89030a573ae3594a44ad42a828245bb2bba`.
@@ -37,14 +37,15 @@ PR #65 exact approved head was `e239ce48cb18a7152adcaa006b8cc74c49c646f2`; CI #5
 
 Current open CyberCore PRs observed during reconciliation:
 
-- #67 — CyberCore MCP Foundation v0.1 — draft; created from an older main and requires post-PR65/68 revalidation before readiness.
-- #66 — WB-LR0001 Durable autonomous LongRun runtime — open/non-draft; created from an older main and requires post-PR65/68 revalidation before any merge decision.
-- #61 — old draft `WB-0035` InterServer VPS + Vikunja plan — historical identity collision; no provider order/payment action is authorized by this reconciliation.
-- #45 — old staging-plan candidate — stale/supersession review required.
-- #13 — old structured registry v0 draft — stale/supersession review required.
+- #69 — this post-PR65/PR68 SOT reconciliation candidate;
+- #67 — CyberCore MCP Foundation v0.1 — draft; created from an older main and requires post-PR65/68 revalidation before readiness;
+- #66 — WB-LR0001 Durable autonomous LongRun runtime — open/non-draft; created from an older main and requires post-PR65/68 revalidation before any merge decision;
+- #61 — old draft `WB-0035` InterServer VPS + Vikunja plan — historical identity collision; no provider order/payment action is authorized by this reconciliation;
+- #45 — old staging-plan candidate — stale/supersession review required;
+- #13 — old structured registry v0 draft — stale/supersession review required;
 - #5 — old provider-framework draft — stale/supersession review required.
 
-No open PR is merged, closed, renumbered, rebased, or provider-executed by this reconciliation.
+No unrelated open PR is merged, closed, renumbered, rebased, or provider-executed by this reconciliation.
 
 ## Identity conflicts
 
@@ -66,11 +67,13 @@ The identifier is used by both merged changes:
 
 Both are canonical Git history. Do not rewrite history to hide the collision. A later governance cleanup should assign unambiguous registry aliases/identities while preserving original PR titles and commit provenance.
 
-## Google Drive drift
+## Google Drive reconciliation
 
-Connected Drive inspection resolved `CyberCore/CASER-E` with `working/` and `evidence/` subfolders. `working/` still contains the older `CyberCore Audit 2026-08-17 — Working`; `evidence/` had no current reconciliation artifact at inspection time.
+Connected Drive inspection resolved `CyberCore/CASER-E` with `working/` and `evidence/` subfolders. `working/` still contains the older `CyberCore Audit 2026-08-17 — Working`.
 
-This repository evidence record is intended to be mirrored into `CASER-E/evidence` after the repository state candidate is created. GitHub remains canonical even after that mirror is created.
+A new native Google Doc named `CyberCore SOT Reconciliation — post PR65 / PR68` was created and verified in `CASER-E/evidence`. Its readback records the same canonical GitHub main, PR #69 candidate identity, recent merge state, remote-write blocker, parallel candidate tracks, identity conflicts, stale-PR queue and priority sequence. Provider-private Drive identifiers are intentionally not committed to this public repository.
+
+The Drive artifact is an evidence mirror only. GitHub `main` remains canonical product state.
 
 ## Reconciliation decision
 
