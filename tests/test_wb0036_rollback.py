@@ -186,6 +186,33 @@ class UnterminatedFactListFtps(FakeRollbackFtps):
         return response
 
 
+class UnindentedMetadataFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        response = super().sendcmd(cmd)
+        _, path = cmd.split(" ", 1)
+        if path.endswith("/index.html"):
+            return f"250-Listing {path}\ntype=file; {path}\n250 End"
+        return response
+
+
+class InvalidFactNameCharactersFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        response = super().sendcmd(cmd)
+        _, path = cmd.split(" ", 1)
+        if path.endswith("/index.html"):
+            return f"250-Listing {path}\n type=file;bad\x00=x; {path}\n250 End"
+        return response
+
+
+class InvalidFactValueCharactersFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        response = super().sendcmd(cmd)
+        _, path = cmd.split(" ", 1)
+        if path.endswith("/index.html"):
+            return f"250-Listing {path}\n type=file;x.meta=bad\x00value; {path}\n250 End"
+        return response
+
+
 class MetadataFailureFtps(FakeRollbackFtps):
     def sendcmd(self, cmd: str) -> str:
         _, path = cmd.split(" ", 1)
@@ -334,7 +361,7 @@ def test_mlst_requires_completed_250_reply():
     fake = NonCompletedMlstReplyFtps(inp)
     result, _ = _execute(fake, upload_input=inp)
     assert not result.rolled_back and result.receipt is None
-    assert "completed 250 reply" in result.errors[0]
+    assert "completed 250 control response" in result.errors[0]
     _assert_no_mutation(fake)
 
 
@@ -362,6 +389,33 @@ def test_mlst_requires_terminal_fact_separator():
     result, _ = _execute(fake, upload_input=inp)
     assert not result.rolled_back and result.receipt is None
     assert "malformed fact separators" in result.errors[0]
+    _assert_no_mutation(fake)
+
+
+def test_mlst_requires_protocol_indentation():
+    inp = _sealed_input()
+    fake = UnindentedMetadataFtps(inp)
+    result, _ = _execute(fake, upload_input=inp)
+    assert not result.rolled_back and result.receipt is None
+    assert "invalid protocol indentation" in result.errors[0]
+    _assert_no_mutation(fake)
+
+
+def test_mlst_rejects_invalid_fact_name_characters():
+    inp = _sealed_input()
+    fake = InvalidFactNameCharactersFtps(inp)
+    result, _ = _execute(fake, upload_input=inp)
+    assert not result.rolled_back and result.receipt is None
+    assert "invalid fact characters" in result.errors[0]
+    _assert_no_mutation(fake)
+
+
+def test_mlst_rejects_invalid_fact_value_characters():
+    inp = _sealed_input()
+    fake = InvalidFactValueCharactersFtps(inp)
+    result, _ = _execute(fake, upload_input=inp)
+    assert not result.rolled_back and result.receipt is None
+    assert "invalid fact characters" in result.errors[0]
     _assert_no_mutation(fake)
 
 
