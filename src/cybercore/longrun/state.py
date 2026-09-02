@@ -32,13 +32,20 @@ class RunEvent:
 
 
 class LongRunStateStore:
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, create: bool = True) -> None:
         self.path = path
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._init()
+        self.create = create
+        if create:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._init()
+        elif not self.path.is_file():
+            raise FileNotFoundError(f"LongRun state database does not exist: {self.path}")
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.path)
+        if self.create:
+            connection = sqlite3.connect(self.path)
+        else:
+            connection = sqlite3.connect(f"file:{self.path}?mode=rw", uri=True)
         connection.row_factory = sqlite3.Row
         return connection
 
@@ -118,7 +125,7 @@ class LongRunStateStore:
             (run_id, step_index, kind, payload, created_at),
         )
 
-    def create(self, state: RunState) -> None:
+    def create_run(self, state: RunState) -> None:
         with self._connect() as db:
             db.execute(
                 "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
