@@ -122,31 +122,43 @@ def build_server(repo: str | None = None) -> MCPServer:
     @server.tool(name="cybercore.capabilities")
     def capabilities() -> dict[str, object]:
         """Return the explicit fail-closed CyberCore MCP capability manifest."""
-        return _invoke("cybercore.capabilities", lambda rid: {"ok": True, "request_id": rid, **capability_manifest()})
+        return _invoke(
+            "cybercore.capabilities",
+            lambda rid: {"ok": True, "request_id": rid, **capability_manifest()},
+        )
 
     @server.tool(name="cybercore.status")
     def status() -> dict[str, object]:
         """Return sanitized local CyberCore runtime status without mutation."""
+
         def run(rid: str) -> dict[str, object]:
             lines = [sanitize_disclosure_text(line) for line in status_lines(paths)]
             return {"ok": True, "request_id": rid, "status": lines}
+
         return _invoke("cybercore.status", run)
 
     @server.tool(name="cybercore.project_context")
     def project_context() -> dict[str, object]:
         """Return trusted repository context through the canonical disclosure policy."""
+
         def run(rid: str) -> dict[str, object]:
-            context = collect_trusted_operation_context(paths.repo, operation="mcp_project_context", risk="low")
+            context = collect_trusted_operation_context(
+                paths.repo, operation="mcp_project_context", risk="low"
+            )
             return {
                 "ok": True,
                 "request_id": rid,
-                "context": disclose_context_payload(context.as_dict(), mode=DisclosureMode.STANDARD),
+                "context": disclose_context_payload(
+                    context.as_dict(), mode=DisclosureMode.STANDARD
+                ),
             }
+
         return _invoke("cybercore.project_context", run)
 
     @server.tool(name="cybercore.verify.repository")
     def verify_repository() -> dict[str, object]:
         """Verify repository identity against canonical CyberCore policy."""
+
         def run(rid: str) -> dict[str, object]:
             result = evaluate_repository_identity_policy(paths.repo)
             return {
@@ -154,22 +166,34 @@ def build_server(repo: str | None = None) -> MCPServer:
                 "request_id": rid,
                 "verification": disclosed_repository_identity_policy_payload(result),
             }
+
         return _invoke("cybercore.verify.repository", run)
 
     @server.tool(name="cybercore.verify.runtime")
     def verify_runtime() -> dict[str, object]:
         """Run read-only CyberCore runtime dependency checks."""
+
         def run(rid: str) -> dict[str, object]:
             checks = [
-                {"name": item.name, "state": str(item.state), "detail": sanitize_disclosure_text(item.detail)}
+                {
+                    "name": item.name,
+                    "state": str(item.state),
+                    "detail": sanitize_disclosure_text(item.detail),
+                }
                 for item in run_doctor(paths)
             ]
-            return {"ok": all(item["state"].lower().endswith("ok") for item in checks), "request_id": rid, "checks": checks}
+            return {
+                "ok": all(item["state"].lower().endswith("ok") for item in checks),
+                "request_id": rid,
+                "checks": checks,
+            }
+
         return _invoke("cybercore.verify.runtime", run)
 
     @server.tool(name="cybercore.ccl.validate")
     def ccl_validate(record_json: str) -> dict[str, object]:
         """Validate one bounded CCL JSON record against canonical schemas."""
+
         def run(rid: str) -> dict[str, object]:
             raw = _bounded_text(record_json, name="record_json")
             record = json.loads(raw)
@@ -177,11 +201,13 @@ def build_server(repo: str | None = None) -> MCPServer:
                 raise ValueError("CCL record must be a JSON object")
             result = CCLValidator.from_repo(paths.repo).validate(record)
             return {"ok": result.valid, "request_id": rid, "validation": result.as_dict()}
+
         return _invoke("cybercore.ccl.validate", run)
 
     @server.tool(name="cybercore.plan.change")
     def plan_change(goal: str) -> dict[str, object]:
         """Create a non-executable change-plan envelope; never applies a change."""
+
         def run(rid: str) -> dict[str, object]:
             bounded = sanitize_disclosure_text(_bounded_text(goal, name="goal"))
             return {
@@ -191,9 +217,18 @@ def build_server(repo: str | None = None) -> MCPServer:
                     "goal": bounded,
                     "mode": "plan_only",
                     "execution_authorized": False,
-                    "required_sequence": ["observe", "evidence", "reason", "plan", "explicit_approval", "apply", "verify"],
+                    "required_sequence": [
+                        "observe",
+                        "evidence",
+                        "reason",
+                        "plan",
+                        "explicit_approval",
+                        "apply",
+                        "verify",
+                    ],
                 },
             }
+
         return _invoke("cybercore.plan.change", run)
 
     return server
