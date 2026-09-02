@@ -15,6 +15,8 @@ class LongRunManifest:
     checkpoint_every_steps: int = 1
     max_consecutive_failures: int = 3
     max_duplicate_steps: int = 2
+    evidence_required: bool = True
+    independent_evaluation_required: bool = True
     allowed_effects: tuple[str, ...] = ("read", "sandbox_write")
     prohibited_effects: tuple[str, ...] = (
         "production_write",
@@ -39,6 +41,10 @@ class LongRunManifest:
             raise ValueError("checkpoint_every_steps must be >= 1")
         if self.max_consecutive_failures < 1 or self.max_duplicate_steps < 1:
             raise ValueError("failure and duplicate limits must be >= 1")
+        if not isinstance(self.evidence_required, bool):
+            raise ValueError("evidence_required must be boolean")
+        if not isinstance(self.independent_evaluation_required, bool):
+            raise ValueError("independent_evaluation_required must be boolean")
         overlap = set(self.allowed_effects).intersection(self.prohibited_effects)
         if overlap:
             raise ValueError(f"effects cannot be both allowed and prohibited: {sorted(overlap)}")
@@ -53,6 +59,8 @@ class LongRunManifest:
             "checkpoint_every_steps": self.checkpoint_every_steps,
             "max_consecutive_failures": self.max_consecutive_failures,
             "max_duplicate_steps": self.max_duplicate_steps,
+            "evidence_required": self.evidence_required,
+            "independent_evaluation_required": self.independent_evaluation_required,
             "allowed_effects": list(self.allowed_effects),
             "prohibited_effects": list(self.prohibited_effects),
             "metadata": dict(sorted(self.metadata.items())),
