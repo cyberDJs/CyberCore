@@ -142,6 +142,18 @@ def _replace_next_tasks(current: str, next_tasks: tuple[str, ...]) -> str:
     )
 
 
+def _insert_completed_entry(current: str, completed_entry: str) -> str:
+    updated, count = re.subn(
+        r"(?m)^next:(?:[ \t]*\[\])?$",
+        lambda match: completed_entry + match.group(0),
+        current,
+        count=1,
+    )
+    if count != 1:
+        raise PostMergeTransitionError("Unable to record completed artifact")
+    return updated
+
+
 def _kernel_transition(
     current: str,
     preview: PostMergeTransitionPreview,
@@ -171,7 +183,7 @@ def _kernel_transition(
             f"    merge_commit: {preview.pull_request.merge_commit}\n"
             f"    verification: {verification}\n"
         )
-        current = current.replace("\nnext:\n", "\n" + completed_entry + "\nnext:\n", 1)
+        current = _insert_completed_entry(current, completed_entry)
 
     current = _set_current(current, "last_verified_main", preview.main_commit)
     current = _replace_required(
