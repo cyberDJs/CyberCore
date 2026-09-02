@@ -132,9 +132,7 @@ def _set_project_state_checkpoint(
 
 def _replace_next_tasks(current: str, next_tasks: tuple[str, ...]) -> str:
     task_block = (
-        "next:\n" + "".join(f"  - {task}\n" for task in next_tasks)
-        if next_tasks
-        else "next: []\n"
+        "next:\n" + "".join(f"  - {task}\n" for task in next_tasks) if next_tasks else "next: []\n"
     )
     return _replace_required(
         r"(?ms)^next:(?:[ \t]*\[\])?\n.*?(?=^rules:)",
