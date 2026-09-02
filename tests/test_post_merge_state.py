@@ -145,6 +145,8 @@ def test_terminal_plan_closes_without_successor_self_reference(tmp_path: Path) -
     assert "branch: main" in plan.kernel_content
     assert "pull_request: null" in plan.kernel_content
     assert "last_verified_main: 1e174e9" in plan.kernel_content
+    assert "next:\n  - select the next bounded candidate explicitly\n" in plan.kernel_content
+    assert "old task" not in plan.kernel_content
     assert "Canonical main ref: GitHub `main` (resolve live)" in plan.project_state_content
     assert "Last verified canonical checkpoint: `1e174e9`" in plan.project_state_content
     assert (
@@ -155,6 +157,21 @@ def test_terminal_plan_closes_without_successor_self_reference(tmp_path: Path) -
     assert "- Active work block: `none`" in plan.project_state_content
     assert "- Work block: idle" in plan.project_state_content
     assert "- Pull request: none" in plan.project_state_content
+
+
+def test_terminal_plan_clears_predecessor_tasks_when_none_declared(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    plan = plan_post_merge_state_update(
+        repo,
+        _preview(),
+        completed_artifact="WB-0018",
+        verification="52_passed",
+        next_action="Stop with no scheduled successor task.",
+        terminal=True,
+    )
+
+    assert "next: []\n" in plan.kernel_content
+    assert "old task" not in plan.kernel_content
 
 
 def test_terminal_plan_rejects_successor_contract(tmp_path: Path) -> None:
