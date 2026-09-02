@@ -155,7 +155,7 @@ def test_engine_blocks_prohibited_effect_before_executor(tmp_path: Path):
 
 def test_completion_requires_score_and_minimum_wall_budget(tmp_path: Path):
     store = LongRunStateStore(tmp_path / "state.sqlite")
-    times = iter([0.0, 1.0, 2.0, 3.0, 6.0, 7.0])
+    times = iter([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
     engine = LongRunEngine(
         _manifest(minimum_wall_seconds=5, evaluator_threshold=0.9),
         store,
@@ -171,7 +171,7 @@ def test_completion_requires_score_and_minimum_wall_budget(tmp_path: Path):
 
 def test_result_after_maximum_wall_budget_stops_instead_of_completing(tmp_path: Path):
     store = LongRunStateStore(tmp_path / "state.sqlite")
-    times = iter([0.0, 9.0, 11.0])
+    times = iter([0.0, 8.0, 9.0, 11.0])
     engine = LongRunEngine(
         _manifest(maximum_wall_seconds=10, evaluator_threshold=0.9),
         store,
@@ -188,6 +188,30 @@ def test_result_after_maximum_wall_budget_stops_instead_of_completing(tmp_path: 
             "SELECT payload FROM events WHERE kind = 'STEP_RESULT' ORDER BY id DESC LIMIT 1"
         ).fetchone()[0]
     assert "maximum wall budget exhausted after execution" in payload
+
+
+def test_maximum_wall_budget_is_rechecked_after_planning_before_executor(tmp_path: Path):
+    store = LongRunStateStore(tmp_path / "state.sqlite")
+    times = iter([0.0, 9.0, 11.0])
+    executed = []
+    engine = LongRunEngine(
+        _manifest(maximum_wall_seconds=10),
+        store,
+        planner=lambda state: _proposal(),
+        executor=lambda proposal: executed.append(proposal) or StepResult(True, 1.0, {}),
+        clock=lambda: next(times),
+    )
+
+    state = engine.run_step()
+
+    assert state.status == "STOPPED"
+    assert executed == []
+    with sqlite3.connect(store.path) as db:
+        kind, payload = db.execute(
+            "SELECT kind, payload FROM events ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+    assert kind == "WATCHDOG_STOP"
+    assert '"phase":"post_planning"' in payload
 
 
 def test_save_with_event_is_atomic_when_payload_serialization_fails(tmp_path: Path):
@@ -212,7 +236,7 @@ def test_save_with_event_is_atomic_when_payload_serialization_fails(tmp_path: Pa
 
 def test_nonserializable_result_is_persisted_as_failed_attempt(tmp_path: Path):
     store = LongRunStateStore(tmp_path / "state.sqlite")
-    times = iter([0.0, 1.0, 2.0])
+    times = iter([0.0, 1.0, 2.0, 3.0])
     engine = LongRunEngine(
         _manifest(),
         store,
@@ -233,9 +257,36 @@ def test_nonserializable_result_is_persisted_as_failed_attempt(tmp_path: Path):
     assert kind == "STEP_PERSISTENCE_FAILURE"
 
 
-def test_executor_exception_is_persisted_as_failed_attempt(tmp_path: Path):
+def test_planner_exception_is_persisted_as_failed_attempt(tmp_path: Path):
     store = LongRunStateStore(tmp_path / "state.sqlite")
     times = iter([0.0, 1.0, 2.0])
+
+    def planner(state):
+        raise TimeoutError("planner timed out")
+
+    engine = LongRunEngine(
+        _manifest(),
+        store,
+        planner=planner,
+        executor=lambda proposal: StepResult(True, 1.0, {}),
+        clock=lambda: next(times),
+    )
+
+    with pytest.raises(TimeoutError):
+        engine.run_step()
+
+    persisted = store.load("marathon-test")
+    assert persisted is not None
+    assert persisted.step_index == 1
+    assert persisted.consecutive_failures == 1
+    with sqlite3.connect(store.path) as db:
+        kind = db.execute("SELECT kind FROM events ORDER BY id DESC LIMIT 1").fetchone()[0]
+    assert kind == "PLANNER_EXCEPTION"
+
+
+def test_executor_exception_is_persisted_as_failed_attempt(tmp_path: Path):
+    store = LongRunStateStore(tmp_path / "state.sqlite")
+    times = iter([0.0, 1.0, 2.0, 3.0])
 
     def executor(proposal):
         raise TimeoutError("tool timed out")
