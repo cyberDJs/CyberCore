@@ -400,10 +400,19 @@ def plan_post_merge_state_update(
     next_tasks: tuple[str, ...] = (),
 ) -> PostMergeStatePlan:
     if terminal:
-        if any(
-            value is not None
-            for value in (next_artifact, next_milestone, next_branch, next_status, next_objective)
-        ) or next_scope:
+        if (
+            any(
+                value is not None
+                for value in (
+                    next_artifact,
+                    next_milestone,
+                    next_branch,
+                    next_status,
+                    next_objective,
+                )
+            )
+            or next_scope
+        ):
             raise PostMergeTransitionError(
                 "Terminal closeout cannot declare a successor work block contract"
             )
