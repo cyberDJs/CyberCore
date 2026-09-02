@@ -42,7 +42,7 @@ A boolean, policy token, or operator assertion alone is not accepted as exclusiv
 
 ## Recovery runtime
 
-The rollback runtime remains read-only and bounded to the sealed `FirstWriteUploadInput`. It verifies endpoint, identity, TLS/root scope, MLSD target type, approved artifact names and positive file-type evidence, then reports logical rollback state without remote mutation.
+The rollback runtime remains read-only and bounded to the sealed `FirstWriteUploadInput`. It verifies endpoint, identity and TLS/root scope, then probes only the exact sealed canary path with `MLST /cybercore-canary-<run_id>`. It never enumerates the staging parent. Only after `MLST` positively proves the exact target is a directory does it use `MLSD` inside that target to validate the approved artifact names and positive file-type evidence.
 
 ## Test requirements
 
@@ -54,6 +54,7 @@ Regression coverage proves:
 - the blocker is unconditional for write-authority arguments while the unsafe writer is disabled;
 - sealed-input validation remains directly covered as a pure helper;
 - logical rollback performs zero delete/rename/upload operations;
+- rollback inspection uses exact-target `MLST` and target-only `MLSD`, never parent-root enumeration;
 - effect verification and secret-exclusion behavior remain covered.
 
 ## Readiness
