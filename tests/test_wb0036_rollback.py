@@ -60,7 +60,9 @@ class FakeRollbackFtps:
         self.target = f"/{upload_input.destination[:-1]}"
         self.directories = {"/", self.target}
         self.files = {
-            self.target: {artifact.name: artifact.content for artifact in upload_input.artifacts}
+            self.target: {
+                artifact.name: artifact.content for artifact in upload_input.artifacts
+            }
         }
         self.mlst_calls: list[str] = []
         self.delete_calls: list[str] = []
@@ -74,11 +76,22 @@ class FakeRollbackFtps:
         self.connected_host = host
         return "ok"
 
-    def auth(self): return "ok"
-    def login(self, user: str, passwd: str): return "ok"
-    def prot_p(self): self.protected = True; return "ok"
-    def set_pasv(self, val: bool): self.passive = val; return None
-    def pwd(self) -> str: return "/"
+    def auth(self):
+        return "ok"
+
+    def login(self, user: str, passwd: str):
+        return "ok"
+
+    def prot_p(self):
+        self.protected = True
+        return "ok"
+
+    def set_pasv(self, val: bool):
+        self.passive = val
+        return None
+
+    def pwd(self) -> str:
+        return "/"
 
     def sendcmd(self, cmd: str) -> str:
         verb, path = cmd.split(" ", 1)
@@ -95,11 +108,23 @@ class FakeRollbackFtps:
             raise ftplib.error_perm("550 No such file or directory")
         return f"250-Listing {path}\n type={entry_type}; {path}\n250 End"
 
-    def delete(self, filename: str): self.delete_calls.append(filename); raise AssertionError
-    def rmd(self, dirname: str): self.rmd_calls.append(dirname); raise AssertionError
-    def rename(self, fromname: str, toname: str): self.rename_calls.append((fromname, toname)); raise AssertionError
-    def quit(self): return "ok"
-    def close(self): return None
+    def delete(self, filename: str):
+        self.delete_calls.append(filename)
+        raise AssertionError
+
+    def rmd(self, dirname: str):
+        self.rmd_calls.append(dirname)
+        raise AssertionError
+
+    def rename(self, fromname: str, toname: str):
+        self.rename_calls.append((fromname, toname))
+        raise AssertionError
+
+    def quit(self):
+        return "ok"
+
+    def close(self):
+        return None
 
 
 class MissingFileTypeFtps(FakeRollbackFtps):
@@ -128,14 +153,18 @@ class PermissionDeniedMetadataFtps(FakeRollbackFtps):
 def _execute(fake, *, upload_input, authorized=True, auth_ref=None, credential=None):
     credential = credential or FirstWriteFtpsCredential(HOST, USERNAME, 21, PASSWORD)
     loads = 0
+
     def loader():
         nonlocal loads
         loads += 1
         return credential
+
     result = rollback.execute_first_write_rollback(
         upload_input,
         rollback_authorized=authorized,
-        authorization_reference=auth_ref or rollback.rollback_authorization_reference(upload_input),
+        authorization_reference=(
+            auth_ref or rollback.rollback_authorization_reference(upload_input)
+        ),
         credential_loader=loader,
         ftp_factory=lambda _context: fake,
     )
@@ -149,34 +178,48 @@ def _assert_no_mutation(fake):
 
 
 def test_rollback_requires_literal_true_before_loading_secret():
-    inp = _sealed_input(); fake = FakeRollbackFtps(inp)
+    inp = _sealed_input()
+    fake = FakeRollbackFtps(inp)
     result, loads = _execute(fake, upload_input=inp, authorized=cast(bool, "false"))
     assert not result.rolled_back and loads == 0 and fake.connected_host == ""
 
 
 def test_rollback_requires_exact_run_scoped_authorization_reference():
-    inp = _sealed_input(); fake = FakeRollbackFtps(inp)
+    inp = _sealed_input()
+    fake = FakeRollbackFtps(inp)
     result, loads = _execute(fake, upload_input=inp, auth_ref="approval:wrong")
     assert not result.rolled_back and loads == 0
 
 
 def test_alternate_sealed_endpoint_blocks_before_loading_secret_or_connect():
-    inp = _sealed_input(endpoint_hostname="other.example"); fake = FakeRollbackFtps(inp)
+    inp = _sealed_input(endpoint_hostname="other.example")
+    fake = FakeRollbackFtps(inp)
     result, loads = _execute(fake, upload_input=inp)
     assert not result.rolled_back and loads == 0 and fake.connected_host == ""
 
 
 def test_present_canary_establishes_logical_rollback_without_mutation():
-    inp = _sealed_input(); fake = FakeRollbackFtps(inp); target = fake.target
+    inp = _sealed_input()
+    fake = FakeRollbackFtps(inp)
+    target = fake.target
     result, loads = _execute(fake, upload_input=inp)
     assert result.rolled_back and loads == 1
-    assert fake.mlst_calls == [target, f"{target}/cybercore-version.json", f"{target}/index.html"]
-    assert result.receipt and result.receipt.present_artifacts == ("cybercore-version.json", "index.html")
+    assert fake.mlst_calls == [
+        target,
+        f"{target}/cybercore-version.json",
+        f"{target}/index.html",
+    ]
+    assert result.receipt and result.receipt.present_artifacts == (
+        "cybercore-version.json",
+        "index.html",
+    )
     _assert_no_mutation(fake)
 
 
 def test_missing_artifact_fails_closed_without_mutation():
-    inp = _sealed_input(); fake = FakeRollbackFtps(inp); target = fake.target
+    inp = _sealed_input()
+    fake = FakeRollbackFtps(inp)
+    target = fake.target
     del fake.files[target]["index.html"]
     result, _ = _execute(fake, upload_input=inp)
     assert not result.rolled_back and result.receipt is None
@@ -185,7 +228,8 @@ def test_missing_artifact_fails_closed_without_mutation():
 
 
 def test_missing_target_550_fails_closed():
-    inp = _sealed_input(); fake = FakeRollbackFtps(inp)
+    inp = _sealed_input()
+    fake = FakeRollbackFtps(inp)
     fake.directories.remove(fake.target)
     result, _ = _execute(fake, upload_input=inp)
     assert not result.rolled_back and result.receipt is None
@@ -193,33 +237,48 @@ def test_missing_target_550_fails_closed():
 
 
 def test_permission_denied_550_fails_closed():
-    inp = _sealed_input(); fake = PermissionDeniedMetadataFtps(inp)
+    inp = _sealed_input()
+    fake = PermissionDeniedMetadataFtps(inp)
     result, _ = _execute(fake, upload_input=inp)
     assert not result.rolled_back and result.receipt is None
     assert "cannot prove rollback target metadata" in result.errors[0]
 
 
 def test_recovery_probes_only_sealed_canary_and_approved_artifacts():
-    inp = _sealed_input(); fake = FakeRollbackFtps(inp); target = fake.target
+    inp = _sealed_input()
+    fake = FakeRollbackFtps(inp)
+    target = fake.target
     fake.directories.add("/unrelated-sibling")
     fake.files[target]["do-not-touch.txt"] = b"unrelated"
     result, _ = _execute(fake, upload_input=inp)
     assert result.rolled_back
-    assert fake.mlst_calls == [target, f"{target}/cybercore-version.json", f"{target}/index.html"]
-    assert all("do-not-touch" not in path and "unrelated" not in path for path in fake.mlst_calls)
+    assert fake.mlst_calls == [
+        target,
+        f"{target}/cybercore-version.json",
+        f"{target}/index.html",
+    ]
+    assert all(
+        "do-not-touch" not in path and "unrelated" not in path
+        for path in fake.mlst_calls
+    )
     _assert_no_mutation(fake)
 
 
 def test_missing_file_type_blocks_without_remote_mutation():
-    inp = _sealed_input(); fake = MissingFileTypeFtps(inp)
+    inp = _sealed_input()
+    fake = MissingFileTypeFtps(inp)
     result, _ = _execute(fake, upload_input=inp)
     assert not result.rolled_back and "positively proven" in result.errors[0]
     _assert_no_mutation(fake)
 
 
 def test_metadata_failure_preserves_fail_closed_no_mutation_semantics():
-    inp = _sealed_input(); fake = MetadataFailureFtps(inp)
+    inp = _sealed_input()
+    fake = MetadataFailureFtps(inp)
     result, _ = _execute(fake, upload_input=inp)
-    assert not result.rolled_back and "cannot prove rollback target metadata" in result.errors[0]
+    assert (
+        not result.rolled_back
+        and "cannot prove rollback target metadata" in result.errors[0]
+    )
     assert PASSWORD not in repr(result)
     _assert_no_mutation(fake)
