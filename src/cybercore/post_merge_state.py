@@ -130,6 +130,20 @@ def _set_project_state_checkpoint(
     return current
 
 
+def _replace_next_tasks(current: str, next_tasks: tuple[str, ...]) -> str:
+    task_block = (
+        "next:\n" + "".join(f"  - {task}\n" for task in next_tasks)
+        if next_tasks
+        else "next: []\n"
+    )
+    return _replace_required(
+        r"(?ms)^next:(?:[ \t]*\[\])?\n.*?(?=^rules:)",
+        task_block,
+        current,
+        "next task list",
+    )
+
+
 def _kernel_transition(
     current: str,
     preview: PostMergeTransitionPreview,
@@ -187,6 +201,7 @@ def _kernel_transition(
         current = _replace_required(
             r"^  pull_request: .+$", "  pull_request: null", current, "pull request"
         )
+        current = _replace_next_tasks(current, next_tasks)
     else:
         if next_artifact is None or next_milestone is None or next_branch is None:
             raise PostMergeTransitionError("Successor state contract is incomplete")
@@ -207,12 +222,8 @@ def _kernel_transition(
         )
         if next_status:
             current = _set_status(current, next_status, "planned")
-
-    if next_tasks:
-        task_block = "next:\n" + "".join(f"  - {task}\n" for task in next_tasks)
-        current = _replace_required(
-            r"(?ms)^next:\n.*?(?=\nrules:)", task_block, current, "next task list"
-        )
+        if next_tasks:
+            current = _replace_next_tasks(current, next_tasks)
     return current
 
 
