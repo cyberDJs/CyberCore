@@ -161,6 +161,13 @@ class MetadataFailureFtps(FakeRollbackFtps):
         raise ftplib.error_temp("421 metadata unavailable")
 
 
+class PermissionDeniedMetadataFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        _verb, path = cmd.split(" ", 1)
+        self.mlst_calls.append(path)
+        raise ftplib.error_perm("550 Permission denied")
+
+
 def _execute(
     fake: FakeRollbackFtps,
     *,
@@ -275,7 +282,7 @@ def test_interrupted_upload_is_preserved_for_evidence_without_mutation() -> None
     _assert_no_mutation(fake)
 
 
-def test_rollback_is_idempotent_when_exact_directory_is_already_absent() -> None:
+def test_missing_target_550_fails_closed_without_claiming_absence() -> None:
     upload_input = _sealed_input()
     fake = FakeRollbackFtps(upload_input)
     target = f"/{upload_input.destination[:-1]}"
@@ -284,12 +291,26 @@ def test_rollback_is_idempotent_when_exact_directory_is_already_absent() -> None
 
     result, _loads = _execute(fake, upload_input=upload_input)
 
-    assert result.rolled_back, result.errors
-    assert result.receipt is not None
-    assert result.receipt.already_absent
-    assert not result.receipt.target_present
-    assert not result.receipt.cleanup_required
-    assert not result.receipt.remote_write_performed
+    assert not result.rolled_back
+    assert result.receipt is None
+    assert not result.remote_mutation_possible
+    assert "cannot prove rollback target metadata" in result.errors[0]
+    assert fake.mlst_calls == [target]
+    assert fake.mlsd_calls == []
+    _assert_no_mutation(fake)
+
+
+def test_permission_denied_550_fails_closed_without_claiming_absence() -> None:
+    upload_input = _sealed_input()
+    fake = PermissionDeniedMetadataFtps(upload_input)
+    target = f"/{upload_input.destination[:-1]}"
+
+    result, _loads = _execute(fake, upload_input=upload_input)
+
+    assert not result.rolled_back
+    assert result.receipt is None
+    assert not result.remote_mutation_possible
+    assert "cannot prove rollback target metadata" in result.errors[0]
     assert fake.mlst_calls == [target]
     assert fake.mlsd_calls == []
     _assert_no_mutation(fake)
