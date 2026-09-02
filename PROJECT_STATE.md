@@ -8,9 +8,9 @@ _Last updated: 2026-09-02_
 - Canonical product state: GitHub `main`
 - Current canonical main: `cb3d705f82d53a1302f9f2ca80615325b1509468`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Current coordination artifact: PR #69 post-merge source-of-truth closeout
+- Current coordination artifact: PR #77 — PR #69 post-merge source-of-truth closeout
 - Current coordination branch: `docs/pr69-post-merge-sot-closeout`
-- Current coordination pull request: not created
+- Current coordination pull request: #77
 - Active branch: `docs/pr69-post-merge-sot-closeout`
 - Active work block: `PR69-POST-MERGE-SOT-CLOSEOUT PR #69 post-merge source-of-truth closeout`
 - Governance: provider mutation, secret mutation, staging apply, production mutation, canonical merge, and authority changes require their applicable explicit approval gates
@@ -38,7 +38,7 @@ Verification:
 
 ## Current milestone
 
-PR #69 post-merge source-of-truth closeout against canonical `main@cb3d705f82d53a1302f9f2ca80615325b1509468`.
+PR #77 closes the PR #69 source-of-truth reconciliation against canonical `main@cb3d705f82d53a1302f9f2ca80615325b1509468`.
 
 ## Active objective
 
@@ -59,8 +59,8 @@ Scope:
 - Branch: `docs/pr69-post-merge-sot-closeout`
 - Project Kernel: present
 - Runtime implementation: docs/state post-merge closeout only
-- Tests: exact-head verification required for the closeout branch
-- Pull request: not created
+- Tests: exact-head verification required for PR #77
+- Pull request: #77
 
 ## Current canonical state
 
@@ -219,7 +219,7 @@ These are not one work block. PR #61 is historical/stale until an explicit super
 The identifier is present in two separate merged canonical changes:
 
 - PR #65 — first-write recovery/runtime safety hardening;
-- PR #68 — Cyber Voice Foundation.
+- merged PR #68 — Cyber Voice Foundation.
 
 Both must remain in immutable Git history. Governance cleanup must add unambiguous aliases/registry identities rather than rewriting historical commits or PR titles.
 
@@ -236,6 +236,7 @@ Do not merge the two meanings or rewrite history; governance cleanup must assign
 
 At the current closeout read, open PRs are:
 
+- #77 — PR #69 post-merge source-of-truth closeout — active coordination PR;
 - #76 — WB-LR0003 Independent Evaluation Acceptance — candidate requiring current-main reconciliation;
 - #75 — WB-0038A Cyber Voice live audio acceptance repair — draft candidate requiring current-main reconciliation;
 - #74 — WB-0039 Cyber Voice Intelligence Bridge — draft candidate requiring current-main reconciliation;
@@ -279,7 +280,7 @@ This closeout preserves that debt; it does not weaken, suppress, or mark the fin
 
 ## Priority sequence
 
-1. Verify the PR #69 post-merge SOT closeout on its exact head with CI, CodeQL and fresh independent review; merge only after separate explicit operator approval.
+1. Verify PR #77 on its exact head with CI, CodeQL and fresh independent review; merge only after separate explicit operator approval.
 2. Reconcile open candidates PR #76, #75, #74 and #67 against resulting canonical `main` before any readiness decision; no merge priority is implied by this inventory.
 3. Resolve WB-0035/WB-0036/WB-0037 identifier collisions and stale PRs through explicit supersession/renumber/closure decisions; do not rewrite history.
 4. Address the six high-severity transitive visual-toolchain `npm audit` findings in a separately reviewed maintenance change.
@@ -287,13 +288,13 @@ This closeout preserves that debt; it does not weaken, suppress, or mark the fin
 
 ## Next action
 
-Open the docs/state-only PR for this PR #69 post-merge SOT closeout, run exact-head CI and CodeQL, request a fresh independent review, and merge only after separate explicit operator approval.
+Run exact-head CI and CodeQL for PR #77, request a fresh independent review on the same head, and merge only after separate explicit operator approval.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr69-post-merge-sot-closeout -->
 ## Manual repository checkpoint
 
-- Coordination PR: not created
+- Coordination PR: #77
 - Coordination branch: `docs/pr69-post-merge-sot-closeout`
 - Canonical main observed for closeout: `cb3d705f82d53a1302f9f2ca80615325b1509468`
 - PR #69 SOT reconciliation: merged and canonical as `cb3d705f82d53a1302f9f2ca80615325b1509468`
