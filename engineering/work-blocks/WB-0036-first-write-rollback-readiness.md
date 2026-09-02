@@ -44,6 +44,8 @@ A boolean, policy token, or operator assertion alone is not accepted as exclusiv
 
 The rollback runtime remains read-only and bounded to the sealed `FirstWriteUploadInput`. It verifies endpoint, identity and TLS/root scope, then probes only the exact sealed canary path with `MLST /cybercore-canary-<run_id>`. It never enumerates the staging parent. Only after `MLST` positively proves the exact target is a directory does it use `MLSD` inside that target to validate the approved artifact names and positive file-type evidence.
 
+`MLST` errors are fail-closed. In particular, FTP `550` is not accepted as proof of absence because it can represent both a missing pathname and access denial. WB-0036 no longer emits an `already_absent` success receipt from an MLST error; ambiguous or unavailable metadata blocks recovery inspection without mutation.
+
 ## Test requirements
 
 Regression coverage proves:
@@ -55,6 +57,7 @@ Regression coverage proves:
 - sealed-input validation remains directly covered as a pure helper;
 - logical rollback performs zero delete/rename/upload operations;
 - rollback inspection uses exact-target `MLST` and target-only `MLSD`, never parent-root enumeration;
+- both missing-target and permission-denied `550` replies fail closed instead of claiming absence;
 - effect verification and secret-exclusion behavior remain covered.
 
 ## Readiness
