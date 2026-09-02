@@ -45,7 +45,7 @@ class LongRunStateStore:
         if self._create_mode:
             connection = sqlite3.connect(self.path)
         else:
-            connection = sqlite3.connect(f"file:{self.path}?mode=rw", uri=True)
+            connection = sqlite3.connect(f"{self.path.absolute().as_uri()}?mode=rw", uri=True)
         connection.row_factory = sqlite3.Row
         return connection
 
