@@ -58,10 +58,8 @@ class LongRunEngine:
         existing = self.store.load(self.manifest.run_id)
         if existing is None:
             state = self._initial_state()
-            self.store.create(state)
-            self.store.append_event(
-                state.run_id,
-                state.step_index,
+            self.store.create_with_event(
+                state,
                 "RUN_STARTED",
                 {"manifest_digest": state.manifest_digest},
                 state.started_at,
@@ -70,6 +68,15 @@ class LongRunEngine:
         if existing.manifest_digest != self.manifest.digest:
             raise RuntimeError("manifest digest mismatch; immutable mission contract changed")
         return existing
+
+    def _persist_transition(
+        self,
+        state: RunState,
+        kind: str,
+        payload: dict[str, object],
+    ) -> RunState:
+        self.store.save_with_event(state, kind, payload, state.updated_at)
+        return state
 
     def run_step(self) -> RunState:
         state = self.load_or_create()
@@ -88,15 +95,11 @@ class LongRunEngine:
         )
         if watchdog.action == "STOP":
             stopped = replace(state, status="STOPPED", updated_at=now)
-            self.store.save(stopped)
-            self.store.append_event(
-                stopped.run_id,
-                stopped.step_index,
+            return self._persist_transition(
+                stopped,
                 "WATCHDOG_STOP",
                 {"reason": watchdog.reason},
-                now,
             )
-            return stopped
         if watchdog.action == "REPLAN":
             state = replace(
                 state,
@@ -105,9 +108,10 @@ class LongRunEngine:
                 last_step_fingerprint=None,
                 updated_at=now,
             )
-            self.store.save(state)
-            self.store.append_event(
-                state.run_id, state.step_index, "WATCHDOG_REPLAN", {"reason": watchdog.reason}, now
+            self._persist_transition(
+                state,
+                "WATCHDOG_REPLAN",
+                {"reason": watchdog.reason},
             )
 
         proposal = self.planner(state)
@@ -118,20 +122,40 @@ class LongRunEngine:
         )
         if not allowed:
             blocked = replace(state, status="BLOCKED", updated_at=self.clock())
-            self.store.save(blocked)
-            self.store.append_event(
-                blocked.run_id,
-                blocked.step_index,
+            return self._persist_transition(
+                blocked,
                 "STEP_BLOCKED",
                 {"fingerprint": proposal.fingerprint, "reason": reason},
-                blocked.updated_at,
             )
-            return blocked
 
         duplicate_count = (
-            state.duplicate_count + 1 if proposal.fingerprint == state.last_step_fingerprint else 0
+            state.duplicate_count + 1
+            if proposal.fingerprint == state.last_step_fingerprint
+            else 0
         )
-        result = self.executor(proposal)
+        try:
+            result = self.executor(proposal)
+        except Exception as exc:
+            now = self.clock()
+            failed = replace(
+                state,
+                step_index=state.step_index + 1,
+                consecutive_failures=state.consecutive_failures + 1,
+                last_step_fingerprint=proposal.fingerprint,
+                duplicate_count=duplicate_count,
+                updated_at=now,
+            )
+            self._persist_transition(
+                failed,
+                "STEP_EXCEPTION",
+                {
+                    "fingerprint": proposal.fingerprint,
+                    "exception_type": type(exc).__name__,
+                    "value": proposal.value,
+                },
+            )
+            raise
+
         now = self.clock()
         new_state = replace(
             state,
@@ -144,27 +168,50 @@ class LongRunEngine:
         )
 
         elapsed = now - new_state.started_at
-        if (
+        terminal_reason: str | None = None
+        if elapsed >= self.manifest.maximum_wall_seconds:
+            new_state = replace(new_state, status="STOPPED")
+            terminal_reason = "maximum wall budget exhausted after execution"
+        elif (
             result.success
             and result.evaluator_score >= self.manifest.evaluator_threshold
             and elapsed >= self.manifest.minimum_wall_seconds
         ):
             new_state = replace(new_state, status="COMPLETED")
 
-        self.store.save(new_state)
-        self.store.append_event(
-            new_state.run_id,
-            new_state.step_index,
-            "STEP_RESULT",
-            {
-                "fingerprint": proposal.fingerprint,
-                "success": result.success,
-                "evaluator_score": result.evaluator_score,
-                "value": proposal.value,
-                "evidence": result.evidence,
-            },
-            now,
-        )
+        payload: dict[str, object] = {
+            "fingerprint": proposal.fingerprint,
+            "success": result.success,
+            "evaluator_score": result.evaluator_score,
+            "value": proposal.value,
+            "evidence": result.evidence,
+            "status": new_state.status,
+        }
+        if terminal_reason is not None:
+            payload["terminal_reason"] = terminal_reason
+
+        try:
+            self._persist_transition(new_state, "STEP_RESULT", payload)
+        except (TypeError, ValueError) as exc:
+            failed = replace(
+                state,
+                step_index=state.step_index + 1,
+                consecutive_failures=state.consecutive_failures + 1,
+                last_step_fingerprint=proposal.fingerprint,
+                duplicate_count=duplicate_count,
+                updated_at=now,
+            )
+            self._persist_transition(
+                failed,
+                "STEP_PERSISTENCE_FAILURE",
+                {
+                    "fingerprint": proposal.fingerprint,
+                    "exception_type": type(exc).__name__,
+                    "reason": "step result payload is not JSON serializable",
+                    "value": proposal.value,
+                },
+            )
+            raise RuntimeError("step result payload is not JSON serializable") from exc
         return new_state
 
     def run_until_terminal(self, *, max_steps: int | None = None) -> RunState:
