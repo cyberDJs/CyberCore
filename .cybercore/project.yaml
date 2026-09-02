@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: post-PR65/PR68 source-of-truth reconciliation
-  active_artifact: POST-PR65-PR68-SOT-RECONCILIATION
+  milestone: current source-of-truth reconciliation
+  active_artifact: PR69-CURRENT-SOT-RECONCILIATION
   branch: docs/post-pr65-pr68-sot-reconciliation
   pull_request: 69
-  last_verified_main: f245e89030a573ae3594a44ad42a828245bb2bba
+  last_verified_main: 1ada318abcd93c7980cc6adc975afb0decefbbec
 
 status:
   ccl_specification: complete_draft
@@ -58,7 +58,7 @@ status:
   checkpoint_inactive_artifact_persistence: verified
   readme_landing_page: verified
   caser_e_google_drive_workspace: initialized
-  caser_e_evidence_mirror: reconciliation_pending
+  caser_e_evidence_mirror: verified_noncanonical
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
   pr38_post_merge_reconciliation: merged
@@ -115,15 +115,20 @@ status:
   pr68_cyber_voice_foundation: merged_verified
   cyber_voice_foundation: canonical
   cyber_voice_direct_execution_allowed: false
+  pr70_cyber_voice_realtime_foundation: merged_verified
+  cyber_voice_realtime_foundation: canonical
+  pr66_longrun: merged_verified_canonical
+  longrun_runtime: canonical
   wb0035_identifier: conflict_needs_review
   wb0036_identifier: conflict_needs_review
+  wb0037_identifier: conflict_needs_review
   pr61_old_wb0035_vps_vikunja: open_draft_identity_conflict_needs_review
-  pr66_longrun: open_candidate_requires_post_pr65_pr68_revalidation
-  pr67_mcp_foundation: open_draft_requires_post_pr65_pr68_revalidation
+  pr67_mcp_foundation: open_draft_requires_current_main_revalidation
+  pr71_wb0037_governed_execution_bridge: open_candidate_noncanonical_base_identity_conflict_needs_review
   pr45_staging_plan: open_stale_needs_supersession_review
   pr13_structured_registry: open_stale_needs_supersession_review
   pr5_provider_framework: open_stale_needs_supersession_review
-  pr69_post_pr65_pr68_sot_reconciliation: active_candidate
+  pr69_post_pr65_pr68_sot_reconciliation: active_candidate_requires_exact_head_regating
 
 completed:
   - artifact: WB-0015
@@ -266,18 +271,25 @@ completed:
     pull_request: 65
     merge_commit: f245e89030a573ae3594a44ad42a828245bb2bba
     verification: ci_585_codeql_584_fresh_codex_review_completed
+  - artifact: WB-0037-cyber-voice-realtime-foundation-historical-id
+    pull_request: 70
+    merge_commit: 65682cbe2f129048ea6c672107c3208d44cbe4ea
+    verification: merged_verified_identity_conflict_recorded
+  - artifact: WB-LR0001-durable-longrun-runtime
+    pull_request: 66
+    merge_commit: 1ada318abcd93c7980cc6adc975afb0decefbbec
+    verification: merged_verified
 
 next:
-  - verify PR69 exact-head CI, CodeQL and fresh independent review; do not merge without explicit operator approval
-  - mirror PR69 reconciliation evidence to Google Drive CASER-E/evidence while preserving GitHub main as canonical
-  - rebase or otherwise reconcile PR66 LongRun with current main and re-run exact-head gates before merge readiness
-  - rebase or otherwise reconcile PR67 MCP Foundation with current main and re-run exact-head gates before readiness
-  - resolve WB0035 and WB0036 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
+  - verify PR69 on the new exact head with CI, CodeQL and fresh independent review; do not merge without explicit operator approval
+  - reconcile PR67 MCP Foundation with current canonical main and re-run exact-head gates before readiness
+  - reconcile PR71 governed execution bridge with canonical main and resolve the WB0037 identifier collision before any merge decision
+  - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
   - review stale open PRs 61, 45, 13 and 5 before any closure or reuse
   - design a separate concurrency-safe first-write mechanism before requesting any future live staging-write authority
   - keep production application mutation prohibited without a separate production MOP and explicit Jan Kočí approval
   - preserve Cloudflare as authoritative DNS and DirectAdmin as hosting/SSL control plane
-  - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
+  - preserve GitHub as canonical product state and Google Drive CASER-E as verified non-canonical evidence/archive/collaboration layer
 
 rules:
   state_first: true
