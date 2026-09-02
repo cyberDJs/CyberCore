@@ -6,6 +6,7 @@ import sys
 from typing import TypedDict, cast
 
 from cybercore import cli
+from cybercore.longrun_cli import run_longrun
 from cybercore.operation_context_disclosure import (
     DisclosureMode,
     disclose_context_payload,
@@ -339,10 +340,12 @@ def _run_context(argv: list[str]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
-    routed_commands = {"post-merge", "identity", "context"}
+    routed_commands = {"post-merge", "identity", "context", "longrun"}
     if not any(command in arguments for command in routed_commands):
         return cli.main(arguments)
     try:
+        if "longrun" in arguments:
+            return run_longrun(arguments)
         if "identity" in arguments:
             return _run_identity(arguments)
         if "context" in arguments:
