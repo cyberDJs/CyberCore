@@ -25,6 +25,8 @@ If a canary exists after a future write attempt:
 
 The staging parent must never be enumerated as part of recovery inspection.
 
+An MLST error does not prove absence. FTP `550` can mean either a missing pathname or insufficient access, so WB-0036 treats every MLST error as an inspection failure. Recovery must not return `already_absent=True` from a `550` response or any other ambiguous metadata failure.
+
 ## Current first-write blocker
 
 FTP `STOR` replaces an existing pathname. An MLSD absence check followed by `STOR` is therefore not an atomic create-if-absent operation. Another session can create or replace the pathname between proof and mutation. Similar pathname races exist around `MKD` and subsequent operations.
