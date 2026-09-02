@@ -26,7 +26,7 @@ current:
   milestone: PR69 post-merge source-of-truth closeout
   active_artifact: PR69-POST-MERGE-SOT-CLOSEOUT
   branch: docs/pr69-post-merge-sot-closeout
-  pull_request: null
+  pull_request: 77
   last_verified_main: cb3d705f82d53a1302f9f2ca80615325b1509468
 
 status:
@@ -309,7 +309,7 @@ completed:
     verification: ci_636_codeql_635_fresh_codex_review_completed
 
 next:
-  - verify the PR69 post-merge SOT closeout on its exact head with CI, CodeQL and fresh independent review; do not merge without explicit operator approval
+  - verify PR77 on its exact head with CI, CodeQL and fresh independent review; do not merge without explicit operator approval
   - reconcile open candidates PR76, PR75, PR74 and PR67 against resulting canonical main before readiness; this inventory does not imply merge priority
   - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
   - review stale open PRs 61, 45, 13 and 5 before any closure or reuse
