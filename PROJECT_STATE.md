@@ -11,12 +11,39 @@ _Last updated: 2026-09-02_
 - Current coordination artifact: PR #69 source-of-truth reconciliation
 - Current coordination branch: `docs/post-pr65-pr68-sot-reconciliation`
 - Current coordination pull request: #69
+- Active branch: `docs/post-pr65-pr68-sot-reconciliation`
+- Active work block: `PR69-CURRENT-SOT-RECONCILIATION Current source-of-truth reconciliation`
 - Governance: provider mutation, secret mutation, staging apply, production mutation, canonical merge, and authority changes require their applicable explicit approval gates
 - CI policy: exact-head GitHub Actions verification is required before merge
 - CodeQL policy: exact-head CodeQL verification is required before merge
 - Independent review: fresh exact-head review is required for material changes before merge readiness
 
 GitHub `main` remains canonical. CASER-E is a mirror/evidence layer and cannot override a fresher authoritative GitHub state.
+
+## Current milestone
+
+PR #69 is the active current source-of-truth reconciliation against canonical `main@111ef0f09f44894278499d9ffaca9ab18eccf404`.
+
+## Active objective
+
+Reconcile the human-readable and machine-readable CyberCore project state to current canonical GitHub reality without granting new execution authority or rewriting historical provenance.
+
+Scope:
+
+1. preserve current canonical merge state and open candidate inventory;
+2. preserve existing safety boundaries and unresolved security debt;
+3. keep Google Drive CASER-E explicitly non-canonical;
+4. preserve the literal Project State schema consumed by post-merge and checkpoint-memory tooling;
+5. pass exact-head CI, CodeQL and fresh independent review before any merge decision.
+
+## Current status
+
+- Work block: active
+- Branch: `docs/post-pr65-pr68-sot-reconciliation`
+- Project Kernel: present
+- Runtime implementation: state/evidence reconciliation only
+- Tests: exact-head revalidation required after Project State schema-compatibility repair
+- Pull request: #69
 
 ## Current canonical state
 
@@ -216,6 +243,10 @@ This reconciliation records that debt; it does not weaken, suppress, or mark the
 4. Resolve WB-0035/WB-0036/WB-0037 identifier collisions and stale PRs through explicit supersession/renumber/closure decisions; do not rewrite history.
 5. Address the six high-severity transitive visual-toolchain `npm audit` findings in a separately reviewed maintenance change.
 6. Start a separate engineering block for concurrency-safe first-write semantics before any future staging-write authorization request.
+
+## Next action
+
+Re-run exact-head CI, CodeQL and fresh independent review for PR #69 after this Project State schema-compatibility repair; merge only after separate explicit operator approval.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr69-current-sot-reconciliation -->
