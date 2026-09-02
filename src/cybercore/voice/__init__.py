@@ -1,9 +1,28 @@
+from cybercore.voice.adapters import (
+    RealtimeAudioTransport,
+    RealtimeSpeechProvider,
+    StreamingSpeechToText,
+    StreamingTextToSpeech,
+    TranscriptDelta,
+    TranscriptResult,
+    VadResult,
+    VadState,
+    VoiceActivityDetector,
+)
 from cybercore.voice.approval import (
     ApprovalCheck,
     ApprovalVerifier,
     DenyAllApprovalVerifier,
     VoiceApprovalIntent,
     capture_voice_approval_intent,
+)
+from cybercore.voice.audio import (
+    AudioBackpressureError,
+    AudioBufferSnapshot,
+    AudioEncoding,
+    AudioFormat,
+    AudioFrame,
+    BoundedAudioBuffer,
 )
 from cybercore.voice.events import VoiceEvent, VoiceEventType
 from cybercore.voice.models import (
@@ -16,6 +35,8 @@ from cybercore.voice.models import (
     VoiceIntent,
     VoiceResponse,
 )
+from cybercore.voice.realtime import RealtimeState, RealtimeVoiceRuntime
+from cybercore.voice.realtime_events import RealtimeEventType, RealtimeVoiceEvent
 from cybercore.voice.router import (
     ActionPlanner,
     IntentCompiler,
@@ -31,14 +52,33 @@ __all__ = [
     "ActionRisk",
     "ApprovalCheck",
     "ApprovalVerifier",
+    "AudioBackpressureError",
+    "AudioBufferSnapshot",
+    "AudioEncoding",
+    "AudioFormat",
+    "AudioFrame",
+    "BoundedAudioBuffer",
     "DenyAllApprovalVerifier",
     "IntentCompiler",
     "IntentKind",
     "NoopActionPlanner",
+    "RealtimeAudioTransport",
+    "RealtimeEventType",
+    "RealtimeSpeechProvider",
+    "RealtimeState",
+    "RealtimeVoiceEvent",
+    "RealtimeVoiceRuntime",
     "ResponseStatus",
     "RuleIntentCompiler",
     "SessionStatus",
+    "StreamingSpeechToText",
+    "StreamingTextToSpeech",
+    "TranscriptDelta",
+    "TranscriptResult",
     "Utterance",
+    "VadResult",
+    "VadState",
+    "VoiceActivityDetector",
     "VoiceApprovalIntent",
     "VoiceContext",
     "VoiceEvent",
