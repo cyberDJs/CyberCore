@@ -68,6 +68,8 @@ class FakeRollbackFtps:
                 artifact.name: artifact.content for artifact in upload_input.artifacts
             },
         }
+        self.mlst_calls: list[str] = []
+        self.mlsd_calls: list[str] = []
         self.delete_calls: list[str] = []
         self.rmd_calls: list[str] = []
         self.rename_calls: list[tuple[str, str]] = []
@@ -96,7 +98,16 @@ class FakeRollbackFtps:
     def pwd(self) -> str:
         return self.cwd_path
 
+    def sendcmd(self, cmd: str) -> str:
+        verb, path = cmd.split(" ", 1)
+        assert verb == "MLST"
+        self.mlst_calls.append(path)
+        if path not in self.directories:
+            raise ftplib.error_perm("550 No such file or directory")
+        return f"250-Listing {path}\n type=dir; {path}\n250 End"
+
     def mlsd(self, path: str = "", facts=None):
+        self.mlsd_calls.append(path)
         listing_path = path or self.cwd_path
         entries: list[tuple[str, dict[str, str]]] = []
         for name in sorted(self.files.get(listing_path, {})):
@@ -139,7 +150,15 @@ class MissingFileTypeFtps(FakeRollbackFtps):
 
 class ListingFailureFtps(FakeRollbackFtps):
     def mlsd(self, path: str = "", facts=None):
+        self.mlsd_calls.append(path)
         raise ftplib.error_temp("421 listing unavailable")
+
+
+class MetadataFailureFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        _verb, path = cmd.split(" ", 1)
+        self.mlst_calls.append(path)
+        raise ftplib.error_temp("421 metadata unavailable")
 
 
 def _execute(
@@ -225,6 +244,8 @@ def test_present_canary_establishes_logical_rollback_without_mutation() -> None:
     assert not result.remote_mutation_possible
     assert fake.protected and fake.passive
     assert fake.files[target] == before
+    assert fake.mlst_calls == [target]
+    assert fake.mlsd_calls == [target]
     _assert_no_mutation(fake)
     assert result.receipt is not None
     assert result.receipt.target_present
@@ -249,6 +270,8 @@ def test_interrupted_upload_is_preserved_for_evidence_without_mutation() -> None
     assert result.receipt.cleanup_required
     assert result.receipt.present_artifacts == ("cybercore-version.json",)
     assert "cybercore-version.json" in fake.files[target]
+    assert fake.mlst_calls == [target]
+    assert fake.mlsd_calls == [target]
     _assert_no_mutation(fake)
 
 
@@ -267,6 +290,25 @@ def test_rollback_is_idempotent_when_exact_directory_is_already_absent() -> None
     assert not result.receipt.target_present
     assert not result.receipt.cleanup_required
     assert not result.receipt.remote_write_performed
+    assert fake.mlst_calls == [target]
+    assert fake.mlsd_calls == []
+    _assert_no_mutation(fake)
+
+
+def test_recovery_never_enumerates_the_staging_parent() -> None:
+    upload_input = _sealed_input()
+    fake = FakeRollbackFtps(upload_input)
+    target = f"/{upload_input.destination[:-1]}"
+    fake.directories.add("/unrelated-sibling")
+    fake.files["/unrelated-sibling"] = {"private.txt": b"unrelated"}
+
+    result, _loads = _execute(fake, upload_input=upload_input)
+
+    assert result.rolled_back, result.errors
+    assert fake.mlst_calls == [target]
+    assert fake.mlsd_calls == [target]
+    assert "/" not in fake.mlsd_calls
+    assert "" not in fake.mlsd_calls
     _assert_no_mutation(fake)
 
 
@@ -305,5 +347,19 @@ def test_listing_failure_preserves_fail_closed_no_mutation_semantics() -> None:
     assert not result.rolled_back
     assert not result.remote_mutation_possible
     assert "cannot prove rollback canary state" in result.errors[0]
+    assert PASSWORD not in repr(result)
+    _assert_no_mutation(fake)
+
+
+def test_metadata_failure_preserves_fail_closed_no_mutation_semantics() -> None:
+    upload_input = _sealed_input()
+    fake = MetadataFailureFtps(upload_input)
+
+    result, _loads = _execute(fake, upload_input=upload_input)
+
+    assert not result.rolled_back
+    assert not result.remote_mutation_possible
+    assert "cannot prove rollback target metadata" in result.errors[0]
+    assert fake.mlsd_calls == []
     assert PASSWORD not in repr(result)
     _assert_no_mutation(fake)
