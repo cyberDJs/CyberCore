@@ -1,7 +1,7 @@
 # WB-MCP0001 — CyberCore MCP Foundation v0.1
 
 Date: 2026-09-02
-Status: `CANDIDATE — READ ONLY`
+Status: `CANDIDATE — READ ONLY — EXACT-HEAD VERIFICATION PENDING`
 Base: `main@f12eb91ea8dd718f9f3c2d366d578859dab31132`
 Branch: `wb-mcp0001-cybercore-mcp-foundation`
 
@@ -16,10 +16,11 @@ Add the smallest production-oriented MCP interface that exposes verified CyberCo
 - seven explicit read/plan-only tools;
 - capability manifest and fail-closed unavailable capability reporting;
 - CyberCore disclosure and repository identity reuse;
-- bounded inputs/responses and sanitized structured errors;
+- bounded inputs/responses, per-tool timeout and sanitized structured errors;
 - invocation audit metadata;
+- MCP read-only tool annotations;
 - CLI/module entrypoint and doctor/capabilities commands;
-- unit/security tests;
+- unit, security and real stdio client integration tests;
 - MCP architecture/security/tunnel documentation.
 
 ## Explicitly out of scope
@@ -38,15 +39,32 @@ At work-block start, actual `main` is `f12eb91...` (merged PR #64), while `.cybe
 
 ## Acceptance
 
-- server starts over stdio;
-- MCP tools are listed by the SDK;
-- capabilities/status/context/repository/runtime/CCL-plan tools are callable;
-- no mutating tool exists;
-- secret/path sanitization remains enforced;
-- oversized input fails closed;
-- tests and existing suite pass on exact PR head;
-- docs describe current tunnel-client setup;
-- draft PR prepared; no merge without explicit approval.
+Implemented in the candidate:
+
+- [x] server entrypoint serves stdio only;
+- [x] MCP SDK client integration test spawns the real stdio subprocess;
+- [x] `tools/list` verifies the exact seven-tool allowlist;
+- [x] `tools/call` exercises capabilities, repository verification, project context, status and plan-only behavior;
+- [x] every registered tool advertises read-only/closed-world annotations;
+- [x] no mutating or generic shell/filesystem tool exists;
+- [x] unavailable world-model tools fail closed instead of being claimed available;
+- [x] secret/path sanitization is tested at the serialized response boundary;
+- [x] oversized input and response fail closed;
+- [x] malformed JSON returns a stable sanitized error envelope;
+- [x] per-tool timeout fails closed;
+- [x] default stdio child environment does not inherit arbitrary parent secrets;
+- [x] CLI doctor verifies protocol startup, tool registration, capability call, schemas and disclosure behavior;
+- [x] docs describe the current tunnel-client stdio profile and secret split;
+- [x] draft PR prepared; no merge without explicit approval.
+
+Verification gates still required on the final exact head:
+
+- [ ] full CyberCore test matrix passes;
+- [ ] Ruff lint and format pass;
+- [ ] Pyright passes;
+- [ ] package/wheel smoke passes;
+- [ ] CodeQL passes;
+- [ ] tunnel-client local readiness can be exercised on an operator runtime with a real tunnel/runtime key without committing secrets.
 
 ## Rollback
 
