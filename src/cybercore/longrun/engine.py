@@ -129,9 +129,7 @@ class LongRunEngine:
             )
 
         duplicate_count = (
-            state.duplicate_count + 1
-            if proposal.fingerprint == state.last_step_fingerprint
-            else 0
+            state.duplicate_count + 1 if proposal.fingerprint == state.last_step_fingerprint else 0
         )
         try:
             result = self.executor(proposal)
