@@ -168,6 +168,24 @@ class DuplicateTypeFactsFtps(FakeRollbackFtps):
         return response
 
 
+class EmptyFactSeparatorFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        response = super().sendcmd(cmd)
+        _, path = cmd.split(" ", 1)
+        if path.endswith("/index.html"):
+            return f"250-Listing {path}\n type=file;; {path}\n250 End"
+        return response
+
+
+class UnterminatedFactListFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        response = super().sendcmd(cmd)
+        _, path = cmd.split(" ", 1)
+        if path.endswith("/index.html"):
+            return f"250-Listing {path}\n size=1;type=file {path}\n250 End"
+        return response
+
+
 class MetadataFailureFtps(FakeRollbackFtps):
     def sendcmd(self, cmd: str) -> str:
         _, path = cmd.split(" ", 1)
@@ -326,6 +344,24 @@ def test_mlst_rejects_duplicate_case_insensitive_facts():
     result, _ = _execute(fake, upload_input=inp)
     assert not result.rolled_back and result.receipt is None
     assert "duplicate facts" in result.errors[0]
+    _assert_no_mutation(fake)
+
+
+def test_mlst_rejects_empty_fact_components():
+    inp = _sealed_input()
+    fake = EmptyFactSeparatorFtps(inp)
+    result, _ = _execute(fake, upload_input=inp)
+    assert not result.rolled_back and result.receipt is None
+    assert "malformed fact separators" in result.errors[0]
+    _assert_no_mutation(fake)
+
+
+def test_mlst_requires_terminal_fact_separator():
+    inp = _sealed_input()
+    fake = UnterminatedFactListFtps(inp)
+    result, _ = _execute(fake, upload_input=inp)
+    assert not result.rolled_back and result.receipt is None
+    assert "malformed fact separators" in result.errors[0]
     _assert_no_mutation(fake)
 
 
