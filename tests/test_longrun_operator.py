@@ -126,6 +126,36 @@ def test_operator_start_refuses_existing_run(tmp_path: Path):
         start_longrun(context)
 
 
+def test_operator_rejects_state_database_outside_repo_sandbox(tmp_path: Path):
+    profile, mission = _contract(tmp_path)
+    outside = tmp_path.parent / "outside.sqlite"
+
+    with pytest.raises(ValueError, match="repository sandbox"):
+        load_operator_context(tmp_path, profile=profile, mission=mission, state_db=outside)
+
+
+def test_cli_status_for_missing_run_does_not_create_database(tmp_path: Path, capsys):
+    profile, mission = _contract(tmp_path)
+    state_db = tmp_path / ".cybercore" / "longrun" / "operator-test.sqlite"
+
+    code = main(
+        [
+            "--repo",
+            str(tmp_path),
+            "longrun",
+            "status",
+            "--profile",
+            str(profile),
+            "--mission",
+            str(mission),
+        ]
+    )
+
+    assert code == 2
+    assert not state_db.exists()
+    assert "does not exist" in capsys.readouterr().err
+
+
 def test_cli_longrun_start_status_resume_and_events(tmp_path: Path, capsys):
     profile, mission = _contract(tmp_path)
     common = [
