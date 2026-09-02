@@ -115,10 +115,14 @@ def _probe_exact_path(client: _RollbackFtpsClient, path: str, *, expected_type: 
         raise FirstWriteRuntimeError("MLST did not return exactly one target metadata record")
 
     facts_text, reported_path = fact_lines[0]
+    if not facts_text.endswith(";"):
+        raise FirstWriteRuntimeError("MLST metadata contains malformed fact separators")
+    fact_items = facts_text[:-1].split(";")
+    if not fact_items or any(not item for item in fact_items):
+        raise FirstWriteRuntimeError("MLST metadata contains malformed fact separators")
+
     facts: dict[str, str] = {}
-    for item in facts_text.split(";"):
-        if not item:
-            continue
+    for item in fact_items:
         if "=" not in item:
             raise FirstWriteRuntimeError("MLST metadata contains a malformed fact")
         key, value = item.split("=", 1)
