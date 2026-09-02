@@ -186,21 +186,26 @@ def _state_arguments(args: argparse.Namespace) -> _StateArguments | None:
         )
         if any(value is not None for value in successor_values) or args.next_scope:
             raise ValueError("--terminal cannot declare a successor work block contract")
-        complete_terminal = all(
-            value is not None
-            for value in (args.completed_artifact, args.verification, args.next_action)
-        )
-        if not complete_terminal:
+
+        terminal_values = (args.completed_artifact, args.verification, args.next_action)
+        if any(value is None for value in terminal_values):
             raise ValueError(
                 "--terminal requires --completed-artifact, --verification and --next-action"
             )
+        if any(not cast(str, value).strip() for value in terminal_values):
+            raise ValueError("--terminal contract values must be non-empty strings")
+
+        next_tasks = tuple(cast(list[str], args.next_task))
+        if any(not task.strip() for task in next_tasks):
+            raise ValueError("--terminal --next-task values must be non-empty strings")
+
         return {
-            "completed_artifact": cast(str, args.completed_artifact),
-            "verification": cast(str, args.verification),
-            "next_action": cast(str, args.next_action),
+            "completed_artifact": cast(str, args.completed_artifact).strip(),
+            "verification": cast(str, args.verification).strip(),
+            "next_action": cast(str, args.next_action).strip(),
             "terminal": True,
             "completed_status": args.completed_status,
-            "next_tasks": tuple(cast(list[str], args.next_task)),
+            "next_tasks": tuple(task.strip() for task in next_tasks),
         }
 
     scalar_names = (
