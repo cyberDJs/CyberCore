@@ -201,6 +201,84 @@ def test_terminal_plan_records_completion_when_next_list_is_already_empty(tmp_pa
     assert "next: []\n" in plan.kernel_content
 
 
+def test_plan_inserts_missing_kernel_checkpoint_on_own_line(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    kernel_path = repo / ".cybercore" / "project.yaml"
+    kernel_path.write_text(
+        kernel_path.read_text(encoding="utf-8").replace("  last_verified_main: old-main\n", ""),
+        encoding="utf-8",
+    )
+
+    plan = plan_post_merge_state_update(
+        repo,
+        _preview(),
+        completed_artifact="WB-0018",
+        verification="52_passed",
+        next_action="Stop with no scheduled successor task.",
+        terminal=True,
+    )
+
+    assert "  pull_request: null\n  last_verified_main: 1e174e9\nstatus:\n" in plan.kernel_content
+    assert "pull_request: null  last_verified_main" not in plan.kernel_content
+
+
+def test_terminal_plan_rejects_empty_public_boundary_values(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+
+    with pytest.raises(PostMergeTransitionError, match="verification must be non-empty"):
+        plan_post_merge_state_update(
+            repo,
+            _preview(),
+            completed_artifact="WB-0018",
+            verification="   ",
+            next_action="Stop.",
+            terminal=True,
+        )
+
+    with pytest.raises(PostMergeTransitionError, match="next action must be non-empty"):
+        plan_post_merge_state_update(
+            repo,
+            _preview(),
+            completed_artifact="WB-0018",
+            verification="52_passed",
+            next_action="",
+            terminal=True,
+        )
+
+    with pytest.raises(PostMergeTransitionError, match="next tasks must not contain empty"):
+        plan_post_merge_state_update(
+            repo,
+            _preview(),
+            completed_artifact="WB-0018",
+            verification="52_passed",
+            next_action="Stop.",
+            terminal=True,
+            next_tasks=("valid task", "  "),
+        )
+
+
+def test_plan_fails_when_project_state_checkpoint_literal_is_absent(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    project_state_path = repo / "PROJECT_STATE.md"
+    project_state_path.write_text(
+        project_state_path.read_text(encoding="utf-8").replace(
+            "- Current canonical main: `old-main`\n",
+            "",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PostMergeTransitionError, match="Project State checkpoint"):
+        plan_post_merge_state_update(
+            repo,
+            _preview(),
+            completed_artifact="WB-0018",
+            verification="52_passed",
+            next_action="Stop with no scheduled successor task.",
+            terminal=True,
+        )
+
+
 def test_terminal_plan_rejects_successor_contract(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
 
