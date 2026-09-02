@@ -20,6 +20,13 @@ from cybercore.first_write_runtime import (
 EXPECTED_ENDPOINT = "staging.eimyherrer.com"
 ROLLBACK_AUTH_PREFIX = "approval:wb0036:rollback"
 
+# RFC 3659 section 2.1 character classes used by MLSx facts.
+_MLST_RCHAR = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+    ",.:!@#$%^&()-_+?/\\'\""
+)
+_MLST_SCHAR = _MLST_RCHAR | {"="}
+
 
 class _RollbackFtpsClient(Protocol):
     sock: object
@@ -88,6 +95,14 @@ def _entry_type(facts: dict[str, str]) -> str | None:
     return value.lower() if isinstance(value, str) else None
 
 
+def _valid_fact_name(value: str) -> bool:
+    return bool(value) and all(char in _MLST_RCHAR for char in value)
+
+
+def _valid_fact_value(value: str) -> bool:
+    return all(char in _MLST_SCHAR for char in value)
+
+
 def _probe_exact_path(client: _RollbackFtpsClient, path: str, *, expected_type: str) -> None:
     """Probe exactly one sealed path with MLST; any ambiguity fails closed."""
     try:
@@ -99,24 +114,25 @@ def _probe_exact_path(client: _RollbackFtpsClient, path: str, *, expected_type: 
 
     response_lines = response.splitlines()
     if (
-        not response_lines
-        or not response_lines[0].startswith(("250 ", "250-"))
-        or not response_lines[-1].startswith("250 ")
+        len(response_lines) != 3
+        or not response_lines[0].startswith("250-")
+        or not (
+            response_lines[-1] == "250" or response_lines[-1].startswith("250 ")
+        )
     ):
-        raise FirstWriteRuntimeError("MLST did not return a completed 250 reply")
+        raise FirstWriteRuntimeError("MLST did not return a completed 250 control response")
 
-    fact_lines: list[tuple[str, str]] = []
-    for raw_line in response_lines:
-        line = raw_line[1:] if raw_line.startswith(" ") else raw_line
-        facts_text, separator, reported_path = line.partition(" ")
-        if separator and "=" in facts_text and ";" in facts_text:
-            fact_lines.append((facts_text, reported_path))
-    if len(fact_lines) != 1:
-        raise FirstWriteRuntimeError("MLST did not return exactly one target metadata record")
+    raw_metadata = response_lines[1]
+    if not raw_metadata.startswith(" ") or raw_metadata.startswith("  "):
+        raise FirstWriteRuntimeError("MLST metadata record has invalid protocol indentation")
 
-    facts_text, reported_path = fact_lines[0]
+    entry = raw_metadata[1:]
+    facts_text, separator, reported_path = entry.partition(" ")
+    if not separator or not facts_text or not reported_path:
+        raise FirstWriteRuntimeError("MLST metadata contains a malformed target record")
     if not facts_text.endswith(";"):
         raise FirstWriteRuntimeError("MLST metadata contains malformed fact separators")
+
     fact_items = facts_text[:-1].split(";")
     if not fact_items or any(not item for item in fact_items):
         raise FirstWriteRuntimeError("MLST metadata contains malformed fact separators")
@@ -126,8 +142,10 @@ def _probe_exact_path(client: _RollbackFtpsClient, path: str, *, expected_type: 
         if "=" not in item:
             raise FirstWriteRuntimeError("MLST metadata contains a malformed fact")
         key, value = item.split("=", 1)
+        if not _valid_fact_name(key) or not _valid_fact_value(value):
+            raise FirstWriteRuntimeError("MLST metadata contains invalid fact characters")
         normalized_key = key.lower()
-        if not key or normalized_key in facts:
+        if normalized_key in facts:
             raise FirstWriteRuntimeError("MLST metadata contains duplicate facts")
         facts[normalized_key] = value
 
