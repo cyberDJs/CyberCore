@@ -21,12 +21,13 @@ For recovery inspection:
 4. probe `MLST /cybercore-canary-<run_id>` and require `type=dir`;
 5. probe `MLST /cybercore-canary-<run_id>/cybercore-version.json` and require `type=file`;
 6. probe `MLST /cybercore-canary-<run_id>/index.html` and require `type=file`;
-7. if and only if all three positive proofs succeed, record the canary as present and physical cleanup as required;
-8. perform no automated cleanup.
+7. for each probe require a completed `250` reply, exactly one metadata record, literal pathname equality, no duplicate case-insensitive facts, and the expected positive type;
+8. if and only if all three positive proofs succeed, record the canary as present and physical cleanup as required;
+9. perform no automated cleanup.
 
 The runtime performs no `MLSD`. It never enumerates the staging parent or canary contents, and it never probes unrelated sibling paths or unrelated canary entries.
 
-An MLST error does not prove absence. FTP `550` can mean either a missing pathname or insufficient access, so WB-0036 treats every MLST command error as an inspection failure. Missing approved artifacts, permission failures, malformed metadata, and path/type mismatches all fail closed without remote mutation.
+An MLST error does not prove absence. FTP `550` can mean either a missing pathname or insufficient access, so WB-0036 treats every MLST command error as an inspection failure. Non-250 replies, missing approved artifacts, permission failures, malformed or duplicate facts, pathname whitespace/slash changes, and path/type mismatches all fail closed without remote mutation.
 
 ## Current first-write blocker
 
