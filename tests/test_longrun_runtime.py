@@ -100,15 +100,16 @@ def test_engine_resumes_from_sqlite_checkpoint(tmp_path: Path):
     def executor(proposal):
         return StepResult(True, 0.5, {"proof": proposal.fingerprint})
 
-    first_engine = LongRunEngine(
-        manifest, store, planner=planner, executor=executor, clock=clock
-    )
+    first_engine = LongRunEngine(manifest, store, planner=planner, executor=executor, clock=clock)
     state = first_engine.run_step()
     assert state.step_index == 1
 
     second_engine = LongRunEngine(
-        manifest, LongRunStateStore(tmp_path / "state.sqlite"),
-        planner=planner, executor=executor, clock=clock
+        manifest,
+        LongRunStateStore(tmp_path / "state.sqlite"),
+        planner=planner,
+        executor=executor,
+        clock=clock,
     )
     resumed = second_engine.run_step()
     assert resumed.step_index == 2
