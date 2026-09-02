@@ -57,6 +57,20 @@ def _transition_args() -> list[str]:
     ]
 
 
+def _terminal_args() -> list[str]:
+    return [
+        "--completed-artifact",
+        "WB-0018",
+        "--verification",
+        "52_passed",
+        "--next-action",
+        "Select the next bounded candidate explicitly.",
+        "--next-task",
+        "select the next bounded candidate explicitly",
+        "--terminal",
+    ]
+
+
 def test_non_post_merge_commands_delegate_to_existing_cli(monkeypatch) -> None:
     received: list[str] = []
 
@@ -117,3 +131,47 @@ def test_post_merge_write_applies_verified_plan(monkeypatch, tmp_path: Path, cap
     assert result == 0
     assert plan.written is True
     assert capsys.readouterr().out.endswith("POST-MERGE STATE WRITTEN\n")
+
+
+def test_post_merge_terminal_write_needs_no_successor(monkeypatch, tmp_path: Path, capsys) -> None:
+    plan = _StatePlan()
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        entrypoint.RuntimePaths,
+        "discover",
+        classmethod(lambda cls, repo=None: type("Paths", (), {"repo": tmp_path})()),
+    )
+    monkeypatch.setattr(entrypoint, "plan_post_merge_transition", lambda *a, **k: _preview())
+
+    def fake_state_plan(*args, **kwargs):
+        captured.update(kwargs)
+        return plan
+
+    monkeypatch.setattr(entrypoint, "plan_post_merge_state_update", fake_state_plan)
+    monkeypatch.setattr(entrypoint, "render_post_merge_preview", lambda preview: "REMOTE PREVIEW\n")
+    monkeypatch.setattr(
+        entrypoint, "render_post_merge_state_preview", lambda state: "STATE PREVIEW\n"
+    )
+
+    result = entrypoint.main(["post-merge", "22", *_terminal_args(), "--write"])
+
+    assert result == 0
+    assert plan.written is True
+    assert captured["terminal"] is True
+    assert "next_artifact" not in captured
+    assert capsys.readouterr().out.endswith("POST-MERGE STATE WRITTEN\n")
+
+
+def test_post_merge_terminal_rejects_successor_fields(capsys) -> None:
+    result = entrypoint.main(
+        [
+            "post-merge",
+            "22",
+            *_terminal_args(),
+            "--next-artifact",
+            "WB-0019",
+        ]
+    )
+
+    assert result == 2
+    assert "cannot declare a successor" in capsys.readouterr().err
