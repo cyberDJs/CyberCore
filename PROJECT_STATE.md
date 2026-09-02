@@ -1,125 +1,216 @@
 # CyberCore Project State
 
-_Last updated: 2026-08-22 15:00 CEST_
+_Last updated: 2026-09-02_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
-- Stable branch: `main`
 - Canonical product state: GitHub `main`
+- Current canonical main: `8b555ffad19d44e8badff457d754efdb91e0bca8`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Active branch: `wb-0034-first-staging-deployment-preflight`
-- Active pull request: #55 — WB-0034 first InterServer staging deployment preflight
-- Active artifact: `WB-0034 — First Staging Deployment Preflight`
-- Active work block: `WB-0034 — First Staging Deployment Preflight`
-- Last verified `main`: `d74497eb0730a0d112cbf7957593f23cb35b5e71`
-- Governance rule: provider mutation, secret mutation, staging apply, and production mutation authority remains reserved to explicit operator authorization
-- CI policy: GitHub Actions verification is required before merge
-- CodeQL policy: Advanced setup is verified; GitHub Default setup is disabled to avoid conflicting scans
+- Current coordination artifact: PR #69 source-of-truth reconciliation
+- Current coordination branch: `docs/post-pr65-pr68-sot-reconciliation`
+- Current coordination pull request: #69
+- Active branch: `docs/post-pr65-pr68-sot-reconciliation`
+- Active work block: `PR69-CURRENT-SOT-RECONCILIATION Current source-of-truth reconciliation`
+- Governance: provider mutation, secret mutation, staging apply, production mutation, canonical merge, and authority changes require their applicable explicit approval gates
+- CI policy: exact-head GitHub Actions verification is required before merge
+- CodeQL policy: exact-head CodeQL verification is required before merge
+- Independent review: fresh exact-head review is required for material changes before merge readiness
+
+GitHub `main` remains canonical. CASER-E is a mirror/evidence layer and cannot override a fresher authoritative GitHub state.
 
 ## Current milestone
 
-PR #54 / WB-0033 was squash-merged into canonical `main` as:
+PR #69 is the active current source-of-truth reconciliation against canonical `main@8b555ffad19d44e8badff457d754efdb91e0bca8`.
 
-```text
-d74497eb0730a0d112cbf7957593f23cb35b5e71
-```
+## Active objective
 
-That merge establishes the verified InterServer staging runtime baseline:
+Reconcile the human-readable and machine-readable CyberCore project state to current canonical GitHub reality without granting new execution authority or rewriting historical provenance.
+
+Scope:
+
+1. preserve current canonical merge state and open candidate inventory;
+2. preserve existing safety boundaries and unresolved security debt;
+3. keep Google Drive CASER-E explicitly non-canonical;
+4. preserve the literal Project State schema consumed by post-merge and checkpoint-memory tooling;
+5. pass exact-head CI, CodeQL and fresh independent review before any merge decision.
+
+## Current status
+
+- Work block: active
+- Branch: `docs/post-pr65-pr68-sot-reconciliation`
+- Project Kernel: present
+- Runtime implementation: state/evidence reconciliation only
+- Tests: exact-head revalidation required after PR #72 canonical reconciliation
+- Pull request: #69
+
+## Current canonical state
+
+The stale WB-0034 / PR #55 snapshot has been superseded by later canonical merges.
+
+Most relevant recent merged state:
+
+- PR #55 — WB-0034 first staging deployment preflight — merged as `090433264f4338828db293a327d5083bacf1813f`;
+- PR #63 — WB-0034 path-scoped explicit FTPS security amendment — merged as `2f8b5b54ba8745871dd3a183c739a32473e8535a`;
+- PR #64 — bounded FTPS runtime and effect verifier — merged as `f12eb91ea8dd718f9f3c2d366d578859dab31132`;
+- PR #68 — Cyber Voice Foundation — merged as `bb18ffedff43970e27fdd0e86ffeb469a8d465de`;
+- PR #65 — first-write recovery/runtime safety hardening — merged as `f245e89030a573ae3594a44ad42a828245bb2bba`;
+- PR #70 — Cyber Voice Realtime Foundation — merged as `65682cbe2f129048ea6c672107c3208d44cbe4ea`;
+- PR #66 — WB-LR0001 Durable autonomous LongRun runtime — merged as `1ada318abcd93c7980cc6adc975afb0decefbbec`;
+- PR #73 — WB-0038 Cyber Voice Local Speech Runtime — merged as `a206c5d0758fc604d0bec5fb26dfd96b33469f62`;
+- PR #71 — WB-0037 governed execution bridge v1 — merged as `111ef0f09f44894278499d9ffaca9ab18eccf404`;
+- PR #72 — WB-LR0002 LongRun Operator Runtime — merged as current `main@8b555ffad19d44e8badff457d754efdb91e0bca8`.
+
+PR #65 was merged only after exact-head CI #585 PASS, CodeQL #584 PASS, fresh exact-head Codex review completion, and resolved review findings. This reconciliation does not retroactively broaden any authority granted to those work blocks.
+
+## Current safety boundary
+
+### First staging write
+
+`REMOTE WRITE BLOCKED`
+
+The repository contains a bounded explicit-FTPS first-write runtime from PR #64, but PR #65 established that ordinary FTP absence checks followed by `STOR` cannot prove atomic no-overwrite under concurrent access.
+
+Current canonical behavior therefore keeps the unsafe first-write mutation path unreachable. Read-only recovery:
+
+- probes only the sealed canary directory and two approved artifact paths;
+- uses exact-path `MLST` only;
+- performs no directory enumeration;
+- fails closed on ambiguous `550`, malformed replies, wrong paths/types, invalid facts, invalid control-line boundaries, or any metadata ambiguity;
+- performs no `DELE`, `RMD`, rename, upload, chmod, or chown.
+
+A future live staging write requires a separately reviewed mechanism providing either:
+
+1. atomic create-if-absent semantics for the approved artifact contract; or
+2. independently verified exclusive mutation access for the complete write interval.
+
+Only after that evidence exists may a new exact staging-write packet and fresh operator authorization be requested.
+
+### Production
+
+Production mutation remains prohibited without a separate production MOP and explicit authority. No current reconciliation, LongRun, MCP, Cyber Voice, governed execution, or staging work grants production authority.
+
+## Verified staging baseline
+
+The existing non-production InterServer staging baseline remains valid unless superseded by new evidence:
 
 - InterServer shared-hosting service `website_id=1439764`;
 - staging hostname `staging.eimyherrer.com`;
 - staging document root `/home/eimyherr/domains/staging.eimyherrer.com/public_html`;
 - production document-root metadata `/home/eimyherr/domains/eimyherrer.com/public_html`;
-- verified non-overlap between staging and production document roots;
-- Cloudflare authoritative DNS and DNS-only staging A record;
-- HTTP/HTTPS reachability;
-- DirectAdmin -> Cloudflare DNS-01 -> Let's Encrypt wildcard renewal path;
-- standing unattended renewal authority for the existing `eimyherrer.com` + `*.eimyherrer.com` certificate only.
+- staging/production document-root non-overlap verified;
+- Cloudflare authoritative DNS;
+- staging A record DNS-only;
+- HTTP/HTTPS reachability verified;
+- DirectAdmin -> Cloudflare DNS-01 -> Let's Encrypt wildcard renewal path verified;
+- standing unattended renewal authority remains limited to the existing wildcard certificate and existing integration.
 
-PR #54 did **not** deploy CyberCore/application content to staging and did not grant staging application remote-write authority.
+That authority does not broaden into staging application deployment authority.
 
-The active slice is PR #55 / WB-0034. It prepares the first real CyberCore staging write up to the final human approval gate while keeping all remote writes blocked.
+## Canonical LongRun state
 
-## Active objective
+PR #66 established the first bounded durable LongRun runtime as canonical state. It includes a mission manifest/digest, SQLite durable state and append-only event ledger, a fail-closed value/effect governor, watchdog controls, deterministic resumability, a MARATHON-16 profile, and ADR-0007.
 
-Prepare a minimal, fail-closed first staging deployment:
+Its explicit exclusions remain important: no production writes, credential/permission/billing mutation, remote deployment, provider binding, or distributed queue infrastructure is granted by the merge.
 
-1. preserve ADR-0006 staging-only boundary;
-2. treat WB-0033 as the canonical verified staging target baseline;
-3. use one unique direct-child no-overwrite canary directory beneath the staging root;
-4. deploy only two future canary files: `index.html` and `cybercore-version.json`;
-5. verify the real deployment protocol before any write;
-6. verify least-privilege deploy identity/credential scope before any write;
-7. verify secret-alias readiness without reading or recording values;
-8. validate rollback and effect-verifier semantics without production application reads;
-9. pin an exact source commit and artifact hashes after WB-0034 merge;
-10. obtain fresh explicit first staging remote-write authorization before `staging_apply`.
+PR #72 established the operator-facing LongRun runtime as canonical state. It adds strict YAML mission/profile loading to immutable `LongRunManifest`, safe `run_id` handling, repo-sandboxed SQLite state, `longrun start|resume|status|events`, durable event-ledger inspection, deterministic read-only repository-integrity evidence, and fail-closed useful-work exhaustion.
 
-## Current status
+PR #72 does not grant model/provider binding, independent evaluator authority, production writes, credential/permission/billing mutation, deployment/runtime promotion, branch-protection changes, or distributed queue infrastructure. Its deterministic harness cannot impersonate the independent evaluator.
 
-- Work block: `WB-0034` active; repository-only preflight
-- Branch: `wb-0034-first-staging-deployment-preflight`
-- Pull request: #55, draft
-- PR #54 / WB-0033: merged as `d74497eb0730a0d112cbf7957593f23cb35b5e71`
-- PR #54 verification: CI #211 PASS, CodeQL #208 PASS, clean fresh Codex exact-head review, all review threads resolved
-- Staging target identity: VERIFIED
-- Staging URL: `https://staging.eimyherrer.com`
-- Staging document root: `/home/eimyherr/domains/staging.eimyherrer.com/public_html`
-- Production document-root metadata: `/home/eimyherr/domains/eimyherrer.com/public_html`
-- Production/staging non-overlap: VERIFIED
-- Production application content read: false
-- Cloudflare authoritative DNS: VERIFIED
-- Staging DNS record: VERIFIED, DNS only
-- Staging HTTP/HTTPS: VERIFIED
-- DirectAdmin Cloudflare ACME path: VERIFIED
-- Wildcard manual renewal: VERIFIED
-- Standing unattended renewal authority: existing wildcard/existing integration only
-- First-write artifact plan: static two-file canary
-- First-write destination: one direct-child `cybercore-canary-<run_id>/` directory
-- First-write overwrite: forbidden
-- Existing/symlink destination: reject
-- First-write symlink promotion: forbidden
-- WB-0034 dedicated readiness schema/validator: IMPLEMENTED
-- Deployment protocol for first write: UNKNOWN / read-only verification required
-- Deploy identity scope: UNKNOWN / must be verified before first write
-- Secret-alias readiness: UNKNOWN
-- Rollback runtime readiness: UNKNOWN
-- Effect verifier runtime readiness: UNKNOWN
-- Exact live source commit and artifact hashes: pending after WB-0034 merge
-- First staging remote-write authorization: NOT GRANTED
-- `remote_write_requested`: false
-- `remote_write_allowed`: false
-- `production_write_allowed`: false
-- Secret values stored in ordinary evidence: none
+## Cyber Voice canonical state
 
-## First-write design
+PR #68 established the governed Cyber Voice foundation:
 
-The first live staging write is intentionally smaller than a full CyberCore application deployment.
+- `Utterance -> Intent -> ActionRequest` contracts;
+- interruption/cancellation semantics;
+- fail-closed HOWEDO continuity and OATHDO governance gateways;
+- plan+revision-bound approval verification;
+- voice approval intent cannot self-authorize execution;
+- audit-friendly lifecycle events.
 
-Planned destination:
+PR #70 added the provider-neutral realtime/audio foundation on top of that governed path:
 
-```text
-/home/eimyherr/domains/staging.eimyherrer.com/public_html/cybercore-canary-<run_id>/
-```
+- deterministic PCM audio contracts and bounded buffers;
+- provider-neutral VAD/STT/TTS/realtime transport protocols;
+- realtime voice state machine and barge-in handling;
+- STT output bridged into the existing governed `Utterance` path;
+- metadata-only lifecycle events by default.
 
-Planned public URLs:
+PR #73 added the local/offline speech reference runtime:
 
-```text
-https://staging.eimyherrer.com/cybercore-canary-<run_id>/
-https://staging.eimyherrer.com/cybercore-canary-<run_id>/cybercore-version.json
-```
+- read-only audio-device discovery and compatibility validation;
+- local PCM microphone/speaker transport;
+- sherpa-onnx VAD, streaming STT and VITS TTS adapters;
+- local session bridge into the governed realtime voice runtime;
+- local JSON model/device configuration and voice CLI commands.
 
-Planned artifacts:
+PR #73 explicitly excludes automatic model downloads, cloud speech credentials/endpoints, recording persistence, speaker biometrics, CASEBOOK/CASER persistence, direct shell/GitHub/provider execution, deployment and production mutation. Microphone/STT input remains untrusted intent, not authority.
 
-```text
-index.html
-cybercore-version.json
-```
+## Governed execution bridge canonical state
 
-The destination is directly beneath the canonical staging root; no separate canary parent directory is created. The live operation, if later authorized, must fail if the destination exists or is a symlink, re-verify that the destination parent resolves to the canonical staging root immediately before creation, and must not overwrite the staging root, create a promotion symlink, or touch production.
+PR #71 established WB-0037 governed execution bridge v1 as canonical state. It provides a constrained SSH transport for bounded already-approved actions with exact target, plan, revision and authorization binding, an allowlisted operation family, `shell=False`, execution receipts, and separation between execution receipt and independent verification.
 
-Production safety verification uses the already-verified production/staging path boundary plus destination allowlisting and write-scope evidence. WB-0034 does not authorize production application content reads or production URL fetches for comparison.
+The merge does not itself authorize deployment, VPS mutation, secret creation, arbitrary shell, arbitrary sudo, arbitrary hosts, or production mutation.
+
+## Current parallel candidate tracks
+
+### PR #67 — CyberCore MCP Foundation v0.1
+
+- State: `OPEN / DRAFT / CANDIDATE`.
+- Purpose: read-only stdio MCP foundation with explicit bounded tools and fail-closed capability declaration.
+- Explicitly excludes arbitrary shell, deploy, provider/cloud mutation and production write.
+- The branch was created from an older canonical main and requires reconciliation against current `main@8b555ffad19d44e8badff457d754efdb91e0bca8` plus fresh exact-head gates before readiness.
+
+## Work-block identity conflicts
+
+### WB-0035 — `CONFLICT / NEEDS_REVIEW`
+
+The identifier currently refers to two distinct histories:
+
+- merged PR #64 — bounded FTPS runtime/effect verifier;
+- open draft PR #61 — InterServer VPS + Vikunja plan.
+
+These are not one work block. PR #61 is historical/stale until an explicit supersession or renumbering decision is made. Its older provider-order authority must not be treated as current execution authority without fresh preflight and explicit scope confirmation.
+
+### WB-0036 — `CONFLICT / NEEDS_REVIEW`
+
+The identifier is present in two separate merged canonical changes:
+
+- PR #65 — first-write recovery/runtime safety hardening;
+- PR #68 — Cyber Voice Foundation.
+
+Both must remain in immutable Git history. Governance cleanup must add unambiguous aliases/registry identities rather than rewriting historical commits or PR titles.
+
+### WB-0037 — `CONFLICT / NEEDS_REVIEW`
+
+The identifier is now used by two distinct merged canonical tracks:
+
+- PR #70 — Cyber Voice Realtime Foundation;
+- PR #71 — governed execution bridge v1.
+
+Do not merge the two meanings or rewrite history; governance cleanup must assign unambiguous registry identities while preserving both original PR titles and commit provenance.
+
+## Open pull-request inventory
+
+At the current reconciliation read, open PRs are:
+
+- #69 — current source-of-truth reconciliation candidate;
+- #67 — MCP Foundation — draft candidate requiring current-main reconciliation;
+- #61 — old WB-0035 VPS/Vikunja draft — identity conflict / needs review;
+- #45 — old staging-plan candidate — stale/supersession review required;
+- #13 — old structured registry v0 draft — stale/supersession review required;
+- #5 — old provider-framework draft — stale/supersession review required.
+
+PR #66, PR #71, PR #72 and PR #73 are no longer candidates: they are merged and canonical. This reconciliation does not close, merge, rename, rebase, deploy, or provider-execute any unrelated PR.
+
+## CASER-E evidence state
+
+Connected Google Drive inspection resolved `CyberCore/CASER-E/working` and `CyberCore/CASER-E/evidence`.
+
+The native Google Doc `CyberCore SOT Reconciliation — post PR65 / PR68` was created, read back, and verified in `CASER-E/evidence`. It is a non-canonical evidence mirror. Provider-private Drive identifiers are intentionally not committed to GitHub.
+
+The repository evidence record remains `docs/evidence/2026-09-02-post-pr65-pr68-sot-reconciliation.md`. GitHub `main` remains canonical product state.
 
 ## Secret-handling boundary
 
@@ -133,133 +224,47 @@ Plaintext secrets remain denied in:
 - CASER documents;
 - ordinary evidence logs.
 
-Required deployment secret aliases remain:
-
-- `INTERSERVER_STAGING_HOST`;
-- `INTERSERVER_STAGING_USER`;
-- `INTERSERVER_STAGING_PORT`;
-- `INTERSERVER_STAGING_SSH_KEY_OR_SFTP_PASSWORD`.
-
-WB-0034 may record only alias presence/readiness and safe scope metadata. It does not authorize credential creation, rotation, reset, or disclosure.
-
-A production-wide write credential is not preapproved for an automated first-write runner. The actual deploy identity/credential scope must be verified before the final authorization request.
-
-## Self-deployment boundary
-
-Allowed in PR #55 / WB-0034 without further provider authorization:
-
-- repository documentation and state reconciliation;
-- plan-only manifest creation;
-- non-secret target-registry reconciliation;
-- repository validator/test implementation;
-- local/dry-run validation;
-- read-only planning and review;
-- recording known target identity and remaining unknowns.
-
-Still blocked:
-
-- `staging_apply`;
-- remote mkdir/upload/overwrite/delete/chmod/chown/symlink operations;
-- creating or rotating deployment credentials;
-- production application-content traversal/read/write;
-- DNS, mail, billing, DirectAdmin, Cloudflare, VPS, WordPress, Nextcloud, registrar, PHP, ownership, permission, package, or service mutation;
-- recurring or automatic deployment.
-
-The standing ACME authority does not broaden into staging application deployment authority.
-
-## Recent completed state changes
-
-### PR #51 — WB-0031 staging runtime gate preflight
-
-Merged as `d4ac1c0fa8139cf5fb6a45e81d16a83c912bf684` with CI, CodeQL, and Codex gates green. It established the runtime preflight contract while preserving no-remote-write semantics.
-
-### PR #52 — WB-0032 definition and kickoff
-
-Merged as `304f4234e4f52c2375d904b45d1ed0c4fe31511c`. It defined the two-phase InterServer staging capability discovery model and separate read-only authority gate.
-
-### PR #53 — WB-0032 Phase B documentation/preflight
-
-Merged as `70346d63ba2b17df17085797e963bb9dbd692282`. It provided the bounded provider discovery procedure without staging application write authority.
-
-### PR #54 — WB-0033 isolated InterServer staging target
-
-Merged as `d74497eb0730a0d112cbf7957593f23cb35b5e71` after exact-head CI #211, CodeQL #208, clean fresh Codex review, and resolved review threads.
-
-Delivered/verified:
-
-- isolated DirectAdmin staging target;
-- production/staging document-root non-overlap;
-- Cloudflare DNS-only staging record;
-- external HTTP/HTTPS;
-- DirectAdmin Cloudflare ACME provider;
-- successful wildcard renewal;
-- bounded standing wildcard unattended-renewal authority;
-- no CyberCore/application deployment.
-
-Earlier merged artifact history remains canonical in Git history and the structured `.cybercore/project.yaml` completed register.
-
-## Current work block
-
-### WB-0034 — First Staging Deployment Preflight
-
-PR #55 prepares the first remote staging write without performing it.
-
-The intended first-write scope is one unique no-overwrite `cybercore-canary-<run_id>/` direct-child directory containing only two non-secret files. The design deliberately avoids a full application rollout, a separate canary parent-directory mutation, and symlink promotion during the first cycle.
-
-A dedicated WB-0034 readiness validator now models the actual first-write blockers and replaces the incompatible assumption that a production URL must be fetched after deployment.
-
-Before the final approval request, WB-0034 must establish:
-
-- actual SFTP or SSH/SFTP deployment protocol;
-- deploy identity/credential scope;
-- secret-alias readiness;
-- rollback semantics;
-- effect verifier readiness;
-- exact source commit, artifact hashes, and run id.
-
-If any of these cannot be verified safely, the first write remains blocked.
+Secret material belongs only in an approved OS-backed secret store or approved external vault. Reconciliation records may contain safe identifiers, scopes and readiness states, never secret values.
 
 ## Security follow-up
 
-- Six high-severity transitive `npm audit` findings remain deferred security debt in the isolated visual documentation toolchain.
-- The dedicated Cloudflare ACME token must remain least-privilege and zone-scoped.
-- Future unattended wildcard renewal should be recorded as observed operational behavior only after an actual scheduled renewal cycle occurs.
-- First-write deployment credentials require scope verification before use; production-wide credential reuse is not implicitly authorized.
-- Production deployment remains outside WB-0034 and requires a separate production MOP plus explicit approval.
+The isolated visual-documentation toolchain still has **six high-severity transitive `npm audit` findings**. Repository documentation explicitly classifies them as deferred security debt for WB-0027; they do not affect the Python runtime package, but they remain open until the pinned visual-tool dependencies are updated in a separately reviewed maintenance change.
+
+This reconciliation records that debt; it does not weaken, suppress, or mark the findings resolved.
+
+## Priority sequence
+
+1. Verify PR #69 on its new exact head with CI, CodeQL and fresh independent review; merge only after separate explicit operator approval.
+2. Reconcile/revalidate PR #67 MCP Foundation against the resulting canonical main before readiness.
+3. Resolve WB-0035/WB-0036/WB-0037 identifier collisions and stale PRs through explicit supersession/renumber/closure decisions; do not rewrite history.
+4. Address the six high-severity transitive visual-toolchain `npm audit` findings in a separately reviewed maintenance change.
+5. Start a separate engineering block for concurrency-safe first-write semantics before any future staging-write authorization request.
 
 ## Next action
 
-1. Complete exact-head CI, CodeQL, and fresh Codex re-review after the WB-0034 hardening changes.
-2. Repair any remaining valid repository finding.
-3. Obtain separate authority before any live InterServer read-only deployment-protocol/identity-scope probe required by this work block.
-4. Verify secret aliases without exposing values.
-5. Dry-run the two-file canary build/manifest/verifier locally.
-6. Merge WB-0034 only after separate merge approval.
-7. Pin the resulting exact `main` commit and assemble the final first-write authorization packet.
-8. Do not execute the remote write until the operator explicitly authorizes that exact packet.
+Re-run exact-head CI, CodeQL and fresh independent review for PR #69 after reconciling PR #72 into the current canonical state; merge only after separate explicit operator approval.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr55-wb0034-first-staging-deployment-preflight -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr69-current-sot-reconciliation -->
 ## Manual repository checkpoint
 
-- Generated: `2026-08-22T15:00:00+02:00`
-- Branch: `wb-0034-first-staging-deployment-preflight`
-- Pull request: #55
-- Active artifact: `WB-0034`
-- Active work block: `WB-0034 — First Staging Deployment Preflight`
-- Last verified main: `d74497eb0730a0d112cbf7957593f23cb35b5e71`
-- WB-0033 / PR #54: merged and canonical
-- Staging target identity: VERIFIED
-- First-write artifact plan: static two-file direct-child canary
-- WB-0034 readiness schema/validator: IMPLEMENTED
-- First-write deployment protocol: UNKNOWN
-- Deploy identity scope: UNKNOWN
-- Secret-alias readiness: UNKNOWN
-- Remote write requested: false
-- Remote write allowed: false
+- Coordination PR: #69
+- Coordination branch: `docs/post-pr65-pr68-sot-reconciliation`
+- Canonical base observed for reconciliation: `8b555ffad19d44e8badff457d754efdb91e0bca8`
+- PR #65: merged and canonical
+- PR #68: merged and canonical
+- PR #70: merged and canonical
+- PR #66 LongRun: merged and canonical
+- PR #73 Cyber Voice Local Speech Runtime: merged and canonical
+- PR #71 governed execution bridge: merged and canonical
+- PR #72 LongRun Operator Runtime: merged and canonical
+- PR #67 MCP: draft candidate; current-main reconciliation required
+- WB-0035 identity: CONFLICT / NEEDS_REVIEW
+- WB-0036 identity: CONFLICT / NEEDS_REVIEW
+- WB-0037 identity: CONFLICT / NEEDS_REVIEW
+- Visual toolchain security debt: 6 high-severity transitive npm findings / OPEN
+- First staging remote write: BLOCKED
 - Production write allowed: false
-- First remote-write authorization: NOT GRANTED
 - Secret values recorded: false
-- Project Kernel: present
-- Project State: WB-0034 repository-only preflight active; first live staging write remains blocked
+- Google Drive CASER-E mirror: VERIFIED / NON-CANONICAL
 <!-- CYBERCORE:CHECKPOINT:END -->

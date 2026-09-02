@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0034 first InterServer staging deployment preflight active
-  active_artifact: WB-0034
-  branch: wb-0034-first-staging-deployment-preflight
-  pull_request: 55
-  last_verified_main: d74497eb0730a0d112cbf7957593f23cb35b5e71
+  milestone: current source-of-truth reconciliation
+  active_artifact: PR69-CURRENT-SOT-RECONCILIATION
+  branch: docs/post-pr65-pr68-sot-reconciliation
+  pull_request: 69
+  last_verified_main: 8b555ffad19d44e8badff457d754efdb91e0bca8
 
 status:
   ccl_specification: complete_draft
@@ -41,7 +41,7 @@ status:
   checkpoint_persistence: verified
   verification_evidence: verified
   idempotent_canonical_memory: verified
-  post_merge_state_transition: verified
+  post_merge_state_transition: drift_repair_in_progress_pr69
   remote_aware_repository_identity: verified
   repository_identity_diagnostics: verified
   repository_identity_policy: verified
@@ -55,9 +55,12 @@ status:
   visual_documentation: verified
   mermaid_render_pipeline: verified
   learn_capture_pipeline: verified
+  visual_toolchain_npm_audit_high_severity_findings: 6
+  visual_toolchain_security_debt: open_deferred_requires_separate_review
   checkpoint_inactive_artifact_persistence: verified
   readme_landing_page: verified
   caser_e_google_drive_workspace: initialized
+  caser_e_evidence_mirror: verified_noncanonical
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
   pr38_post_merge_reconciliation: merged
@@ -92,22 +95,48 @@ status:
   pr54_wb0033_isolated_staging_target: merged_verified
   wb0033_interserver_isolated_staging_target: verified_merged
   wb0033_bounded_provider_mutations: verified
-  wb0034_first_staging_deployment_preflight: active_remote_write_blocked
-  pr55_wb0034_first_staging_deployment_preflight: active_draft
+  pr55_wb0034_first_staging_deployment_preflight: merged_verified
+  wb0034_first_staging_deployment_preflight: merged_verified_remote_write_blocked
   first_write_readiness_schema: implemented
+  pr63_wb0034_ftps_path_scoped_identity: merged_verified
   first_write_artifact_plan: static_two_file_canary
   first_write_destination_shape: direct_child_unique_directory
   first_write_overwrite_allowed: false
   first_write_symlink_promotion_allowed: false
-  first_write_deployment_protocol_status: unknown
-  first_write_deploy_identity_scope_status: unknown
-  first_write_secret_alias_readiness: unknown
-  first_write_rollback_runtime_status: unknown
-  first_write_effect_verifier_status: unknown
+  first_write_deployment_protocol_status: ftps_explicit_repository_contract_verified
+  first_write_deploy_identity_scope_status: dedicated_staging_identity_contract_verified
+  first_write_secret_alias_readiness: not_currently_reverified
+  pr64_wb0035_ftps_runtime_effect_verifier: merged_verified
+  first_write_effect_verifier_status: implemented_repository_verified
+  pr65_wb0036_first_write_safety: merged_verified
+  first_write_rollback_runtime_status: read_only_logical_recovery_verified
+  first_write_atomic_no_overwrite_status: blocked_requires_new_engineering
   first_write_operator_authorization_status: not_granted
   staging_remote_write_requested: false
   staging_application_remote_write_allowed: false
   production_write_allowed: false
+  pr68_cyber_voice_foundation: merged_verified
+  cyber_voice_foundation: canonical
+  cyber_voice_direct_execution_allowed: false
+  pr70_cyber_voice_realtime_foundation: merged_verified
+  cyber_voice_realtime_foundation: canonical
+  pr66_longrun: merged_verified_canonical
+  longrun_runtime: canonical
+  pr73_cyber_voice_local_speech_runtime: merged_verified_canonical
+  cyber_voice_local_speech_runtime: canonical
+  pr71_wb0037_governed_execution_bridge: merged_verified_canonical
+  governed_execution_bridge: canonical
+  pr72_longrun_operator_runtime: merged_verified_canonical
+  longrun_operator_runtime: canonical
+  wb0035_identifier: conflict_needs_review
+  wb0036_identifier: conflict_needs_review
+  wb0037_identifier: conflict_needs_review
+  pr61_old_wb0035_vps_vikunja: open_draft_identity_conflict_needs_review
+  pr67_mcp_foundation: open_draft_requires_current_main_revalidation
+  pr45_staging_plan: open_stale_needs_supersession_review
+  pr13_structured_registry: open_stale_needs_supersession_review
+  pr5_provider_framework: open_stale_needs_supersession_review
+  pr69_post_pr65_pr68_sot_reconciliation: active_candidate_requires_exact_head_regating
 
 completed:
   - artifact: WB-0015
@@ -230,18 +259,57 @@ completed:
     pull_request: 54
     merge_commit: d74497eb0730a0d112cbf7957593f23cb35b5e71
     verification: ci_211_codeql_208_codex_no_major_issues
+  - artifact: WB-0034-first-staging-deployment-preflight
+    pull_request: 55
+    merge_commit: 090433264f4338828db293a327d5083bacf1813f
+    verification: ci_478_codeql_476_codex_clean
+  - artifact: WB-0034-path-scoped-explicit-ftps-security-amendment
+    pull_request: 63
+    merge_commit: 2f8b5b54ba8745871dd3a183c739a32473e8535a
+    verification: merged_verified
+  - artifact: WB-0035-bounded-ftps-runtime-effect-verifier
+    pull_request: 64
+    merge_commit: f12eb91ea8dd718f9f3c2d366d578859dab31132
+    verification: merged_verified
+  - artifact: WB-0036-cyber-voice-foundation-historical-id
+    pull_request: 68
+    merge_commit: bb18ffedff43970e27fdd0e86ffeb469a8d465de
+    verification: merged_verified_identity_conflict_recorded
+  - artifact: WB-0036-first-write-safety-historical-id
+    pull_request: 65
+    merge_commit: f245e89030a573ae3594a44ad42a828245bb2bba
+    verification: ci_585_codeql_584_fresh_codex_review_completed
+  - artifact: WB-0037-cyber-voice-realtime-foundation-historical-id
+    pull_request: 70
+    merge_commit: 65682cbe2f129048ea6c672107c3208d44cbe4ea
+    verification: merged_verified_identity_conflict_recorded
+  - artifact: WB-LR0001-durable-longrun-runtime
+    pull_request: 66
+    merge_commit: 1ada318abcd93c7980cc6adc975afb0decefbbec
+    verification: merged_verified
+  - artifact: WB-0038-cyber-voice-local-speech-runtime
+    pull_request: 73
+    merge_commit: a206c5d0758fc604d0bec5fb26dfd96b33469f62
+    verification: merged_verified
+  - artifact: WB-0037-governed-execution-bridge-historical-id
+    pull_request: 71
+    merge_commit: 111ef0f09f44894278499d9ffaca9ab18eccf404
+    verification: merged_verified_identity_conflict_recorded
+  - artifact: WB-LR0002-longrun-operator-runtime
+    pull_request: 72
+    merge_commit: 8b555ffad19d44e8badff457d754efdb91e0bca8
+    verification: merged_verified
 
 next:
-  - complete PR55 WB0034 repository-only preflight and exact-head CI/CodeQL/Codex review
-  - verify first-write deployment protocol read-only; do not perform remote write
-  - verify least-privilege deploy identity and credential scope; do not create or rotate credentials without separate approval
-  - verify secret-alias readiness without reading or recording values
-  - dry-run the no-overwrite two-file canary plan and effect verifier locally
-  - pin the exact main source commit after WB0034 merge
-  - request fresh explicit first staging remote-write authorization with exact commit, run id, protocol, identity scope, destination, artifact list, and rollback scope
+  - verify PR69 on the new exact head with CI, CodeQL and fresh independent review; do not merge without explicit operator approval
+  - reconcile PR67 MCP Foundation with current canonical main and re-run exact-head gates before readiness
+  - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
+  - review stale open PRs 61, 45, 13 and 5 before any closure or reuse
+  - remediate the six high-severity transitive visual-toolchain npm audit findings in a separately reviewed maintenance change
+  - design a separate concurrency-safe first-write mechanism before requesting any future live staging-write authority
   - keep production application mutation prohibited without a separate production MOP and explicit Jan Kočí approval
   - preserve Cloudflare as authoritative DNS and DirectAdmin as hosting/SSL control plane
-  - preserve GitHub as canonical product state and Google Drive CASER-E as evidence/archive/collaboration layer
+  - preserve GitHub as canonical product state and Google Drive CASER-E as verified non-canonical evidence/archive/collaboration layer
 
 rules:
   state_first: true
@@ -249,6 +317,7 @@ rules:
   repository_is_truth: true
   one_active_artifact: true
   no_production_mutation_without_human_approval: true
+  identity_collision_policy: preserve_history_and_mark_conflict_until_explicit_resolution
   plaintext_secrets_denied_in:
     - github
     - google_drive
