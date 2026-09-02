@@ -90,7 +90,11 @@ class LongRunEngine:
             stopped = replace(state, status="STOPPED", updated_at=now)
             self.store.save(stopped)
             self.store.append_event(
-                stopped.run_id, stopped.step_index, "WATCHDOG_STOP", {"reason": watchdog.reason}, now
+                stopped.run_id,
+                stopped.step_index,
+                "WATCHDOG_STOP",
+                {"reason": watchdog.reason},
+                now,
             )
             return stopped
         if watchdog.action == "REPLAN":
@@ -125,9 +129,7 @@ class LongRunEngine:
             return blocked
 
         duplicate_count = (
-            state.duplicate_count + 1
-            if proposal.fingerprint == state.last_step_fingerprint
-            else 0
+            state.duplicate_count + 1 if proposal.fingerprint == state.last_step_fingerprint else 0
         )
         result = self.executor(proposal)
         now = self.clock()
