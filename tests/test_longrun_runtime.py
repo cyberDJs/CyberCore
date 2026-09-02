@@ -1,4 +1,6 @@
+from dataclasses import replace
 from pathlib import Path
+import sqlite3
 
 import pytest
 
@@ -165,3 +167,95 @@ def test_completion_requires_score_and_minimum_wall_budget(tmp_path: Path):
     assert state.status == "RUNNING"
     state = engine.run_step()
     assert state.status == "COMPLETED"
+
+
+def test_result_after_maximum_wall_budget_stops_instead_of_completing(tmp_path: Path):
+    store = LongRunStateStore(tmp_path / "state.sqlite")
+    times = iter([0.0, 9.0, 11.0])
+    engine = LongRunEngine(
+        _manifest(maximum_wall_seconds=10, evaluator_threshold=0.9),
+        store,
+        planner=lambda state: _proposal(),
+        executor=lambda proposal: StepResult(True, 1.0, {"verified": True}),
+        clock=lambda: next(times),
+    )
+
+    state = engine.run_step()
+
+    assert state.status == "STOPPED"
+    with sqlite3.connect(store.path) as db:
+        payload = db.execute(
+            "SELECT payload FROM events WHERE kind = 'STEP_RESULT' ORDER BY id DESC LIMIT 1"
+        ).fetchone()[0]
+    assert "maximum wall budget exhausted after execution" in payload
+
+
+def test_save_with_event_is_atomic_when_payload_serialization_fails(tmp_path: Path):
+    store = LongRunStateStore(tmp_path / "state.sqlite")
+    engine = LongRunEngine(
+        _manifest(),
+        store,
+        planner=lambda state: _proposal(),
+        executor=lambda proposal: StepResult(True, 1.0, {}),
+        clock=lambda: 0.0,
+    )
+    state = engine.load_or_create()
+    advanced = replace(state, step_index=1)
+
+    with pytest.raises(TypeError):
+        store.save_with_event(advanced, "STEP_RESULT", {"bad": object()}, 0.0)
+
+    persisted = store.load(state.run_id)
+    assert persisted is not None
+    assert persisted.step_index == 0
+
+
+def test_nonserializable_result_is_persisted_as_failed_attempt(tmp_path: Path):
+    store = LongRunStateStore(tmp_path / "state.sqlite")
+    times = iter([0.0, 1.0, 2.0])
+    engine = LongRunEngine(
+        _manifest(),
+        store,
+        planner=lambda state: _proposal(),
+        executor=lambda proposal: StepResult(True, 1.0, {"bad": object()}),
+        clock=lambda: next(times),
+    )
+
+    with pytest.raises(RuntimeError, match="not JSON serializable"):
+        engine.run_step()
+
+    persisted = store.load("marathon-test")
+    assert persisted is not None
+    assert persisted.step_index == 1
+    assert persisted.consecutive_failures == 1
+    with sqlite3.connect(store.path) as db:
+        kind = db.execute("SELECT kind FROM events ORDER BY id DESC LIMIT 1").fetchone()[0]
+    assert kind == "STEP_PERSISTENCE_FAILURE"
+
+
+def test_executor_exception_is_persisted_as_failed_attempt(tmp_path: Path):
+    store = LongRunStateStore(tmp_path / "state.sqlite")
+    times = iter([0.0, 1.0, 2.0])
+
+    def executor(proposal):
+        raise TimeoutError("tool timed out")
+
+    engine = LongRunEngine(
+        _manifest(),
+        store,
+        planner=lambda state: _proposal(),
+        executor=executor,
+        clock=lambda: next(times),
+    )
+
+    with pytest.raises(TimeoutError):
+        engine.run_step()
+
+    persisted = store.load("marathon-test")
+    assert persisted is not None
+    assert persisted.step_index == 1
+    assert persisted.consecutive_failures == 1
+    assert persisted.last_step_fingerprint == "step-1"
+    with sqlite3.connect(store.path) as db:
+        kind = db.execute("SELECT kind FROM events ORDER BY id DESC LIMIT 1").fetchone()[0]
+    assert kind == "STEP_EXCEPTION"
