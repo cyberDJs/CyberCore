@@ -47,6 +47,14 @@ def _request_bytes(action: GovernedAction) -> bytes:
     return (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
+def _timeout_bytes(value: str | bytes | None) -> bytes:
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, str):
+        return value.encode()
+    return b""
+
+
 def execute_action(
     action: GovernedAction,
     target: ExecutionTarget,
@@ -59,15 +67,29 @@ def execute_action(
 
     argv = build_transport_argv(target)
     started_at = utc_now()
-    completed = run(
-        list(argv),
-        input=_request_bytes(action),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-        shell=False,
-        timeout=30,
-    )
+    try:
+        completed = run(
+            list(argv),
+            input=_request_bytes(action),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            shell=False,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        completed_at = utc_now()
+        timeout_stderr = _timeout_bytes(exc.stderr) + b"\ncybercore-exec transport timed out"
+        return build_receipt(
+            action,
+            transport_argv=argv,
+            started_at=started_at,
+            completed_at=completed_at,
+            exit_code=124,
+            stdout=_timeout_bytes(exc.stdout),
+            stderr=timeout_stderr,
+            mutation_possible=decision.mutating,
+        )
     completed_at = utc_now()
 
     stdout = completed.stdout if isinstance(completed.stdout, bytes) else b""
