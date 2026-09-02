@@ -134,13 +134,25 @@ def execute_first_write_rollback(
     if input_errors:
         return FirstWriteRollbackResult(False, input_errors, upload_input=upload_input)
     if upload_input.protocol != EXPECTED_PROTOCOL:
-        return FirstWriteRollbackResult(False, ("first-write rollback requires FTPS_EXPLICIT",), upload_input=upload_input)
+        return FirstWriteRollbackResult(
+            False, ("first-write rollback requires FTPS_EXPLICIT",), upload_input=upload_input
+        )
     if upload_input.endpoint_hostname != EXPECTED_ENDPOINT:
-        return FirstWriteRollbackResult(False, ("sealed rollback endpoint is not the approved staging endpoint",), upload_input=upload_input)
+        return FirstWriteRollbackResult(
+            False,
+            ("sealed rollback endpoint is not the approved staging endpoint",),
+            upload_input=upload_input,
+        )
     if rollback_authorized is not True:
-        return FirstWriteRollbackResult(False, ("fresh rollback authorization is required",), upload_input=upload_input)
+        return FirstWriteRollbackResult(
+            False, ("fresh rollback authorization is required",), upload_input=upload_input
+        )
     if authorization_reference != rollback_authorization_reference(upload_input):
-        return FirstWriteRollbackResult(False, ("rollback authorization reference does not match sealed run",), upload_input=upload_input)
+        return FirstWriteRollbackResult(
+            False,
+            ("rollback authorization reference does not match sealed run",),
+            upload_input=upload_input,
+        )
 
     try:
         credential = credential_loader()
@@ -148,13 +160,27 @@ def execute_first_write_rollback(
         return FirstWriteRollbackResult(False, (str(exc),), upload_input=upload_input)
 
     if credential.endpoint_hostname != EXPECTED_ENDPOINT:
-        return FirstWriteRollbackResult(False, ("credential endpoint is not the approved staging endpoint",), upload_input=upload_input)
+        return FirstWriteRollbackResult(
+            False,
+            ("credential endpoint is not the approved staging endpoint",),
+            upload_input=upload_input,
+        )
     if credential.username != EXPECTED_USERNAME:
-        return FirstWriteRollbackResult(False, ("credential username does not match the verified staging identity",), upload_input=upload_input)
+        return FirstWriteRollbackResult(
+            False,
+            ("credential username does not match the verified staging identity",),
+            upload_input=upload_input,
+        )
     if credential.port != EXPECTED_PORT:
-        return FirstWriteRollbackResult(False, ("explicit FTPS first-write rollback requires port 21",), upload_input=upload_input)
+        return FirstWriteRollbackResult(
+            False,
+            ("explicit FTPS first-write rollback requires port 21",),
+            upload_input=upload_input,
+        )
     if not credential.username or not credential.password:
-        return FirstWriteRollbackResult(False, ("FTPS credential is incomplete",), upload_input=upload_input)
+        return FirstWriteRollbackResult(
+            False, ("FTPS credential is incomplete",), upload_input=upload_input
+        )
 
     context = ssl.create_default_context()
     context.check_hostname = True
