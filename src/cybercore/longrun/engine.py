@@ -122,9 +122,7 @@ class LongRunEngine:
             failed = replace(
                 state,
                 status=(
-                    "STOPPED"
-                    if elapsed >= self.manifest.maximum_wall_seconds
-                    else state.status
+                    "STOPPED" if elapsed >= self.manifest.maximum_wall_seconds else state.status
                 ),
                 step_index=state.step_index + 1,
                 consecutive_failures=state.consecutive_failures + 1,
