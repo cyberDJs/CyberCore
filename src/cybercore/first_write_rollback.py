@@ -89,7 +89,7 @@ def _entry_type(facts: dict[str, str]) -> str | None:
 
 
 def _probe_exact_path(client: _RollbackFtpsClient, path: str, *, expected_type: str) -> None:
-    """Probe exactly one sealed path with MLST; any command error is UNKNOWN/fail-closed."""
+    """Probe exactly one sealed path with MLST; any ambiguity fails closed."""
     try:
         response = client.sendcmd(f"MLST {path}")
     except FTPS_OPERATION_ERRORS:
@@ -97,21 +97,35 @@ def _probe_exact_path(client: _RollbackFtpsClient, path: str, *, expected_type: 
             "cannot prove rollback target metadata over protected FTPS"
         ) from None
 
+    response_lines = response.splitlines()
+    if (
+        not response_lines
+        or not response_lines[0].startswith(("250 ", "250-"))
+        or not response_lines[-1].startswith("250 ")
+    ):
+        raise FirstWriteRuntimeError("MLST did not return a completed 250 reply")
+
     fact_lines: list[tuple[str, str]] = []
-    for raw_line in response.splitlines():
-        line = raw_line.strip()
+    for raw_line in response_lines:
+        line = raw_line[1:] if raw_line.startswith(" ") else raw_line
         facts_text, separator, reported_path = line.partition(" ")
         if separator and "=" in facts_text and ";" in facts_text:
-            fact_lines.append((facts_text, reported_path.strip()))
+            fact_lines.append((facts_text, reported_path))
     if len(fact_lines) != 1:
         raise FirstWriteRuntimeError("MLST did not return exactly one target metadata record")
 
     facts_text, reported_path = fact_lines[0]
     facts: dict[str, str] = {}
     for item in facts_text.split(";"):
-        if item and "=" in item:
-            key, value = item.split("=", 1)
-            facts[key.lower()] = value
+        if not item:
+            continue
+        if "=" not in item:
+            raise FirstWriteRuntimeError("MLST metadata contains a malformed fact")
+        key, value = item.split("=", 1)
+        normalized_key = key.lower()
+        if not key or normalized_key in facts:
+            raise FirstWriteRuntimeError("MLST metadata contains duplicate facts")
+        facts[normalized_key] = value
 
     if reported_path != path:
         raise FirstWriteRuntimeError("MLST metadata record does not match the sealed target path")
