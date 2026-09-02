@@ -13,6 +13,7 @@ from cybercore.longrun.operator import (
     resume_longrun,
     start_longrun,
 )
+from cybercore.longrun.state import LongRunStateStore, RunState
 
 
 _PROFILE = """\
@@ -54,6 +55,21 @@ def _contract(tmp_path: Path) -> tuple[Path, Path]:
     profile.write_text(_PROFILE, encoding="utf-8")
     mission.write_text(_MISSION, encoding="utf-8")
     return profile, mission
+
+
+def _state(run_id: str) -> RunState:
+    return RunState(
+        run_id=run_id,
+        manifest_digest=f"digest-{run_id}",
+        status="RUNNING",
+        step_index=0,
+        consecutive_failures=0,
+        last_step_fingerprint=None,
+        duplicate_count=0,
+        evaluator_score=0.0,
+        started_at=0.0,
+        updated_at=0.0,
+    )
 
 
 def test_loader_composes_profile_and_mission_into_immutable_manifest(tmp_path: Path):
@@ -154,6 +170,25 @@ def test_operator_rejects_default_state_path_through_external_symlink(tmp_path: 
         load_operator_context(tmp_path, profile=profile, mission=mission)
 
     assert not (outside / "longrun" / "operator-test.sqlite").exists()
+
+
+def test_open_existing_state_preserves_literal_uri_escape_path(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    literal_dir = repo / "%2e%2e"
+    literal_dir.mkdir()
+    literal_db = literal_dir / "run.sqlite"
+    outside_db = tmp_path / "run.sqlite"
+
+    literal_store = LongRunStateStore(literal_db)
+    literal_store.create(_state("inside-literal"))
+    outside_store = LongRunStateStore(outside_db)
+    outside_store.create(_state("outside-decoded"))
+
+    reopened = LongRunStateStore(literal_db, create=False)
+
+    assert reopened.load("inside-literal") is not None
+    assert reopened.load("outside-decoded") is None
 
 
 def test_cli_status_for_missing_run_does_not_create_database(tmp_path: Path, capsys):
