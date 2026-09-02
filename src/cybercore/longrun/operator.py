@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from hashlib import sha256
 from pathlib import Path
 
 from cybercore.longrun.engine import LongRunEngine, StepResult
@@ -16,6 +17,8 @@ class LongRunOperatorContext:
     manifest: LongRunManifest
     store: LongRunStateStore
     state_db: Path
+    profile_path: Path
+    mission_path: Path
 
 
 def _resolve(repo: Path, path: Path) -> Path:
@@ -44,41 +47,99 @@ def load_operator_context(
         manifest=manifest,
         store=LongRunStateStore(db_path),
         state_db=db_path,
+        profile_path=profile_path,
+        mission_path=mission_path,
     )
 
 
-def _deterministic_planner(state: RunState) -> StepProposal:
-    step_number = state.step_index + 1
-    return StepProposal(
-        fingerprint=f"deterministic-read-{step_number:06d}",
-        expected_quality_gain=0.6,
-        expected_information_gain=0.6,
-        cost=0.05,
-        risk=0.01,
-        duplication_probability=0.0,
-        effect="read",
-    )
+def _within_repo(path: Path, repo: Path) -> bool:
+    try:
+        path.relative_to(repo)
+    except ValueError:
+        return False
+    return True
 
 
-def _deterministic_executor(proposal: StepProposal) -> StepResult:
-    return StepResult(
-        success=True,
-        evaluator_score=0.0,
-        evidence={
-            "harness": "deterministic-local",
-            "fingerprint": proposal.fingerprint,
-            "effect": proposal.effect,
-            "independent_evaluation": False,
-        },
-    )
+def _deterministic_targets(context: LongRunOperatorContext) -> tuple[Path, ...]:
+    candidates = {
+        context.repo / "pyproject.toml",
+        context.repo / "README.md",
+        context.repo / "configs" / "longrun" / "marathon16.yaml",
+        context.repo / "docs" / "architecture" / "ADR-0007-durable-longrun-runtime.md",
+        context.profile_path,
+        context.mission_path,
+    }
+    for pattern in (
+        "src/cybercore/longrun/*.py",
+        "tests/test_longrun*.py",
+    ):
+        candidates.update(context.repo.glob(pattern))
+
+    targets: list[Path] = []
+    for path in sorted(candidates):
+        if not _within_repo(path, context.repo):
+            continue
+        if path.is_symlink() or not path.is_file():
+            continue
+        if path.stat().st_size > 1_000_000:
+            continue
+        targets.append(path)
+    if not targets:
+        raise RuntimeError("deterministic LongRun harness found no safe repository read targets")
+    return tuple(targets)
 
 
 def deterministic_engine(context: LongRunOperatorContext) -> LongRunEngine:
+    targets = _deterministic_targets(context)
+    fingerprints = {
+        f"repo-read:{path.relative_to(context.repo).as_posix()}": path for path in targets
+    }
+
+    def planner(state: RunState) -> StepProposal:
+        if state.step_index >= len(targets):
+            return StepProposal(
+                fingerprint="repo-read:targets-exhausted",
+                expected_quality_gain=0.0,
+                expected_information_gain=0.0,
+                cost=0.01,
+                risk=0.01,
+                duplication_probability=1.0,
+                effect="read",
+            )
+        path = targets[state.step_index]
+        fingerprint = f"repo-read:{path.relative_to(context.repo).as_posix()}"
+        return StepProposal(
+            fingerprint=fingerprint,
+            expected_quality_gain=0.5,
+            expected_information_gain=0.5,
+            cost=0.02,
+            risk=0.01,
+            duplication_probability=0.0,
+            effect="read",
+        )
+
+    def executor(proposal: StepProposal) -> StepResult:
+        target = fingerprints.get(proposal.fingerprint)
+        if target is None:
+            raise RuntimeError("deterministic harness proposal has no safe read target")
+        data = target.read_bytes()
+        return StepResult(
+            success=True,
+            evaluator_score=0.0,
+            evidence={
+                "harness": "deterministic-repo-integrity",
+                "path": target.relative_to(context.repo).as_posix(),
+                "sha256": sha256(data).hexdigest(),
+                "size": len(data),
+                "independent_evaluation": False,
+            },
+        )
+
     return LongRunEngine(
         context.manifest,
         context.store,
-        planner=_deterministic_planner,
-        executor=_deterministic_executor,
+        planner=planner,
+        executor=executor,
     )
 
 
