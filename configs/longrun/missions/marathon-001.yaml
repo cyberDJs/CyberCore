@@ -1,0 +1,8 @@
+version: 0
+run_id: marathon-001
+objective: >-
+  Prove durable CyberCore LongRun checkpoint, resume, watchdog, evidence-ledger,
+  and bounded-autonomy behavior under deterministic local endurance execution.
+metadata:
+  benchmark: MARATHON-001
+  mode: deterministic-local
