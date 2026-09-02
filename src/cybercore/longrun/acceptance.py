@@ -70,7 +70,9 @@ class AcceleratedAcceptanceHarness:
                 evaluator_version="1",
                 score=self.evaluator_score,
                 verdict=self.evaluator_verdict,
-                reasons=(f"evaluated {proposal.fingerprint} from deterministic acceptance evidence",),
+                reasons=(
+                    f"evaluated {proposal.fingerprint} from deterministic acceptance evidence",
+                ),
                 evidence_digest=evidence_digest(result.evidence),
             )
 
