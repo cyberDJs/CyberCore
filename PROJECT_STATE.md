@@ -6,19 +6,20 @@ _Last updated: 2026-09-02_
 
 - Repository: `cyberDJs/CyberCore`
 - Canonical product state: GitHub `main`
-- Current canonical main: `41a0994b3cef083f15b8280724dd788cd31a880e`
+- Canonical main ref: GitHub `main` (resolve live)
+- Last verified canonical checkpoint: `36a16e805390c8c5214eeb4646b6ecf6c8efc4aa`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Current coordination artifact: PR #77 — PR #69 post-merge source-of-truth closeout
-- Current coordination branch: `docs/pr69-post-merge-sot-closeout`
-- Current coordination pull request: #77
-- Active branch: `docs/pr69-post-merge-sot-closeout`
-- Active work block: `PR69-POST-MERGE-SOT-CLOSEOUT PR #69 post-merge source-of-truth closeout`
+- Current coordination artifact: none — terminal canonical state
+- Current coordination branch: `main`
+- Current coordination pull request: none
+- Active branch: `main`
+- Active work block: `none`
 - Governance: provider mutation, secret mutation, staging apply, production mutation, canonical merge, and authority changes require their applicable explicit approval gates
 - CI policy: exact-head GitHub Actions verification is required before merge
 - CodeQL policy: exact-head CodeQL verification is required before merge
 - Independent review: fresh exact-head review is required for material changes before merge readiness
 
-GitHub `main` remains canonical. CASER-E is a mirror/evidence layer and cannot override a fresher authoritative GitHub state.
+GitHub `main` remains canonical. `Last verified canonical checkpoint` is evidence of the last independently observed canonical commit; it is not an alias for the moving `main` HEAD. CASER-E is a mirror/evidence layer and cannot override a fresher authoritative GitHub state.
 
 ### PR #69 — docs(state): reconcile current canonical state through PR72
 
@@ -36,31 +37,47 @@ Verification:
 - CodeQL #635: **PASS**.
 - Fresh exact-head Codex review on `932b2a19ca3050fe22af4acd2db23de51134509d`: **completed with no new unresolved findings**.
 
+### PR #77 — docs(state): close out PR69 after merge
+
+Merged into `main` as:
+
+```text
+36a16e805390c8c5214eeb4646b6ecf6c8efc4aa
+```
+
+Completed artifact: `PR69-POST-MERGE-SOT-CLOSEOUT`.
+
+Verification:
+
+- CI #655: **PASS** on exact head `428b4acf004f48caea3d17c2e75914f0e99ac7fd`.
+- CodeQL #654: **PASS** on the same exact head.
+- Fresh exact-head Codex review on `428b4acf004f48caea3d17c2e75914f0e99ac7fd`: **completed with no major issues**.
+- Review threads before merge: **0**.
+
 ## Current milestone
 
-PR #77 closes the PR #69 source-of-truth reconciliation against canonical `main@41a0994b3cef083f15b8280724dd788cd31a880e` after canonical merge of PR #76.
+Canonical state is idle after the verified merge of PR #77.
 
 ## Active objective
 
-Close the merged PR #69 coordination state, refresh the live open-candidate inventory through merged PR #76, and leave a clean canonical handoff without broadening execution authority or rewriting historical provenance.
+No active coordination work block. Select the next bounded candidate explicitly against the live canonical GitHub `main` without making a state-maintenance PR its own successor artifact.
 
 Scope:
 
-1. mark PR #69 as merged and remove it from the open candidate queue;
-2. advance both human-readable and machine-readable canonical state to `main@41a0994b3cef083f15b8280724dd788cd31a880e`;
-3. record PR #76 as merged canonical and keep PR #75, PR #74 and PR #67 as open candidates without inventing merge priority;
-4. preserve existing safety boundaries, identity conflicts and unresolved visual-toolchain security debt;
-5. keep the CASER-E mirror verified, non-canonical and stale relative to current canonical main pending refresh after this closeout becomes canonical;
-6. pass exact-head CI, CodeQL and fresh independent review before any merge decision.
+1. evaluate PR #75, PR #74 and PR #67 by purpose, conflicts and current-main drift without inferring priority from recency;
+2. reconcile only the selected candidate against live GitHub `main` and rerun exact-head CI, CodeQL and independent review before readiness;
+3. preserve all existing authority, security, staging and production boundaries;
+4. use terminal post-merge closeout when there is no real successor work block, leaving canonical state idle instead of creating recursive reconciliation work;
+5. refresh the non-canonical CASER-E mirror separately after this terminal-closeout maintenance becomes canonical.
 
 ## Current status
 
-- Work block: active
-- Branch: `docs/pr69-post-merge-sot-closeout`
+- Work block: idle
+- Branch: `main`
 - Project Kernel: present
-- Runtime implementation: docs/state post-merge closeout only
-- Tests: exact-head verification required for PR #77
-- Pull request: #77
+- Runtime implementation: canonical state with terminal post-merge closeout contract
+- Tests: canonical baseline verified; each maintenance PR still requires fresh exact-head gates
+- Pull request: none
 
 ## Current canonical state
 
@@ -79,9 +96,10 @@ Most relevant recent merged state:
 - PR #71 — WB-0037 governed execution bridge v1 — merged as `111ef0f09f44894278499d9ffaca9ab18eccf404`;
 - PR #72 — WB-LR0002 LongRun Operator Runtime — merged as `8b555ffad19d44e8badff457d754efdb91e0bca8`;
 - PR #69 — current source-of-truth reconciliation — merged as `cb3d705f82d53a1302f9f2ca80615325b1509468`;
-- PR #76 — WB-LR0003 Independent Evaluation Acceptance — merged as current `main@41a0994b3cef083f15b8280724dd788cd31a880e`.
+- PR #76 — WB-LR0003 Independent Evaluation Acceptance — merged as `41a0994b3cef083f15b8280724dd788cd31a880e`;
+- PR #77 — PR #69 post-merge source-of-truth closeout — merged as verified checkpoint `36a16e805390c8c5214eeb4646b6ecf6c8efc4aa`.
 
-PR #69 was merged only after exact-head CI #636 PASS, CodeQL #635 PASS, fresh exact-head Codex review completion, and resolved review findings. This closeout does not retroactively broaden any authority granted to the merged work blocks.
+PR #69 was merged only after exact-head CI #636 PASS, CodeQL #635 PASS, fresh exact-head Codex review completion, and resolved review findings. PR #77 was merged only after CI #655 PASS, CodeQL #654 PASS, a fresh exact-head clean Codex review and zero review threads. These closeouts do not retroactively broaden any authority granted to the merged work blocks.
 
 ## Current safety boundary
 
@@ -182,14 +200,14 @@ The merge does not itself authorize deployment, VPS mutation, secret creation, a
 
 - State: `OPEN / DRAFT / CANDIDATE`.
 - Purpose: repair native-rate microphone capture and synchronous-TTS overflow/barge-in handling exposed by the first physical acceptance run.
-- Current branch was based on `main@8b555ffad19d44e8badff457d754efdb91e0bca8` and therefore requires reconciliation against current `main@41a0994b3cef083f15b8280724dd788cd31a880e` plus fresh exact-head verification before readiness.
+- Current branch was based on `main@8b555ffad19d44e8badff457d754efdb91e0bca8` and therefore requires reconciliation against live GitHub `main` plus fresh exact-head verification before readiness. The last verified canonical checkpoint is `36a16e805390c8c5214eeb4646b6ecf6c8efc4aa`.
 - Explicitly leaves Voice approval/execution authority, model downloads, deployment and production configuration unchanged.
 
 ### PR #74 — WB-0039 Cyber Voice Intelligence Bridge
 
 - State: `OPEN / DRAFT / CANDIDATE`.
 - Purpose: model-backed interpretation and general-knowledge response without moving approval or execution authority into the model.
-- Current branch was based on `main@111ef0f09f44894278499d9ffaca9ab18eccf404` and therefore requires reconciliation against current `main@41a0994b3cef083f15b8280724dd788cd31a880e` plus fresh exact-head verification before readiness.
+- Current branch was based on `main@111ef0f09f44894278499d9ffaca9ab18eccf404` and therefore requires reconciliation against live GitHub `main` plus fresh exact-head verification before readiness. The last verified canonical checkpoint is `36a16e805390c8c5214eeb4646b6ecf6c8efc4aa`.
 - Explicitly excludes shell, SSH, GitHub, Slack, Drive, browser and infrastructure execution, automatic model downloads, cloud credentials, persistence and new approval authority.
 
 ### PR #67 — CyberCore MCP Foundation v0.1
@@ -197,7 +215,7 @@ The merge does not itself authorize deployment, VPS mutation, secret creation, a
 - State: `OPEN / DRAFT / CANDIDATE`.
 - Purpose: read-only stdio MCP foundation with explicit bounded tools and fail-closed capability declaration.
 - Explicitly excludes arbitrary shell, deploy, provider/cloud mutation and production write.
-- The branch was created from `main@f12eb91ea8dd718f9f3c2d366d578859dab31132` and requires reconciliation against current `main@41a0994b3cef083f15b8280724dd788cd31a880e` plus fresh exact-head gates before readiness.
+- The branch was created from `main@f12eb91ea8dd718f9f3c2d366d578859dab31132` and requires reconciliation against live GitHub `main` plus fresh exact-head gates before readiness. The last verified canonical checkpoint is `36a16e805390c8c5214eeb4646b6ecf6c8efc4aa`.
 
 No merge priority is inferred merely from PR number or recency; each candidate must be independently reconciled and gated.
 
@@ -232,26 +250,25 @@ Do not merge the two meanings or rewrite history; governance cleanup must assign
 
 ## Open pull-request inventory
 
-At the current closeout read, open PRs are:
+At the last verified canonical checkpoint, open PRs requiring separate review are:
 
-- #77 — PR #69 post-merge source-of-truth closeout — active coordination PR;
-- #75 — WB-0038A Cyber Voice live audio acceptance repair — draft candidate requiring current-main reconciliation;
-- #74 — WB-0039 Cyber Voice Intelligence Bridge — draft candidate requiring current-main reconciliation;
-- #67 — MCP Foundation — draft candidate requiring current-main reconciliation;
+- #75 — WB-0038A Cyber Voice live audio acceptance repair — draft candidate requiring live-main reconciliation;
+- #74 — WB-0039 Cyber Voice Intelligence Bridge — draft candidate requiring live-main reconciliation;
+- #67 — MCP Foundation — draft candidate requiring live-main reconciliation;
 - #61 — old WB-0035 VPS/Vikunja draft — identity conflict / needs review;
 - #45 — old staging-plan candidate — stale/supersession review required;
 - #13 — old structured registry v0 draft — stale/supersession review required;
 - #5 — old provider-framework draft — stale/supersession review required.
 
-PR #69 and PR #76 are merged and no longer open coordination candidates. PR #66, PR #69, PR #71, PR #72, PR #73 and PR #76 are merged and canonical. This closeout does not close, merge, rename, rebase, deploy, or provider-execute any unrelated PR.
+PR #69, PR #76 and PR #77 are merged and no longer open coordination candidates. PR #66, PR #69, PR #71, PR #72, PR #73, PR #76 and PR #77 are merged and canonical at or before the last verified checkpoint. Terminal state maintenance does not close, merge, rename, rebase, deploy, or provider-execute any unrelated PR.
 
 ## CASER-E evidence state
 
 Connected Google Drive inspection previously resolved `CyberCore/CASER-E/working` and `CyberCore/CASER-E/evidence`.
 
-The native Google Doc `CyberCore SOT Reconciliation — post PR65 / PR68` was created, read back, and verified in `CASER-E/evidence`. It remains non-canonical evidence, but its content predates the PR #69 and PR #76 merges and is therefore stale relative to current `main@41a0994b3cef083f15b8280724dd788cd31a880e`.
+The native Google Doc `CyberCore SOT Reconciliation — post PR65 / PR68` was created, read back, and verified in `CASER-E/evidence`. It remains non-canonical evidence, but its content predates the PR #69, PR #76 and PR #77 merges and is therefore stale relative to live GitHub `main`.
 
-Refresh the CASER-E mirror only after this post-merge closeout is merged, so the mirror tracks a stable canonical checkpoint rather than another candidate branch. Provider-private Drive identifiers remain intentionally absent from GitHub.
+Refresh the CASER-E mirror after this terminal-closeout maintenance becomes canonical, so the mirror tracks a stable checkpoint instead of a candidate state branch. Provider-private Drive identifiers remain intentionally absent from GitHub.
 
 The repository evidence record remains `docs/evidence/2026-09-02-post-pr65-pr68-sot-reconciliation.md`. GitHub `main` remains canonical product state.
 
@@ -277,28 +294,30 @@ This closeout preserves that debt; it does not weaken, suppress, or mark the fin
 
 ## Priority sequence
 
-1. Verify PR #77 on its exact head with CI, CodeQL and fresh independent review; merge only after separate explicit operator approval.
-2. Reconcile open candidates PR #75, PR #74 and PR #67 against resulting canonical `main` before any readiness decision; no merge priority is implied by this inventory.
-3. Resolve WB-0035/WB-0036/WB-0037 identifier collisions and stale PRs through explicit supersession/renumber/closure decisions; do not rewrite history.
-4. Address the six high-severity transitive visual-toolchain `npm audit` findings in a separately reviewed maintenance change.
-5. Start a separate engineering block for concurrency-safe first-write semantics before any future staging-write authorization request.
+1. Select one bounded candidate among PR #75, PR #74 and PR #67, then reconcile it against live GitHub `main` before any readiness decision; no merge priority is implied by this inventory.
+2. Resolve WB-0035/WB-0036/WB-0037 identifier collisions and stale PRs through explicit supersession/renumber/closure decisions; do not rewrite history.
+3. Address the six high-severity transitive visual-toolchain `npm audit` findings in a separately reviewed maintenance change.
+4. Start a separate engineering block for concurrency-safe first-write semantics before any future staging-write authorization request.
+5. Refresh the verified non-canonical CASER-E evidence mirror after terminal-closeout maintenance becomes canonical.
 
 ## Next action
 
-Run exact-head CI and CodeQL for PR #77, request a fresh independent review on the same head, and merge only after separate explicit operator approval.
+Select the next bounded candidate track explicitly, reconcile it against live GitHub `main`, and require fresh exact-head CI, CodeQL and independent review before any merge-readiness decision.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
-<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:pr69-post-merge-sot-closeout -->
+<!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:terminal-post-merge-closeout -->
 ## Manual repository checkpoint
 
-- Coordination PR: #77
-- Coordination branch: `docs/pr69-post-merge-sot-closeout`
-- Canonical main observed for closeout: `41a0994b3cef083f15b8280724dd788cd31a880e`
+- Coordination PR: none
+- Coordination branch: `main`
+- Canonical main ref: GitHub `main` / resolve live
+- Last verified canonical checkpoint: `36a16e805390c8c5214eeb4646b6ecf6c8efc4aa`
 - PR #69 SOT reconciliation: merged and canonical as `cb3d705f82d53a1302f9f2ca80615325b1509468`
 - PR #76 LongRun Independent Evaluation Acceptance: merged and canonical as `41a0994b3cef083f15b8280724dd788cd31a880e`
-- PR #75 Cyber Voice live audio acceptance repair: open draft candidate; current-main reconciliation required
-- PR #74 Cyber Voice Intelligence Bridge: open draft candidate; current-main reconciliation required
-- PR #67 MCP: open draft candidate; current-main reconciliation required
+- PR #77 post-merge SOT closeout: merged and verified as `36a16e805390c8c5214eeb4646b6ecf6c8efc4aa`
+- PR #75 Cyber Voice live audio acceptance repair: open draft candidate; live-main reconciliation required
+- PR #74 Cyber Voice Intelligence Bridge: open draft candidate; live-main reconciliation required
+- PR #67 MCP: open draft candidate; live-main reconciliation required
 - WB-0035 identity: CONFLICT / NEEDS_REVIEW
 - WB-0036 identity: CONFLICT / NEEDS_REVIEW
 - WB-0037 identity: CONFLICT / NEEDS_REVIEW
@@ -306,5 +325,5 @@ Run exact-head CI and CodeQL for PR #77, request a fresh independent review on t
 - First staging remote write: BLOCKED
 - Production write allowed: false
 - Secret values recorded: false
-- Google Drive CASER-E mirror: VERIFIED / NON-CANONICAL / STALE RELATIVE TO CURRENT MAIN
+- Google Drive CASER-E mirror: VERIFIED / NON-CANONICAL / STALE RELATIVE TO LIVE MAIN
 <!-- CYBERCORE:CHECKPOINT:END -->
