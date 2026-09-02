@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from dataclasses import dataclass, field
 import ftplib
 import ssl
@@ -32,9 +32,6 @@ class _RollbackFtpsClient(Protocol):
     def set_pasv(self, val: bool) -> object: ...
     def pwd(self) -> str: ...
     def sendcmd(self, cmd: str) -> str: ...
-    def mlsd(
-        self, path: str = "", facts: list[str] | None = None
-    ) -> Iterable[tuple[str, dict[str, str]]]: ...
     def quit(self) -> object: ...
     def close(self) -> object: ...
 
@@ -87,25 +84,27 @@ def _tls_version(client: _RollbackFtpsClient) -> str:
     return value
 
 
-def _list_entries(client: _RollbackFtpsClient, path: str) -> list[tuple[str, dict[str, str]]]:
-    try:
-        return list(client.mlsd(path))
-    except FTPS_OPERATION_ERRORS:
-        raise FirstWriteRuntimeError(
-            "cannot prove rollback canary state over protected FTPS"
-        ) from None
-
-
 def _entry_type(facts: dict[str, str]) -> str | None:
     value = facts.get("type")
     return value.lower() if isinstance(value, str) else None
 
 
-def _probe_exact_target(client: _RollbackFtpsClient, target_path: str) -> None:
-    """Positively prove only the sealed target with MLST; all errors fail closed."""
+def _probe_exact_path(
+    client: _RollbackFtpsClient,
+    path: str,
+    *,
+    expected_type: str,
+) -> bool:
+    """Probe exactly one sealed path with MLST and verify its reported type."""
 
     try:
-        response = client.sendcmd(f"MLST {target_path}")
+        response = client.sendcmd(f"MLST {path}")
+    except ftplib.error_perm as exc:
+        if str(exc).lstrip().startswith("550"):
+            return False
+        raise FirstWriteRuntimeError(
+            "cannot prove rollback target metadata over protected FTPS"
+        ) from None
     except FTPS_OPERATION_ERRORS:
         raise FirstWriteRuntimeError(
             "cannot prove rollback target metadata over protected FTPS"
@@ -129,32 +128,13 @@ def _probe_exact_target(client: _RollbackFtpsClient, target_path: str) -> None:
         key, value = item.split("=", 1)
         facts[key.lower()] = value
 
-    if reported_path.rstrip("/") != target_path.rstrip("/"):
+    if reported_path.rstrip("/") != path.rstrip("/"):
         raise FirstWriteRuntimeError("MLST metadata record does not match the sealed target path")
-    if _entry_type(facts) != "dir":
-        raise FirstWriteRuntimeError("rollback target is not positively proven to be a directory")
-
-
-def _validate_target_contents(
-    entries: list[tuple[str, dict[str, str]]],
-) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    names = [name for name, _facts in entries]
-    if len(names) != len(set(names)):
-        return (), ("rollback target listing contains duplicate names",)
-
-    unexpected = sorted(set(names) - EXPECTED_ARTIFACTS)
-    if unexpected:
-        return (), ("rollback target contains unexpected entries",)
-
-    errors: list[str] = []
-    for name, facts in entries:
-        if _entry_type(facts) != "file":
-            errors.append(
-                f"rollback target entry is not positively proven to be a regular file: {name}"
-            )
-    if errors:
-        return (), tuple(errors)
-    return tuple(sorted(names)), ()
+    if _entry_type(facts) != expected_type:
+        raise FirstWriteRuntimeError(
+            f"rollback target is not positively proven to be a {expected_type}"
+        )
+    return True
 
 
 def execute_first_write_rollback(
@@ -167,12 +147,9 @@ def execute_first_write_rollback(
 ) -> FirstWriteRollbackResult:
     """Establish the safe first-write rollback posture without remote mutation.
 
-    The WB-0034 first write is additive and isolated in a unique no-overwrite canary
-    directory. Its immediate recovery action is therefore logical rollback: stop,
-    do not promote, preserve the isolated run for evidence, and report whether later
-    physical cleanup is required. Automated DELE/RMD/RNTO operations are intentionally
-    absent because FTP path identity cannot be bound atomically against concurrent
-    rename/swap races.
+    Recovery is bounded to the sealed canary directory and the two approved artifact
+    paths. It never enumerates the staging parent or the canary directory and never
+    performs remote mutation.
     """
 
     input_errors = validate_first_write_upload_input(upload_input)
@@ -250,11 +227,24 @@ def execute_first_write_rollback(
                     "FTPS identity is not rooted at the approved staging root"
                 )
 
-            _probe_exact_target(client, target_path)
-            contents = _list_entries(client, target_path)
-            present, content_errors = _validate_target_contents(contents)
-            if content_errors:
-                raise FirstWriteRuntimeError(content_errors[0])
+            if not _probe_exact_path(client, target_path, expected_type="dir"):
+                return FirstWriteRollbackReceipt(
+                    source_commit=upload_input.source_commit,
+                    run_id=upload_input.run_id,
+                    destination=upload_input.destination,
+                    endpoint_hostname=EXPECTED_ENDPOINT,
+                    protocol=upload_input.protocol,
+                    target_present=False,
+                    present_artifacts=(),
+                    cleanup_required=False,
+                    already_absent=True,
+                )
+
+            present: list[str] = []
+            for artifact_name in sorted(EXPECTED_ARTIFACTS):
+                artifact_path = f"{target_path}/{artifact_name}"
+                if _probe_exact_path(client, artifact_path, expected_type="file"):
+                    present.append(artifact_name)
 
             return FirstWriteRollbackReceipt(
                 source_commit=upload_input.source_commit,
@@ -263,7 +253,7 @@ def execute_first_write_rollback(
                 endpoint_hostname=EXPECTED_ENDPOINT,
                 protocol=upload_input.protocol,
                 target_present=True,
-                present_artifacts=present,
+                present_artifacts=tuple(present),
                 cleanup_required=True,
             )
         except FirstWriteRuntimeError:
