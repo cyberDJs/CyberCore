@@ -18,9 +18,12 @@ If a canary exists after a future write attempt:
 1. stop;
 2. do not promote;
 3. preserve evidence;
-4. inspect only the exact sealed path;
-5. record whether physical cleanup is required;
-6. perform no automated cleanup.
+4. probe only the exact sealed target with `MLST /cybercore-canary-<run_id>`;
+5. if positively proven as a directory, inspect only that target with `MLSD`;
+6. record whether physical cleanup is required;
+7. perform no automated cleanup.
+
+The staging parent must never be enumerated as part of recovery inspection.
 
 ## Current first-write blocker
 
