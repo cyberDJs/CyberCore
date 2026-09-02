@@ -18,10 +18,10 @@ Immediate rollback is logical and non-destructive:
 
 - stop the run;
 - do not promote or broaden scope;
-- inspect only the exact sealed canary path read-only;
+- inspect only the exact sealed canary paths read-only;
 - preserve any isolated canary for evidence;
-- report whether later cleanup is required;
-- perform no `DELE`, `RMD`, `RNFR`, or `RNTO` operation.
+- report cleanup requirement only when the complete approved canary shape is positively proven;
+- perform no `DELE`, `RMD`, `RNFR`, `RNTO`, upload, chmod, or chown operation.
 
 Physical cleanup is outside the automated first-write recovery contract and requires a separately reviewed concurrency-safe maintenance mechanism.
 
@@ -42,9 +42,15 @@ A boolean, policy token, or operator assertion alone is not accepted as exclusiv
 
 ## Recovery runtime
 
-The rollback runtime remains read-only and bounded to the sealed `FirstWriteUploadInput`. It verifies endpoint, identity and TLS/root scope, then probes only the exact sealed canary path with `MLST /cybercore-canary-<run_id>`. It never enumerates the staging parent. Only after `MLST` positively proves the exact target is a directory does it use `MLSD` inside that target to validate the approved artifact names and positive file-type evidence.
+The rollback runtime is read-only and bounded to the sealed `FirstWriteUploadInput`. After endpoint, identity, TLS, and root-scope checks, it performs exactly three metadata probes:
 
-`MLST` errors are fail-closed. In particular, FTP `550` is not accepted as proof of absence because it can represent both a missing pathname and access denial. WB-0036 no longer emits an `already_absent` success receipt from an MLST error; ambiguous or unavailable metadata blocks recovery inspection without mutation.
+1. `MLST /cybercore-canary-<run_id>` and require `type=dir`;
+2. `MLST /cybercore-canary-<run_id>/cybercore-version.json` and require `type=file`;
+3. `MLST /cybercore-canary-<run_id>/index.html` and require `type=file`.
+
+It performs **no `MLSD` or directory listing at all**. Therefore it does not enumerate the staging parent, the canary directory, unrelated siblings, or unrelated entries inside the canary directory.
+
+Every `MLST` command error is fail-closed. In particular, FTP `550` is not accepted as proof of absence because it can represent both a missing pathname and access denial. Missing artifacts, permission errors, malformed metadata, path mismatches, and unavailable metadata all block recovery inspection without remote mutation.
 
 ## Test requirements
 
@@ -52,13 +58,16 @@ Regression coverage proves:
 
 - the blocked first-write runner does not call packet validation;
 - therefore it cannot trigger validator-side `git fetch` or Git credential helpers;
-- credential loader and FTPS factory are not invoked;
+- credential loader and FTPS factory are not invoked by the blocked writer;
 - the blocker is unconditional for write-authority arguments while the unsafe writer is disabled;
 - sealed-input validation remains directly covered as a pure helper;
 - logical rollback performs zero delete/rename/upload operations;
-- rollback inspection uses exact-target `MLST` and target-only `MLSD`, never parent-root enumeration;
-- both missing-target and permission-denied `550` replies fail closed instead of claiming absence;
-- effect verification and secret-exclusion behavior remain covered.
+- recovery probes exactly the sealed canary directory and two approved artifact paths with `MLST` only;
+- recovery performs no `MLSD` or staging/canary enumeration;
+- unrelated sibling paths and unrelated canary entries are never inspected;
+- missing-target and permission-denied `550` replies both fail closed;
+- missing approved artifacts and malformed type evidence fail closed;
+- secret-exclusion behavior remains covered.
 
 ## Readiness
 
