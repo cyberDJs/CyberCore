@@ -101,17 +101,11 @@ def _entry_type(facts: dict[str, str]) -> str | None:
     return value.lower() if isinstance(value, str) else None
 
 
-def _probe_exact_target(client: _RollbackFtpsClient, target_path: str) -> bool:
-    """Probe only the sealed target with MLST; never enumerate the staging parent."""
+def _probe_exact_target(client: _RollbackFtpsClient, target_path: str) -> None:
+    """Positively prove only the sealed target with MLST; all errors fail closed."""
 
     try:
         response = client.sendcmd(f"MLST {target_path}")
-    except ftplib.error_perm as exc:
-        if str(exc).lstrip().startswith("550"):
-            return False
-        raise FirstWriteRuntimeError(
-            "cannot prove rollback target metadata over protected FTPS"
-        ) from None
     except FTPS_OPERATION_ERRORS:
         raise FirstWriteRuntimeError(
             "cannot prove rollback target metadata over protected FTPS"
@@ -139,7 +133,6 @@ def _probe_exact_target(client: _RollbackFtpsClient, target_path: str) -> bool:
         raise FirstWriteRuntimeError("MLST metadata record does not match the sealed target path")
     if _entry_type(facts) != "dir":
         raise FirstWriteRuntimeError("rollback target is not positively proven to be a directory")
-    return True
 
 
 def _validate_target_contents(
@@ -257,19 +250,7 @@ def execute_first_write_rollback(
                     "FTPS identity is not rooted at the approved staging root"
                 )
 
-            if not _probe_exact_target(client, target_path):
-                return FirstWriteRollbackReceipt(
-                    source_commit=upload_input.source_commit,
-                    run_id=upload_input.run_id,
-                    destination=upload_input.destination,
-                    endpoint_hostname=EXPECTED_ENDPOINT,
-                    protocol=upload_input.protocol,
-                    target_present=False,
-                    present_artifacts=(),
-                    cleanup_required=False,
-                    already_absent=True,
-                )
-
+            _probe_exact_target(client, target_path)
             contents = _list_entries(client, target_path)
             present, content_errors = _validate_target_contents(contents)
             if content_errors:
