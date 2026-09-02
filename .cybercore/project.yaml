@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: PR69 post-merge source-of-truth closeout
-  active_artifact: PR69-POST-MERGE-SOT-CLOSEOUT
-  branch: docs/pr69-post-merge-sot-closeout
-  pull_request: 77
-  last_verified_main: 41a0994b3cef083f15b8280724dd788cd31a880e
+  milestone: Canonical checkpoint after PR #77
+  active_artifact: null
+  branch: main
+  pull_request: null
+  last_verified_main: 36a16e805390c8c5214eeb4646b6ecf6c8efc4aa
 
 status:
   ccl_specification: complete_draft
@@ -41,7 +41,9 @@ status:
   checkpoint_persistence: verified
   verification_evidence: verified
   idempotent_canonical_memory: verified
-  post_merge_state_transition: pr69_closeout_in_progress
+  post_merge_state_transition: verified
+  coordination_state: idle
+  terminal_post_merge_closeout: canonical_contract
   remote_aware_repository_identity: verified
   repository_identity_diagnostics: verified
   repository_identity_policy: verified
@@ -61,7 +63,7 @@ status:
   readme_landing_page: verified
   caser_e_google_drive_workspace: initialized
   caser_e_evidence_mirror: verified_noncanonical
-  caser_e_evidence_mirror_freshness: stale_after_pr76_merge
+  caser_e_evidence_mirror_freshness: stale_after_pr77_merge
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
   pr38_post_merge_reconciliation: merged
@@ -131,6 +133,7 @@ status:
   longrun_operator_runtime: canonical
   pr76_longrun_independent_evaluation_acceptance: merged_verified_canonical
   longrun_independent_evaluation_acceptance: canonical
+  pr77_post_merge_sot_closeout: merged_verified_canonical
   wb0035_identifier: conflict_needs_review
   wb0036_identifier: conflict_needs_review
   wb0037_identifier: conflict_needs_review
@@ -312,15 +315,19 @@ completed:
     pull_request: 76
     merge_commit: 41a0994b3cef083f15b8280724dd788cd31a880e
     verification: merged_verified_canonical
+  - artifact: PR69-POST-MERGE-SOT-CLOSEOUT
+    pull_request: 77
+    merge_commit: 36a16e805390c8c5214eeb4646b6ecf6c8efc4aa
+    verification: ci_655_codeql_654_fresh_codex_clean
 
 next:
-  - verify PR77 on its exact head with CI, CodeQL and fresh independent review; do not merge without explicit operator approval
-  - reconcile open candidates PR75, PR74 and PR67 against resulting canonical main before readiness; this inventory does not imply merge priority
+  - select one bounded candidate among PR75, PR74 and PR67; do not infer merge priority from recency
+  - reconcile the selected candidate against live GitHub main and rerun exact-head CI, CodeQL and independent review before readiness
   - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
   - review stale open PRs 61, 45, 13 and 5 before any closure or reuse
   - remediate the six high-severity transitive visual-toolchain npm audit findings in a separately reviewed maintenance change
   - design a separate concurrency-safe first-write mechanism before requesting any future live staging-write authority
-  - refresh the verified non-canonical CASER-E evidence mirror after this closeout becomes canonical
+  - refresh the verified non-canonical CASER-E evidence mirror after terminal-closeout maintenance becomes canonical
   - keep production application mutation prohibited without a separate production MOP and explicit Jan Kočí approval
   - preserve Cloudflare as authoritative DNS and DirectAdmin as hosting/SSL control plane
   - preserve GitHub as canonical product state and Google Drive CASER-E as non-canonical evidence/archive/collaboration layer
@@ -330,6 +337,11 @@ rules:
   no_knowledge_regression: true
   repository_is_truth: true
   one_active_artifact: true
+  idle_state_allowed: true
+  canonical_main_resolution: live_git_ref
+  last_verified_main_semantics: verified_checkpoint_not_head_alias
+  state_transition_pr_is_transactional: true
+  terminal_closeout_does_not_create_successor_artifact: true
   no_production_mutation_without_human_approval: true
   identity_collision_policy: preserve_history_and_mark_conflict_until_explicit_resolution
   plaintext_secrets_denied_in:
