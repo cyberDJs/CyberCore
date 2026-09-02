@@ -59,22 +59,82 @@ class LongRunStateStore:
                 )
             """)
 
+    @staticmethod
+    def _run_values(state: RunState) -> tuple[object, ...]:
+        return (
+            state.run_id,
+            state.manifest_digest,
+            state.status,
+            state.step_index,
+            state.consecutive_failures,
+            state.last_step_fingerprint,
+            state.duplicate_count,
+            state.evaluator_score,
+            state.started_at,
+            state.updated_at,
+        )
+
+    @staticmethod
+    def _update_values(state: RunState) -> tuple[object, ...]:
+        return (
+            state.manifest_digest,
+            state.status,
+            state.step_index,
+            state.consecutive_failures,
+            state.last_step_fingerprint,
+            state.duplicate_count,
+            state.evaluator_score,
+            state.started_at,
+            state.updated_at,
+            state.run_id,
+        )
+
+    @staticmethod
+    def _encode_payload(payload: dict[str, Any]) -> str:
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+    @staticmethod
+    def _append_encoded_event(
+        db: sqlite3.Connection,
+        run_id: str,
+        step_index: int,
+        kind: str,
+        payload: str,
+        created_at: float,
+    ) -> None:
+        db.execute(
+            "INSERT INTO events(run_id, step_index, kind, payload, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (run_id, step_index, kind, payload, created_at),
+        )
+
     def create(self, state: RunState) -> None:
         with self._connect() as db:
             db.execute(
                 "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    state.run_id,
-                    state.manifest_digest,
-                    state.status,
-                    state.step_index,
-                    state.consecutive_failures,
-                    state.last_step_fingerprint,
-                    state.duplicate_count,
-                    state.evaluator_score,
-                    state.started_at,
-                    state.updated_at,
-                ),
+                self._run_values(state),
+            )
+
+    def create_with_event(
+        self,
+        state: RunState,
+        kind: str,
+        payload: dict[str, Any],
+        created_at: float,
+    ) -> None:
+        encoded = self._encode_payload(payload)
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                self._run_values(state),
+            )
+            self._append_encoded_event(
+                db,
+                state.run_id,
+                state.step_index,
+                kind,
+                encoded,
+                created_at,
             )
 
     def load(self, run_id: str) -> RunState | None:
@@ -88,26 +148,41 @@ class LongRunStateStore:
                 """UPDATE runs SET manifest_digest=?, status=?, step_index=?,
                 consecutive_failures=?, last_step_fingerprint=?, duplicate_count=?,
                 evaluator_score=?, started_at=?, updated_at=? WHERE run_id=?""",
-                (
-                    state.manifest_digest,
-                    state.status,
-                    state.step_index,
-                    state.consecutive_failures,
-                    state.last_step_fingerprint,
-                    state.duplicate_count,
-                    state.evaluator_score,
-                    state.started_at,
-                    state.updated_at,
-                    state.run_id,
-                ),
+                self._update_values(state),
+            )
+
+    def save_with_event(
+        self,
+        state: RunState,
+        kind: str,
+        payload: dict[str, Any],
+        created_at: float,
+    ) -> None:
+        encoded = self._encode_payload(payload)
+        with self._connect() as db:
+            db.execute(
+                """UPDATE runs SET manifest_digest=?, status=?, step_index=?,
+                consecutive_failures=?, last_step_fingerprint=?, duplicate_count=?,
+                evaluator_score=?, started_at=?, updated_at=? WHERE run_id=?""",
+                self._update_values(state),
+            )
+            self._append_encoded_event(
+                db,
+                state.run_id,
+                state.step_index,
+                kind,
+                encoded,
+                created_at,
             )
 
     def append_event(
-        self, run_id: str, step_index: int, kind: str, payload: dict[str, Any], created_at: float
+        self,
+        run_id: str,
+        step_index: int,
+        kind: str,
+        payload: dict[str, Any],
+        created_at: float,
     ) -> None:
-        encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        encoded = self._encode_payload(payload)
         with self._connect() as db:
-            db.execute(
-                "INSERT INTO events(run_id, step_index, kind, payload, created_at) VALUES (?, ?, ?, ?, ?)",
-                (run_id, step_index, kind, encoded, created_at),
-            )
+            self._append_encoded_event(db, run_id, step_index, kind, encoded, created_at)
