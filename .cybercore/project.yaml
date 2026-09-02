@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: Canonical checkpoint after PR #77
+  milestone: Canonical checkpoint after PR #79
   active_artifact: null
   branch: main
   pull_request: null
-  last_verified_main: 36a16e805390c8c5214eeb4646b6ecf6c8efc4aa
+  last_verified_main: 6293a31bac00c2f833e6eb5131eeafdafd9acc0a
 
 status:
   ccl_specification: complete_draft
@@ -42,8 +42,8 @@ status:
   verification_evidence: verified
   idempotent_canonical_memory: verified
   post_merge_state_transition: verified
-  coordination_state: idle
-  terminal_post_merge_closeout: canonical_contract
+  coordination_state: idle_with_canonical_repair_required
+  terminal_post_merge_closeout: implemented
   remote_aware_repository_identity: verified
   repository_identity_diagnostics: verified
   repository_identity_policy: verified
@@ -63,7 +63,7 @@ status:
   readme_landing_page: verified
   caser_e_google_drive_workspace: initialized
   caser_e_evidence_mirror: verified_noncanonical
-  caser_e_evidence_mirror_freshness: stale_after_pr77_merge
+  caser_e_evidence_mirror_freshness: stale_after_pr79_merge
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
   pr38_post_merge_reconciliation: merged
@@ -134,6 +134,9 @@ status:
   pr76_longrun_independent_evaluation_acceptance: merged_verified_canonical
   longrun_independent_evaluation_acceptance: canonical
   pr77_post_merge_sot_closeout: merged_verified_canonical
+  pr79_governed_bootstrap_artifact: merged_canonical_needs_repair
+  pr79_exact_head_ci_codeql: passed_ci_658_codeql_657
+  pr79_unresolved_review_threads: 4
   wb0035_identifier: conflict_needs_review
   wb0036_identifier: conflict_needs_review
   wb0037_identifier: conflict_needs_review
@@ -319,9 +322,15 @@ completed:
     pull_request: 77
     merge_commit: 36a16e805390c8c5214eeb4646b6ecf6c8efc4aa
     verification: ci_655_codeql_654_fresh_codex_clean
+  - artifact: WB-0038C-governed-bootstrap-artifact
+    pull_request: 79
+    merge_commit: 6293a31bac00c2f833e6eb5131eeafdafd9acc0a
+    verification: ci_658_codeql_657_passed_review_findings_unresolved
 
 next:
-  - select one bounded candidate among PR75, PR74 and PR67; do not infer merge priority from recency
+  - repair canonical PR79 WB0038C review findings before selecting another candidate: protocol version mismatch, missing privileged helper, transport timeout mismatch, and unresolved CodeQL clear-text logging thread
+  - require tests, exact-head CI, CodeQL and fresh independent review for the PR79 repair; do not merge without explicit operator approval
+  - only after PR79 repair is canonical, select one bounded candidate among PR75, PR74 and PR67; do not infer merge priority from recency
   - reconcile the selected candidate against live GitHub main and rerun exact-head CI, CodeQL and independent review before readiness
   - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
   - review stale open PRs 61, 45, 13 and 5 before any closure or reuse
@@ -339,9 +348,10 @@ rules:
   one_active_artifact: true
   idle_state_allowed: true
   canonical_main_resolution: live_git_ref
-  last_verified_main_semantics: verified_checkpoint_not_head_alias
+  last_verified_main_semantics: observed_checkpoint_not_head_alias_or_quality_signoff
   state_transition_pr_is_transactional: true
   terminal_closeout_does_not_create_successor_artifact: true
+  unresolved_review_findings_remain_open_after_merge: true
   no_production_mutation_without_human_approval: true
   identity_collision_policy: preserve_history_and_mark_conflict_until_explicit_resolution
   plaintext_secrets_denied_in:
