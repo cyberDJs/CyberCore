@@ -117,8 +117,10 @@ def _parse_evaluation(text: str) -> tuple[float, str, tuple[str, ...]]:
     score = _number(raw["score"], label="evaluator.score")
     verdict = _string(raw["verdict"], label="evaluator.verdict")
     reasons = raw["reasons"]
-    if not isinstance(reasons, list) or not reasons or not all(
-        isinstance(reason, str) and reason.strip() for reason in reasons
+    if (
+        not isinstance(reasons, list)
+        or not reasons
+        or not all(isinstance(reason, str) and reason.strip() for reason in reasons)
     ):
         raise ValueError("evaluator.reasons must contain non-empty strings")
     return score, verdict, tuple(reason.strip() for reason in reasons)
