@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from cybercore.execution.models import GovernedAction
+from cybercore.execution.models import ExecutionStatus, GovernedAction
 from cybercore.execution.policy import VIKUNJA_TARGET
 from cybercore.execution.ssh_runner import (
     ExecutionBlockedError,
@@ -55,6 +55,36 @@ def test_mutating_operation_marks_mutation_possible() -> None:
 
     receipt = execute_action(_action("vikunja.backup.run"), VIKUNJA_TARGET, run=fake_run)
     assert receipt.mutation_possible is True
+
+
+def test_timeout_returns_failed_receipt_and_preserves_mutation_uncertainty() -> None:
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        raise subprocess.TimeoutExpired(
+            cmd=argv,
+            timeout=30,
+            output=b"partial-output",
+            stderr=b"partial-error",
+        )
+
+    receipt = execute_action(_action("vikunja.backup.run"), VIKUNJA_TARGET, run=fake_run)
+
+    assert receipt.status is ExecutionStatus.FAILED
+    assert receipt.exit_code == 124
+    assert receipt.mutation_possible is True
+    assert receipt.secret_values_recorded is False
+    assert len(receipt.stdout_sha256) == 64
+    assert len(receipt.stderr_sha256) == 64
+
+
+def test_timeout_for_read_only_operation_is_not_marked_mutating() -> None:
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        raise subprocess.TimeoutExpired(cmd=argv, timeout=30)
+
+    receipt = execute_action(_action("vikunja.health.verify"), VIKUNJA_TARGET, run=fake_run)
+
+    assert receipt.status is ExecutionStatus.FAILED
+    assert receipt.exit_code == 124
+    assert receipt.mutation_possible is False
 
 
 def test_policy_blocks_before_ssh() -> None:
