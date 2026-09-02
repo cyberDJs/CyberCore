@@ -20,11 +20,12 @@ Recovery inspection is bounded to exactly three sealed metadata paths:
 
 The runtime performs no `MLSD`, parent enumeration, canary enumeration, or discovery of unrelated entries. A positive logical-recovery receipt is produced only when all three exact metadata proofs succeed.
 
-MLST failure is never translated into proof of absence. FTP `550` is ambiguous because it can indicate both a missing object and insufficient access. WB-0036 therefore fails closed on every MLST command error. Missing approved artifacts, permission errors, malformed metadata, wrong paths, non-literal path variants, wrong types, non-completed replies, duplicate facts, malformed separators, invalid protocol indentation, invalid fact characters, and unterminated fact lists all block inspection without remote mutation.
+MLST failure is never translated into proof of absence. FTP `550` is ambiguous because it can indicate both a missing object and insufficient access. WB-0036 therefore fails closed on every MLST command error. Missing approved artifacts, permission errors, malformed metadata, wrong paths, non-literal path variants, wrong types, non-completed replies, duplicate facts, malformed separators, invalid protocol indentation, invalid fact characters, synthetic line breaks, and unterminated fact lists all block inspection without remote mutation.
 
 Each MLST proof must now satisfy all of these parser invariants:
 
 - the control response is exactly a leading `250-` line, one metadata line, and a terminating `250` line;
+- physical FTP control-line boundaries are derived only from LF characters emitted by `ftplib`; carriage return, vertical tab, form feed, Unicode line/paragraph separators, and other Python `splitlines()` separators are rejected rather than promoted into synthetic protocol lines;
 - the metadata line starts with exactly one protocol-required leading space because this recovery contract requires facts;
 - exactly one metadata fact record is accepted;
 - the reported pathname is preserved literally after consuming only the required facts/path delimiter and must equal the requested sealed path byte-for-byte at the Python string level;
@@ -53,7 +54,9 @@ The next exact-head review identified three parser-level fail-open edges: `sendc
 
 The subsequent exact-head review identified one remaining malformed-separator edge: an empty fact component (`type=file;;`) or a missing final `;` terminator (`size=1;type=file`) could still be accepted. WB-0036 now requires one terminal `;`, rejects empty components before that terminator, and keeps malformed MLST metadata fail-closed.
 
-The final grammar-focused review then identified two broader parser gaps: the RFC-required leading space on an MLST fact record was optional in the parser, and control characters could appear inside fact names or values. WB-0036 now validates the complete three-line MLST control-response shape, requires exactly one leading metadata indentation space, and restricts fact names/values to the RFC 3659 `RCHAR`/`SCHAR` character classes before any type evidence is accepted.
+The grammar-focused review then identified two broader parser gaps: the RFC-required leading space on an MLST fact record was optional in the parser, and control characters could appear inside fact names or values. WB-0036 now validates the complete three-line MLST control-response shape, requires exactly one leading metadata indentation space, and restricts fact names/values to the RFC 3659 `RCHAR`/`SCHAR` character classes before any type evidence is accepted.
+
+A final exact-head review identified a line-boundary ambiguity in Python `str.splitlines()`: vertical tab, form feed, Unicode separators, and similar characters could be interpreted as new lines even though `ftplib` had not received a separate FTP control line. WB-0036 now rejects all non-LF line-breaking characters before parsing and splits the `ftplib` response only on literal `\n` boundaries, preventing synthetic MLST metadata lines.
 
 ## Final WB-0036 control
 
@@ -81,6 +84,7 @@ Read-only recovery tests prove:
 - no `MLSD` or directory listing occurs;
 - unrelated sibling and canary-entry paths are not inspected;
 - only structurally complete three-line `250` MLST control responses are accepted;
+- non-LF line-breaking characters cannot create synthetic FTP control lines;
 - the metadata line must carry exactly one protocol-required leading space;
 - MLST-reported paths must equal the requested sealed paths literally, including slash and whitespace semantics;
 - duplicate case-insensitive facts are rejected;
