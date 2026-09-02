@@ -39,6 +39,11 @@ Operational outcomes
 
 ```text
 CyberCore
+├── Interfaces
+│   ├── CLI
+│   ├── Cyber Voice
+│   ├── automation clients
+│   └── AI-assisted interaction
 ├── Foundation
 │   ├── identity and principles
 │   ├── engineering method
@@ -63,7 +68,7 @@ CyberCore
 │   ├── rollout and rollback
 │   └── release evidence
 ├── Runtime
-│   ├── CLI and local agent
+│   ├── local agent
 │   ├── Exchange and transport adapters
 │   ├── validation and state management
 │   ├── controlled apply
@@ -104,6 +109,12 @@ written architecture specification.
 
 ## Core boundaries
 
+### Interfaces
+
+Interfaces translate human or machine intent into bounded CyberCore contracts. They do not own provider credentials, mutation authority, or verification semantics.
+
+Cyber Voice is the governed human operating interface. Its Foundation contract is documented in [`docs/architecture/CYBER_VOICE.md`](docs/architecture/CYBER_VOICE.md) and ADR-0008.
+
 ### Foundation
 
 Foundation documents change rarely. They define how CyberCore thinks and why it exists. Changes require explicit review and must not be smuggled through implementation work.
@@ -127,6 +138,46 @@ Providers translate external systems into normalized CyberCore capabilities and 
 ### AI
 
 AI may observe, propose, explain, correlate, generate drafts, and verify. AI does not silently cross human approval gates for destructive or production-changing actions.
+
+## Cyber Voice architecture
+
+Cyber Voice converts human utterances into bounded intents and action requests while preserving the existing CyberCore authority model.
+
+```text
+Human utterance
+      |
+      v
+Intent compiler
+      |
+      v
+Session + context
+      |
+      v
+Action planner
+      |
+      v
+HOWEDO continuity
+      |
+      v
+OATHDO governance
+      |
+      v
+CCL approval verification
+      |
+      v
+Existing CyberCore execution boundary
+```
+
+Key invariants:
+
+- voice input is intent, never implicit authority;
+- a voice approval phrase does not itself authorize execution;
+- mutating actions require exact plan and revision binding;
+- unknown continuity or governance states fail closed;
+- HOWEDO and OATHDO remain adapter integrations, not mandatory core dependencies;
+- the Foundation Voice layer stops at action readiness and performs no direct execution.
+
+Audio capture, STT, TTS, wake words, speaker authentication, realtime model providers, CASEBOOK/CASER persistence, and tool-specific action routers are future adapter layers.
 
 ## Exchange architecture
 
@@ -193,6 +244,6 @@ InterServer
 
 ## Current stage
 
-The current architectural milestone is **Foundation Release v0.1**.
+The current architectural milestone is **Foundation Release v0.1** with Cyber Voice Foundation introduced as a reviewable interface-layer extension.
 
-The foundation release freezes the project identity, public/private boundary, CXP v1 contracts, initial CLI/runtime surface, and deterministic artifact publisher. Future releases extend provider integrations, cryptographic trust, registry discovery, and GitHub write automation through new specifications and Work Blocks.
+The foundation release freezes the project identity, public/private boundary, CXP v1 contracts, initial CLI/runtime surface, and deterministic artifact publisher. Future releases extend provider integrations, cryptographic trust, registry discovery, GitHub write automation, and governed human interfaces through new specifications and Work Blocks.

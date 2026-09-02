@@ -2,7 +2,7 @@
 
 Project: **CyberDJS / CyberCore**  
 Started: **2026-07-08**  
-Updated: **2026-08-03**
+Updated: **2026-09-02**
 Mode: living roadmap; GitHub `main` is the stable source of truth.
 
 ## Strategic outcome
@@ -82,12 +82,38 @@ Planned capabilities:
 - deterministic state machine;
 - explicit human approval gate;
 - structured result and failure reporting;
-- rollback contract where supported.
+- rollback contract where supported;
+- governed human interface through Cyber Voice.
 
 First milestone:
 
 - first end-to-end Work Block:
   `publish -> transport -> verify -> READY -> apply -> test -> commit -> push -> PR`.
+
+#### WB-0036 — Cyber Voice Foundation
+
+**Status:** implementation proposed for review
+
+Foundation scope:
+
+- vendor-neutral `Utterance -> Intent -> ActionRequest` contracts;
+- conversational session state with interruption and cancellation;
+- fail-closed HOWEDO continuity adapter boundary;
+- fail-closed OATHDO governance adapter boundary;
+- canonical CyberCore approval verification for mutation readiness;
+- voice approval intent capture that cannot self-authorize execution;
+- audit-friendly voice lifecycle events;
+- architecture and ADR documentation;
+- no microphone, STT, TTS, speaker authentication, direct execution, deployment, or production mutation.
+
+Next Voice work after Foundation review:
+
+1. streaming audio adapter contract and barge-in transport;
+2. provider-neutral STT/TTS adapters;
+3. model-backed multilingual intent compiler with regression evaluation;
+4. CASEBOOK/CASER session and evidence persistence;
+5. bounded tool routers for terminal, GitHub, Slack, Drive, browser, and infrastructure;
+6. speaker-identity design only after a dedicated security review.
 
 ### EPIC-002 — Provider Framework
 
@@ -368,3 +394,4 @@ Critical flow:
 ```text
 Reality -> Evidence -> Knowledge -> Confidence -> Decision
         -> Specification -> Implementation -> Verification -> Merge
+```
