@@ -20,7 +20,16 @@ Recovery inspection is bounded to exactly three sealed metadata paths:
 
 The runtime performs no `MLSD`, parent enumeration, canary enumeration, or discovery of unrelated entries. A positive logical-recovery receipt is produced only when all three exact metadata proofs succeed.
 
-MLST failure is never translated into proof of absence. FTP `550` is ambiguous because it can indicate both a missing object and insufficient access. WB-0036 therefore fails closed on every MLST command error. Missing approved artifacts, permission errors, malformed metadata, wrong paths, non-literal path variants, and wrong types all block inspection without remote mutation.
+MLST failure is never translated into proof of absence. FTP `550` is ambiguous because it can indicate both a missing object and insufficient access. WB-0036 therefore fails closed on every MLST command error. Missing approved artifacts, permission errors, malformed metadata, wrong paths, non-literal path variants, wrong types, non-completed replies, and duplicate facts all block inspection without remote mutation.
+
+Each MLST proof must now satisfy all of these parser invariants:
+
+- the response is a completed FTP `250` reply;
+- exactly one metadata fact line is present;
+- the reported pathname is preserved literally after consuming only the protocol delimiter and must equal the requested sealed path byte-for-byte at the Python string level;
+- duplicate case-insensitive fact keys are rejected;
+- malformed facts are rejected;
+- the single `type` fact must positively equal the required object type.
 
 ## Upload TOCTOU finding
 
@@ -34,7 +43,9 @@ A ready-triggered review identified a recovery-scope issue: bare parent `MLSD` m
 
 A subsequent exact-head review identified that treating every `MLST 550` as missing was unsafe because `550` can also mean no access. WB-0036 accepts only positive exact metadata as proof and treats both missing-looking and permission-denied `550` replies as blocked inspection.
 
-The final exact-head review identified that normalizing both requested and reported MLST paths with `rstrip("/")` weakened the exact-path contract: a reported artifact path such as `/index.html/` could compare equal to the sealed `/index.html`. WB-0036 now requires literal string equality between the requested MLST path and the single reported metadata path; any trailing slash or other pathname variation blocks recovery.
+A later exact-head review identified that normalizing both requested and reported MLST paths with `rstrip("/")` weakened the exact-path contract: a reported artifact path such as `/index.html/` could compare equal to the sealed `/index.html`. WB-0036 now requires literal string equality between the requested MLST path and the single reported metadata path; any trailing slash or other pathname variation blocks recovery.
+
+The next exact-head review identified three parser-level fail-open edges: `sendcmd()` may return non-250 replies, trimming the reported pathname can hide meaningful whitespace, and duplicate `type` facts can silently overwrite each other in a dictionary. WB-0036 now requires a completed `250` reply, preserves the reported pathname literally, and rejects duplicate case-insensitive fact keys before accepting metadata.
 
 ## Final WB-0036 control
 
@@ -61,8 +72,10 @@ Read-only recovery tests prove:
 - exactly the sealed canary directory and two approved artifact paths are probed;
 - no `MLSD` or directory listing occurs;
 - unrelated sibling and canary-entry paths are not inspected;
-- MLST-reported paths must equal the requested sealed paths literally, including slash semantics;
-- missing target, missing approved artifact, permission-denied `550`, metadata transport failure, malformed type evidence, and non-literal path reports all fail closed;
+- only completed `250` MLST replies are accepted;
+- MLST-reported paths must equal the requested sealed paths literally, including slash and whitespace semantics;
+- duplicate case-insensitive facts are rejected;
+- missing target, missing approved artifact, permission-denied `550`, metadata transport failure, malformed type evidence, malformed facts, and non-literal path reports all fail closed;
 - no delete, rename, upload, or other remote mutation occurs;
 - secret material is excluded from result representation.
 
