@@ -134,6 +134,15 @@ class MissingFileTypeFtps(FakeRollbackFtps):
         return response
 
 
+class TrailingSlashMetadataFtps(FakeRollbackFtps):
+    def sendcmd(self, cmd: str) -> str:
+        response = super().sendcmd(cmd)
+        _, path = cmd.split(" ", 1)
+        if path.endswith("/index.html"):
+            return response.replace(f" {path}\n", f" {path}/\n")
+        return response
+
+
 class MetadataFailureFtps(FakeRollbackFtps):
     def sendcmd(self, cmd: str) -> str:
         _, path = cmd.split(" ", 1)
@@ -256,6 +265,15 @@ def test_recovery_probes_only_sealed_canary_and_approved_artifacts():
         f"{target}/index.html",
     ]
     assert all("do-not-touch" not in path and "unrelated" not in path for path in fake.mlst_calls)
+    _assert_no_mutation(fake)
+
+
+def test_mlst_reported_path_requires_literal_equality():
+    inp = _sealed_input()
+    fake = TrailingSlashMetadataFtps(inp)
+    result, _ = _execute(fake, upload_input=inp)
+    assert not result.rolled_back and result.receipt is None
+    assert "does not match the sealed target path" in result.errors[0]
     _assert_no_mutation(fake)
 
 
