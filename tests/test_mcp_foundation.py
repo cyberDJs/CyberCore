@@ -67,8 +67,7 @@ def test_safe_result_redacts_secret_keys_assignments_and_paths() -> None:
         "token": "literal-token-value",
         "nested": {"access_token": "nested-token-value"},
         "message": (
-            "password=hunter2 at /private/cybercore/path from "
-            "https://user:secret@example.test/repo"
+            "password=hunter2 at /private/cybercore/path from https://user:secret@example.test/repo"
         ),
     }
 
