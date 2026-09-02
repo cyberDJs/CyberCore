@@ -11,25 +11,26 @@ It also supersedes any earlier claim that the current FTPS `MKD` + `STOR` sequen
 
 ## Recovery model
 
-The recovery runtime is read-only. It may inspect the exact sealed canary path and report whether cleanup is required, but it performs no delete, rename, upload, chmod, chown, or other remote mutation.
+The recovery runtime is read-only. It may inspect only the three exact sealed canary paths and report whether cleanup is required, but it performs no delete, rename, upload, chmod, chown, directory listing, or other remote mutation.
 
-If a canary exists after a future write attempt:
+For recovery inspection:
 
 1. stop;
 2. do not promote;
 3. preserve evidence;
-4. probe only the exact sealed target with `MLST /cybercore-canary-<run_id>`;
-5. if positively proven as a directory, inspect only that target with `MLSD`;
-6. record whether physical cleanup is required;
-7. perform no automated cleanup.
+4. probe `MLST /cybercore-canary-<run_id>` and require `type=dir`;
+5. probe `MLST /cybercore-canary-<run_id>/cybercore-version.json` and require `type=file`;
+6. probe `MLST /cybercore-canary-<run_id>/index.html` and require `type=file`;
+7. if and only if all three positive proofs succeed, record the canary as present and physical cleanup as required;
+8. perform no automated cleanup.
 
-The staging parent must never be enumerated as part of recovery inspection.
+The runtime performs no `MLSD`. It never enumerates the staging parent or canary contents, and it never probes unrelated sibling paths or unrelated canary entries.
 
-An MLST error does not prove absence. FTP `550` can mean either a missing pathname or insufficient access, so WB-0036 treats every MLST error as an inspection failure. Recovery must not return `already_absent=True` from a `550` response or any other ambiguous metadata failure.
+An MLST error does not prove absence. FTP `550` can mean either a missing pathname or insufficient access, so WB-0036 treats every MLST command error as an inspection failure. Missing approved artifacts, permission failures, malformed metadata, and path/type mismatches all fail closed without remote mutation.
 
 ## Current first-write blocker
 
-FTP `STOR` replaces an existing pathname. An MLSD absence check followed by `STOR` is therefore not an atomic create-if-absent operation. Another session can create or replace the pathname between proof and mutation. Similar pathname races exist around `MKD` and subsequent operations.
+FTP `STOR` replaces an existing pathname. An absence check followed by `STOR` is therefore not an atomic create-if-absent operation. Another session can create or replace the pathname between proof and mutation. Similar pathname races exist around `MKD` and subsequent operations.
 
 Packet validation is also not guaranteed offline because it can consult the Git remote. Therefore `execute_first_write_ftps(...)` now returns `ATOMIC_NO_OVERWRITE_BLOCKER` immediately, **before packet validation, `git fetch`, Git credential helpers, staging credential loading, or FTPS connection setup**.
 
@@ -42,7 +43,7 @@ A later engineering block must provide one of these and prove it independently:
 - an atomic server-side create-if-absent mechanism compatible with the exact approved deployment artifact contract; or
 - real exclusive mutation access covering the exact staging scope for the complete mutation interval.
 
-A boolean, policy token, operator statement, prior directory listing, or ordinary path check is not enough.
+A boolean, policy token, operator statement, prior metadata probe, or ordinary path check is not enough.
 
 Pure FTP `STOU` may be investigated as a future primitive because it creates a server-selected unique filename, but adopting it would require a separately reviewed artifact/destination contract; it is not silently substituted here.
 
