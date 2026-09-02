@@ -10,11 +10,17 @@ Remove destructive rollback races and prevent the first-write runtime from claim
 
 ## Recovery result
 
-Automated rollback is logical and read-only. It performs no `DELE`, `RMD`, `RNFR`, `RNTO`, upload, chmod or chown operation. Any created canary is preserved for evidence and later separately authorized maintenance.
+Automated rollback is logical and read-only. It performs no `DELE`, `RMD`, `RNFR`, `RNTO`, upload, chmod, chown, or directory-listing operation. Any created canary is preserved for evidence and later separately authorized maintenance.
 
-Recovery inspection is bounded to the exact sealed canary path. Presence/type is checked with `MLST /cybercore-canary-<run_id>`; the staging parent is never enumerated. Only a positively proven directory is inspected further with `MLSD` on that exact target path.
+Recovery inspection is bounded to exactly three sealed metadata paths:
 
-MLST failure is never translated into proof of absence. FTP `550` is ambiguous because it can indicate both a missing object and insufficient access. WB-0036 therefore fails closed on every MLST error and does not emit an `already_absent` success receipt from an error response.
+- the canary directory via `MLST /cybercore-canary-<run_id>` with required `type=dir`;
+- `cybercore-version.json` via exact-path `MLST` with required `type=file`;
+- `index.html` via exact-path `MLST` with required `type=file`.
+
+The runtime performs no `MLSD`, parent enumeration, canary enumeration, or discovery of unrelated entries. A positive logical-recovery receipt is produced only when all three exact metadata proofs succeed.
+
+MLST failure is never translated into proof of absence. FTP `550` is ambiguous because it can indicate both a missing object and insufficient access. WB-0036 therefore fails closed on every MLST command error. Missing approved artifacts, permission errors, malformed metadata, wrong paths, and wrong types all block inspection without remote mutation.
 
 ## Upload TOCTOU finding
 
@@ -24,13 +30,13 @@ Consequently the prior "no-overwrite" claim was not proven under concurrency, an
 
 A later Codex pass identified a second boundary issue: `validate_first_write_packet(...)` can execute `git fetch origin`, so a blocker after validation can still create network activity and invoke configured Git credential helpers.
 
-A ready-triggered review identified a recovery-scope issue: bare parent `MLSD` materialized unrelated staging-root metadata. WB-0036 now uses exact-path `MLST` instead, keeping recovery work and evidence bounded to the sealed target.
+A ready-triggered review identified a recovery-scope issue: bare parent `MLSD` materialized unrelated staging-root metadata. Recovery was first narrowed to target-specific metadata and was subsequently tightened further to exact-path `MLST` only, eliminating directory listing entirely.
 
-A subsequent exact-head review identified that treating every `MLST 550` as missing was unsafe because `550` can also mean no access. WB-0036 now accepts only positive target metadata as proof and treats both missing-looking and permission-denied `550` replies as blocked inspection.
+A subsequent exact-head review identified that treating every `MLST 550` as missing was unsafe because `550` can also mean no access. WB-0036 accepts only positive exact metadata as proof and treats both missing-looking and permission-denied `550` replies as blocked inspection.
 
 ## Final WB-0036 control
 
-`execute_first_write_ftps(...)` now returns `ATOMIC_NO_OVERWRITE_BLOCKER` as its first operational action, before packet validation and therefore before any validator-side Git remote access.
+`execute_first_write_ftps(...)` returns `ATOMIC_NO_OVERWRITE_BLOCKER` as its first operational action, before packet validation and therefore before any validator-side Git remote access.
 
 The blocked first-write entry point performs no:
 
@@ -46,17 +52,16 @@ Pure sealed-input validation remains available separately through `validate_firs
 
 ## Evidence
 
-Regression tests replace the packet validator with a function that raises if called and require the blocked runner to return normally while proving:
+Regression tests prove the blocked writer has zero packet-validator, credential-loader, and FTPS-factory calls and produces no remote mutation state.
 
-- packet-validator call count is zero;
-- credential loader call count is zero;
-- FTPS factory call count is zero;
-- `executed=False`;
-- `remote_mutation_possible=False`;
-- no upload receipt, sealed upload input, or partial mutation state is produced;
-- the same blocker is returned even with false or mismatched write-authority arguments.
+Read-only recovery tests prove:
 
-Direct helper tests separately preserve coverage for sealed-input protocol and artifact-digest validation. Read-only recovery tests prove zero remote mutation across present, interrupted and malformed target states, plus exact-target `MLST`/`MLSD` behavior with no staging-parent enumeration. Missing-target and permission-denied `550` replies are both regression-tested as fail-closed metadata errors with no `MLSD` follow-up and no remote mutation.
+- exactly the sealed canary directory and two approved artifact paths are probed;
+- no `MLSD` or directory listing occurs;
+- unrelated sibling and canary-entry paths are not inspected;
+- missing target, missing approved artifact, permission-denied `550`, metadata transport failure, and malformed type evidence all fail closed;
+- no delete, rename, upload, or other remote mutation occurs;
+- secret material is excluded from result representation.
 
 ## Future writer requirement
 
@@ -65,7 +70,7 @@ Live first-write readiness requires a separately reviewed mechanism that supplie
 1. atomic create-if-absent semantics for the approved artifact contract, or
 2. independently verified exclusive mutation access for the complete write interval.
 
-Ordinary MLSD checks, policy assertions, or human statements are insufficient. FTP `STOU` is a possible research direction because it creates a server-selected unique file, but it does not preserve the current exact pre-authorized filename/directory contract and therefore is not adopted in this block.
+Ordinary metadata checks, policy assertions, or human statements are insufficient. FTP `STOU` is a possible research direction because it creates a server-selected unique file, but it does not preserve the current exact pre-authorized filename/directory contract and therefore is not adopted in this block.
 
 ## Readiness conclusion
 
