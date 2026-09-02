@@ -37,6 +37,7 @@ current:
   active_artifact: %s
   branch: feat/idempotent-canonical-memory
   pull_request: null
+  last_verified_main: old-main
 status:
   tests: 46_passed
 completed:
@@ -46,6 +47,8 @@ completed:
     verification: 46_passed
 next:
   - old task
+rules:
+  one_active_artifact: true
 """
         % active,
         encoding="utf-8",
@@ -53,6 +56,14 @@ next:
     (repo / "PROJECT_STATE.md").write_text(
         """# CyberCore Project State
 
+## Source of truth
+
+- Repository: `cyberDJs/CyberCore`
+- Canonical product state: GitHub `main`
+- Current canonical main: `old-main`
+- Current coordination artifact: WB-0018
+- Current coordination branch: `feat/idempotent-canonical-memory`
+- Current coordination pull request: not created
 - Active branch: `feat/idempotent-canonical-memory`
 - Active work block: `WB-0018 Idempotent Canonical Memory`
 
@@ -61,6 +72,14 @@ next:
 ## Current milestone
 
 Idempotent Canonical Memory v0.1.
+
+## Active objective
+
+Complete the active work block.
+
+Scope:
+
+1. preserve state;
 
 ## Current status
 
@@ -98,13 +117,56 @@ def test_plan_updates_kernel_and_project_state(tmp_path: Path) -> None:
     )
 
     assert "active_artifact: WB-0019" in plan.kernel_content
+    assert "last_verified_main: 1e174e9" in plan.kernel_content
     assert "merge_commit: 1e174e9" in plan.kernel_content
     assert "verification: 52_passed" in plan.kernel_content
+    assert "Canonical main ref: GitHub `main` (resolve live)" in plan.project_state_content
+    assert "Last verified canonical checkpoint: `1e174e9`" in plan.project_state_content
     assert "`WB-0019 Post-Merge State Transition v0.1`" in plan.project_state_content
     assert (
         "### PR #22 — feat: make canonical memory idempotent and rollback-safe"
         in plan.project_state_content
     )
+
+
+def test_terminal_plan_closes_without_successor_self_reference(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    plan = plan_post_merge_state_update(
+        repo,
+        _preview(),
+        completed_artifact="WB-0018",
+        verification="52_passed",
+        next_action="Select the next bounded candidate explicitly.",
+        terminal=True,
+        next_tasks=("select the next bounded candidate explicitly",),
+    )
+
+    assert "active_artifact: null" in plan.kernel_content
+    assert "branch: main" in plan.kernel_content
+    assert "pull_request: null" in plan.kernel_content
+    assert "last_verified_main: 1e174e9" in plan.kernel_content
+    assert "Canonical main ref: GitHub `main` (resolve live)" in plan.project_state_content
+    assert "Last verified canonical checkpoint: `1e174e9`" in plan.project_state_content
+    assert "Current coordination artifact: none — terminal canonical state" in plan.project_state_content
+    assert "- Active branch: `main`" in plan.project_state_content
+    assert "- Active work block: `none`" in plan.project_state_content
+    assert "- Work block: idle" in plan.project_state_content
+    assert "- Pull request: none" in plan.project_state_content
+
+
+def test_terminal_plan_rejects_successor_contract(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+
+    with pytest.raises(PostMergeTransitionError, match="cannot declare a successor"):
+        plan_post_merge_state_update(
+            repo,
+            _preview(),
+            completed_artifact="WB-0018",
+            verification="52_passed",
+            next_action="Stop.",
+            terminal=True,
+            next_artifact="WB-0019",
+        )
 
 
 def test_plan_rejects_active_artifact_mismatch(tmp_path: Path) -> None:
