@@ -27,7 +27,7 @@ current:
   active_artifact: PR69-CURRENT-SOT-RECONCILIATION
   branch: docs/post-pr65-pr68-sot-reconciliation
   pull_request: 69
-  last_verified_main: 1ada318abcd93c7980cc6adc975afb0decefbbec
+  last_verified_main: 111ef0f09f44894278499d9ffaca9ab18eccf404
 
 status:
   ccl_specification: complete_draft
@@ -55,6 +55,8 @@ status:
   visual_documentation: verified
   mermaid_render_pipeline: verified
   learn_capture_pipeline: verified
+  visual_toolchain_npm_audit_high_severity_findings: 6
+  visual_toolchain_security_debt: open_deferred_requires_separate_review
   checkpoint_inactive_artifact_persistence: verified
   readme_landing_page: verified
   caser_e_google_drive_workspace: initialized
@@ -120,12 +122,16 @@ status:
   cyber_voice_realtime_foundation: canonical
   pr66_longrun: merged_verified_canonical
   longrun_runtime: canonical
+  pr73_cyber_voice_local_speech_runtime: merged_verified_canonical
+  cyber_voice_local_speech_runtime: canonical
+  pr71_wb0037_governed_execution_bridge: merged_verified_canonical
+  governed_execution_bridge: canonical
   wb0035_identifier: conflict_needs_review
   wb0036_identifier: conflict_needs_review
   wb0037_identifier: conflict_needs_review
   pr61_old_wb0035_vps_vikunja: open_draft_identity_conflict_needs_review
   pr67_mcp_foundation: open_draft_requires_current_main_revalidation
-  pr71_wb0037_governed_execution_bridge: open_candidate_noncanonical_base_identity_conflict_needs_review
+  pr72_longrun_operator_runtime: open_candidate_requires_current_main_revalidation
   pr45_staging_plan: open_stale_needs_supersession_review
   pr13_structured_registry: open_stale_needs_supersession_review
   pr5_provider_framework: open_stale_needs_supersession_review
@@ -280,13 +286,22 @@ completed:
     pull_request: 66
     merge_commit: 1ada318abcd93c7980cc6adc975afb0decefbbec
     verification: merged_verified
+  - artifact: WB-0038-cyber-voice-local-speech-runtime
+    pull_request: 73
+    merge_commit: a206c5d0758fc604d0bec5fb26dfd96b33469f62
+    verification: merged_verified
+  - artifact: WB-0037-governed-execution-bridge-historical-id
+    pull_request: 71
+    merge_commit: 111ef0f09f44894278499d9ffaca9ab18eccf404
+    verification: merged_verified_identity_conflict_recorded
 
 next:
   - verify PR69 on the new exact head with CI, CodeQL and fresh independent review; do not merge without explicit operator approval
+  - reconcile PR72 LongRun Operator Runtime with current canonical main and re-run exact-head gates before readiness
   - reconcile PR67 MCP Foundation with current canonical main and re-run exact-head gates before readiness
-  - reconcile PR71 governed execution bridge with canonical main and resolve the WB0037 identifier collision before any merge decision
   - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
   - review stale open PRs 61, 45, 13 and 5 before any closure or reuse
+  - remediate the six high-severity transitive visual-toolchain npm audit findings in a separately reviewed maintenance change
   - design a separate concurrency-safe first-write mechanism before requesting any future live staging-write authority
   - keep production application mutation prohibited without a separate production MOP and explicit Jan Kočí approval
   - preserve Cloudflare as authoritative DNS and DirectAdmin as hosting/SSL control plane
