@@ -1,6 +1,6 @@
 # Governed Execution Bridge V1
 
-Status: proposed implementation slice  
+Status: implementation under review  
 Work block: `WB-0037`
 
 ## Purpose
