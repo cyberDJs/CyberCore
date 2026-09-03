@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from array import array
 from dataclasses import dataclass
+from functools import lru_cache
 import importlib
 import math
 import sys
@@ -152,33 +153,77 @@ def _normalized_sinc(value: float) -> float:
     return math.sin(scaled) / scaled
 
 
-def _bandlimited_sample(
-    source: list[int],
-    position: float,
-    cutoff: float,
-    *,
+@lru_cache(maxsize=32)
+def _downsample_kernels(
+    source_rate_hz: int,
+    target_rate_hz: int,
     half_width: int = 36,
-) -> int:
-    center = math.floor(position)
-    start = max(0, center - half_width + 1)
-    stop = min(len(source), center + half_width + 1)
-    weighted = 0.0
-    total_weight = 0.0
+) -> tuple[int, int, tuple[tuple[float, ...], ...], tuple[float, ...]]:
+    common_rate = math.gcd(source_rate_hz, target_rate_hz)
+    phase_count = target_rate_hz // common_rate
+    cutoff = 0.45 * target_rate_hz / source_rate_hz
+    first_offset = -half_width + 1
+    kernels: list[tuple[float, ...]] = []
+    totals: list[float] = []
 
-    for sample_index in range(start, stop):
-        distance = sample_index - position
-        if abs(distance) >= half_width:
-            continue
-        window = 0.54 + 0.46 * math.cos(math.pi * distance / half_width)
-        weight = 2.0 * cutoff * _normalized_sinc(2.0 * cutoff * distance) * window
-        weighted += source[sample_index] * weight
-        total_weight += weight
+    for phase in range(phase_count):
+        fraction = phase / phase_count
+        weights: list[float] = []
+        for offset in range(first_offset, half_width + 1):
+            distance = offset - fraction
+            window = 0.54 + 0.46 * math.cos(math.pi * distance / half_width)
+            weight = 2.0 * cutoff * _normalized_sinc(2.0 * cutoff * distance) * window
+            weights.append(weight)
+        kernel = tuple(weights)
+        kernels.append(kernel)
+        totals.append(sum(kernel))
 
-    if abs(total_weight) < 1e-12:
-        fallback = min(max(round(position), 0), len(source) - 1)
-        return source[fallback]
-    value = round(weighted / total_weight)
-    return max(-32768, min(32767, value))
+    return common_rate, first_offset, tuple(kernels), tuple(totals)
+
+
+def _downsample_pcm_s16le(
+    source: list[int],
+    source_rate_hz: int,
+    target_rate_hz: int,
+    output_count: int,
+) -> list[int]:
+    common_rate, first_offset, kernels, kernel_totals = _downsample_kernels(
+        source_rate_hz, target_rate_hz
+    )
+    last_offset = first_offset + len(kernels[0]) - 1
+    output: list[int] = []
+
+    for index in range(output_count):
+        numerator = index * source_rate_hz
+        center = numerator // target_rate_hz
+        residue = numerator % target_rate_hz
+        phase = residue // common_rate
+        kernel = kernels[phase]
+
+        low_offset = max(first_offset, -center)
+        high_offset = min(last_offset, len(source) - 1 - center)
+        kernel_start = low_offset - first_offset
+        kernel_stop = high_offset - first_offset + 1
+
+        weighted = 0.0
+        sample_index = center + low_offset
+        for kernel_index in range(kernel_start, kernel_stop):
+            weighted += source[sample_index] * kernel[kernel_index]
+            sample_index += 1
+
+        if low_offset == first_offset and high_offset == last_offset:
+            total_weight = kernel_totals[phase]
+        else:
+            total_weight = sum(kernel[kernel_start:kernel_stop])
+
+        if abs(total_weight) < 1e-12:
+            fallback = min(max(round(numerator / target_rate_hz), 0), len(source) - 1)
+            value = source[fallback]
+        else:
+            value = round(weighted / total_weight)
+        output.append(max(-32768, min(32767, value)))
+
+    return output
 
 
 def resample_pcm_s16le_mono(payload: bytes, source_rate_hz: int, target_rate_hz: int) -> bytes:
@@ -199,24 +244,18 @@ def resample_pcm_s16le_mono(payload: bytes, source_rate_hz: int, target_rate_hz:
     output: list[int]
     if len(source) == 1:
         output = [source[0]] * output_count
+    elif target_rate_hz < source_rate_hz:
+        output = _downsample_pcm_s16le(source, source_rate_hz, target_rate_hz, output_count)
     else:
         ratio = source_rate_hz / target_rate_hz
         output = []
-        if target_rate_hz < source_rate_hz:
-            # Keep the passband below the target Nyquist frequency and leave a small
-            # transition band for the finite Hamming-windowed sinc kernel.
-            cutoff = 0.45 * target_rate_hz / source_rate_hz
-            for index in range(output_count):
-                position = min(index * ratio, len(source) - 1)
-                output.append(_bandlimited_sample(source, position, cutoff))
-        else:
-            for index in range(output_count):
-                position = min(index * ratio, len(source) - 1)
-                left = int(position)
-                right = min(left + 1, len(source) - 1)
-                fraction = position - left
-                value = round(source[left] + (source[right] - source[left]) * fraction)
-                output.append(max(-32768, min(32767, value)))
+        for index in range(output_count):
+            position = min(index * ratio, len(source) - 1)
+            left = int(position)
+            right = min(left + 1, len(source) - 1)
+            fraction = position - left
+            value = round(source[left] + (source[right] - source[left]) * fraction)
+            output.append(max(-32768, min(32767, value)))
 
     pcm = array("h", output)
     if sys.byteorder == "big":
