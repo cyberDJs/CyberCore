@@ -246,7 +246,9 @@ def test_terminal_plan_quotes_kernel_strings_with_yaml_syntax(tmp_path: Path) ->
     assert '  - "repair: protocol mismatch"' in plan.kernel_content
 
 
-def test_terminal_plan_preserves_backslashes_in_verification_scalars(tmp_path: Path) -> None:
+def test_terminal_plan_preserves_backslashes_in_verification_scalars(
+    tmp_path: Path,
+) -> None:
     repo = _repo(tmp_path)
     verification = "C:\\temp\\ci #681: PASS"
 
