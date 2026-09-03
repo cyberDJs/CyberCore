@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import os
 from pathlib import Path
+import shutil
+import signal
 import subprocess
+import threading
+import time
+from typing import BinaryIO
 
 from cybercore.governed_plan import CommandPlan, CommandSpec, OperationClass
 from cybercore.governed_receipt import CommandReceipt, ExecutionReceipt
@@ -33,10 +39,35 @@ _BLOCKED_EXECUTABLES = {
 }
 
 _SHELL_META = ("|", "&", ";", ">", "<", "`", "$(`", "\n", "\r")
+_TRUSTED_EXECUTABLE_PATH = "/usr/local/bin:/usr/bin:/bin"
+_MAX_OUTPUT_BYTES_PER_STREAM = 1024 * 1024
+_OUTPUT_READ_CHUNK_BYTES = 64 * 1024
+_PROCESS_POLL_SECONDS = 0.01
+_PROCESS_GROUP_TERM_GRACE_SECONDS = 0.1
 
 
-def _digest(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+@dataclass(frozen=True, slots=True)
+class _PreparedCommand:
+    spec: CommandSpec
+    cwd: Path
+    argv: tuple[str, ...]
+
+
+class _DigestState:
+    def __init__(self, byte_limit: int) -> None:
+        self.byte_limit = byte_limit
+        self.total_bytes = 0
+        self.limit_exceeded = False
+        self._digest = hashlib.sha256()
+
+    def consume(self, chunk: bytes) -> None:
+        self._digest.update(chunk)
+        self.total_bytes += len(chunk)
+        if self.total_bytes > self.byte_limit:
+            self.limit_exceeded = True
+
+    def hexdigest(self) -> str:
+        return self._digest.hexdigest()
 
 
 def _matches_prefix(argv: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
@@ -59,7 +90,33 @@ def _resolved_cwd(root: Path, raw_cwd: str) -> Path:
     return resolved
 
 
-def validate_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> Path:
+def _resolve_executable(raw_executable: str) -> str:
+    candidate = Path(raw_executable)
+    if candidate.is_absolute():
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError as exc:
+            raise GovernedRunnerError(
+                f"authorized executable cannot be resolved: {raw_executable}"
+            ) from exc
+        if not resolved.is_file() or not os.access(resolved, os.X_OK):
+            raise GovernedRunnerError(f"authorized executable is not executable: {resolved}")
+        return str(resolved)
+
+    if candidate.parent != Path("."):
+        raise GovernedRunnerError(
+            f"relative executable paths are denied by policy: {raw_executable}"
+        )
+
+    resolved_name = shutil.which(raw_executable, path=_TRUSTED_EXECUTABLE_PATH)
+    if resolved_name is None:
+        raise GovernedRunnerError(
+            f"authorized executable was not found on the trusted path: {raw_executable}"
+        )
+    return str(Path(resolved_name).resolve())
+
+
+def _validate_plan_binding(plan: CommandPlan) -> None:
     grant = plan.grant
     if plan.operation_id != grant.operation_id:
         raise GovernedRunnerError("plan operation_id does not match authorization grant")
@@ -67,6 +124,10 @@ def validate_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> 
         raise GovernedRunnerError("plan canonical_target does not match authorization grant")
     if not grant.is_current():
         raise GovernedRunnerError("authorization grant is expired or not yet valid")
+
+
+def _prepare_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> _PreparedCommand:
+    grant = plan.grant
     if command.classification is OperationClass.BLOCKED:
         raise GovernedRunnerError("BLOCKED command class cannot be executed")
     if command.classification not in grant.allowed_classes:
@@ -82,7 +143,54 @@ def validate_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> 
     if not any(_matches_prefix(command.argv, prefix) for prefix in grant.allowed_command_prefixes):
         raise GovernedRunnerError(f"command is outside authorized prefixes: {command.argv!r}")
 
-    return _resolved_cwd(root, command.cwd)
+    cwd = _resolved_cwd(root, command.cwd)
+    resolved_executable = _resolve_executable(command.argv[0])
+    return _PreparedCommand(
+        spec=command,
+        cwd=cwd,
+        argv=(resolved_executable, *command.argv[1:]),
+    )
+
+
+def _prepare_plan(plan: CommandPlan, *, root: Path) -> tuple[_PreparedCommand, ...]:
+    _validate_plan_binding(plan)
+    return tuple(_prepare_command(plan, command, root=root) for command in plan.commands)
+
+
+def _drain_stream(
+    stream: BinaryIO,
+    state: _DigestState,
+    limit_event: threading.Event,
+) -> None:
+    try:
+        while chunk := stream.read(_OUTPUT_READ_CHUNK_BYTES):
+            state.consume(chunk)
+            if state.limit_exceeded:
+                limit_event.set()
+    finally:
+        stream.close()
+
+
+def _terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
+    if os.name != "posix":
+        process.kill()
+        process.wait()
+        return
+
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+
+    deadline = time.monotonic() + _PROCESS_GROUP_TERM_GRACE_SECONDS
+    while process.poll() is None and time.monotonic() < deadline:
+        time.sleep(_PROCESS_POLL_SECONDS)
+
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    process.wait()
 
 
 class GovernedRunner:
@@ -94,61 +202,89 @@ class GovernedRunner:
             raise GovernedRunnerError(f"allowed root does not exist: {self.allowed_root}")
 
     def execute(self, plan: CommandPlan) -> ExecutionReceipt:
+        prepared_commands = _prepare_plan(plan, root=self.allowed_root)
         receipts: list[CommandReceipt] = []
         status = "IMPLEMENTED"
 
-        for command in plan.commands:
-            cwd = validate_command(plan, command, root=self.allowed_root)
+        environment = {
+            "PATH": _TRUSTED_EXECUTABLE_PATH,
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+        }
+
+        for prepared in prepared_commands:
+            command = prepared.spec
             started = datetime.now(timezone.utc)
             timed_out = False
-            exit_code: int | None
-            stdout = b""
-            stderr = b""
-
-            environment = {
-                "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
-                "LANG": "C.UTF-8",
-                "LC_ALL": "C.UTF-8",
-            }
+            output_limit_exceeded = False
+            exit_code: int | None = None
+            stdout_state = _DigestState(_MAX_OUTPUT_BYTES_PER_STREAM)
+            stderr_state = _DigestState(_MAX_OUTPUT_BYTES_PER_STREAM)
+            output_limit_event = threading.Event()
 
             try:
-                completed = subprocess.run(
-                    list(command.argv),
-                    cwd=cwd,
+                process = subprocess.Popen(
+                    list(prepared.argv),
+                    cwd=prepared.cwd,
                     env=environment,
-                    check=False,
-                    capture_output=True,
-                    timeout=command.timeout_seconds,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    start_new_session=True,
                     shell=False,
                 )
-                exit_code = completed.returncode
-                stdout = completed.stdout
-                stderr = completed.stderr
-            except subprocess.TimeoutExpired as exc:
-                timed_out = True
-                exit_code = None
-                stdout = exc.stdout or b""
-                stderr = exc.stderr or b""
             except OSError as exc:
-                exit_code = None
-                stderr = str(exc).encode("utf-8", errors="replace")
+                stderr_state.consume(str(exc).encode("utf-8", errors="replace"))
+            else:
+                assert process.stdout is not None
+                assert process.stderr is not None
+                stdout_thread = threading.Thread(
+                    target=_drain_stream,
+                    args=(process.stdout, stdout_state, output_limit_event),
+                    daemon=True,
+                )
+                stderr_thread = threading.Thread(
+                    target=_drain_stream,
+                    args=(process.stderr, stderr_state, output_limit_event),
+                    daemon=True,
+                )
+                stdout_thread.start()
+                stderr_thread.start()
+
+                deadline = time.monotonic() + command.timeout_seconds
+                while process.poll() is None:
+                    if output_limit_event.is_set():
+                        output_limit_exceeded = True
+                        _terminate_process_tree(process)
+                        break
+                    if time.monotonic() >= deadline:
+                        timed_out = True
+                        _terminate_process_tree(process)
+                        break
+                    time.sleep(_PROCESS_POLL_SECONDS)
+
+                if process.poll() is None:
+                    process.wait()
+                exit_code = process.returncode
+                stdout_thread.join()
+                stderr_thread.join()
+                output_limit_exceeded = output_limit_exceeded or output_limit_event.is_set()
 
             finished = datetime.now(timezone.utc)
             receipts.append(
                 CommandReceipt(
-                    argv=command.argv,
-                    cwd=str(cwd),
+                    argv=prepared.argv,
+                    cwd=str(prepared.cwd),
                     classification=command.classification,
                     started_at=started.isoformat(),
                     finished_at=finished.isoformat(),
                     exit_code=exit_code,
-                    stdout_sha256=_digest(stdout),
-                    stderr_sha256=_digest(stderr),
+                    stdout_sha256=stdout_state.hexdigest(),
+                    stderr_sha256=stderr_state.hexdigest(),
                     timed_out=timed_out,
                 )
             )
 
-            if timed_out or exit_code != 0:
+            if timed_out or output_limit_exceeded or exit_code != 0:
                 status = "FAILED"
                 break
 
