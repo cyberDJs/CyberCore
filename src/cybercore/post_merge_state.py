@@ -225,9 +225,12 @@ def _kernel_transition(
         current = _set_status(current, completed_status, "verified")
 
     if terminal:
+        milestone = _yaml_string(
+            f"Canonical checkpoint after PR #{preview.pull_request.number}"
+        )
         current = _replace_required(
             r"^  milestone: .+$",
-            f"  milestone: Canonical checkpoint after PR #{preview.pull_request.number}",
+            f"  milestone: {milestone}",
             current,
             "current milestone",
         )
