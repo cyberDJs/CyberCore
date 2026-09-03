@@ -168,14 +168,18 @@ def test_pcm_resampler_low_passes_before_downsampling() -> None:
         ).tobytes()
         output = array("h")
         output.frombytes(resample_pcm_s16le_mono(source, source_rate_hz, target_rate_hz))
-        steady_state = output[16:-16]
+        steady_state = output[64:-64]
         return math.sqrt(sum(sample * sample for sample in steady_state) / len(steady_state))
 
     speech_band_rms = output_rms(1000)
-    above_nyquist_rms = output_rms(12000)
+    upper_speech_band_rms = output_rms(6000)
+    just_above_nyquist_rms = output_rms(8050)
+    transition_stopband_rms = output_rms(8250)
 
     assert speech_band_rms > amplitude * 0.5
-    assert above_nyquist_rms < speech_band_rms * 0.05
+    assert upper_speech_band_rms > speech_band_rms * 0.9
+    assert just_above_nyquist_rms < speech_band_rms * 0.05
+    assert transition_stopband_rms < speech_band_rms * 0.05
 
 
 def test_sounddevice_transport_writes_and_flushes_output() -> None:
