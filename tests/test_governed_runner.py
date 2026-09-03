@@ -254,15 +254,12 @@ def test_timeout_terminates_descendant_processes(tmp_path: Path) -> None:
 def test_timeout_remains_active_while_inherited_pipes_are_open(tmp_path: Path) -> None:
     grandchild = tmp_path / "pipe-holder.py"
     grandchild.write_text(
-        "import time\n"
-        "time.sleep(5)\n",
+        "import time\ntime.sleep(5)\n",
         encoding="utf-8",
     )
     parent = tmp_path / "pipe-parent.py"
     parent.write_text(
-        "import subprocess\n"
-        "import sys\n"
-        f"subprocess.Popen([sys.executable, {str(grandchild)!r}])\n",
+        f"import subprocess\nimport sys\nsubprocess.Popen([sys.executable, {str(grandchild)!r}])\n",
         encoding="utf-8",
     )
     command = CommandSpec(
