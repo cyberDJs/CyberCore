@@ -132,6 +132,9 @@ class GovernedRunner:
                 exit_code = None
                 stdout = exc.stdout or b""
                 stderr = exc.stderr or b""
+            except OSError as exc:
+                exit_code = None
+                stderr = str(exc).encode("utf-8", errors="replace")
 
             finished = datetime.now(timezone.utc)
             receipts.append(
