@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 from cybercore.post_merge import (
     MergedPullRequest,
@@ -12,12 +13,12 @@ from cybercore.post_merge import (
 from cybercore.post_merge_state import plan_post_merge_state_update
 
 
-def _preview() -> PostMergeTransitionPreview:
+def _preview(*, base_branch: str = "main") -> PostMergeTransitionPreview:
     return PostMergeTransitionPreview(
         pull_request=MergedPullRequest(
             number=22,
             repository="cyberDJs/CyberCore",
-            base_branch="main",
+            base_branch=base_branch,
             head_branch="feat/idempotent-canonical-memory",
             head_sha="5f16ec7",
             merge_commit="1e174e9",
@@ -119,7 +120,7 @@ def test_plan_updates_kernel_and_project_state(tmp_path: Path) -> None:
     assert "active_artifact: WB-0019" in plan.kernel_content
     assert "last_verified_main: 1e174e9" in plan.kernel_content
     assert "merge_commit: 1e174e9" in plan.kernel_content
-    assert "verification: 52_passed" in plan.kernel_content
+    assert 'verification: "52_passed"' in plan.kernel_content
     assert "Canonical main ref: GitHub `main` (resolve live)" in plan.project_state_content
     assert "Last verified canonical checkpoint: `1e174e9`" in plan.project_state_content
     assert "`WB-0019 Post-Merge State Transition v0.1`" in plan.project_state_content
@@ -145,7 +146,7 @@ def test_terminal_plan_closes_without_successor_self_reference(tmp_path: Path) -
     assert "branch: main" in plan.kernel_content
     assert "pull_request: null" in plan.kernel_content
     assert "last_verified_main: 1e174e9" in plan.kernel_content
-    assert "next:\n  - select the next bounded candidate explicitly\n" in plan.kernel_content
+    assert 'next:\n  - "select the next bounded candidate explicitly"\n' in plan.kernel_content
     assert "old task" not in plan.kernel_content
     assert "Canonical main ref: GitHub `main` (resolve live)" in plan.project_state_content
     assert "Last verified canonical checkpoint: `1e174e9`" in plan.project_state_content
@@ -197,7 +198,7 @@ def test_terminal_plan_records_completion_when_next_list_is_already_empty(tmp_pa
     assert "  - artifact: WB-0018\n" in plan.kernel_content
     assert "    pull_request: 22\n" in plan.kernel_content
     assert "    merge_commit: 1e174e9\n" in plan.kernel_content
-    assert "    verification: 52_passed\n" in plan.kernel_content
+    assert '    verification: "52_passed"\n' in plan.kernel_content
     assert "next: []\n" in plan.kernel_content
 
 
@@ -220,6 +221,61 @@ def test_plan_inserts_missing_kernel_checkpoint_on_own_line(tmp_path: Path) -> N
 
     assert "  pull_request: null\n  last_verified_main: 1e174e9\nstatus:\n" in plan.kernel_content
     assert "pull_request: null  last_verified_main" not in plan.kernel_content
+
+
+def test_terminal_plan_quotes_kernel_strings_with_yaml_syntax(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+
+    plan = plan_post_merge_state_update(
+        repo,
+        _preview(),
+        completed_artifact="WB-0018",
+        verification="CI #680: PASS",
+        next_action="Stop with a quoted terminal task.",
+        terminal=True,
+        next_tasks=("repair: protocol mismatch",),
+    )
+
+    kernel = yaml.safe_load(plan.kernel_content)
+    assert kernel["status"]["tests"] == "CI #680: PASS"
+    assert kernel["completed"][1]["verification"] == "CI #680: PASS"
+    assert kernel["next"] == ["repair: protocol mismatch"]
+    assert 'verification: "CI #680: PASS"' in plan.kernel_content
+    assert '  - "repair: protocol mismatch"' in plan.kernel_content
+
+
+def test_project_state_next_action_is_literal_replacement_text(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    next_action = r"1. repair the canonical findings \ now"
+
+    plan = plan_post_merge_state_update(
+        repo,
+        _preview(),
+        completed_artifact="WB-0018",
+        verification="52_passed",
+        next_action=next_action,
+        terminal=True,
+    )
+
+    assert f"## Next action\n\n{next_action}\n" in plan.project_state_content
+
+
+def test_terminal_objective_uses_selected_stable_branch(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+
+    plan = plan_post_merge_state_update(
+        repo,
+        _preview(base_branch="release/candidate"),
+        completed_artifact="WB-0018",
+        verification="52_passed",
+        next_action="Stop on selected stable branch.",
+        terminal=True,
+    )
+
+    assert "branch: release/candidate" in plan.kernel_content
+    assert "- Active branch: `release/candidate`" in plan.project_state_content
+    assert "live canonical `release/candidate`" in plan.project_state_content
+    assert "live canonical `main`" not in plan.project_state_content
 
 
 def test_terminal_plan_rejects_empty_public_boundary_values(tmp_path: Path) -> None:
