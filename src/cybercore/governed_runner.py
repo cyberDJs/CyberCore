@@ -90,6 +90,12 @@ def _resolved_cwd(root: Path, raw_cwd: str) -> Path:
     return resolved
 
 
+def _deny_blocked_executable(executable: str) -> None:
+    name = Path(executable).name
+    if name in _BLOCKED_EXECUTABLES:
+        raise GovernedRunnerError(f"executable is denied by policy: {name}")
+
+
 def _resolve_executable(raw_executable: str) -> str:
     candidate = Path(raw_executable)
     if candidate.is_absolute():
@@ -135,9 +141,7 @@ def _prepare_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> 
             f"operation class is not authorized: {command.classification.value}"
         )
 
-    executable = Path(command.argv[0]).name
-    if executable in _BLOCKED_EXECUTABLES:
-        raise GovernedRunnerError(f"executable is denied by policy: {executable}")
+    _deny_blocked_executable(command.argv[0])
     if _contains_shell_meta(command.argv):
         raise GovernedRunnerError("shell metacharacters are denied by policy")
     if not any(_matches_prefix(command.argv, prefix) for prefix in grant.allowed_command_prefixes):
@@ -145,6 +149,7 @@ def _prepare_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> 
 
     cwd = _resolved_cwd(root, command.cwd)
     resolved_executable = _resolve_executable(command.argv[0])
+    _deny_blocked_executable(resolved_executable)
     return _PreparedCommand(
         spec=command,
         cwd=cwd,
@@ -167,14 +172,20 @@ def _drain_stream(
             state.consume(chunk)
             if state.limit_exceeded:
                 limit_event.set()
+    except (OSError, ValueError):
+        pass
     finally:
-        stream.close()
+        try:
+            stream.close()
+        except OSError:
+            pass
 
 
 def _terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
     if os.name != "posix":
-        process.kill()
-        process.wait()
+        if process.poll() is None:
+            process.kill()
+            process.wait()
         return
 
     try:
@@ -190,7 +201,36 @@ def _terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
-    process.wait()
+    if process.poll() is None:
+        process.wait()
+
+
+def _join_drain_threads_until_deadline(
+    process: subprocess.Popen[bytes],
+    stdout_thread: threading.Thread,
+    stderr_thread: threading.Thread,
+    deadline: float,
+) -> bool:
+    threads = (stdout_thread, stderr_thread)
+    for thread in threads:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        thread.join(timeout=remaining)
+
+    if not any(thread.is_alive() for thread in threads):
+        return True
+
+    _terminate_process_tree(process)
+    for stream in (process.stdout, process.stderr):
+        if stream is not None:
+            try:
+                stream.close()
+            except OSError:
+                pass
+    for thread in threads:
+        thread.join(timeout=_PROCESS_GROUP_TERM_GRACE_SECONDS)
+    return not any(thread.is_alive() for thread in threads)
 
 
 class GovernedRunner:
@@ -263,10 +303,26 @@ class GovernedRunner:
                     time.sleep(_PROCESS_POLL_SECONDS)
 
                 if process.poll() is None:
-                    process.wait()
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        timed_out = True
+                        _terminate_process_tree(process)
+                    else:
+                        try:
+                            process.wait(timeout=remaining)
+                        except subprocess.TimeoutExpired:
+                            timed_out = True
+                            _terminate_process_tree(process)
+
                 exit_code = process.returncode
-                stdout_thread.join()
-                stderr_thread.join()
+                drains_finished = _join_drain_threads_until_deadline(
+                    process,
+                    stdout_thread,
+                    stderr_thread,
+                    deadline,
+                )
+                if not drains_finished:
+                    timed_out = True
                 output_limit_exceeded = output_limit_exceeded or output_limit_event.is_set()
 
             finished = datetime.now(timezone.utc)
