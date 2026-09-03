@@ -246,6 +246,42 @@ def test_terminal_plan_quotes_kernel_strings_with_yaml_syntax(tmp_path: Path) ->
     assert '  - "repair: protocol mismatch"' in plan.kernel_content
 
 
+def test_terminal_plan_preserves_backslashes_in_verification_scalars(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    verification = "C:\\temp\\ci #681: PASS"
+
+    plan = plan_post_merge_state_update(
+        repo,
+        _preview(),
+        completed_artifact="WB-0018",
+        verification=verification,
+        next_action="Stop with a path-sensitive verification.",
+        terminal=True,
+    )
+
+    kernel = yaml.safe_load(plan.kernel_content)
+    assert kernel["status"]["tests"] == verification
+    assert kernel["completed"][1]["verification"] == verification
+
+
+def test_terminal_plan_preserves_backslashes_in_task_scalars(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    task = "repair\\path"
+
+    plan = plan_post_merge_state_update(
+        repo,
+        _preview(),
+        completed_artifact="WB-0018",
+        verification="52_passed",
+        next_action="Stop with a path-sensitive terminal task.",
+        terminal=True,
+        next_tasks=(task,),
+    )
+
+    kernel = yaml.safe_load(plan.kernel_content)
+    assert kernel["next"] == [task]
+
+
 def test_project_state_next_action_is_literal_replacement_text(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     next_action = r"1. repair the canonical findings \ now"
