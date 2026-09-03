@@ -79,10 +79,7 @@ def validate_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> 
         raise GovernedRunnerError(f"executable is denied by policy: {executable}")
     if _contains_shell_meta(command.argv):
         raise GovernedRunnerError("shell metacharacters are denied by policy")
-    if not any(
-        _matches_prefix(command.argv, prefix)
-        for prefix in grant.allowed_command_prefixes
-    ):
+    if not any(_matches_prefix(command.argv, prefix) for prefix in grant.allowed_command_prefixes):
         raise GovernedRunnerError(f"command is outside authorized prefixes: {command.argv!r}")
 
     return _resolved_cwd(root, command.cwd)
