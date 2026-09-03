@@ -161,5 +161,10 @@ def test_stops_after_first_failed_command(tmp_path: Path) -> None:
         grant=grant,
     )
 
-    with pytest.raises(FileNotFoundError):
-        GovernedRunner(tmp_path).execute(plan)
+    receipt = GovernedRunner(tmp_path).execute(plan)
+
+    assert receipt.status == "FAILED"
+    assert receipt.verified is False
+    assert len(receipt.commands) == 1
+    assert receipt.commands[0].exit_code is None
+    assert len(receipt.commands[0].stderr_sha256) == 64
