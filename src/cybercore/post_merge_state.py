@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import re
@@ -66,7 +68,12 @@ def _stage(target: Path, content: bytes, suffix: str) -> Path:
     return staged
 
 
-def _replace_required(pattern: str, replacement: str, content: str, label: str) -> str:
+def _replace_required(
+    pattern: str,
+    replacement: str | Callable[[re.Match[str]], str],
+    content: str,
+    label: str,
+) -> str:
     updated, count = re.subn(pattern, replacement, content, count=1, flags=re.MULTILINE)
     if count != 1:
         raise PostMergeTransitionError(f"Unable to update {label}")
@@ -78,6 +85,10 @@ def _replace_optional(pattern: str, replacement: str, content: str, label: str) 
     if count > 1:
         raise PostMergeTransitionError(f"Unable to update {label}")
     return updated
+
+
+def _yaml_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _require_non_empty(label: str, value: str | None) -> str:
@@ -151,7 +162,9 @@ def _set_project_state_checkpoint(
 
 def _replace_next_tasks(current: str, next_tasks: tuple[str, ...]) -> str:
     task_block = (
-        "next:\n" + "".join(f"  - {task}\n" for task in next_tasks) if next_tasks else "next: []\n"
+        "next:\n" + "".join(f"  - {_yaml_string(task)}\n" for task in next_tasks)
+        if next_tasks
+        else "next: []\n"
     )
     return _replace_required(
         r"(?ms)^next:(?:[ \t]*\[\])?\n.*?(?=^rules:)",
@@ -200,13 +213,13 @@ def _kernel_transition(
             f"  - artifact: {completed_artifact}\n"
             f"    pull_request: {preview.pull_request.number}\n"
             f"    merge_commit: {preview.pull_request.merge_commit}\n"
-            f"    verification: {verification}\n"
+            f"    verification: {_yaml_string(verification)}\n"
         )
         current = _insert_completed_entry(current, completed_entry)
 
     current = _set_current(current, "last_verified_main", preview.main_commit)
     current = _replace_required(
-        r"^  tests: .+$", f"  tests: {verification}", current, "test baseline"
+        r"^  tests: .+$", f"  tests: {_yaml_string(verification)}", current, "test baseline"
     )
     if completed_status:
         current = _set_status(current, completed_status, "verified")
@@ -306,29 +319,34 @@ def _project_state_transition(
         )
         current = _replace_required(
             r"(?ms)(^## Current milestone\n\n).*?(?=\n## )",
-            rf"\1Canonical checkpoint after merged PR #{preview.pull_request.number}.\n",
+            lambda match: (
+                match.group(1)
+                + f"Canonical checkpoint after merged PR #{preview.pull_request.number}.\n"
+            ),
             current,
             "Project State milestone",
         )
         if re.search(r"(?m)^## Active objective$", current):
             current = _replace_required(
                 r"(?ms)(^## Active objective\n\n).*?(?=\n## Current status)",
-                (
-                    "\\1No active coordination work block. Select the next bounded candidate "
-                    "explicitly against the live canonical `main`.\n"
+                lambda match: (
+                    match.group(1)
+                    + "No active coordination work block. Select the next bounded candidate "
+                    + f"explicitly against the live canonical `{base_branch}`.\n"
                 ),
                 current,
                 "Project State terminal objective",
             )
         current = _replace_required(
             r"(?ms)(^## Current status\n\n).*?(?=\n## )",
-            (
-                "\\1- Work block: idle\n"
-                f"- Branch: `{base_branch}`\n"
-                "- Project Kernel: present\n"
-                "- Runtime implementation: canonical\n"
-                f"- Tests: {verification.replace('_', ' ')}\n"
-                "- Pull request: none\n"
+            lambda match: (
+                match.group(1)
+                + "- Work block: idle\n"
+                + f"- Branch: `{base_branch}`\n"
+                + "- Project Kernel: present\n"
+                + "- Runtime implementation: canonical\n"
+                + f"- Tests: {verification.replace('_', ' ')}\n"
+                + "- Pull request: none\n"
             ),
             current,
             "Project State status",
@@ -368,7 +386,7 @@ def _project_state_transition(
         )
         current = _replace_required(
             r"(?ms)(^## Current milestone\n\n).*?(?=\n## )",
-            rf"\1{next_milestone}.\n",
+            lambda match: match.group(1) + f"{next_milestone}.\n",
             current,
             "Project State milestone",
         )
@@ -376,22 +394,22 @@ def _project_state_transition(
             scope_text = "Scope:\n\n" + "".join(
                 f"{index}. {item.rstrip('.;')};\n" for index, item in enumerate(next_scope, start=1)
             )
-            replacement = f"\\1{next_objective}\n\n{scope_text}"
             current = _replace_required(
                 r"(?ms)(^## Active objective\n\n).*?(?=\n## Current status)",
-                replacement,
+                lambda match: match.group(1) + f"{next_objective}\n\n{scope_text}",
                 current,
                 "Project State objective and scope",
             )
         current = _replace_required(
             r"(?ms)(^## Current status\n\n).*?(?=\n## )",
-            (
-                "\\1- Work block: active\n"
-                f"- Branch: `{next_branch}`\n"
-                "- Project Kernel: present\n"
-                "- Runtime implementation: planned\n"
-                f"- Tests: {verification.replace('_', ' ')}\n"
-                "- Pull request: not created\n"
+            lambda match: (
+                match.group(1)
+                + "- Work block: active\n"
+                + f"- Branch: `{next_branch}`\n"
+                + "- Project Kernel: present\n"
+                + "- Runtime implementation: planned\n"
+                + f"- Tests: {verification.replace('_', ' ')}\n"
+                + "- Pull request: not created\n"
             ),
             current,
             "Project State status",
@@ -399,7 +417,7 @@ def _project_state_transition(
 
     current = _replace_required(
         r"(?ms)(^## Next action\n\n).*?(?=\n<!-- CYBERCORE:CHECKPOINT:START -->)",
-        rf"\1{next_action}\n\n",
+        lambda match: match.group(1) + f"{next_action}\n\n",
         current,
         "Project State next action",
     )
