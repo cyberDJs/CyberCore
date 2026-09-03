@@ -198,6 +198,21 @@ def test_bare_executable_ignores_ambient_path(
     assert Path(receipt.commands[0].argv[0]).resolve() != fake_git.resolve()
 
 
+def test_rejects_symlink_to_denied_executable(tmp_path: Path) -> None:
+    denied_target = Path("/bin/rm").resolve()
+    alias = tmp_path / "safe-tool"
+    alias.symlink_to(denied_target)
+    command = CommandSpec(
+        argv=(str(alias), "--version"),
+        cwd=".",
+        classification=OperationClass.READ_ONLY,
+    )
+    grant = _grant(prefixes=((str(alias), "--version"),))
+
+    with pytest.raises(GovernedRunnerError, match="denied by policy: rm"):
+        GovernedRunner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
+
+
 def test_timeout_terminates_descendant_processes(tmp_path: Path) -> None:
     marker = tmp_path / "descendant-survived"
     grandchild = tmp_path / "grandchild.py"
@@ -234,6 +249,40 @@ def test_timeout_terminates_descendant_processes(tmp_path: Path) -> None:
     assert receipt.status == "FAILED"
     assert receipt.commands[0].timed_out is True
     assert not marker.exists()
+
+
+def test_timeout_remains_active_while_inherited_pipes_are_open(tmp_path: Path) -> None:
+    grandchild = tmp_path / "pipe-holder.py"
+    grandchild.write_text(
+        "import time\n"
+        "time.sleep(5)\n",
+        encoding="utf-8",
+    )
+    parent = tmp_path / "pipe-parent.py"
+    parent.write_text(
+        "import subprocess\n"
+        "import sys\n"
+        f"subprocess.Popen([sys.executable, {str(grandchild)!r}])\n",
+        encoding="utf-8",
+    )
+    command = CommandSpec(
+        argv=(sys.executable, str(parent)),
+        cwd=".",
+        classification=OperationClass.COMPUTE,
+        timeout_seconds=0.2,
+    )
+    grant = _grant(
+        allowed_classes=frozenset({OperationClass.COMPUTE}),
+        prefixes=((sys.executable,),),
+    )
+
+    started = time.monotonic()
+    receipt = GovernedRunner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 1.0
+    assert receipt.status == "FAILED"
+    assert receipt.commands[0].timed_out is True
 
 
 def test_output_limit_stops_noisy_process(tmp_path: Path) -> None:
