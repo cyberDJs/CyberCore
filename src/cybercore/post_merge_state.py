@@ -68,13 +68,21 @@ def _stage(target: Path, content: bytes, suffix: str) -> Path:
     return staged
 
 
+def _literal_replacement(value: str) -> Callable[[re.Match[str]], str]:
+    def replace(_match: re.Match[str]) -> str:
+        return value
+
+    return replace
+
+
 def _replace_required(
     pattern: str,
     replacement: str | Callable[[re.Match[str]], str],
     content: str,
     label: str,
 ) -> str:
-    updated, count = re.subn(pattern, replacement, content, count=1, flags=re.MULTILINE)
+    replacement_fn = _literal_replacement(replacement) if isinstance(replacement, str) else replacement
+    updated, count = re.subn(pattern, replacement_fn, content, count=1, flags=re.MULTILINE)
     if count != 1:
         raise PostMergeTransitionError(f"Unable to update {label}")
     return updated
