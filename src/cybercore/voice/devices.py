@@ -157,7 +157,7 @@ def _bandlimited_sample(
     position: float,
     cutoff: float,
     *,
-    half_width: int = 16,
+    half_width: int = 36,
 ) -> int:
     center = math.floor(position)
     start = max(0, center - half_width + 1)
