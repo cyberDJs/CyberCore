@@ -162,19 +162,14 @@ def test_pcm_resampler_low_passes_before_downsampling() -> None:
         source = array(
             "h",
             (
-                round(
-                    amplitude
-                    * math.sin(2.0 * math.pi * frequency_hz * index / source_rate_hz)
-                )
+                round(amplitude * math.sin(2.0 * math.pi * frequency_hz * index / source_rate_hz))
                 for index in range(sample_count)
             ),
         ).tobytes()
         output = array("h")
         output.frombytes(resample_pcm_s16le_mono(source, source_rate_hz, target_rate_hz))
         steady_state = output[16:-16]
-        return math.sqrt(
-            sum(sample * sample for sample in steady_state) / len(steady_state)
-        )
+        return math.sqrt(sum(sample * sample for sample in steady_state) / len(steady_state))
 
     speech_band_rms = output_rms(1000)
     above_nyquist_rms = output_rms(12000)
