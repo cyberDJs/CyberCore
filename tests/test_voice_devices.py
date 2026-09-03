@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from cybercore.voice import devices as voice_devices
 from cybercore.voice.audio import AudioFormat, AudioFrame
 from cybercore.voice.devices import (
     AudioInputOverflowError,
@@ -180,6 +181,23 @@ def test_pcm_resampler_low_passes_before_downsampling() -> None:
     assert upper_speech_band_rms > speech_band_rms * 0.9
     assert just_above_nyquist_rms < speech_band_rms * 0.05
     assert transition_stopband_rms < speech_band_rms * 0.05
+
+
+def test_pcm_resampler_reuses_precomputed_downsampling_kernels() -> None:
+    source = array("h", range(3840)).tobytes()
+    voice_devices._downsample_kernels.cache_clear()
+
+    resample_pcm_s16le_mono(source, 48000, 16000)
+    first = voice_devices._downsample_kernels.cache_info()
+
+    assert first.misses == 1
+    assert first.hits == 0
+
+    resample_pcm_s16le_mono(source, 48000, 16000)
+    second = voice_devices._downsample_kernels.cache_info()
+
+    assert second.misses == 1
+    assert second.hits == 1
 
 
 def test_sounddevice_transport_writes_and_flushes_output() -> None:
