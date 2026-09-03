@@ -1,4 +1,5 @@
 from array import array
+import math
 from types import SimpleNamespace
 
 import pytest
@@ -149,6 +150,37 @@ def test_pcm_resampler_preserves_block_duration() -> None:
 
     assert len(output) == 1280 * 2
     assert resample_pcm_s16le_mono(output, 16000, 16000) == output
+
+
+def test_pcm_resampler_low_passes_before_downsampling() -> None:
+    source_rate_hz = 48000
+    target_rate_hz = 16000
+    amplitude = 12000
+    sample_count = 3840
+
+    def output_rms(frequency_hz: int) -> float:
+        source = array(
+            "h",
+            (
+                round(
+                    amplitude
+                    * math.sin(2.0 * math.pi * frequency_hz * index / source_rate_hz)
+                )
+                for index in range(sample_count)
+            ),
+        ).tobytes()
+        output = array("h")
+        output.frombytes(resample_pcm_s16le_mono(source, source_rate_hz, target_rate_hz))
+        steady_state = output[16:-16]
+        return math.sqrt(
+            sum(sample * sample for sample in steady_state) / len(steady_state)
+        )
+
+    speech_band_rms = output_rms(1000)
+    above_nyquist_rms = output_rms(12000)
+
+    assert speech_band_rms > amplitude * 0.5
+    assert above_nyquist_rms < speech_band_rms * 0.05
 
 
 def test_sounddevice_transport_writes_and_flushes_output() -> None:
