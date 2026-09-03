@@ -237,9 +237,11 @@ def test_terminal_plan_quotes_kernel_strings_with_yaml_syntax(tmp_path: Path) ->
     )
 
     kernel = yaml.safe_load(plan.kernel_content)
+    assert kernel["current"]["milestone"] == "Canonical checkpoint after PR #22"
     assert kernel["status"]["tests"] == "CI #680: PASS"
     assert kernel["completed"][1]["verification"] == "CI #680: PASS"
     assert kernel["next"] == ["repair: protocol mismatch"]
+    assert 'milestone: "Canonical checkpoint after PR #22"' in plan.kernel_content
     assert 'verification: "CI #680: PASS"' in plan.kernel_content
     assert '  - "repair: protocol mismatch"' in plan.kernel_content
 
