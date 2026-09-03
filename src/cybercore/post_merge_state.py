@@ -85,9 +85,7 @@ def _replace_required(
         replacement_fn = _literal_replacement(replacement)
     else:
         replacement_fn = replacement
-    updated, count = re.subn(
-        pattern, replacement_fn, content, count=1, flags=re.MULTILINE
-    )
+    updated, count = re.subn(pattern, replacement_fn, content, count=1, flags=re.MULTILINE)
     if count != 1:
         raise PostMergeTransitionError(f"Unable to update {label}")
     return updated
