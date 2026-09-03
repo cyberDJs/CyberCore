@@ -3,6 +3,7 @@ from __future__ import annotations
 from array import array
 from dataclasses import dataclass
 import importlib
+import math
 import sys
 from typing import Any
 
@@ -144,6 +145,42 @@ def native_input_sample_rate_hz(
     return sample_rate
 
 
+def _normalized_sinc(value: float) -> float:
+    if abs(value) < 1e-12:
+        return 1.0
+    scaled = math.pi * value
+    return math.sin(scaled) / scaled
+
+
+def _bandlimited_sample(
+    source: list[int],
+    position: float,
+    cutoff: float,
+    *,
+    half_width: int = 16,
+) -> int:
+    center = math.floor(position)
+    start = max(0, center - half_width + 1)
+    stop = min(len(source), center + half_width + 1)
+    weighted = 0.0
+    total_weight = 0.0
+
+    for sample_index in range(start, stop):
+        distance = sample_index - position
+        if abs(distance) >= half_width:
+            continue
+        window = 0.54 + 0.46 * math.cos(math.pi * distance / half_width)
+        weight = 2.0 * cutoff * _normalized_sinc(2.0 * cutoff * distance) * window
+        weighted += source[sample_index] * weight
+        total_weight += weight
+
+    if abs(total_weight) < 1e-12:
+        fallback = min(max(round(position), 0), len(source) - 1)
+        return source[fallback]
+    value = round(weighted / total_weight)
+    return max(-32768, min(32767, value))
+
+
 def resample_pcm_s16le_mono(payload: bytes, source_rate_hz: int, target_rate_hz: int) -> bytes:
     if source_rate_hz <= 0 or target_rate_hz <= 0:
         raise ValueError("sample rates must be positive")
@@ -165,13 +202,21 @@ def resample_pcm_s16le_mono(payload: bytes, source_rate_hz: int, target_rate_hz:
     else:
         ratio = source_rate_hz / target_rate_hz
         output = []
-        for index in range(output_count):
-            position = min(index * ratio, len(source) - 1)
-            left = int(position)
-            right = min(left + 1, len(source) - 1)
-            fraction = position - left
-            value = round(source[left] + (source[right] - source[left]) * fraction)
-            output.append(max(-32768, min(32767, value)))
+        if target_rate_hz < source_rate_hz:
+            # Keep the passband below the target Nyquist frequency and leave a small
+            # transition band for the finite Hamming-windowed sinc kernel.
+            cutoff = 0.45 * target_rate_hz / source_rate_hz
+            for index in range(output_count):
+                position = min(index * ratio, len(source) - 1)
+                output.append(_bandlimited_sample(source, position, cutoff))
+        else:
+            for index in range(output_count):
+                position = min(index * ratio, len(source) - 1)
+                left = int(position)
+                right = min(left + 1, len(source) - 1)
+                fraction = position - left
+                value = round(source[left] + (source[right] - source[left]) * fraction)
+                output.append(max(-32768, min(32767, value)))
 
     pcm = array("h", output)
     if sys.byteorder == "big":
