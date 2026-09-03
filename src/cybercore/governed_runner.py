@@ -230,7 +230,7 @@ def _join_drain_threads_until_deadline(
                 pass
     for thread in threads:
         thread.join(timeout=_PROCESS_GROUP_TERM_GRACE_SECONDS)
-    return not any(thread.is_alive() for thread in threads)
+    return False
 
 
 class GovernedRunner:
@@ -315,13 +315,13 @@ class GovernedRunner:
                             _terminate_process_tree(process)
 
                 exit_code = process.returncode
-                drains_finished = _join_drain_threads_until_deadline(
+                drains_finished_before_deadline = _join_drain_threads_until_deadline(
                     process,
                     stdout_thread,
                     stderr_thread,
                     deadline,
                 )
-                if not drains_finished:
+                if not drains_finished_before_deadline:
                     timed_out = True
                 output_limit_exceeded = output_limit_exceeded or output_limit_event.is_set()
 
