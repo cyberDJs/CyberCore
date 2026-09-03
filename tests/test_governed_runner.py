@@ -146,8 +146,7 @@ def test_prevalidates_entire_plan_before_first_command_runs(tmp_path: Path) -> N
     marker = tmp_path / "should-not-exist"
     writer = tmp_path / "writer.py"
     writer.write_text(
-        "from pathlib import Path\n"
-        f"Path({str(marker)!r}).write_text('ran', encoding='utf-8')\n",
+        f"from pathlib import Path\nPath({str(marker)!r}).write_text('ran', encoding='utf-8')\n",
         encoding="utf-8",
     )
     grant = _grant(
@@ -178,7 +177,9 @@ def test_prevalidates_entire_plan_before_first_command_runs(tmp_path: Path) -> N
     assert not marker.exists()
 
 
-def test_bare_executable_ignores_ambient_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_bare_executable_ignores_ambient_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     fake_git = tmp_path / "git"
     fake_git.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
     fake_git.chmod(0o755)
