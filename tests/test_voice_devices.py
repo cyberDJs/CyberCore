@@ -125,6 +125,18 @@ def test_validate_audio_settings_checks_native_capture_and_model_output_rate() -
     assert sd.output_checks[0]["dtype"] == "int16"
 
 
+def test_named_input_device_uses_resolved_numeric_index() -> None:
+    sd = FakeSoundDevice()
+    config = LocalAudioConfig(input_device="Mic", output_device=1)
+
+    validate_audio_settings(config, sounddevice_module=sd)
+    source = SoundDeviceInput(config, sounddevice_module=sd)
+    source.start()
+
+    assert sd.input_checks[0]["device"] == 0
+    assert sd.input_stream_kwargs["device"] == 0
+
+
 def test_sounddevice_input_captures_native_rate_then_resamples_to_model_rate() -> None:
     sd = FakeSoundDevice()
     source = SoundDeviceInput(LocalAudioConfig(), sounddevice_module=sd)

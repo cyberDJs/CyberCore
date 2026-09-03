@@ -133,16 +133,27 @@ def _resolve_input_device(sd: Any, device: int | str | None) -> tuple[int, Any]:
     return index, item
 
 
+def _resolved_input_device_and_sample_rate(
+    config: LocalAudioConfig,
+    *,
+    sounddevice_module: Any | None = None,
+) -> tuple[int, int]:
+    sd = _load_sounddevice(sounddevice_module)
+    index, item = _resolve_input_device(sd, config.input_device)
+    sample_rate = round(float(item.get("default_samplerate", 0.0)))
+    if sample_rate <= 0:
+        raise AudioDeviceError("input device reported an invalid native sample rate")
+    return index, sample_rate
+
+
 def native_input_sample_rate_hz(
     config: LocalAudioConfig,
     *,
     sounddevice_module: Any | None = None,
 ) -> int:
-    sd = _load_sounddevice(sounddevice_module)
-    _, item = _resolve_input_device(sd, config.input_device)
-    sample_rate = round(float(item.get("default_samplerate", 0.0)))
-    if sample_rate <= 0:
-        raise AudioDeviceError("input device reported an invalid native sample rate")
+    _, sample_rate = _resolved_input_device_and_sample_rate(
+        config, sounddevice_module=sounddevice_module
+    )
     return sample_rate
 
 
@@ -270,9 +281,11 @@ def validate_audio_settings(
 ) -> None:
     sd = _load_sounddevice(sounddevice_module)
     try:
-        input_sample_rate = native_input_sample_rate_hz(config, sounddevice_module=sd)
+        input_device_index, input_sample_rate = _resolved_input_device_and_sample_rate(
+            config, sounddevice_module=sd
+        )
         sd.check_input_settings(
-            device=config.input_device,
+            device=input_device_index,
             channels=config.channels,
             dtype="int16",
             samplerate=input_sample_rate,
@@ -300,7 +313,7 @@ class SoundDeviceInput:
         self._sd = _load_sounddevice(sounddevice_module)
         self._stream: Any | None = None
         self._sequence = 0
-        self._device_sample_rate_hz = native_input_sample_rate_hz(
+        self._device_index, self._device_sample_rate_hz = _resolved_input_device_and_sample_rate(
             config, sounddevice_module=self._sd
         )
         self._device_frames_per_block = max(
@@ -326,7 +339,7 @@ class SoundDeviceInput:
         stream = self._sd.RawInputStream(
             samplerate=self._device_sample_rate_hz,
             blocksize=self._device_frames_per_block,
-            device=self.config.input_device,
+            device=self._device_index,
             channels=self.config.channels,
             dtype="int16",
         )
