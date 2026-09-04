@@ -1,0 +1,18 @@
+version: cybercore.cloudflare-dns/v0.1
+zone: sarahhairdesign.cz
+
+# Template only. Do not apply until the authoritative Seznam Email Profi records,
+# web origin, and DNSSEC transition have been independently verified.
+managed_recordsets:
+  - type: A
+    name: "@"
+  - type: A
+    name: www
+  - type: MX
+    name: "@"
+  - type: TXT
+    name: "@"
+  - type: TXT
+    name: _dmarc
+
+records: []
