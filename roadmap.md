@@ -382,28 +382,17 @@ Current protection recovery evidence (2026-09-04):
 - Detailed evidence:
   `docs/evidence/2026-09-04-main-protection-restore.md`.
 
-The post-merge state transition closes WB-0026 and activates the planned
-successor:
+Historical successor status:
 
-`WB-0027 — Visual Documentation and Learn Capture v0.1`
-
-Expected implementation branch:
-
-`feat/visual-documentation-learn-capture`
-
-WB-0027 visual documentation and Learn capture is locally verified on
-`feat/visual-documentation-learn-capture`, including rendering, capture, media
-review, and the repository verification suite. It is committed on the feature
-branch and has not been proposed for review.
-
-Next:
-
-- review and merge the WB-0026 closeout change;
-- synchronize protected `main`;
-- create `feat/visual-documentation-learn-capture` from current `main`;
-- run the verification baseline;
-- review the committed WB-0027 change set without modifying GitHub settings
-  or production systems.
+- WB-0026 was closed by its post-merge transition.
+- WB-0027 — Visual Documentation and Learn Capture v0.1 was subsequently
+  independently approved and squash-merged through PR #34 as
+  `94cb1998274e31e9ce3314f59d2e0ae290bc40cc`.
+- The former instructions to review the WB-0026 closeout, create the WB-0027
+  implementation branch, and propose WB-0027 are retired and must not be used
+  as current operator actions.
+- Current work selection must resolve live `main` and the current canonical
+  project-state artifacts before any implementation or merge decision.
 
 Critical flow:
 
