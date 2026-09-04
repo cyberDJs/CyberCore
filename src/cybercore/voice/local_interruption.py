@@ -133,12 +133,17 @@ class LocalInterruptionProbe:
                 reason="fresh playback-time speech satisfied the confirmation boundary",
             )
 
+        if self.allow_confirmed_interrupt:
+            reason = "candidate playback-time speech observed while confirmation is pending"
+        else:
+            reason = "candidate playback-time speech observed while interruption is disabled"
+
         return self._evidence(
             frame,
             vad_state=vad_state,
             playback=playback,
             decision=LocalInterruptionDecision.OBSERVE,
-            reason="candidate playback-time speech observed while interruption is disabled",
+            reason=reason,
         )
 
     def _evidence(
