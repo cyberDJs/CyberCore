@@ -36,7 +36,7 @@ def _load_sounddevice(module: Any | None = None) -> Any:
         return importlib.import_module("sounddevice")
     except (ImportError, OSError) as exc:
         raise LocalVoiceDependencyError(
-            f"sounddevice is unavailable; install CyberCore with the 'voice-local' extra"
+            "sounddevice is unavailable; install CyberCore with the 'voice-local' extra"
         ) from exc
 
 
