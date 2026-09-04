@@ -90,9 +90,7 @@ def test_exact_binding_prevents_operation_class_relabel(tmp_path: Path) -> None:
     )
 
     with pytest.raises(GovernedRunnerError, match="pair"):
-        governed_runner_module._prepare_plan(
-            _plan(relabeled, grant), root=tmp_path, strict=True
-        )
+        governed_runner_module._prepare_plan(_plan(relabeled, grant), root=tmp_path, strict=True)
 
 
 def test_python_script_is_bound_to_exact_authorized_digest(tmp_path: Path) -> None:
@@ -144,9 +142,7 @@ def test_nonce_directory_creation_fsyncs_each_new_parent_entry(
     )
     state_dir = tmp_path / "a" / "b" / "c"
 
-    governed_runner_module._ensure_nonce_state_dir(
-        state_dir, persist_parent_chain=True
-    )
+    governed_runner_module._ensure_nonce_state_dir(state_dir, persist_parent_chain=True)
 
     assert state_dir.is_dir()
     assert fsynced == [tmp_path, tmp_path / "a", tmp_path / "a" / "b"]
@@ -181,9 +177,7 @@ def test_systemd_spawn_hardens_service_and_wrapper_environment(
         classes=frozenset({OperationClass.READ_ONLY}),
         prefixes=((sys.executable, "--version"),),
     )
-    prepared = governed_runner_module._prepare_plan(
-        _plan(command, grant), root=tmp_path
-    )[0]
+    prepared = governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path)[0]
     env = governed_runner_module._bounded_environment(include_user_bus=False)
 
     containment.spawn(
