@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Any, cast
 
+from cybercore.voice.audio import AudioFrame
 from cybercore.voice.barge_shadow import BargeInShadowSnapshot, FreshSpeechShadowGate
 from cybercore.voice.local_config import LocalVoiceConfig, load_local_voice_config
 from cybercore.voice.local_runtime import LocalSpeechRuntime
@@ -21,7 +23,7 @@ DEFAULT_PROBE_TEXT = (
 class ShadowLocalSpeechRuntime(LocalSpeechRuntime):
     """Local Voice runtime that observes playback-time VAD without interrupting TTS."""
 
-    def __init__(self, **kwargs) -> None:  # type: ignore[no-untyped-def]
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._barge_shadow = FreshSpeechShadowGate()
 
@@ -29,7 +31,7 @@ class ShadowLocalSpeechRuntime(LocalSpeechRuntime):
     def barge_in_shadow_snapshot(self) -> BargeInShadowSnapshot:
         return self._barge_shadow.snapshot
 
-    def _observe_barge_in_shadow(self, frame) -> None:  # type: ignore[no-untyped-def]
+    def _observe_barge_in_shadow(self, frame: AudioFrame) -> None:
         vad = self.provider.vad.evaluate(frame)
         self._barge_shadow.observe(vad.state, frame_sequence=frame.sequence)
 
@@ -61,7 +63,7 @@ def run_barge_in_shadow_probe(
     actor_id: str = "local-operator",
     probe_text: str = DEFAULT_PROBE_TEXT,
 ) -> int:
-    local = ShadowLocalSpeechRuntime.from_config(config)
+    local = cast(ShadowLocalSpeechRuntime, ShadowLocalSpeechRuntime.from_config(config))
     try:
         local.open()
         print("CYBER VOICE SHADOW: LISTENING FOR ARMING UTTERANCE")
