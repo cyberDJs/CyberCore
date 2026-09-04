@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
 from typing import BinaryIO, Protocol
@@ -196,6 +197,7 @@ class _SystemdContainment:
             list(wrapped),
             cwd="/",
             env=env,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             start_new_session=True,
@@ -734,7 +736,24 @@ def _deny_blocked_executable(executable: str) -> None:
         raise GovernedRunnerError(f"executable is denied by policy: {name}")
 
 
+def _require_trusted_absolute_executable(executable: str) -> None:
+    candidate = Path(executable)
+    if not candidate.is_absolute():
+        return
+    resolved = candidate.resolve(strict=True)
+    current_python = Path(sys.executable).resolve(strict=True)
+    if _PYTHON_EXECUTABLE_RE.fullmatch(resolved.name.lower()) and resolved == current_python:
+        return
+    trusted = shutil.which(resolved.name, path=_TRUSTED_EXECUTABLE_PATH)
+    if trusted is None or Path(trusted).resolve(strict=True) != resolved:
+        raise GovernedRunnerError(
+            f"absolute executable is outside trusted runtime identities: {candidate}"
+        )
+
+
 def _require_positive_executable_policy(executable: str, *, strict: bool) -> None:
+    if strict:
+        _require_trusted_absolute_executable(executable)
     name = Path(executable).name.lower()
     if _PYTHON_EXECUTABLE_RE.fullmatch(name):
         return
