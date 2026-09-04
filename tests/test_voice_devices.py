@@ -40,6 +40,37 @@ class FakeInputStream:
         self.closed = True
 
 
+class SequencedInputStream(FakeInputStream):
+    def __init__(self, payloads: list[bytes]) -> None:
+        super().__init__(b"")
+        self.payloads = list(payloads)
+
+    @property
+    def read_available(self) -> int:
+        return len(self.payloads) * 3840
+
+    @read_available.setter
+    def read_available(self, value: int) -> None:
+        pass
+
+    def read(self, frames: int):
+        self.read_calls.append(frames)
+        return self.payloads.pop(0), False
+
+
+class PartialInputStream(FakeInputStream):
+    def __init__(self, frames: int) -> None:
+        super().__init__(b"\x00\x00" * frames)
+        self.frames = frames
+        self.read_available = frames
+
+    def read(self, frames: int):
+        self.read_calls.append(frames)
+        assert frames == self.frames
+        self.read_available = 0
+        return self.payload, False
+
+
 class FakeOutputStream:
     def __init__(self) -> None:
         self.started = False
@@ -148,12 +179,51 @@ def test_sounddevice_input_captures_native_rate_then_resamples_to_model_rate() -
     assert len(frame.payload) == 2560
     assert sd.input_stream_kwargs["samplerate"] == 48000
     assert sd.input_stream_kwargs["blocksize"] == 3840
-    assert sd.input_stream.read_calls == [3840]
+    assert sd.input_stream.read_calls == [3840, 3840]
 
     overflow_sd = FakeSoundDevice(overflowed=True)
     overflow_source = SoundDeviceInput(LocalAudioConfig(), sounddevice_module=overflow_sd)
     with pytest.raises(AudioInputOverflowError):
         overflow_source.read_frame()
+
+
+def test_sounddevice_input_preserves_downsampling_state_across_capture_blocks() -> None:
+    source_rate_hz = 48000
+    target_rate_hz = 16000
+    block_samples = 3840
+    amplitude = 12000
+    frequency_hz = 6000
+    all_samples = array(
+        "h",
+        (
+            round(amplitude * math.sin(2.0 * math.pi * frequency_hz * index / source_rate_hz))
+            for index in range(block_samples * 3)
+        ),
+    )
+    block_bytes = block_samples * 2
+    payload = all_samples.tobytes()
+    blocks = [
+        payload[offset : offset + block_bytes] for offset in range(0, len(payload), block_bytes)
+    ]
+    sd = FakeSoundDevice()
+    sd.input_stream = SequencedInputStream(blocks)
+    source = SoundDeviceInput(LocalAudioConfig(), sounddevice_module=sd)
+
+    actual = source.read_frame().payload + source.read_frame().payload
+    reference = resample_pcm_s16le_mono(payload, source_rate_hz, target_rate_hz)
+
+    assert actual == reference[: len(actual)]
+
+
+def test_sounddevice_input_discards_partial_capture_block() -> None:
+    sd = FakeSoundDevice()
+    sd.input_stream = PartialInputStream(100)
+    source = SoundDeviceInput(LocalAudioConfig(), sounddevice_module=sd)
+
+    source.discard_pending_audio()
+
+    assert sd.input_stream.read_calls == [100]
+    assert sd.input_stream.read_available == 0
 
 
 def test_pcm_resampler_preserves_block_duration() -> None:
