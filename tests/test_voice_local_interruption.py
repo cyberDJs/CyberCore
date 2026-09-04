@@ -81,6 +81,7 @@ def test_probe_can_confirm_only_when_explicitly_enabled() -> None:
     second = probe.observe(frame(2), vad_state=VadState.SPEECH, playback=playback)
 
     assert first.decision is LocalInterruptionDecision.OBSERVE
+    assert first.reason == "candidate playback-time speech observed while confirmation is pending"
     assert second.decision is LocalInterruptionDecision.CONFIRMED_INTERRUPT
     assert second.reason == "fresh playback-time speech satisfied the confirmation boundary"
 
