@@ -454,7 +454,9 @@ def test_systemd_client_env_preserves_only_required_bus_discovery(
 def test_systemd_spawn_binds_validated_working_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(governed_runner_module.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/true")
+    monkeypatch.setattr(
+        governed_runner_module.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/true"
+    )
     captured: dict[str, object] = {}
 
     class _FakeProcess:
@@ -479,7 +481,9 @@ def test_systemd_spawn_binds_validated_working_directory(
 def test_systemctl_control_call_is_bounded_by_deadline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(governed_runner_module.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/true")
+    monkeypatch.setattr(
+        governed_runner_module.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/true"
+    )
     seen_timeouts: list[float] = []
 
     def fake_run(*_args: object, timeout: float, **_kwargs: object) -> None:
