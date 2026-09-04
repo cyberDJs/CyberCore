@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from cybercore.cloudflare_dns import (
     CloudflareClient,
@@ -166,8 +167,9 @@ def test_apply_is_blocked_without_exact_plan_bound_approval(tmp_path: Path) -> N
     assert (evidence_dir / "rollback-prepared-receipt.json").is_file()
     assert (evidence_dir / "post-write-zone-snapshot.json").is_file()
     assert (evidence_dir / "apply-receipt.json").is_file()
-    rollback = load_manifest(evidence_dir / "rollback-manifest.yaml")
-    assert any(record.content == "192.0.2.9" for record in rollback.records)
+    rollback = yaml.safe_load((evidence_dir / "rollback-manifest.yaml").read_text())
+    assert rollback["version"] == "cybercore.cloudflare-dns.rollback/v0.1"
+    assert any(record["content"] == "192.0.2.9" for record in rollback["records"])
 
 
 def test_apply_rejects_drift_before_any_write(tmp_path: Path) -> None:
@@ -441,3 +443,118 @@ def test_plan_rejects_more_than_free_tier_batch_limit() -> None:
     )
     with pytest.raises(CloudflareDnsError, match="limits one plan to 200 changes"):
         build_plan(manifest, zone_id="zone-1", current_records=())
+
+
+def test_apply_rejects_zone_status_drift_pending_to_active(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+    api = FakeApi((), status="pending")
+    plan = plan_from_manifest(api, manifest)
+    assert plan.zone_status == "pending"
+
+    api.status = "active"
+    with pytest.raises(CloudflareDnsError, match="plan drifted"):
+        apply_manifest(
+            api,
+            manifest,
+            expected_plan=plan.fingerprint,
+            approval=plan.approval_text,
+        )
+    assert api.writes == []
+
+
+def test_domain_valued_content_is_normalized_before_planning(tmp_path: Path) -> None:
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: CNAME
+    name: www
+  - type: MX
+    name: "@"
+records:
+  - type: CNAME
+    name: www
+    content: Target.Example.NET.
+  - type: MX
+    name: "@"
+    content: MAIL.Example.NET.
+    priority: 10
+"""
+    manifest = _load_inline_manifest(tmp_path, "normalized-domain-content.yaml", content)
+    assert manifest.records[0].content == "target.example.net"
+    assert manifest.records[1].content == "mail.example.net"
+    current = (
+        DnsRecord("CNAME", "www.example.cz", "target.example.net", 1, False, None, "c1"),
+        DnsRecord("MX", "example.cz", "mail.example.net", 1, False, 10, "m1"),
+    )
+    plan = build_plan(manifest, zone_id="zone-1", current_records=current)
+    assert plan.changes == ()
+
+
+def test_api_record_normalization_and_rollback_preserve_writable_metadata(tmp_path: Path) -> None:
+    responses = [
+        (
+            200,
+            json.dumps(
+                {
+                    "success": True,
+                    "result": [
+                        {
+                            "id": "c1",
+                            "type": "CNAME",
+                            "name": "WWW.Example.CZ.",
+                            "content": "Target.Example.NET.",
+                            "ttl": 1,
+                            "proxied": True,
+                            "comment": "keep this note",
+                            "tags": ["owner:cybercore"],
+                            "settings": {"flatten_cname": True},
+                        }
+                    ],
+                }
+            ).encode(),
+        )
+    ]
+
+    def requester(_request):
+        return responses.pop(0)
+
+    client = CloudflareClient("test-token", requester=requester)
+    record = client.list_dns_records("zone-1")[0]
+    assert record.name == "www.example.cz"
+    assert record.content == "target.example.net"
+    assert record.restore_metadata == {
+        "comment": "keep this note",
+        "tags": ["owner:cybercore"],
+        "settings": {"flatten_cname": True},
+    }
+
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: CNAME
+    name: www
+records: []
+"""
+    manifest = _load_inline_manifest(tmp_path, "delete-cname.yaml", content)
+    api = FakeApi((record,))
+    plan = plan_from_manifest(api, manifest)
+    evidence_dir = tmp_path / "metadata-evidence"
+    apply_manifest(
+        api,
+        manifest,
+        expected_plan=plan.fingerprint,
+        approval=plan.approval_text,
+        evidence_dir=evidence_dir,
+    )
+    rollback = yaml.safe_load((evidence_dir / "rollback-manifest.yaml").read_text())
+    restored = rollback["records"][0]
+    assert restored["comment"] == "keep this note"
+    assert restored["tags"] == ["owner:cybercore"]
+    assert restored["settings"] == {"flatten_cname": True}
+    snapshot = json.loads((evidence_dir / "pre-write-zone-snapshot.json").read_text())
+    snap_record = snapshot["records"][0]
+    assert snap_record["comment"] == "keep this note"
+    assert snap_record["tags"] == ["owner:cybercore"]
+    assert snap_record["settings"] == {"flatten_cname": True}

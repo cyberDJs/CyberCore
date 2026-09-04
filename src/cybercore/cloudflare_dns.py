@@ -21,6 +21,8 @@ PROXY_CAPABLE_TYPES = {"A", "AAAA", "CNAME"}
 ADDRESS_TYPES = {"A", "AAAA"}
 IP_RESOLUTION_TYPES = {"A", "AAAA", "CNAME"}
 PLANNABLE_ZONE_STATUSES = {"active", "pending"}
+DOMAIN_CONTENT_TYPES = {"CNAME", "MX"}
+RESTORABLE_METADATA_FIELDS = {"comment", "tags", "settings", "private_routing"}
 
 
 class CloudflareDnsError(RuntimeError):
@@ -36,6 +38,7 @@ class DnsRecord:
     proxied: bool = False
     priority: int | None = None
     record_id: str | None = None
+    restore_metadata: dict[str, object] | None = None
 
     def recordset(self) -> tuple[str, str]:
         return (self.record_type, self.name)
@@ -63,8 +66,14 @@ class DnsRecord:
             payload["priority"] = self.priority
         return payload
 
-    def public_dict(self) -> dict[str, object]:
-        result = self.api_payload()
+    def restore_payload(self) -> dict[str, object]:
+        payload = self.api_payload()
+        if self.restore_metadata:
+            payload.update(self.restore_metadata)
+        return payload
+
+    def public_dict(self, *, include_restore_metadata: bool = False) -> dict[str, object]:
+        result = self.restore_payload() if include_restore_metadata else self.api_payload()
         if self.record_id is not None:
             result["id"] = self.record_id
         return result
@@ -98,6 +107,7 @@ class DnsManifest:
 class DnsPlan:
     zone: str
     zone_id: str
+    zone_status: str
     changes: tuple[DnsChange, ...]
     fingerprint: str
     current_records: tuple[DnsRecord, ...]
@@ -110,6 +120,7 @@ class DnsPlan:
         return {
             "zone": self.zone,
             "zone_id": self.zone_id,
+            "zone_status": self.zone_status,
             "fingerprint": self.fingerprint,
             "approval_text": self.approval_text,
             "change_count": len(self.changes),
@@ -248,15 +259,20 @@ class CloudflareClient:
         priority = item.get("priority")
         if priority is not None and not isinstance(priority, int):
             raise CloudflareDnsError("Cloudflare DNS record priority is invalid")
+        record_type = record_type.upper()
+        if record_type in DOMAIN_CONTENT_TYPES:
+            content = _normalize_domain_content(content)
+        restore_metadata = {key: item[key] for key in RESTORABLE_METADATA_FIELDS if key in item}
         records.append(
             DnsRecord(
                 record_type=record_type,
-                name=name.rstrip("."),
+                name=name.lower().rstrip("."),
                 content=content,
                 ttl=ttl,
                 proxied=bool(item.get("proxied", False)),
                 priority=priority,
                 record_id=record_id,
+                restore_metadata=restore_metadata or None,
             )
         )
 
@@ -325,6 +341,13 @@ def _normalize_name(name: object, zone: str) -> str:
     return f"{raw}.{zone}"
 
 
+def _normalize_domain_content(content: str) -> str:
+    value = content.strip().lower().rstrip(".")
+    if not value:
+        raise CloudflareDnsError("domain-valued DNS record content must be non-empty")
+    return value
+
+
 def _record_from_manifest(item: object, zone: str) -> DnsRecord:
     if not isinstance(item, dict):
         raise CloudflareDnsError("manifest records must be mappings")
@@ -342,6 +365,8 @@ def _record_from_manifest(item: object, zone: str) -> DnsRecord:
     content = item.get("content")
     if not isinstance(content, str) or not content:
         raise CloudflareDnsError("manifest record content must be a non-empty string")
+    if record_type in DOMAIN_CONTENT_TYPES:
+        content = _normalize_domain_content(content)
     ttl = item.get("ttl", 1)
     if not isinstance(ttl, int) or isinstance(ttl, bool) or (ttl != 1 and not 60 <= ttl <= 86400):
         raise CloudflareDnsError("manifest record ttl must be 1 or between 60 and 86400")
@@ -470,10 +495,13 @@ def load_manifest(path: Path) -> DnsManifest:
     return DnsManifest(zone, tuple(managed), records, template)
 
 
-def _canonical_plan_payload(zone: str, zone_id: str, changes: tuple[DnsChange, ...]) -> bytes:
+def _canonical_plan_payload(
+    zone: str, zone_id: str, zone_status: str, changes: tuple[DnsChange, ...]
+) -> bytes:
     data = {
         "zone": zone,
         "zone_id": zone_id,
+        "zone_status": zone_status,
         "changes": [change.public_dict() for change in changes],
     }
     return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode(
@@ -534,6 +562,7 @@ def build_plan(
     *,
     zone_id: str,
     current_records: tuple[DnsRecord, ...],
+    zone_status: str = "active",
 ) -> DnsPlan:
     _validate_current_name_conflicts(manifest, current_records)
     managed = set(manifest.managed_recordsets)
@@ -573,9 +602,9 @@ def build_plan(
     if len(changes_tuple) > 200:
         raise CloudflareDnsError("Cloudflare DNS v0.1 limits one plan to 200 changes")
     fingerprint = hashlib.sha256(
-        _canonical_plan_payload(manifest.zone, zone_id, changes_tuple)
+        _canonical_plan_payload(manifest.zone, zone_id, zone_status, changes_tuple)
     ).hexdigest()
-    return DnsPlan(manifest.zone, zone_id, changes_tuple, fingerprint, current_records)
+    return DnsPlan(manifest.zone, zone_id, zone_status, changes_tuple, fingerprint, current_records)
 
 
 def discover(api: CloudflareApi, zone: str) -> dict[str, object]:
@@ -599,7 +628,12 @@ def plan_from_manifest(api: CloudflareApi, manifest: DnsManifest) -> DnsPlan:
         raise CloudflareDnsError(
             f"Cloudflare zone status {status!r} is not safe for DNS planning or mutation"
         )
-    return build_plan(manifest, zone_id=zone_id, current_records=api.list_dns_records(zone_id))
+    return build_plan(
+        manifest,
+        zone_id=zone_id,
+        current_records=api.list_dns_records(zone_id),
+        zone_status=status,
+    )
 
 
 def _record_sort_key(record: DnsRecord) -> tuple[object, ...]:
@@ -623,12 +657,12 @@ def _rollback_manifest_payload(
         key=_record_sort_key,
     )
     return {
-        "version": "cybercore.cloudflare-dns/v0.1",
+        "version": "cybercore.cloudflare-dns.rollback/v0.1",
         "zone": manifest.zone,
         "managed_recordsets": [
             {"type": record_type, "name": name} for record_type, name in manifest.managed_recordsets
         ],
-        "records": [record.api_payload() for record in records],
+        "records": [record.restore_payload() for record in records],
     }
 
 
@@ -661,9 +695,10 @@ def _prepare_pre_write_evidence(
         "phase": "pre-write",
         "zone": plan.zone,
         "zone_id": plan.zone_id,
+        "zone_status": plan.zone_status,
         "plan_fingerprint": plan.fingerprint,
         "dnssec": dnssec,
-        "records": [record.public_dict() for record in records],
+        "records": [record.public_dict(include_restore_metadata=True) for record in records],
     }
     snapshot_text = json.dumps(snapshot_payload, indent=2, sort_keys=True) + "\n"
     snapshot_name = "pre-write-zone-snapshot.json"
@@ -711,10 +746,11 @@ def _write_post_write_snapshot(
         "phase": "post-write",
         "zone": plan.zone,
         "zone_id": plan.zone_id,
+        "zone_status": verification.zone_status,
         "plan_fingerprint": plan.fingerprint,
         "dnssec": dnssec,
         "records": [
-            record.public_dict()
+            record.public_dict(include_restore_metadata=True)
             for record in sorted(verification.current_records, key=_record_sort_key)
         ],
         "remaining_changes": [change.public_dict() for change in verification.changes],

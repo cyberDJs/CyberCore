@@ -11,17 +11,18 @@ The provider is fail-closed:
 1. DNS mutation is limited to recordsets explicitly listed in `managed_recordsets`.
 2. Unmanaged DNS records are never deleted or rewritten.
 3. A write requires both the exact current plan fingerprint and the exact approval string emitted by that plan.
-4. The provider re-discovers state immediately before the write. Drift in managed recordsets changes the fingerprint; conflict-relevant unmanaged drift fails planning closed before mutation.
+4. The provider re-discovers state immediately before the write. Managed-record drift and Cloudflare zone-status changes both change the plan fingerprint; conflict-relevant unmanaged drift fails planning closed before mutation.
 5. All DNS writes are sent through Cloudflare's `/dns_records/batch` endpoint as one database transaction; updates use PATCH semantics so unsupported record metadata (for example comments/tags/settings) is not reset by a PUT overwrite. Network propagation of individual DNS keys is still not atomic.
 6. Post-write discovery must converge to zero remaining changes.
-7. Before any mutation, `apply` must persist a full pre-write zone/DNSSEC snapshot, a generated rollback manifest, and a rollback-prepared receipt in a new evidence directory. Post-write state and the apply receipt are persisted after the batch.
+7. Before any mutation, `apply` must persist a full pre-write zone/DNSSEC snapshot, a generated rollback manifest, and a rollback-prepared receipt in a new evidence directory. The snapshot/rollback representation retains Cloudflare writable metadata such as comments, tags, settings, and private-routing state when present. Post-write state and the apply receipt are persisted after the batch.
 8. A desired CNAME is blocked if unmanaged A/AAAA/CNAME state at the same name would make the change invalid. Unmanaged NS conflicts are also fail-closed. At most one desired CNAME is allowed per owner name.
 9. Proxied A/AAAA/CNAME records require `ttl: 1` (Cloudflare Auto). A/AAAA records sharing an owner name must use a consistent proxy mode, including unmanaged A/AAAA state that Cloudflare would implicitly affect.
 10. API tokens are read only from the runtime secret alias `CLOUDFLARE_DNS_API_TOKEN`; token values are never written to manifests or receipts.
 11. DNSSEC is read and reported in v0.1 but **DNSSEC mutation is intentionally out of scope**. Registrar DS changes remain a separate governed operation.
 12. Supported record types in v0.1: `A`, `AAAA`, `CNAME`, `MX`, `TXT`.
 13. Repository examples can declare `template: true`; template manifests may be planned but are rejected by `apply` before any provider access or mutation.
-14. Discovery does not hide a zone merely because nameserver cutover is incomplete. Planning/mutation is allowed only for Cloudflare `active` or `pending` zones, so a pending zone can be prepared before registrar delegation without treating it as production traffic.
+14. Discovery does not hide a zone merely because nameserver cutover is incomplete. Planning/mutation is allowed only for Cloudflare `active` or `pending` zones, and the observed status is bound into the approved fingerprint so a `pending` -> `active` cutover invalidates the prior approval.
+15. Domain-valued CNAME and MX content is canonicalized to lowercase without a trailing root dot before comparison, preventing false updates and post-write non-convergence.
 
 ## CLI
 
