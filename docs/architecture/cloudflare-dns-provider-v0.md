@@ -21,6 +21,7 @@ The provider is fail-closed:
 11. DNSSEC is read and reported in v0.1 but **DNSSEC mutation is intentionally out of scope**. Registrar DS changes remain a separate governed operation.
 12. Supported record types in v0.1: `A`, `AAAA`, `CNAME`, `MX`, `TXT`.
 13. Repository examples can declare `template: true`; template manifests may be planned but are rejected by `apply` before any provider access or mutation.
+14. Discovery does not hide a zone merely because nameserver cutover is incomplete. Planning/mutation is allowed only for Cloudflare `active` or `pending` zones, so a pending zone can be prepared before registrar delegation without treating it as production traffic.
 
 ## CLI
 

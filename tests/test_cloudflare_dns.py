@@ -9,10 +9,12 @@ from cybercore.cloudflare_dns import (
     CloudflareClient,
     CloudflareDnsError,
     DnsChange,
+    DnsManifest,
     DnsRecord,
     apply_manifest,
     build_plan,
     load_manifest,
+    plan_from_manifest,
 )
 
 
@@ -97,13 +99,14 @@ def test_plan_is_minimal_and_fingerprinted(tmp_path: Path) -> None:
 
 
 class FakeApi:
-    def __init__(self, records: tuple[DnsRecord, ...]) -> None:
+    def __init__(self, records: tuple[DnsRecord, ...], *, status: str = "active") -> None:
         self.records = list(records)
+        self.status = status
         self.writes: list[tuple[str, str]] = []
         self._next = 10
 
     def find_zone(self, zone: str) -> tuple[str, str]:
-        return "zone-1", "active"
+        return "zone-1", self.status
 
     def list_dns_records(self, zone_id: str) -> tuple[DnsRecord, ...]:
         return tuple(self.records)
@@ -398,3 +401,43 @@ def test_client_uses_patch_for_updates_to_preserve_unmodeled_metadata() -> None:
     payload = json.loads(raw)
     assert payload["puts"] == []
     assert payload["patches"] == [{"id": "a1", **after.api_payload()}]
+
+
+def test_pending_zone_can_be_planned_before_nameserver_cutover(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+    pending = FakeApi((), status="pending")
+    plan = plan_from_manifest(pending, manifest)
+    assert plan.changes
+
+    moved = FakeApi((), status="moved")
+    with pytest.raises(CloudflareDnsError, match="not safe for DNS planning or mutation"):
+        plan_from_manifest(moved, manifest)
+
+
+def test_find_zone_does_not_filter_out_pending_zone() -> None:
+    captured: dict[str, str] = {}
+
+    def requester(request):
+        captured["url"] = request.full_url
+        return (
+            200,
+            b'{"success":true,"result":[{"id":"zone-1","name":"example.cz","status":"pending"}]}',
+        )
+
+    client = CloudflareClient("test-token", requester=requester)
+    assert client.find_zone("example.cz") == ("zone-1", "pending")
+    assert "status=" not in captured["url"]
+
+
+def test_plan_rejects_more_than_free_tier_batch_limit() -> None:
+    records = tuple(
+        DnsRecord("A", "example.cz", f"192.0.2.{index}", 300, False) for index in range(1, 202)
+    )
+    manifest = DnsManifest(
+        zone="example.cz",
+        managed_recordsets=(("A", "example.cz"),),
+        records=records,
+        template=False,
+    )
+    with pytest.raises(CloudflareDnsError, match="limits one plan to 200 changes"):
+        build_plan(manifest, zone_id="zone-1", current_records=())

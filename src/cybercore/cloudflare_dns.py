@@ -20,6 +20,7 @@ SUPPORTED_TYPES = {"A", "AAAA", "CNAME", "MX", "TXT"}
 PROXY_CAPABLE_TYPES = {"A", "AAAA", "CNAME"}
 ADDRESS_TYPES = {"A", "AAAA"}
 IP_RESOLUTION_TYPES = {"A", "AAAA", "CNAME"}
+PLANNABLE_ZONE_STATUSES = {"active", "pending"}
 
 
 class CloudflareDnsError(RuntimeError):
@@ -194,14 +195,12 @@ class CloudflareClient:
         return decoded.get("result")
 
     def find_zone(self, zone: str) -> tuple[str, str]:
-        result = self._request(
-            "GET", "/zones", query={"name": zone, "status": "active", "per_page": 50}
-        )
+        result = self._request("GET", "/zones", query={"name": zone, "per_page": 50})
         if not isinstance(result, list):
             raise CloudflareDnsError("Cloudflare zones response is invalid")
         exact = [item for item in result if isinstance(item, dict) and item.get("name") == zone]
         if len(exact) != 1:
-            raise CloudflareDnsError(f"expected exactly one active Cloudflare zone for {zone}")
+            raise CloudflareDnsError(f"expected exactly one Cloudflare zone for {zone}")
         zone_id = exact[0].get("id")
         status = exact[0].get("status")
         if not isinstance(zone_id, str) or not zone_id or not isinstance(status, str):
@@ -571,6 +570,8 @@ def build_plan(
             changes.append(DnsChange("DELETE", recordset, record, None))
 
     changes_tuple = tuple(changes)
+    if len(changes_tuple) > 200:
+        raise CloudflareDnsError("Cloudflare DNS v0.1 limits one plan to 200 changes")
     fingerprint = hashlib.sha256(
         _canonical_plan_payload(manifest.zone, zone_id, changes_tuple)
     ).hexdigest()
@@ -594,8 +595,10 @@ def discover(api: CloudflareApi, zone: str) -> dict[str, object]:
 
 def plan_from_manifest(api: CloudflareApi, manifest: DnsManifest) -> DnsPlan:
     zone_id, status = api.find_zone(manifest.zone)
-    if status != "active":
-        raise CloudflareDnsError("Cloudflare zone is not active")
+    if status not in PLANNABLE_ZONE_STATUSES:
+        raise CloudflareDnsError(
+            f"Cloudflare zone status {status!r} is not safe for DNS planning or mutation"
+        )
     return build_plan(manifest, zone_id=zone_id, current_records=api.list_dns_records(zone_id))
 
 
