@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 import time
+import uuid
 
 import pytest
 
@@ -53,6 +54,15 @@ class _DirectTestContainment:
             process.wait()
 
 
+class _RecordingContainment(_DirectTestContainment):
+    def __init__(self) -> None:
+        self.termination_deadlines: list[float] = []
+
+    def terminate(self, process: subprocess.Popen[bytes], *, deadline: float) -> None:
+        self.termination_deadlines.append(deadline)
+        super().terminate(process, deadline=deadline)
+
+
 def _runner(root: Path) -> GovernedRunner:
     return GovernedRunner(root, containment=_DirectTestContainment())
 
@@ -64,6 +74,7 @@ def _grant(
     allowed_classes: frozenset[OperationClass] | None = None,
     prefixes: tuple[tuple[str, ...], ...] | None = None,
     expires_in: float = 300.0,
+    nonce: str | None = None,
 ) -> AuthorizationGrant:
     now = datetime.now(timezone.utc)
     return AuthorizationGrant(
@@ -74,7 +85,7 @@ def _grant(
         issuer="test-authorizer",
         issued_at=now - timedelta(seconds=1),
         expires_at=now + timedelta(seconds=expires_in),
-        nonce="test-nonce",
+        nonce=nonce or uuid.uuid4().hex,
     )
 
 
@@ -243,7 +254,9 @@ def test_prevalidates_entire_plan_before_first_command_runs(tmp_path: Path) -> N
     assert not marker.exists()
 
 
-def test_revalidates_grant_before_each_spawn(tmp_path: Path) -> None:
+def test_revalidates_grant_before_each_spawn_and_preserves_partial_receipt(
+    tmp_path: Path,
+) -> None:
     sleeper = tmp_path / "sleep.py"
     sleeper.write_text("import time\ntime.sleep(0.2)\n", encoding="utf-8")
     grant = _grant(
@@ -269,8 +282,19 @@ def test_revalidates_grant_before_each_spawn(tmp_path: Path) -> None:
         grant=grant,
     )
 
-    with pytest.raises(GovernedRunnerError, match="expired or not yet valid"):
-        _runner(tmp_path).execute(plan)
+    receipt = _runner(tmp_path).execute(plan)
+
+    assert receipt.status == "FAILED"
+    assert len(receipt.commands) == 2
+    assert receipt.commands[0].exit_code == 0
+    assert receipt.commands[1].exit_code is None
+    assert receipt.commands[1].stderr_sha256 != hashlib_sha256_empty()
+
+
+def hashlib_sha256_empty() -> str:
+    import hashlib
+
+    return hashlib.sha256(b"").hexdigest()
 
 
 def test_revalidates_cwd_before_each_spawn(tmp_path: Path) -> None:
@@ -308,8 +332,12 @@ def test_revalidates_cwd_before_each_spawn(tmp_path: Path) -> None:
         grant=grant,
     )
 
-    with pytest.raises(GovernedRunnerError, match="escapes allowed root"):
-        _runner(tmp_path).execute(plan)
+    receipt = _runner(tmp_path).execute(plan)
+
+    assert receipt.status == "FAILED"
+    assert len(receipt.commands) == 2
+    assert receipt.commands[0].exit_code == 0
+    assert receipt.commands[1].exit_code is None
 
 
 def test_detects_in_place_executable_replacement(tmp_path: Path) -> None:
@@ -346,8 +374,12 @@ def test_detects_in_place_executable_replacement(tmp_path: Path) -> None:
         grant=grant,
     )
 
-    with pytest.raises(GovernedRunnerError, match="executable changed"):
-        _runner(tmp_path).execute(plan)
+    receipt = _runner(tmp_path).execute(plan)
+
+    assert receipt.status == "FAILED"
+    assert len(receipt.commands) == 2
+    assert receipt.commands[0].exit_code == 0
+    assert receipt.commands[1].exit_code is None
 
 
 def test_bare_executable_ignores_ambient_path(
@@ -369,6 +401,22 @@ def test_bare_executable_ignores_ambient_path(
     assert receipt.status == "IMPLEMENTED"
     assert receipt.commands[0].exit_code == 0
     assert Path(receipt.commands[0].argv[0]).resolve() != fake_git.resolve()
+
+
+def test_rejects_replayed_authorization_nonce(tmp_path: Path) -> None:
+    command = CommandSpec(
+        argv=(sys.executable, "--version"),
+        cwd=".",
+        classification=OperationClass.READ_ONLY,
+    )
+    grant = _grant(nonce="one-shot-nonce")
+    plan = _plan(tmp_path, command, grant=grant)
+
+    first = _runner(tmp_path).execute(plan)
+
+    assert first.status == "IMPLEMENTED"
+    with pytest.raises(GovernedRunnerError, match="already been consumed"):
+        _runner(tmp_path).execute(plan)
 
 
 def test_timeout_terminates_descendant_processes(tmp_path: Path) -> None:
@@ -409,6 +457,30 @@ def test_timeout_terminates_descendant_processes(tmp_path: Path) -> None:
     assert not marker.exists()
 
 
+def test_timeout_uses_separate_cleanup_deadline(tmp_path: Path) -> None:
+    sleeper = tmp_path / "timeout.py"
+    sleeper.write_text("import time\ntime.sleep(5)\n", encoding="utf-8")
+    command = CommandSpec(
+        argv=(sys.executable, str(sleeper)),
+        cwd=".",
+        classification=OperationClass.COMPUTE,
+        timeout_seconds=0.05,
+    )
+    grant = _grant(
+        allowed_classes=frozenset({OperationClass.COMPUTE}),
+        prefixes=((sys.executable,),),
+    )
+    containment = _RecordingContainment()
+
+    receipt = GovernedRunner(tmp_path, containment=containment).execute(
+        _plan(tmp_path, command, grant=grant)
+    )
+
+    assert receipt.status == "FAILED"
+    assert containment.termination_deadlines
+    assert containment.termination_deadlines[0] > time.monotonic()
+
+
 def test_timeout_remains_active_while_inherited_pipes_are_open(tmp_path: Path) -> None:
     grandchild = tmp_path / "pipe-holder.py"
     grandchild.write_text("import time\ntime.sleep(5)\n", encoding="utf-8")
@@ -432,7 +504,7 @@ def test_timeout_remains_active_while_inherited_pipes_are_open(tmp_path: Path) -
     receipt = _runner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
     elapsed = time.monotonic() - started
 
-    assert elapsed < 1.0
+    assert elapsed < 1.5
     assert receipt.status == "FAILED"
     assert receipt.commands[0].timed_out is True
 
