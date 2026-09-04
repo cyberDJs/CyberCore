@@ -2,13 +2,18 @@
 
 WB-0025 Slice 1 established local and hosted verification for the Python
 package. Slice 2 added reproducible CodeQL analysis for Python and defined the
-merge-gate contract now enforced for `main`.
+merge-gate contract enforced for `main`.
 
-Repository automation does not mutate repository settings. After explicit
-human approval, the `main-branch-protection` ruleset was activated for
-`cyberDJs/CyberCore` and verified against PR #32. WB-0026 remains active until
-PR #32 is reviewed, approved, merged, and protected `main` is verified after
-merge.
+WB-0026 originally activated and verified repository ruleset `18986451` through
+PR #32. WB-0026 was later closed by its post-merge state transition. On
+2026-09-04 a live repository-settings preflight found that the historical
+ruleset no longer existed and `main` was not protected. After explicit human
+approval, equivalent protection was restored as ruleset `22291749`
+(`main-branch-protection`) and independently read back from GitHub.
+
+Repository automation does not mutate repository settings. Any future ruleset,
+branch-protection, required-check, bypass, or merge-policy change requires its
+own explicit repository-settings approval.
 
 ## Supported Python Matrix
 
@@ -120,7 +125,7 @@ These checks are the exact required merge gates for pull requests targeting
 
 Job names must remain stable because branch protection matches required checks
 by their reported names. Renaming a required job can block merges until the
-branch-protection rule is updated by an approved repository administrator.
+ruleset is updated by an explicitly authorized repository administrator.
 
 GitHub also reports an informational workflow check named `CodeQL`. The active
 ruleset required context is not that display check; it is the lowercase CodeQL
@@ -132,19 +137,17 @@ required check pending indefinitely.
 
 ## Active Branch Protection
 
-Main branch protection was explicitly approved, activated, and verified through
-this ruleset:
+Current protection was restored and verified on 2026-09-04:
 
 - Repository: `cyberDJs/CyberCore`
-- Pull request: #32
-- Ruleset id: `18986451`
+- Ruleset id: `22291749`
 - Ruleset name: `main-branch-protection`
 - Target: `branch`
 - Target ref: `~DEFAULT_BRANCH`
 - Enforcement: `active`
 - Bypass actors: none
 - `current_user_can_bypass: never`
-- Activated: `2026-08-03T10:47:03.259+02:00`
+- Live branch state after restore: `main` reports `protected=true`
 
 Rules:
 
@@ -158,6 +161,10 @@ Rules:
 - Last-push approval not required.
 - Allowed merge methods: merge, squash, rebase.
 - Linear history not required.
+- GitHub currently reports
+  `require_extra_approval_for_unattributed_changes: true` on the pull-request
+  rule; this was returned by GitHub when the restored rule was created and is
+  recorded rather than silently omitted.
 
 Required status-check policy:
 
@@ -167,9 +174,23 @@ Required status-check policy:
 Strict required status checks mean the required checks validate the merge
 candidate against current `main`.
 
-## PR #32 Verification
+### Historical ruleset
 
-Verification against PR #32:
+Ruleset `18986451` is retained in project history as evidence of the original
+WB-0026 activation. It is not the current ruleset and must not be used as a
+live settings identifier.
+
+The 2026-09-04 preflight observed both `rulesets=[]` and `main` unprotected
+before restoration. The cause of disappearance is **unknown**. The available
+organization audit-log probe did not provide usable deletion provenance, so no
+actor, timestamp, or cause is asserted.
+
+Detailed recovery evidence is recorded in
+`docs/evidence/2026-09-04-main-protection-restore.md`.
+
+## PR #32 Historical Verification
+
+Verification against PR #32 at the original WB-0026 activation:
 
 - Head commit: `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`
 - CI run: `30784170890` passed
@@ -178,43 +199,35 @@ Verification against PR #32:
 - PR mergeable: `MERGEABLE`
 - Merge state: `BLOCKED`
 - Review decision: `REVIEW_REQUIRED`
-- PR remains draft
+- PR remained draft at that snapshot
 
-The merge state is expected: the ruleset is active, all required checks have
-passed, and merge remains blocked until the draft PR is marked ready and an
-independent approval is present.
+That evidence proves the historical activation state; it does not substitute
+for current live repository-settings verification.
 
-## Manual Verification Checklist
+## Current Verification Checklist
 
-Before merging PR #32:
+Before merging any pull request to `main`:
 
-- Confirm `.github/workflows/ci.yml` has completed successfully on the final
-  PR head after the last push.
-  Activation-time snapshot: head
-  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`, run `30784170890`.
-  Pre-correction snapshot: head
-  `034c77e156725169afb75e1cc89364bac252c67e`, run `30806185333`.
-  Neither snapshot substitutes for final-head evidence after a corrective push.
-- Confirm `.github/workflows/codeql.yml` has completed successfully on the
-  final PR head after the last push.
-  Activation-time snapshot: head
-  `c3868e058f42dfbb8c0c4bdf3eabfe094dd91ccf`, run `30784170892`.
-  Pre-correction snapshot: head
-  `034c77e156725169afb75e1cc89364bac252c67e`, run `30806185411`.
-  Neither snapshot substitutes for final-head evidence after a corrective push.
+- Resolve live `main` and the exact PR head.
+- Confirm `.github/workflows/ci.yml` completed successfully on the exact final
+  PR head.
+- Confirm `.github/workflows/codeql.yml` completed successfully on the same
+  exact final PR head.
+- Confirm all seven required contexts are present and successful.
 - Confirm the required CodeQL context is the stable lowercase job name
-  `codeql`.
-- Confirm the informational check named `CodeQL` is not confused with the
-  required ruleset context `codeql`.
-- Confirm no workflow uses `pull_request_target`.
-- Confirm all action refs are immutable 40-character lowercase SHA values.
-- Confirm all checkout steps use `persist-credentials: false`.
-- Confirm no required workflow uses path filtering.
-- Confirm GitHub CodeQL Default setup is disabled so it does not conflict with
-  the checked-in Advanced setup.
-- Confirm ruleset `18986451` is active with no bypass actors and
+  `codeql`; do not substitute the informational `CodeQL` display check.
+- Confirm no required workflow uses `pull_request_target` or path filtering.
+- Confirm all action refs remain immutable commit SHAs and checkout steps keep
+  `persist-credentials: false`.
+- Confirm GitHub CodeQL Default setup remains disabled while the checked-in
+  Advanced setup is authoritative.
+- Confirm ruleset `22291749` is active, has no bypass actors, and reports
   `current_user_can_bypass: never`.
-- Confirm PR #32 is independently approved after the final push.
+- Confirm `main` reports `protected=true`.
+- Confirm required review approval and review-thread resolution gates are
+  satisfied after the final push.
+- With strict status checks enabled, confirm the candidate is up to date with
+  current `main` before merge.
 
 ## Rollback
 
@@ -224,10 +237,10 @@ If one required check becomes unavailable or incorrectly configured:
 
 1. Inspect the failed context and determine whether the cause is source,
    dependency, runner, cache, configuration, or GitHub service related.
-2. Keep ruleset `18986451` active and preserve all unaffected protections,
+2. Keep ruleset `22291749` active and preserve all unaffected protections,
    including pull-request review, approval, deletion, and non-fast-forward
    protection.
-3. Through the explicitly approved repository-settings process, remove or
+3. Through an explicitly approved repository-settings operation, remove or
    replace only the broken required status context. Do not add a bypass actor
    and do not relax unrelated rules.
 4. Repair the workflow or required-context configuration on a feature branch.
@@ -236,14 +249,14 @@ If one required check becomes unavailable or incorrectly configured:
 
 ### Ruleset-wide failure
 
-Disabling the complete ruleset is reserved for a failure of the ruleset itself,
-not for failure of an individual required check.
+Disabling the complete current ruleset is reserved for failure of the ruleset
+itself, not failure of an individual required check.
 
-Before disabling ruleset `18986451`, an equivalent replacement ruleset must be
-active with pull-request, approval, deletion, non-fast-forward, and unaffected
-required-check protections. Full disablement requires separate explicit human
-approval. If equivalent protection cannot be established first, do not disable
-the ruleset; escalate the incident and keep `main` protected.
+Before disabling ruleset `22291749`, an equivalent replacement ruleset must be
+active with pull-request, approval, deletion, non-fast-forward, review-thread,
+and unaffected required-check protections. Full disablement requires separate
+explicit human approval. If equivalent protection cannot be established first,
+do not disable the ruleset; escalate the incident and keep `main` protected.
 
 This runbook intentionally contains no tokens, credentials, API write commands,
 or automation that mutates repository settings.
