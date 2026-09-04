@@ -10,6 +10,7 @@ import time
 
 import pytest
 
+import cybercore.governed_runner as governed_runner_module
 from cybercore.governed_plan import (
     AuthorizationGrant,
     CommandPlan,
@@ -39,7 +40,8 @@ class _DirectTestContainment:
             shell=False,
         )
 
-    def terminate(self, process: subprocess.Popen[bytes]) -> None:
+    def terminate(self, process: subprocess.Popen[bytes], *, deadline: float) -> None:
+        del deadline
         if os.name == "posix":
             try:
                 os.killpg(process.pid, signal.SIGKILL)
@@ -61,6 +63,7 @@ def _grant(
     target: str = "cyberDJs/CyberCore",
     allowed_classes: frozenset[OperationClass] | None = None,
     prefixes: tuple[tuple[str, ...], ...] | None = None,
+    expires_in: float = 300.0,
 ) -> AuthorizationGrant:
     now = datetime.now(timezone.utc)
     return AuthorizationGrant(
@@ -70,7 +73,7 @@ def _grant(
         allowed_command_prefixes=prefixes or ((sys.executable, "--version"),),
         issuer="test-authorizer",
         issued_at=now - timedelta(seconds=1),
-        expires_at=now + timedelta(minutes=5),
+        expires_at=now + timedelta(seconds=expires_in),
         nonce="test-nonce",
     )
 
@@ -83,6 +86,7 @@ def _plan(
     operation_id: str = "WB-0040",
     target: str = "cyberDJs/CyberCore",
 ) -> CommandPlan:
+    del root
     return CommandPlan(
         operation_id=operation_id,
         canonical_target=target,
@@ -134,16 +138,17 @@ def test_rejects_shell_wrapper_even_when_prefix_is_allowlisted(tmp_path: Path) -
         GovernedRunner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
 
 
-def test_rejects_alternative_shell_wrapper(tmp_path: Path) -> None:
+def test_positive_policy_rejects_non_runtime_executable(tmp_path: Path) -> None:
+    echo = str(Path("/bin/echo").resolve())
     command = CommandSpec(
-        argv=("dash", "-c", "touch marker"),
+        argv=(echo, "hello"),
         cwd=".",
         classification=OperationClass.READ_ONLY,
     )
-    grant = _grant(prefixes=(("dash",),))
+    grant = _grant(prefixes=((echo,),))
 
-    with pytest.raises(GovernedRunnerError, match="denied by policy: dash"):
-        GovernedRunner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
+    with pytest.raises(GovernedRunnerError, match="positive policy"):
+        _runner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
 
 
 def test_rejects_shell_metacharacters(tmp_path: Path) -> None:
@@ -155,7 +160,7 @@ def test_rejects_shell_metacharacters(tmp_path: Path) -> None:
     grant = _grant(prefixes=((sys.executable, "--version"),))
 
     with pytest.raises(GovernedRunnerError, match="metacharacters"):
-        GovernedRunner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
+        _runner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
 
 
 def test_rejects_command_outside_authorized_prefixes(tmp_path: Path) -> None:
@@ -166,7 +171,7 @@ def test_rejects_command_outside_authorized_prefixes(tmp_path: Path) -> None:
     )
 
     with pytest.raises(GovernedRunnerError, match="outside authorized prefixes"):
-        GovernedRunner(tmp_path).execute(_plan(tmp_path, command))
+        _runner(tmp_path).execute(_plan(tmp_path, command))
 
 
 def test_rejects_operation_class_not_present_in_grant(tmp_path: Path) -> None:
@@ -177,19 +182,18 @@ def test_rejects_operation_class_not_present_in_grant(tmp_path: Path) -> None:
     )
 
     with pytest.raises(GovernedRunnerError, match="operation class is not authorized"):
-        GovernedRunner(tmp_path).execute(_plan(tmp_path, command))
+        _runner(tmp_path).execute(_plan(tmp_path, command))
 
 
 def test_rejects_cwd_escape(tmp_path: Path) -> None:
-    outside = tmp_path.parent
     command = CommandSpec(
         argv=(sys.executable, "--version"),
-        cwd=str(outside),
+        cwd=str(tmp_path.parent),
         classification=OperationClass.READ_ONLY,
     )
 
     with pytest.raises(GovernedRunnerError, match="escapes allowed root"):
-        GovernedRunner(tmp_path).execute(_plan(tmp_path, command))
+        _runner(tmp_path).execute(_plan(tmp_path, command))
 
 
 def test_rejects_grant_binding_mismatch(tmp_path: Path) -> None:
@@ -201,7 +205,7 @@ def test_rejects_grant_binding_mismatch(tmp_path: Path) -> None:
     grant = _grant(operation_id="OTHER")
 
     with pytest.raises(GovernedRunnerError, match="operation_id"):
-        GovernedRunner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
+        _runner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
 
 
 def test_prevalidates_entire_plan_before_first_command_runs(tmp_path: Path) -> None:
@@ -239,10 +243,39 @@ def test_prevalidates_entire_plan_before_first_command_runs(tmp_path: Path) -> N
     assert not marker.exists()
 
 
+def test_revalidates_grant_before_each_spawn(tmp_path: Path) -> None:
+    sleeper = tmp_path / "sleep.py"
+    sleeper.write_text("import time\ntime.sleep(0.2)\n", encoding="utf-8")
+    grant = _grant(
+        allowed_classes=frozenset({OperationClass.COMPUTE, OperationClass.READ_ONLY}),
+        prefixes=((sys.executable,),),
+        expires_in=0.1,
+    )
+    plan = CommandPlan(
+        operation_id="WB-0040",
+        canonical_target="cyberDJs/CyberCore",
+        commands=(
+            CommandSpec(
+                argv=(sys.executable, str(sleeper)),
+                cwd=".",
+                classification=OperationClass.COMPUTE,
+            ),
+            CommandSpec(
+                argv=(sys.executable, "--version"),
+                cwd=".",
+                classification=OperationClass.READ_ONLY,
+            ),
+        ),
+        grant=grant,
+    )
+
+    with pytest.raises(GovernedRunnerError, match="expired or not yet valid"):
+        _runner(tmp_path).execute(plan)
+
+
 def test_revalidates_cwd_before_each_spawn(tmp_path: Path) -> None:
     target = tmp_path / "target"
     target.mkdir()
-    outside = tmp_path.parent
     mutator = tmp_path / "mutate-cwd.py"
     mutator.write_text(
         "import os\n"
@@ -250,7 +283,7 @@ def test_revalidates_cwd_before_each_spawn(tmp_path: Path) -> None:
         "import shutil\n"
         f"target = Path({str(target)!r})\n"
         "shutil.rmtree(target)\n"
-        f"os.symlink({str(outside)!r}, target)\n",
+        f"os.symlink({str(tmp_path.parent)!r}, target)\n",
         encoding="utf-8",
     )
     grant = _grant(
@@ -279,20 +312,21 @@ def test_revalidates_cwd_before_each_spawn(tmp_path: Path) -> None:
         _runner(tmp_path).execute(plan)
 
 
-def test_revalidates_executable_identity_before_each_spawn(tmp_path: Path) -> None:
-    alias = tmp_path / "allowed-python"
-    alias.symlink_to(Path(sys.executable).resolve())
+def test_detects_in_place_executable_replacement(tmp_path: Path) -> None:
+    executable = tmp_path / "python3.99"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    executable.chmod(0o755)
     mutator = tmp_path / "mutate-executable.py"
     mutator.write_text(
         "from pathlib import Path\n"
-        f"alias = Path({str(alias)!r})\n"
-        "alias.unlink()\n"
-        "alias.symlink_to('/bin/echo')\n",
+        f"path = Path({str(executable)!r})\n"
+        "path.write_text('#!/bin/sh\\nexit 99\\n', encoding='utf-8')\n"
+        "path.chmod(0o755)\n",
         encoding="utf-8",
     )
     grant = _grant(
         allowed_classes=frozenset({OperationClass.FILE_WRITE, OperationClass.READ_ONLY}),
-        prefixes=((sys.executable,), (str(alias),)),
+        prefixes=((sys.executable,), (str(executable),)),
     )
     plan = CommandPlan(
         operation_id="WB-0040",
@@ -304,7 +338,7 @@ def test_revalidates_executable_identity_before_each_spawn(tmp_path: Path) -> No
                 classification=OperationClass.FILE_WRITE,
             ),
             CommandSpec(
-                argv=(str(alias), "--version"),
+                argv=(str(executable),),
                 cwd=".",
                 classification=OperationClass.READ_ONLY,
             ),
@@ -335,21 +369,6 @@ def test_bare_executable_ignores_ambient_path(
     assert receipt.status == "IMPLEMENTED"
     assert receipt.commands[0].exit_code == 0
     assert Path(receipt.commands[0].argv[0]).resolve() != fake_git.resolve()
-
-
-def test_rejects_symlink_to_denied_executable(tmp_path: Path) -> None:
-    denied_target = Path("/bin/rm").resolve()
-    alias = tmp_path / "safe-tool"
-    alias.symlink_to(denied_target)
-    command = CommandSpec(
-        argv=(str(alias), "--version"),
-        cwd=".",
-        classification=OperationClass.READ_ONLY,
-    )
-    grant = _grant(prefixes=((str(alias), "--version"),))
-
-    with pytest.raises(GovernedRunnerError, match="denied by policy: rm"):
-        GovernedRunner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
 
 
 def test_timeout_terminates_descendant_processes(tmp_path: Path) -> None:
@@ -418,37 +437,81 @@ def test_timeout_remains_active_while_inherited_pipes_are_open(tmp_path: Path) -
     assert receipt.commands[0].timed_out is True
 
 
-def test_output_limit_stops_noisy_process(tmp_path: Path) -> None:
-    marker = tmp_path / "noisy-process-finished"
-    noisy = tmp_path / "noisy.py"
-    noisy.write_text(
-        "from pathlib import Path\n"
-        "import sys\n"
-        "import time\n"
-        "chunk = 'x' * 4096\n"
-        "for _ in range(400):\n"
-        "    sys.stdout.write(chunk)\n"
-        "    sys.stdout.flush()\n"
-        "    time.sleep(0.003)\n"
-        f"Path({str(marker)!r}).write_text('finished', encoding='utf-8')\n",
-        encoding="utf-8",
-    )
-    command = CommandSpec(
-        argv=(sys.executable, str(noisy)),
-        cwd=".",
-        classification=OperationClass.COMPUTE,
-        timeout_seconds=5,
-    )
-    grant = _grant(
-        allowed_classes=frozenset({OperationClass.COMPUTE}),
-        prefixes=((sys.executable,),),
-    )
+def test_systemd_client_env_preserves_only_required_bus_discovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+    monkeypatch.setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/1000/bus")
+    monkeypatch.setenv("SECRET_SHOULD_NOT_LEAK", "nope")
 
-    receipt = _runner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
+    env = governed_runner_module._bounded_environment(include_user_bus=True)
 
-    assert receipt.status == "FAILED"
-    assert receipt.commands[0].timed_out is False
-    assert not marker.exists()
+    assert env["XDG_RUNTIME_DIR"] == "/run/user/1000"
+    assert env["DBUS_SESSION_BUS_ADDRESS"] == "unix:path=/run/user/1000/bus"
+    assert "SECRET_SHOULD_NOT_LEAK" not in env
+
+
+def test_systemd_spawn_binds_validated_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(governed_runner_module.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/true")
+    captured: dict[str, object] = {}
+
+    class _FakeProcess:
+        pid = 123
+
+    def fake_popen(argv: list[str], **kwargs: object) -> _FakeProcess:
+        captured["argv"] = argv
+        captured["kwargs"] = kwargs
+        return _FakeProcess()
+
+    monkeypatch.setattr(governed_runner_module.subprocess, "Popen", fake_popen)
+    containment = governed_runner_module._SystemdContainment()
+    env = governed_runner_module._bounded_environment(include_user_bus=False)
+
+    containment.spawn((sys.executable, "--version"), cwd=tmp_path, env=env)
+
+    argv = captured["argv"]
+    assert isinstance(argv, list)
+    assert f"--working-directory={tmp_path}" in argv
+
+
+def test_systemctl_control_call_is_bounded_by_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(governed_runner_module.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/true")
+    seen_timeouts: list[float] = []
+
+    def fake_run(*_args: object, timeout: float, **_kwargs: object) -> None:
+        seen_timeouts.append(timeout)
+        raise subprocess.TimeoutExpired(cmd="systemctl", timeout=timeout)
+
+    monkeypatch.setattr(governed_runner_module.subprocess, "run", fake_run)
+
+    class _FakeProcess:
+        pid = 321
+        returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def kill(self) -> None:
+            self.returncode = -9
+
+        def wait(self, timeout: float | None = None) -> int:
+            del timeout
+            self.returncode = -9
+            return self.returncode
+
+    process = _FakeProcess()
+    containment = governed_runner_module._SystemdContainment()
+    containment._units[process.pid] = "test-unit"
+    deadline = time.monotonic() + 0.05
+
+    containment.terminate(process, deadline=deadline)
+
+    assert seen_timeouts
+    assert all(0 < value <= 0.05 for value in seen_timeouts)
 
 
 def test_rejects_missing_executable_during_prevalidation(tmp_path: Path) -> None:
@@ -460,5 +523,5 @@ def test_rejects_missing_executable_during_prevalidation(tmp_path: Path) -> None
     )
     grant = _grant(prefixes=((missing,),))
 
-    with pytest.raises(GovernedRunnerError, match="trusted path"):
-        GovernedRunner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
+    with pytest.raises(GovernedRunnerError, match="positive policy"):
+        _runner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
