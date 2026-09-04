@@ -36,7 +36,7 @@ def _load_sounddevice(module: Any | None = None) -> Any:
         return importlib.import_module("sounddevice")
     except (ImportError, OSError) as exc:
         raise LocalVoiceDependencyError(
-            "sounddevice is unavailable; install CyberCore with the 'voice-local' extra"
+            f"sounddevice is unavailable; install CyberCore with the 'voice-local' extra"
         ) from exc
 
 
@@ -534,6 +534,11 @@ class SoundDeviceTransport:
         self._sd = _load_sounddevice(sounddevice_module)
         self._stream: Any | None = None
         self._format: AudioFormat | None = None
+        self._underflow_count = 0
+
+    @property
+    def underflow_count(self) -> int:
+        return self._underflow_count
 
     def _open(self, audio_format: AudioFormat) -> Any:
         if audio_format.encoding is not AudioEncoding.PCM_S16LE:
@@ -557,10 +562,7 @@ class SoundDeviceTransport:
         stream = self._open(frame.format)
         underflowed = stream.write(frame.payload)
         if underflowed:
-            self.flush_output()
-            raise AudioOutputUnderflowError(
-                "speaker output underflowed; output was flushed to avoid stale speech"
-            )
+            self._underflow_count += 1
 
     def flush_output(self) -> None:
         stream, self._stream = self._stream, None
