@@ -10,7 +10,8 @@ import signal
 import subprocess
 import threading
 import time
-from typing import BinaryIO
+from typing import BinaryIO, Protocol
+import uuid
 
 from cybercore.governed_plan import CommandPlan, CommandSpec, OperationClass
 from cybercore.governed_receipt import CommandReceipt, ExecutionReceipt
@@ -25,6 +26,20 @@ _BLOCKED_EXECUTABLES = {
     "sh",
     "zsh",
     "fish",
+    "dash",
+    "ash",
+    "ksh",
+    "ksh93",
+    "mksh",
+    "csh",
+    "tcsh",
+    "yash",
+    "xonsh",
+    "nu",
+    "nushell",
+    "pwsh",
+    "powershell",
+    "busybox",
     "sudo",
     "su",
     "doas",
@@ -38,7 +53,7 @@ _BLOCKED_EXECUTABLES = {
     "printenv",
 }
 
-_SHELL_META = ("|", "&", ";", ">", "<", "`", "$(`", "\n", "\r")
+_SHELL_META = ("|", "&", ";", ">", "<", "`", "$(`, "\n", "\r")
 _TRUSTED_EXECUTABLE_PATH = "/usr/local/bin:/usr/bin:/bin"
 _MAX_OUTPUT_BYTES_PER_STREAM = 1024 * 1024
 _OUTPUT_READ_CHUNK_BYTES = 64 * 1024
@@ -47,10 +62,104 @@ _PROCESS_GROUP_TERM_GRACE_SECONDS = 0.1
 
 
 @dataclass(frozen=True, slots=True)
+class _FileIdentity:
+    device: int
+    inode: int
+
+
+@dataclass(frozen=True, slots=True)
 class _PreparedCommand:
     spec: CommandSpec
     cwd: Path
     argv: tuple[str, ...]
+    cwd_identity: _FileIdentity
+    executable_identity: _FileIdentity
+
+
+class _Containment(Protocol):
+    def spawn(
+        self,
+        argv: tuple[str, ...],
+        *,
+        cwd: Path,
+        env: dict[str, str],
+    ) -> subprocess.Popen[bytes]: ...
+
+    def terminate(self, process: subprocess.Popen[bytes]) -> None: ...
+
+
+class _SystemdContainment:
+    """Contain commands in a transient user service cgroup; fail closed if unavailable."""
+
+    def __init__(self) -> None:
+        if os.name != "posix":
+            raise GovernedRunnerError("strong process containment is unavailable on this platform")
+        systemd_run = shutil.which("systemd-run", path=_TRUSTED_EXECUTABLE_PATH)
+        systemctl = shutil.which("systemctl", path=_TRUSTED_EXECUTABLE_PATH)
+        if systemd_run is None or systemctl is None:
+            raise GovernedRunnerError("systemd cgroup containment tools are unavailable")
+        self._systemd_run = str(Path(systemd_run).resolve())
+        self._systemctl = str(Path(systemctl).resolve())
+        self._units: dict[int, str] = {}
+
+    def spawn(
+        self,
+        argv: tuple[str, ...],
+        *,
+        cwd: Path,
+        env: dict[str, str],
+    ) -> subprocess.Popen[bytes]:
+        unit = f"cybercore-governed-{uuid.uuid4().hex}"
+        wrapped = (
+            self._systemd_run,
+            "--user",
+            "--quiet",
+            "--collect",
+            "--wait",
+            "--pipe",
+            f"--unit={unit}",
+            "--",
+            *argv,
+        )
+        process = subprocess.Popen(
+            list(wrapped),
+            cwd=cwd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+            shell=False,
+        )
+        self._units[process.pid] = unit
+        return process
+
+    def terminate(self, process: subprocess.Popen[bytes]) -> None:
+        unit = self._units.get(process.pid)
+        if unit is None:
+            raise GovernedRunnerError("containment unit identity is missing")
+        for sig in ("TERM", "KILL"):
+            subprocess.run(
+                [
+                    self._systemctl,
+                    "--user",
+                    "kill",
+                    "--kill-whom=all",
+                    f"--signal={sig}",
+                    unit,
+                ],
+                env={"PATH": _TRUSTED_EXECUTABLE_PATH, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                shell=False,
+                check=False,
+            )
+            if process.poll() is not None:
+                break
+            time.sleep(_PROCESS_GROUP_TERM_GRACE_SECONDS)
+        if process.poll() is None:
+            process.kill()
+            process.wait()
 
 
 class _DigestState:
@@ -78,11 +187,16 @@ def _contains_shell_meta(argv: tuple[str, ...]) -> bool:
     return any(token in arg for arg in argv for token in _SHELL_META)
 
 
+def _identity(path: Path) -> _FileIdentity:
+    stat = path.stat()
+    return _FileIdentity(device=stat.st_dev, inode=stat.st_ino)
+
+
 def _resolved_cwd(root: Path, raw_cwd: str) -> Path:
     candidate = Path(raw_cwd)
     if not candidate.is_absolute():
         candidate = root / candidate
-    resolved = candidate.resolve()
+    resolved = candidate.resolve(strict=True)
     if resolved != root and root not in resolved.parents:
         raise GovernedRunnerError(f"command cwd escapes allowed root: {resolved}")
     if not resolved.is_dir():
@@ -91,7 +205,7 @@ def _resolved_cwd(root: Path, raw_cwd: str) -> Path:
 
 
 def _deny_blocked_executable(executable: str) -> None:
-    name = Path(executable).name
+    name = Path(executable).name.lower()
     if name in _BLOCKED_EXECUTABLES:
         raise GovernedRunnerError(f"executable is denied by policy: {name}")
 
@@ -119,7 +233,10 @@ def _resolve_executable(raw_executable: str) -> str:
         raise GovernedRunnerError(
             f"authorized executable was not found on the trusted path: {raw_executable}"
         )
-    return str(Path(resolved_name).resolve())
+    resolved = Path(resolved_name).resolve(strict=True)
+    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+        raise GovernedRunnerError(f"authorized executable is not executable: {resolved}")
+    return str(resolved)
 
 
 def _validate_plan_binding(plan: CommandPlan) -> None:
@@ -150,16 +267,36 @@ def _prepare_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> 
     cwd = _resolved_cwd(root, command.cwd)
     resolved_executable = _resolve_executable(command.argv[0])
     _deny_blocked_executable(resolved_executable)
+    executable_path = Path(resolved_executable)
     return _PreparedCommand(
         spec=command,
         cwd=cwd,
         argv=(resolved_executable, *command.argv[1:]),
+        cwd_identity=_identity(cwd),
+        executable_identity=_identity(executable_path),
     )
 
 
 def _prepare_plan(plan: CommandPlan, *, root: Path) -> tuple[_PreparedCommand, ...]:
     _validate_plan_binding(plan)
     return tuple(_prepare_command(plan, command, root=root) for command in plan.commands)
+
+
+def _revalidate_prepared_command(
+    plan: CommandPlan,
+    prepared: _PreparedCommand,
+    *,
+    root: Path,
+) -> _PreparedCommand:
+    current = _prepare_command(plan, prepared.spec, root=root)
+    if current.cwd_identity != prepared.cwd_identity or current.cwd != prepared.cwd:
+        raise GovernedRunnerError("command cwd changed after plan validation")
+    if (
+        current.executable_identity != prepared.executable_identity
+        or current.argv[0] != prepared.argv[0]
+    ):
+        raise GovernedRunnerError("command executable changed after plan validation")
+    return current
 
 
 def _drain_stream(
@@ -181,31 +318,8 @@ def _drain_stream(
             pass
 
 
-def _terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
-    if os.name != "posix":
-        if process.poll() is None:
-            process.kill()
-            process.wait()
-        return
-
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-
-    deadline = time.monotonic() + _PROCESS_GROUP_TERM_GRACE_SECONDS
-    while process.poll() is None and time.monotonic() < deadline:
-        time.sleep(_PROCESS_POLL_SECONDS)
-
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    if process.poll() is None:
-        process.wait()
-
-
 def _join_drain_threads_until_deadline(
+    containment: _Containment,
     process: subprocess.Popen[bytes],
     stdout_thread: threading.Thread,
     stderr_thread: threading.Thread,
@@ -221,7 +335,7 @@ def _join_drain_threads_until_deadline(
     if not any(thread.is_alive() for thread in threads):
         return True
 
-    _terminate_process_tree(process)
+    containment.terminate(process)
     for stream in (process.stdout, process.stderr):
         if stream is not None:
             try:
@@ -236,10 +350,11 @@ def _join_drain_threads_until_deadline(
 class GovernedRunner:
     """Execute an already-authorized command plan without interpreting new authority."""
 
-    def __init__(self, allowed_root: Path):
+    def __init__(self, allowed_root: Path, *, containment: _Containment | None = None):
         self.allowed_root = allowed_root.expanduser().resolve()
         if not self.allowed_root.is_dir():
             raise GovernedRunnerError(f"allowed root does not exist: {self.allowed_root}")
+        self._containment = containment or _SystemdContainment()
 
     def execute(self, plan: CommandPlan) -> ExecutionReceipt:
         prepared_commands = _prepare_plan(plan, root=self.allowed_root)
@@ -253,7 +368,8 @@ class GovernedRunner:
         }
 
         for prepared in prepared_commands:
-            command = prepared.spec
+            current = _revalidate_prepared_command(plan, prepared, root=self.allowed_root)
+            command = current.spec
             started = datetime.now(timezone.utc)
             timed_out = False
             output_limit_exceeded = False
@@ -263,14 +379,10 @@ class GovernedRunner:
             output_limit_event = threading.Event()
 
             try:
-                process = subprocess.Popen(
-                    list(prepared.argv),
-                    cwd=prepared.cwd,
+                process = self._containment.spawn(
+                    current.argv,
+                    cwd=current.cwd,
                     env=environment,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    start_new_session=True,
-                    shell=False,
                 )
             except OSError as exc:
                 stderr_state.consume(str(exc).encode("utf-8", errors="replace"))
@@ -294,11 +406,11 @@ class GovernedRunner:
                 while process.poll() is None:
                     if output_limit_event.is_set():
                         output_limit_exceeded = True
-                        _terminate_process_tree(process)
+                        self._containment.terminate(process)
                         break
                     if time.monotonic() >= deadline:
                         timed_out = True
-                        _terminate_process_tree(process)
+                        self._containment.terminate(process)
                         break
                     time.sleep(_PROCESS_POLL_SECONDS)
 
@@ -306,16 +418,17 @@ class GovernedRunner:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         timed_out = True
-                        _terminate_process_tree(process)
+                        self._containment.terminate(process)
                     else:
                         try:
                             process.wait(timeout=remaining)
                         except subprocess.TimeoutExpired:
                             timed_out = True
-                            _terminate_process_tree(process)
+                            self._containment.terminate(process)
 
                 exit_code = process.returncode
                 drains_finished_before_deadline = _join_drain_threads_until_deadline(
+                    self._containment,
                     process,
                     stdout_thread,
                     stderr_thread,
@@ -328,8 +441,8 @@ class GovernedRunner:
             finished = datetime.now(timezone.utc)
             receipts.append(
                 CommandReceipt(
-                    argv=prepared.argv,
-                    cwd=str(prepared.cwd),
+                    argv=current.argv,
+                    cwd=str(current.cwd),
                     classification=command.classification,
                     started_at=started.isoformat(),
                     finished_at=finished.isoformat(),
