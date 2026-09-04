@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+import math
 
 
 class OperationClass(str, Enum):
@@ -27,8 +28,8 @@ class CommandSpec:
     def __post_init__(self) -> None:
         if not self.argv or not self.argv[0].strip():
             raise ValueError("command argv must contain an executable")
-        if self.timeout_seconds <= 0:
-            raise ValueError("command timeout must be greater than zero")
+        if not math.isfinite(self.timeout_seconds) or self.timeout_seconds <= 0:
+            raise ValueError("command timeout must be finite and greater than zero")
 
 
 @dataclass(frozen=True, slots=True)
