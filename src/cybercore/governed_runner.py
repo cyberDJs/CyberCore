@@ -863,7 +863,9 @@ def _prepare_python_code_input(
     if args[0].startswith("-"):
         raise GovernedRunnerError("Python option/module/stdin execution is denied by policy")
     if binding is None or not binding.exact or binding.argv_prefix != command.argv:
-        raise GovernedRunnerError("Python script execution requires an exact authorized command binding")
+        raise GovernedRunnerError(
+            "Python script execution requires an exact authorized command binding"
+        )
     if command.code_sha256 is None:
         raise GovernedRunnerError("Python script execution requires code_sha256")
 
