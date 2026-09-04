@@ -217,9 +217,7 @@ def test_strict_mode_rejects_absolute_python_impostor_outside_trusted_path(
     )
 
     with pytest.raises(GovernedRunnerError, match="trusted runtime identities"):
-        governed_runner_module._prepare_plan(
-            _plan(command, grant), root=tmp_path, strict=True
-        )
+        governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path, strict=True)
 
 
 def test_systemd_termination_never_kills_only_client_when_unit_stop_unconfirmed(
