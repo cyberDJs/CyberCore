@@ -194,6 +194,12 @@ def build_parser() -> argparse.ArgumentParser:
     cloudflare_apply.add_argument("--manifest", type=Path, required=True)
     cloudflare_apply.add_argument("--expected-plan", required=True)
     cloudflare_apply.add_argument("--approve", required=True)
+    cloudflare_apply.add_argument(
+        "--evidence-dir",
+        type=Path,
+        required=True,
+        help="New directory for the pre-write snapshot, rollback manifest, and apply receipt",
+    )
 
     return parser
 
@@ -231,6 +237,7 @@ def main(argv: list[str] | None = None) -> int:
                     manifest,
                     expected_plan=args.expected_plan,
                     approval=args.approve,
+                    evidence_dir=args.evidence_dir,
                 )
                 payload["mutation"] = "cloudflare_dns"
             else:

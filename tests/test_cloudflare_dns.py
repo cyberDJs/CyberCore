@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from cybercore.cloudflare_dns import (
+    CloudflareClient,
     CloudflareDnsError,
+    DnsChange,
     DnsRecord,
     apply_manifest,
     build_plan,
@@ -145,14 +148,23 @@ def test_apply_is_blocked_without_exact_plan_bound_approval(tmp_path: Path) -> N
         apply_manifest(api, manifest, expected_plan=plan.fingerprint, approval="yes")
     assert api.writes == []
 
+    evidence_dir = tmp_path / "evidence"
     receipt = apply_manifest(
         api,
         manifest,
         expected_plan=plan.fingerprint,
         approval=plan.approval_text,
+        evidence_dir=evidence_dir,
     )
     assert receipt["verified"] is True
     assert api.writes
+    assert (evidence_dir / "pre-write-zone-snapshot.json").is_file()
+    assert (evidence_dir / "rollback-manifest.yaml").is_file()
+    assert (evidence_dir / "rollback-prepared-receipt.json").is_file()
+    assert (evidence_dir / "post-write-zone-snapshot.json").is_file()
+    assert (evidence_dir / "apply-receipt.json").is_file()
+    rollback = load_manifest(evidence_dir / "rollback-manifest.yaml")
+    assert any(record.content == "192.0.2.9" for record in rollback.records)
 
 
 def test_apply_rejects_drift_before_any_write(tmp_path: Path) -> None:
@@ -171,3 +183,218 @@ def test_apply_rejects_drift_before_any_write(tmp_path: Path) -> None:
             approval=plan.approval_text,
         )
     assert api.writes == []
+
+
+def _load_inline_manifest(tmp_path: Path, name: str, content: str):
+    path = tmp_path / name
+    path.write_text(content, encoding="utf-8")
+    return load_manifest(path)
+
+
+def test_manifest_rejects_multiple_cnames_at_one_name(tmp_path: Path) -> None:
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: CNAME
+    name: www
+records:
+  - type: CNAME
+    name: www
+    content: one.example.net
+  - type: CNAME
+    name: www
+    content: two.example.net
+"""
+    with pytest.raises(CloudflareDnsError, match="at most one desired CNAME"):
+        _load_inline_manifest(tmp_path, "multi-cname.yaml", content)
+
+
+def test_manifest_rejects_non_auto_ttl_for_proxied_record(tmp_path: Path) -> None:
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: A
+    name: www
+records:
+  - type: A
+    name: www
+    content: 192.0.2.10
+    proxied: true
+    ttl: 300
+"""
+    with pytest.raises(CloudflareDnsError, match="require ttl: 1"):
+        _load_inline_manifest(tmp_path, "proxied-ttl.yaml", content)
+
+
+def test_manifest_rejects_mixed_proxy_mode_for_address_records(tmp_path: Path) -> None:
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: A
+    name: www
+records:
+"""
+    content += """\
+  - type: A
+    name: www
+    content: 192.0.2.10
+    proxied: true
+    ttl: 1
+  - type: A
+    name: www
+    content: 192.0.2.11
+    proxied: false
+    ttl: 300
+"""
+    with pytest.raises(CloudflareDnsError, match="one consistent Cloudflare proxy mode"):
+        _load_inline_manifest(tmp_path, "mixed-proxy.yaml", content)
+
+
+def test_plan_blocks_unmanaged_a_before_creating_cname(tmp_path: Path) -> None:
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: CNAME
+    name: www
+records:
+  - type: CNAME
+    name: www
+    content: target.example.net
+"""
+    manifest = _load_inline_manifest(tmp_path, "cname.yaml", content)
+    current = (DnsRecord("A", "www.example.cz", "192.0.2.9", 300, False, None, "a1"),)
+    with pytest.raises(CloudflareDnsError, match="conflicts with unmanaged A"):
+        build_plan(manifest, zone_id="zone-1", current_records=current)
+
+
+def test_plan_allows_managed_a_replacement_with_cname(tmp_path: Path) -> None:
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: A
+    name: www
+  - type: CNAME
+    name: www
+records:
+  - type: CNAME
+    name: www
+    content: target.example.net
+"""
+    manifest = _load_inline_manifest(tmp_path, "managed-replacement.yaml", content)
+    current = (DnsRecord("A", "www.example.cz", "192.0.2.9", 300, False, None, "a1"),)
+    plan = build_plan(manifest, zone_id="zone-1", current_records=current)
+    assert [change.action for change in plan.changes] == ["DELETE", "CREATE"]
+
+
+def test_plan_blocks_unmanaged_ns_at_desired_owner_name(tmp_path: Path) -> None:
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: A
+    name: delegated
+records:
+  - type: A
+    name: delegated
+    content: 192.0.2.10
+"""
+    manifest = _load_inline_manifest(tmp_path, "ns-conflict.yaml", content)
+    current = (DnsRecord("NS", "delegated.example.cz", "ns1.example.net", 300, False, None, "ns1"),)
+    with pytest.raises(CloudflareDnsError, match="unmanaged NS"):
+        build_plan(manifest, zone_id="zone-1", current_records=current)
+
+
+def test_apply_requires_new_evidence_directory_before_write(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+    api = FakeApi((DnsRecord("A", "example.cz", "192.0.2.9", 300, False, None, "a1"),))
+    plan = build_plan(manifest, zone_id="zone-1", current_records=api.list_dns_records("zone-1"))
+    with pytest.raises(CloudflareDnsError, match="requires a new evidence directory"):
+        apply_manifest(
+            api,
+            manifest,
+            expected_plan=plan.fingerprint,
+            approval=plan.approval_text,
+        )
+    assert api.writes == []
+
+    evidence_dir = tmp_path / "already-exists"
+    evidence_dir.mkdir()
+    with pytest.raises(CloudflareDnsError, match="must be a new writable path"):
+        apply_manifest(
+            api,
+            manifest,
+            expected_plan=plan.fingerprint,
+            approval=plan.approval_text,
+            evidence_dir=evidence_dir,
+        )
+    assert api.writes == []
+
+
+def test_plan_blocks_proxy_mode_change_to_unmanaged_address_record(tmp_path: Path) -> None:
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: A
+    name: www
+records:
+  - type: A
+    name: www
+    content: 192.0.2.10
+    proxied: true
+    ttl: 1
+"""
+    manifest = _load_inline_manifest(tmp_path, "proxy-conflict.yaml", content)
+    current = (DnsRecord("AAAA", "www.example.cz", "2001:db8::1", 300, False, None, "aaaa1"),)
+    with pytest.raises(CloudflareDnsError, match="proxy mode.*unmanaged A/AAAA"):
+        build_plan(manifest, zone_id="zone-1", current_records=current)
+
+
+def test_template_manifest_cannot_be_applied(tmp_path: Path) -> None:
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+template: true
+managed_recordsets:
+  - type: A
+    name: "@"
+records: []
+"""
+    manifest = _load_inline_manifest(tmp_path, "template.yaml", content)
+    api = FakeApi(())
+    with pytest.raises(CloudflareDnsError, match="template Cloudflare DNS manifest"):
+        apply_manifest(
+            api,
+            manifest,
+            expected_plan="unused",
+            approval="unused",
+            evidence_dir=tmp_path / "unused-evidence",
+        )
+    assert api.writes == []
+
+
+def test_client_uses_patch_for_updates_to_preserve_unmodeled_metadata() -> None:
+    captured: dict[str, object] = {}
+
+    def requester(request):
+        captured["method"] = request.method
+        captured["body"] = request.data
+        return 200, b'{"success":true,"result":{}}'
+
+    client = CloudflareClient("test-token", requester=requester)
+    before = DnsRecord("A", "www.example.cz", "192.0.2.9", 300, False, None, "a1")
+    after = DnsRecord("A", "www.example.cz", "192.0.2.10", 300, False)
+    change = DnsChange("UPDATE", ("A", "www.example.cz"), before, after)
+
+    client.apply_dns_batch("zone-1", (change,))
+    assert captured["method"] == "POST"
+    raw = captured["body"]
+    assert isinstance(raw, bytes)
+    payload = json.loads(raw)
+    assert payload["puts"] == []
+    assert payload["patches"] == [{"id": "a1", **after.api_payload()}]

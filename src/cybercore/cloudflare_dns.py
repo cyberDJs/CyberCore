@@ -18,6 +18,8 @@ API_BASE = "https://api.cloudflare.com/client/v4"
 TOKEN_ENV = "CLOUDFLARE_DNS_API_TOKEN"
 SUPPORTED_TYPES = {"A", "AAAA", "CNAME", "MX", "TXT"}
 PROXY_CAPABLE_TYPES = {"A", "AAAA", "CNAME"}
+ADDRESS_TYPES = {"A", "AAAA"}
+IP_RESOLUTION_TYPES = {"A", "AAAA", "CNAME"}
 
 
 class CloudflareDnsError(RuntimeError):
@@ -88,6 +90,7 @@ class DnsManifest:
     zone: str
     managed_recordsets: tuple[tuple[str, str], ...]
     records: tuple[DnsRecord, ...]
+    template: bool
 
 
 @dataclass(frozen=True)
@@ -96,6 +99,7 @@ class DnsPlan:
     zone_id: str
     changes: tuple[DnsChange, ...]
     fingerprint: str
+    current_records: tuple[DnsRecord, ...]
 
     @property
     def approval_text(self) -> str:
@@ -268,7 +272,7 @@ class CloudflareClient:
         if len(changes) > 200:
             raise CloudflareDnsError("Cloudflare DNS v0.1 limits one batch to 200 changes")
         deletes: list[dict[str, object]] = []
-        puts: list[dict[str, object]] = []
+        patches: list[dict[str, object]] = []
         posts: list[dict[str, object]] = []
         for change in changes:
             if change.action == "DELETE" and change.before is not None:
@@ -284,7 +288,7 @@ class CloudflareClient:
                     raise CloudflareDnsError(
                         "cannot update Cloudflare DNS record without record id"
                     )
-                puts.append({"id": change.before.record_id, **change.after.api_payload()})
+                patches.append({"id": change.before.record_id, **change.after.api_payload()})
             elif change.action == "CREATE" and change.after is not None:
                 posts.append(change.after.api_payload())
             else:
@@ -292,7 +296,7 @@ class CloudflareClient:
         self._request(
             "POST",
             f"/zones/{zone_id}/dns_records/batch",
-            payload={"deletes": deletes, "puts": puts, "posts": posts, "patches": []},
+            payload={"deletes": deletes, "patches": patches, "puts": [], "posts": posts},
         )
 
 
@@ -347,6 +351,8 @@ def _record_from_manifest(item: object, zone: str) -> DnsRecord:
         raise CloudflareDnsError("manifest record proxied must be boolean")
     if proxied and record_type not in PROXY_CAPABLE_TYPES:
         raise CloudflareDnsError(f"manifest forbids proxied=true for {record_type}")
+    if proxied and ttl != 1:
+        raise CloudflareDnsError("proxied Cloudflare records require ttl: 1 (Auto)")
     priority = item.get("priority")
     if record_type == "MX":
         if (
@@ -404,7 +410,7 @@ def load_manifest(path: Path) -> DnsManifest:
         raise CloudflareDnsError("Cloudflare DNS manifest is invalid YAML") from exc
     if not isinstance(document, dict):
         raise CloudflareDnsError("Cloudflare DNS manifest must be a mapping")
-    allowed = {"version", "zone", "managed_recordsets", "records"}
+    allowed = {"version", "zone", "managed_recordsets", "records", "template"}
     unknown = set(document) - allowed
     if unknown:
         raise CloudflareDnsError(
@@ -413,6 +419,9 @@ def load_manifest(path: Path) -> DnsManifest:
     if document.get("version") != "cybercore.cloudflare-dns/v0.1":
         raise CloudflareDnsError("manifest version must be cybercore.cloudflare-dns/v0.1")
     zone = _normalize_zone(document.get("zone"))
+    template = document.get("template", False)
+    if not isinstance(template, bool):
+        raise CloudflareDnsError("manifest template must be boolean")
 
     raw_sets = document.get("managed_recordsets")
     if not isinstance(raw_sets, list) or not raw_sets:
@@ -439,16 +448,27 @@ def load_manifest(path: Path) -> DnsManifest:
     if len(set(semantic)) != len(semantic):
         raise CloudflareDnsError("manifest contains duplicate desired records")
 
-    by_name: dict[str, set[str]] = {}
+    by_name: dict[str, list[DnsRecord]] = {}
     for record in records:
-        by_name.setdefault(record.name, set()).add(record.record_type)
-    for name, types in by_name.items():
+        by_name.setdefault(record.name, []).append(record)
+    for name, owner_records in by_name.items():
+        types = {record.record_type for record in owner_records}
+        cname_count = sum(record.record_type == "CNAME" for record in owner_records)
+        if cname_count > 1:
+            raise CloudflareDnsError(f"at most one desired CNAME is allowed at {name}")
         if "CNAME" in types and len(types) > 1:
             raise CloudflareDnsError(
                 f"CNAME cannot coexist with other desired record types at {name}"
             )
+        address_records = [
+            record for record in owner_records if record.record_type in ADDRESS_TYPES
+        ]
+        if len({record.proxied for record in address_records}) > 1:
+            raise CloudflareDnsError(
+                f"A/AAAA records at {name} must use one consistent Cloudflare proxy mode"
+            )
 
-    return DnsManifest(zone, tuple(managed), records)
+    return DnsManifest(zone, tuple(managed), records, template)
 
 
 def _canonical_plan_payload(zone: str, zone_id: str, changes: tuple[DnsChange, ...]) -> bytes:
@@ -462,12 +482,61 @@ def _canonical_plan_payload(zone: str, zone_id: str, changes: tuple[DnsChange, .
     )
 
 
+def _validate_current_name_conflicts(
+    manifest: DnsManifest, current_records: tuple[DnsRecord, ...]
+) -> None:
+    managed = set(manifest.managed_recordsets)
+    desired_by_name: dict[str, list[DnsRecord]] = {}
+    current_by_name: dict[str, list[DnsRecord]] = {}
+    for record in manifest.records:
+        desired_by_name.setdefault(record.name, []).append(record)
+    for record in current_records:
+        current_by_name.setdefault(record.name, []).append(record)
+
+    for name, desired_records in desired_by_name.items():
+        desired_types = {record.record_type for record in desired_records}
+        unmanaged = [
+            record for record in current_by_name.get(name, []) if record.recordset() not in managed
+        ]
+        if any(record.record_type == "NS" for record in unmanaged):
+            raise CloudflareDnsError(
+                f"desired records at {name} conflict with an unmanaged NS record"
+            )
+        if "CNAME" in desired_types:
+            conflicts = [
+                record for record in unmanaged if record.record_type in IP_RESOLUTION_TYPES
+            ]
+            if conflicts:
+                conflict_types = ", ".join(sorted({record.record_type for record in conflicts}))
+                raise CloudflareDnsError(
+                    f"desired CNAME at {name} conflicts with unmanaged {conflict_types} record(s)"
+                )
+        elif desired_types & ADDRESS_TYPES:
+            if any(record.record_type == "CNAME" for record in unmanaged):
+                raise CloudflareDnsError(
+                    f"desired A/AAAA at {name} conflicts with an unmanaged CNAME record"
+                )
+            desired_address = [
+                record for record in desired_records if record.record_type in ADDRESS_TYPES
+            ]
+            unmanaged_address = [
+                record for record in unmanaged if record.record_type in ADDRESS_TYPES
+            ]
+            if desired_address and unmanaged_address:
+                desired_proxy_mode = desired_address[0].proxied
+                if any(record.proxied != desired_proxy_mode for record in unmanaged_address):
+                    raise CloudflareDnsError(
+                        f"desired A/AAAA proxy mode at {name} conflicts with unmanaged A/AAAA records"
+                    )
+
+
 def build_plan(
     manifest: DnsManifest,
     *,
     zone_id: str,
     current_records: tuple[DnsRecord, ...],
 ) -> DnsPlan:
+    _validate_current_name_conflicts(manifest, current_records)
     managed = set(manifest.managed_recordsets)
     current = [record for record in current_records if record.recordset() in managed]
     desired = list(manifest.records)
@@ -505,7 +574,7 @@ def build_plan(
     fingerprint = hashlib.sha256(
         _canonical_plan_payload(manifest.zone, zone_id, changes_tuple)
     ).hexdigest()
-    return DnsPlan(manifest.zone, zone_id, changes_tuple, fingerprint)
+    return DnsPlan(manifest.zone, zone_id, changes_tuple, fingerprint, current_records)
 
 
 def discover(api: CloudflareApi, zone: str) -> dict[str, object]:
@@ -530,13 +599,145 @@ def plan_from_manifest(api: CloudflareApi, manifest: DnsManifest) -> DnsPlan:
     return build_plan(manifest, zone_id=zone_id, current_records=api.list_dns_records(zone_id))
 
 
+def _record_sort_key(record: DnsRecord) -> tuple[object, ...]:
+    return (
+        record.record_type,
+        record.name,
+        record.content,
+        record.ttl,
+        record.proxied,
+        -1 if record.priority is None else record.priority,
+        "" if record.record_id is None else record.record_id,
+    )
+
+
+def _rollback_manifest_payload(
+    manifest: DnsManifest, current_records: tuple[DnsRecord, ...]
+) -> dict[str, object]:
+    managed = set(manifest.managed_recordsets)
+    records = sorted(
+        (record for record in current_records if record.recordset() in managed),
+        key=_record_sort_key,
+    )
+    return {
+        "version": "cybercore.cloudflare-dns/v0.1",
+        "zone": manifest.zone,
+        "managed_recordsets": [
+            {"type": record_type, "name": name} for record_type, name in manifest.managed_recordsets
+        ],
+        "records": [record.api_payload() for record in records],
+    }
+
+
+def _write_exclusive(path: Path, content: str) -> str:
+    try:
+        with path.open("x", encoding="utf-8") as handle:
+            handle.write(content)
+    except OSError as exc:
+        raise CloudflareDnsError(f"cannot persist Cloudflare DNS evidence: {path.name}") from exc
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _prepare_pre_write_evidence(
+    plan: DnsPlan,
+    manifest: DnsManifest,
+    *,
+    dnssec: dict[str, object],
+    evidence_dir: Path,
+) -> dict[str, object]:
+    try:
+        evidence_dir.mkdir(parents=True, mode=0o700, exist_ok=False)
+    except OSError as exc:
+        raise CloudflareDnsError(
+            "Cloudflare DNS evidence directory must be a new writable path"
+        ) from exc
+
+    records = sorted(plan.current_records, key=_record_sort_key)
+    snapshot_payload = {
+        "version": "cybercore.cloudflare-dns.snapshot/v0.1",
+        "phase": "pre-write",
+        "zone": plan.zone,
+        "zone_id": plan.zone_id,
+        "plan_fingerprint": plan.fingerprint,
+        "dnssec": dnssec,
+        "records": [record.public_dict() for record in records],
+    }
+    snapshot_text = json.dumps(snapshot_payload, indent=2, sort_keys=True) + "\n"
+    snapshot_name = "pre-write-zone-snapshot.json"
+    snapshot_hash = _write_exclusive(evidence_dir / snapshot_name, snapshot_text)
+
+    rollback_payload = _rollback_manifest_payload(manifest, plan.current_records)
+    rollback_text = yaml.safe_dump(rollback_payload, sort_keys=False, allow_unicode=False)
+    rollback_name = "rollback-manifest.yaml"
+    rollback_hash = _write_exclusive(evidence_dir / rollback_name, rollback_text)
+
+    rollback_receipt = {
+        "version": "cybercore.cloudflare-dns.rollback-receipt/v0.1",
+        "status": "PREPARED_NOT_EXECUTED",
+        "zone": plan.zone,
+        "plan_fingerprint": plan.fingerprint,
+        "rollback_manifest": rollback_name,
+        "rollback_manifest_sha256": rollback_hash,
+        "pre_write_snapshot": snapshot_name,
+        "pre_write_snapshot_sha256": snapshot_hash,
+    }
+    rollback_receipt_name = "rollback-prepared-receipt.json"
+    _write_exclusive(
+        evidence_dir / rollback_receipt_name,
+        json.dumps(rollback_receipt, indent=2, sort_keys=True) + "\n",
+    )
+    return {
+        "directory": str(evidence_dir),
+        "pre_write_snapshot": snapshot_name,
+        "pre_write_snapshot_sha256": snapshot_hash,
+        "rollback_manifest": rollback_name,
+        "rollback_manifest_sha256": rollback_hash,
+        "rollback_receipt": rollback_receipt_name,
+    }
+
+
+def _write_post_write_snapshot(
+    plan: DnsPlan,
+    verification: DnsPlan,
+    *,
+    dnssec: dict[str, object],
+    evidence_dir: Path,
+) -> str:
+    payload = {
+        "version": "cybercore.cloudflare-dns.snapshot/v0.1",
+        "phase": "post-write",
+        "zone": plan.zone,
+        "zone_id": plan.zone_id,
+        "plan_fingerprint": plan.fingerprint,
+        "dnssec": dnssec,
+        "records": [
+            record.public_dict()
+            for record in sorted(verification.current_records, key=_record_sort_key)
+        ],
+        "remaining_changes": [change.public_dict() for change in verification.changes],
+    }
+    name = "post-write-zone-snapshot.json"
+    _write_exclusive(evidence_dir / name, json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    return name
+
+
+def _write_apply_receipt(evidence_dir: Path, payload: dict[str, object]) -> None:
+    _write_exclusive(
+        evidence_dir / "apply-receipt.json",
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+    )
+
+
 def apply_manifest(
     api: CloudflareApi,
     manifest: DnsManifest,
     *,
     expected_plan: str,
     approval: str,
+    evidence_dir: Path | None = None,
 ) -> dict[str, object]:
+    if manifest.template:
+        raise CloudflareDnsError("template Cloudflare DNS manifest cannot be applied")
     plan = plan_from_manifest(api, manifest)
     if plan.fingerprint != expected_plan:
         raise CloudflareDnsError(
@@ -549,10 +750,84 @@ def apply_manifest(
         {"action": change.action, "type": change.recordset[0], "name": change.recordset[1]}
         for change in plan.changes
     ]
+    evidence: dict[str, object] | None = None
     if plan.changes:
-        api.apply_dns_batch(plan.zone_id, plan.changes)
+        if evidence_dir is None:
+            raise CloudflareDnsError(
+                "remote DNS write requires a new evidence directory for snapshot and rollback"
+            )
+        dnssec_before = api.get_dnssec(plan.zone_id)
+        evidence = _prepare_pre_write_evidence(
+            plan,
+            manifest,
+            dnssec=dnssec_before,
+            evidence_dir=evidence_dir,
+        )
+        try:
+            api.apply_dns_batch(plan.zone_id, plan.changes)
+        except CloudflareDnsError as exc:
+            _write_apply_receipt(
+                evidence_dir,
+                {
+                    "version": "cybercore.cloudflare-dns.apply-receipt/v0.1",
+                    "status": "WRITE_ERROR_RECONCILIATION_REQUIRED",
+                    "zone": plan.zone,
+                    "plan_fingerprint": plan.fingerprint,
+                    "verified": False,
+                    "requested_changes": applied,
+                    "error": str(exc),
+                    "rollback_manifest": evidence["rollback_manifest"],
+                },
+            )
+            raise
 
-    verification = plan_from_manifest(api, manifest)
+    try:
+        verification = plan_from_manifest(api, manifest)
+        dnssec_after = api.get_dnssec(plan.zone_id) if plan.changes else None
+    except CloudflareDnsError as exc:
+        if plan.changes and evidence_dir is not None and evidence is not None:
+            _write_apply_receipt(
+                evidence_dir,
+                {
+                    "version": "cybercore.cloudflare-dns.apply-receipt/v0.1",
+                    "status": "POST_WRITE_VERIFICATION_ERROR",
+                    "zone": plan.zone,
+                    "plan_fingerprint": plan.fingerprint,
+                    "verified": False,
+                    "requested_changes": applied,
+                    "error": str(exc),
+                    "rollback_manifest": evidence["rollback_manifest"],
+                },
+            )
+        raise
+
+    post_write_snapshot: str | None = None
+    if plan.changes and evidence_dir is not None and evidence is not None:
+        assert dnssec_after is not None
+        post_write_snapshot = _write_post_write_snapshot(
+            plan,
+            verification,
+            dnssec=dnssec_after,
+            evidence_dir=evidence_dir,
+        )
+        receipt_status = "VERIFIED" if not verification.changes else "NON_CONVERGED"
+        _write_apply_receipt(
+            evidence_dir,
+            {
+                "version": "cybercore.cloudflare-dns.apply-receipt/v0.1",
+                "status": receipt_status,
+                "zone": plan.zone,
+                "plan_fingerprint": plan.fingerprint,
+                "verified": not verification.changes,
+                "requested_changes": applied,
+                "remaining_changes": [change.public_dict() for change in verification.changes],
+                "pre_write_snapshot": evidence["pre_write_snapshot"],
+                "rollback_manifest": evidence["rollback_manifest"],
+                "rollback_receipt": evidence["rollback_receipt"],
+                "post_write_snapshot": post_write_snapshot,
+            },
+        )
+
     if verification.changes:
         raise CloudflareDnsError(
             "Cloudflare DNS write completed but post-write verification did not converge"
@@ -563,4 +838,6 @@ def apply_manifest(
         "applied": applied,
         "verified": True,
         "remaining_changes": 0,
+        "evidence": evidence,
+        "post_write_snapshot": post_write_snapshot,
     }
