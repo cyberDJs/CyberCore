@@ -342,6 +342,19 @@ class LocalSpeechRuntime:
                 self.realtime.cancel(f"microphone input failed while {reason}")
             raise
 
+    def _discard_pending_microphone_input(self, reason: str) -> None:
+        try:
+            discard = getattr(self.audio_input, "discard_pending_input", None)
+            if callable(discard):
+                discard()
+            else:
+                self.audio_input.close()
+                self.audio_input.start()
+        except Exception:
+            if self.realtime.state is not RealtimeState.CANCELLED:
+                self.realtime.cancel(f"microphone input failed while {reason}")
+            raise
+
     def speak(self, text: str) -> bool:
         self.open()
         self._begin_speaking_with_live_input(text)
@@ -354,6 +367,7 @@ class LocalSpeechRuntime:
             if self.realtime.state is RealtimeState.SPEAKING:
                 self.realtime.send_next_output()
             self._drain_microphone_input("draining local half-duplex playback input")
+        self._discard_pending_microphone_input("discarding local half-duplex playback residue")
         return self.realtime.state is RealtimeState.INTERRUPTED
 
     def cancel(self, reason: str = "operator cancellation") -> None:
