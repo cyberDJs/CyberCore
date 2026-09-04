@@ -274,6 +274,80 @@ def resample_pcm_s16le_mono(payload: bytes, source_rate_hz: int, target_rate_hz:
     return pcm.tobytes()
 
 
+class _StreamingDownsampler:
+    def __init__(self, source_rate_hz: int, target_rate_hz: int) -> None:
+        if source_rate_hz <= target_rate_hz:
+            raise ValueError("streaming downsampler requires source rate above target rate")
+        self.source_rate_hz = source_rate_hz
+        self.target_rate_hz = target_rate_hz
+        self._history: list[int] = []
+        self._source_samples_seen = 0
+        self._output_samples_emitted = 0
+
+    def reset(self) -> None:
+        self._history.clear()
+        self._source_samples_seen = 0
+        self._output_samples_emitted = 0
+
+    def process(self, payload: bytes) -> bytes:
+        if len(payload) % 2:
+            raise ValueError("PCM_S16LE payload must contain complete samples")
+        if not payload:
+            return b""
+
+        samples = array("h")
+        samples.frombytes(payload)
+        if sys.byteorder == "big":
+            samples.byteswap()
+        source = list(samples)
+
+        common_rate, first_offset, kernels, kernel_totals = _downsample_kernels(
+            self.source_rate_hz, self.target_rate_hz
+        )
+        last_offset = first_offset + len(kernels[0]) - 1
+        history_length = len(kernels[0]) - 1
+        buffer_start = self._source_samples_seen - len(self._history)
+        buffer = self._history + source
+        source_end = self._source_samples_seen + len(source)
+        output: list[int] = []
+
+        while (
+            self._output_samples_emitted * self.source_rate_hz // self.target_rate_hz
+            < source_end
+        ):
+            numerator = self._output_samples_emitted * self.source_rate_hz
+            center = numerator // self.target_rate_hz
+            residue = numerator % self.target_rate_hz
+            phase = residue // common_rate
+            kernel = kernels[phase]
+            delayed_center = center - last_offset
+
+            weighted = 0.0
+            for kernel_index, offset in enumerate(range(first_offset, last_offset + 1)):
+                global_index = delayed_center + offset
+                if global_index < 0:
+                    sample = 0
+                else:
+                    local_index = global_index - buffer_start
+                    if local_index < 0 or local_index >= len(buffer):
+                        raise RuntimeError("streaming downsampler history underflow")
+                    sample = buffer[local_index]
+                weighted += sample * kernel[kernel_index]
+
+            total_weight = kernel_totals[phase]
+            value = 0 if abs(total_weight) < 1e-12 else round(weighted / total_weight)
+            output.append(max(-32768, min(32767, value)))
+            self._output_samples_emitted += 1
+
+        self._source_samples_seen = source_end
+        self._history = buffer[-history_length:] if history_length else []
+
+        pcm = array("h", output)
+        if sys.byteorder == "big":
+            pcm.byteswap()
+        return pcm.tobytes()
+
+
 def validate_audio_settings(
     config: LocalAudioConfig,
     *,
@@ -319,6 +393,11 @@ class SoundDeviceInput:
         self._device_frames_per_block = max(
             1, round(self._device_sample_rate_hz * config.block_ms / 1000)
         )
+        self._streaming_downsampler = (
+            _StreamingDownsampler(self._device_sample_rate_hz, config.sample_rate_hz)
+            if self._device_sample_rate_hz > config.sample_rate_hz
+            else None
+        )
 
     @property
     def audio_format(self) -> AudioFormat:
@@ -352,6 +431,13 @@ class SoundDeviceInput:
         assert self._stream is not None
         return self._stream
 
+    def _resample_payload(self, payload: bytes) -> bytes:
+        if self._streaming_downsampler is not None:
+            return self._streaming_downsampler.process(payload)
+        return resample_pcm_s16le_mono(
+            payload, self._device_sample_rate_hz, self.config.sample_rate_hz
+        )
+
     def read_frame(self) -> AudioFrame:
         stream = self._ensure_stream()
         data, overflowed = stream.read(self._device_frames_per_block)
@@ -359,9 +445,7 @@ class SoundDeviceInput:
             raise AudioInputOverflowError(
                 "microphone input overflowed; audio frame rejected instead of hiding loss"
             )
-        payload = resample_pcm_s16le_mono(
-            bytes(data), self._device_sample_rate_hz, self.config.sample_rate_hz
-        )
+        payload = self._resample_payload(bytes(data))
         frame = AudioFrame(
             sequence=self._sequence,
             payload=payload,
@@ -377,8 +461,22 @@ class SoundDeviceInput:
             return None
         return self.read_frame()
 
+    def discard_pending_input(self) -> None:
+        stream = self._ensure_stream()
+        available = max(0, int(getattr(stream, "read_available", 0)))
+        if available:
+            _, overflowed = stream.read(available)
+            if overflowed:
+                raise AudioInputOverflowError(
+                    "microphone input overflowed while discarding half-duplex playback residue"
+                )
+        if self._streaming_downsampler is not None:
+            self._streaming_downsampler.reset()
+
     def close(self) -> None:
         stream, self._stream = self._stream, None
+        if self._streaming_downsampler is not None:
+            self._streaming_downsampler.reset()
         if stream is None:
             return
         try:
