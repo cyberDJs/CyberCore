@@ -8,8 +8,13 @@ WB-0026 originally activated and verified repository ruleset `18986451` through
 PR #32. WB-0026 was later closed by its post-merge state transition. On
 2026-09-04 a live repository-settings preflight found that the historical
 ruleset no longer existed and `main` was not protected. After explicit human
-approval, equivalent protection was restored as ruleset `22291749`
-(`main-branch-protection`) and independently read back from GitHub.
+approval, baseline protection was restored as ruleset `22291749`
+(`main-branch-protection`) and independently read back from GitHub. A later
+2026-09-04 source-of-truth check found that the restored ruleset had also
+reintroduced the historical one-review gate, while the newer governance model
+made external human review optional for documentation/state-only non-production
+pull requests. After separate explicit repository-settings approval, the live
+ruleset's ordinary approving-review count was corrected from `1` to `0`.
 
 Repository automation does not mutate repository settings. Any future ruleset,
 branch-protection, required-check, bypass, or merge-policy change requires its
@@ -137,7 +142,7 @@ required check pending indefinitely.
 
 ## Active Branch Protection
 
-Current protection was restored and verified on 2026-09-04:
+Current protection was restored and reconciled on 2026-09-04:
 
 - Repository: `cyberDJs/CyberCore`
 - Ruleset id: `22291749`
@@ -154,8 +159,8 @@ Rules:
 - Deletion protection enabled.
 - Non-fast-forward protection enabled.
 - Pull request required.
-- One approving review required.
-- Stale approvals dismissed after push.
+- Ordinary approving-review count: `0`.
+- Stale approvals dismissed after push if an optional review is present.
 - Review thread resolution required.
 - CODEOWNERS review not required.
 - Last-push approval not required.
@@ -163,8 +168,15 @@ Rules:
 - Linear history not required.
 - GitHub currently reports
   `require_extra_approval_for_unattributed_changes: true` on the pull-request
-  rule; this was returned by GitHub when the restored rule was created and is
-  recorded rather than silently omitted.
+  rule; this server-returned setting remains present after the ordinary approval
+  count was corrected to `0`.
+
+The GitHub reviewer count is not the project's authorization model. External
+human review is optional for documentation/state-only non-production pull
+requests, while merge still requires the applicable explicit operator approval
+and all required GitHub checks. Production, destructive, security-sensitive,
+provider, secret, billing, DNS, mail, DirectAdmin, infrastructure, or other
+consequential mutations retain their separate explicit approval gates.
 
 Required status-check policy:
 
@@ -178,14 +190,15 @@ candidate against current `main`.
 
 Ruleset `18986451` is retained in project history as evidence of the original
 WB-0026 activation. It is not the current ruleset and must not be used as a
-live settings identifier.
+live settings identifier. Its historical contract required one approving
+review.
 
 The 2026-09-04 preflight observed both `rulesets=[]` and `main` unprotected
 before restoration. The cause of disappearance is **unknown**. The available
 organization audit-log probe did not provide usable deletion provenance, so no
 actor, timestamp, or cause is asserted.
 
-Detailed recovery evidence is recorded in
+Detailed recovery and approval-gate repair evidence is recorded in
 `docs/evidence/2026-09-04-main-protection-restore.md`.
 
 ## PR #32 Historical Verification
@@ -221,11 +234,14 @@ Before merging any pull request to `main`:
   `persist-credentials: false`.
 - Confirm GitHub CodeQL Default setup remains disabled while the checked-in
   Advanced setup is authoritative.
-- Confirm ruleset `22291749` is active, has no bypass actors, and reports
-  `current_user_can_bypass: never`.
+- Confirm ruleset `22291749` is active, has no bypass actors, reports
+  `current_user_can_bypass: never`, and has
+  `required_approving_review_count: 0`.
 - Confirm `main` reports `protected=true`.
-- Confirm required review approval and review-thread resolution gates are
-  satisfied after the final push.
+- Confirm all review threads are resolved after the final push.
+- Confirm the applicable explicit operator approval exists for the proposed
+  merge or consequential action; do not treat the GitHub reviewer count as an
+  authority substitute.
 - With strict status checks enabled, confirm the candidate is up to date with
   current `main` before merge.
 
@@ -238,7 +254,7 @@ If one required check becomes unavailable or incorrectly configured:
 1. Inspect the failed context and determine whether the cause is source,
    dependency, runner, cache, configuration, or GitHub service related.
 2. Keep ruleset `22291749` active and preserve all unaffected protections,
-   including pull-request review, approval, deletion, and non-fast-forward
+   including pull-request, review-thread, deletion, and non-fast-forward
    protection.
 3. Through an explicitly approved repository-settings operation, remove or
    replace only the broken required status context. Do not add a bypass actor
@@ -253,8 +269,8 @@ Disabling the complete current ruleset is reserved for failure of the ruleset
 itself, not failure of an individual required check.
 
 Before disabling ruleset `22291749`, an equivalent replacement ruleset must be
-active with pull-request, approval, deletion, non-fast-forward, review-thread,
-and unaffected required-check protections. Full disablement requires separate
+active with pull-request, deletion, non-fast-forward, review-thread, and
+unaffected required-check protections. Full disablement requires separate
 explicit human approval. If equivalent protection cannot be established first,
 do not disable the ruleset; escalate the incident and keep `main` protected.
 
