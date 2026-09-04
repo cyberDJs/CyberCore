@@ -2,7 +2,7 @@
 
 Project: **CyberDJS / CyberCore**  
 Started: **2026-07-08**  
-Updated: **2026-09-02**
+Updated: **2026-09-04**
 Mode: living roadmap; GitHub `main` is the stable source of truth.
 
 ## Strategic outcome
@@ -365,6 +365,22 @@ Completion evidence:
 - Ruleset `18986451`, `main-branch-protection`, was last verified active
   before merge, with no bypass actors and seven required status contexts.
 - This closeout does not claim a separate post-merge repository-settings read.
+
+Current protection recovery evidence (2026-09-04):
+
+- Live preflight against `main@14d4c6c4beb6b03aaedfaf2a76a521a038c98cb1`
+  observed `rulesets=[]` and `main` not protected.
+- The original ruleset `18986451` remains historical evidence only; it is not
+  a current live settings identifier.
+- After explicit repository-settings approval, equivalent protection was
+  restored as ruleset `22291749` (`main-branch-protection`).
+- Post-restore verification observed enforcement `active`, no bypass actors,
+  `current_user_can_bypass: never`, all seven required status contexts,
+  strict required status checks, and `main` reporting `protected=true`.
+- The cause and deletion provenance of the missing historical ruleset remain
+  unknown; no actor or cause is inferred without audit evidence.
+- Detailed evidence:
+  `docs/evidence/2026-09-04-main-protection-restore.md`.
 
 The post-merge state transition closes WB-0026 and activates the planned
 successor:
