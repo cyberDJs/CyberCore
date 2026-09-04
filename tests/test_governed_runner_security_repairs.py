@@ -188,12 +188,38 @@ def test_systemd_spawn_hardens_service_and_wrapper_environment(
     )
 
     argv = captured["argv"]
+    kwargs = captured["kwargs"]
     assert isinstance(argv, list)
+    assert isinstance(kwargs, dict)
+    assert kwargs["stdin"] is subprocess.DEVNULL
     assert "--setenv=PYTHONPATH=" in argv
     assert "--setenv=PYTHONNOUSERSITE=1" in argv
     assert "--property=ProtectSystem=strict" in argv
     assert "--property=ProtectHome=read-only" in argv
     assert f"--property=ReadOnlyPaths={tmp_path}" in argv
+
+
+def test_strict_mode_rejects_absolute_python_impostor_outside_trusted_path(
+    tmp_path: Path,
+) -> None:
+    fake_python = tmp_path / "python3.99"
+    fake_python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+    argv = (str(fake_python), "--version")
+    grant = _grant(
+        classes=frozenset({OperationClass.READ_ONLY}),
+        prefixes=(argv,),
+    )
+    command = CommandSpec(
+        argv=argv,
+        cwd=".",
+        classification=OperationClass.READ_ONLY,
+    )
+
+    with pytest.raises(GovernedRunnerError, match="trusted runtime identities"):
+        governed_runner_module._prepare_plan(
+            _plan(command, grant), root=tmp_path, strict=True
+        )
 
 
 def test_systemd_termination_never_kills_only_client_when_unit_stop_unconfirmed(
