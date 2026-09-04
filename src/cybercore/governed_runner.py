@@ -180,6 +180,8 @@ class _SystemdContainment:
             "--property=ProtectSystem=strict",
             "--property=ProtectHome=read-only",
             "--property=RestrictSUIDSGID=yes",
+            "--property=RestrictAddressFamilies=AF_INET AF_INET6",
+            "--property=UnsetEnvironment=LD_PRELOAD LD_AUDIT LD_LIBRARY_PATH",
             root_access,
             f"--setenv=PATH={env['PATH']}",
             f"--setenv=LANG={env['LANG']}",
