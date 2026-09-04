@@ -183,8 +183,7 @@ class LocalInterruptionProbe:
         ):
             return True
         if (
-            self._last_playback_started_monotonic
-            != playback.playback_started_monotonic
+            self._last_playback_started_monotonic != playback.playback_started_monotonic
             and self._last_playback_started_monotonic is not None
         ):
             return True
