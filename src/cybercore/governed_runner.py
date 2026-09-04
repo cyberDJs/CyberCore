@@ -15,6 +15,7 @@ import uuid
 
 from cybercore.governed_plan import (
     AuthorizationGrant,
+    CommandBinding,
     CommandPlan,
     CommandSpec,
     OperationClass,
@@ -91,12 +92,21 @@ class _FileIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class _PreparedCodeInput:
+    path: Path
+    identity: _FileIdentity
+    argv_index: int
+
+
+@dataclass(frozen=True, slots=True)
 class _PreparedCommand:
     spec: CommandSpec
+    root: Path
     cwd: Path
     argv: tuple[str, ...]
     cwd_identity: tuple[int, int]
     executable_identity: _FileIdentity
+    code_input: _PreparedCodeInput | None = None
 
 
 class _Containment(Protocol):
@@ -113,7 +123,7 @@ class _Containment(Protocol):
 
 
 class _SystemdContainment:
-    """Contain commands in a transient user-service cgroup; fail closed if unavailable."""
+    """Contain production commands in a transient user-service cgroup."""
 
     def __init__(self) -> None:
         if os.name != "posix":
@@ -127,6 +137,7 @@ class _SystemdContainment:
         self._systemctl = str(Path(systemctl).resolve())
         self._wrapper_python = str(Path(python3).resolve())
         self._units: dict[int, str] = {}
+        self._runtime_deadlines: dict[int, float] = {}
 
     def spawn(
         self,
@@ -141,6 +152,13 @@ class _SystemdContainment:
             prepared,
             grant_expires_at=grant_expires_at,
             wrapper_python=self._wrapper_python,
+            env=env,
+        )
+        write_enabled = prepared.spec.classification in _REPLAY_SENSITIVE_CLASSES
+        root_access = (
+            f"--property=ReadWritePaths={prepared.root}"
+            if write_enabled
+            else f"--property=ReadOnlyPaths={prepared.root}"
         )
         wrapped = (
             self._systemd_run,
@@ -155,9 +173,22 @@ class _SystemdContainment:
             f"--property=TimeoutStopSec={_PROCESS_TERMINATION_BUDGET_SECONDS}s",
             "--property=KillMode=control-group",
             "--property=SendSIGKILL=yes",
+            "--property=NoNewPrivileges=yes",
+            "--property=PrivateTmp=yes",
+            "--property=PrivateDevices=yes",
+            "--property=ProtectSystem=strict",
+            "--property=ProtectHome=read-only",
+            "--property=RestrictSUIDSGID=yes",
+            root_access,
             f"--setenv=PATH={env['PATH']}",
             f"--setenv=LANG={env['LANG']}",
             f"--setenv=LC_ALL={env['LC_ALL']}",
+            "--setenv=PYTHONPATH=",
+            "--setenv=PYTHONHOME=",
+            "--setenv=PYTHONNOUSERSITE=1",
+            "--setenv=PYTHONSAFEPATH=1",
+            "--setenv=PYTHONINSPECT=",
+            "--setenv=PYTHONWARNINGS=",
             "--",
             *payload,
         )
@@ -171,6 +202,9 @@ class _SystemdContainment:
             shell=False,
         )
         self._units[process.pid] = unit
+        self._runtime_deadlines[process.pid] = (
+            time.monotonic() + timeout_seconds + _PROCESS_TERMINATION_BUDGET_SECONDS + 0.25
+        )
         return process
 
     def terminate(self, process: subprocess.Popen[bytes], *, deadline: float) -> None:
@@ -212,14 +246,27 @@ class _SystemdContainment:
                 if remaining > 0:
                     time.sleep(min(_PROCESS_GROUP_TERM_GRACE_SECONDS, remaining / 2))
 
+        runtime_deadline = self._runtime_deadlines.get(process.pid)
+        if runtime_deadline is None:
+            if process.poll() is None:
+                process.kill()
+                remaining = deadline - time.monotonic()
+                if remaining > 0:
+                    try:
+                        process.wait(timeout=remaining)
+                    except subprocess.TimeoutExpired:
+                        pass
+            return
+
         if process.poll() is None:
-            process.kill()
-            remaining = deadline - time.monotonic()
+            remaining = runtime_deadline - time.monotonic()
             if remaining > 0:
                 try:
                     process.wait(timeout=remaining)
                 except subprocess.TimeoutExpired:
                     pass
+        if process.poll() is None:
+            raise GovernedRunnerError("transient service stop could not be confirmed")
 
 
 class _DigestState:
@@ -259,15 +306,61 @@ def _default_nonce_state_dir() -> Path:
     return state_home / "cybercore" / "governed-runner" / "consumed-nonces"
 
 
+def _fsync_directory(path: Path) -> None:
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    fd = os.open(path, directory_flags)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _ensure_nonce_state_dir(state_dir: Path, *, persist_parent_chain: bool) -> None:
+    if not persist_parent_chain:
+        try:
+            state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        except OSError as exc:
+            raise GovernedRunnerError("authorization nonce state directory is unavailable") from exc
+        return
+
+    missing: list[Path] = []
+    cursor = state_dir
+    while not cursor.exists():
+        missing.append(cursor)
+        parent = cursor.parent
+        if parent == cursor:
+            break
+        cursor = parent
+    if not cursor.is_dir():
+        raise GovernedRunnerError("authorization nonce state parent is not a directory")
+
+    for directory in reversed(missing):
+        parent = directory.parent
+        try:
+            directory.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+        except OSError as exc:
+            raise GovernedRunnerError("authorization nonce state directory is unavailable") from exc
+        try:
+            _fsync_directory(parent)
+        except OSError as exc:
+            raise GovernedRunnerError(
+                "authorization nonce state parent directory cannot be persisted"
+            ) from exc
+
+
 def _requires_nonce_consumption(plan: CommandPlan) -> bool:
     return any(command.classification in _REPLAY_SENSITIVE_CLASSES for command in plan.commands)
 
 
-def _consume_authorization_nonce(grant: AuthorizationGrant, *, state_dir: Path) -> None:
-    try:
-        state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-    except OSError as exc:
-        raise GovernedRunnerError("authorization nonce state directory is unavailable") from exc
+def _consume_authorization_nonce(
+    grant: AuthorizationGrant,
+    *,
+    state_dir: Path,
+    persist_parent_chain: bool = False,
+) -> None:
+    _ensure_nonce_state_dir(state_dir, persist_parent_chain=persist_parent_chain)
 
     nonce_key = hashlib.sha256(
         f"{grant.issuer}\0{grant.nonce}".encode("utf-8", errors="strict")
@@ -298,22 +391,16 @@ def _consume_authorization_nonce(grant: AuthorizationGrant, *, state_dir: Path) 
             pass
         raise GovernedRunnerError("authorization grant nonce cannot be persisted") from exc
 
-    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
     try:
-        directory_fd = os.open(state_dir, directory_flags)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        _fsync_directory(state_dir)
     except OSError as exc:
-        # The marker may already be durable. Keep it and fail closed rather than
-        # risk making a consumed authorization reusable.
         raise GovernedRunnerError(
             "authorization grant nonce directory cannot be persisted"
         ) from exc
 
 
 _STABLE_EXEC_WRAPPER = r"""
+import fcntl
 import hashlib
 import os
 import sys
@@ -323,6 +410,51 @@ import time
 def fail(message, code=126):
     os.write(2, (message + "\n").encode("utf-8", errors="replace"))
     raise SystemExit(code)
+
+
+def copy_sealed(source_fd, name, expected_sha256, executable=False):
+    if not hasattr(os, "memfd_create"):
+        fail("stable memfd execution is unavailable")
+    flags = getattr(os, "MFD_ALLOW_SEALING", 0x0002)
+    target_fd = os.memfd_create(name, flags=flags)
+    try:
+        source_digest = hashlib.sha256()
+        while True:
+            chunk = os.read(source_fd, 1024 * 1024)
+            if not chunk:
+                break
+            source_digest.update(chunk)
+            view = memoryview(chunk)
+            while view:
+                written = os.write(target_fd, view)
+                view = view[written:]
+        if source_digest.hexdigest() != expected_sha256:
+            fail("validated content changed before service exec")
+        os.fchmod(target_fd, 0o700 if executable else 0o400)
+        seals = (
+            fcntl.F_SEAL_WRITE
+            | fcntl.F_SEAL_GROW
+            | fcntl.F_SEAL_SHRINK
+            | fcntl.F_SEAL_SEAL
+        )
+        fcntl.fcntl(target_fd, fcntl.F_ADD_SEALS, seals)
+        applied = fcntl.fcntl(target_fd, fcntl.F_GET_SEALS)
+        if applied & seals != seals:
+            fail("memfd sealing could not be verified")
+        os.lseek(target_fd, 0, os.SEEK_SET)
+        sealed_digest = hashlib.sha256()
+        while True:
+            chunk = os.read(target_fd, 1024 * 1024)
+            if not chunk:
+                break
+            sealed_digest.update(chunk)
+        if sealed_digest.hexdigest() != expected_sha256:
+            fail("sealed memfd content verification failed")
+        os.lseek(target_fd, 0, os.SEEK_SET)
+        return target_fd
+    except BaseException:
+        os.close(target_fd)
+        raise
 
 
 cwd_path = sys.argv[1]
@@ -336,7 +468,35 @@ expected_mtime_ns = int(sys.argv[8])
 expected_mode = int(sys.argv[9])
 expected_sha256 = sys.argv[10]
 expires_at = float(sys.argv[11])
-target_argv = sys.argv[12:]
+payload_path = sys.argv[12]
+payload_lang = sys.argv[13]
+payload_lc_all = sys.argv[14]
+code_present = sys.argv[15] == "1"
+cursor = 16
+code_fields = None
+if code_present:
+    code_fields = (
+        sys.argv[cursor],
+        int(sys.argv[cursor + 1]),
+        int(sys.argv[cursor + 2]),
+        int(sys.argv[cursor + 3]),
+        int(sys.argv[cursor + 4]),
+        int(sys.argv[cursor + 5]),
+        sys.argv[cursor + 6],
+        int(sys.argv[cursor + 7]),
+    )
+    cursor += 8
+target_argv = list(sys.argv[cursor:])
+
+os.environ.clear()
+payload_env = {
+    "PATH": payload_path,
+    "LANG": payload_lang,
+    "LC_ALL": payload_lc_all,
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTHONNOUSERSITE": "1",
+    "PYTHONPATH": "",
+}
 
 if time.time() >= expires_at:
     fail("authorization grant expired before service exec", 125)
@@ -375,40 +535,65 @@ try:
         )
         if observed != expected:
             fail("validated executable metadata changed before service exec")
-
-        if not hasattr(os, "memfd_create") or os.execve not in os.supports_fd:
+        if os.execve not in os.supports_fd:
             fail("stable executable handle execution is unavailable")
-        executable_fd = os.memfd_create("cybercore-governed-exec", flags=0)
-        try:
-            digest = hashlib.sha256()
-            while True:
-                chunk = os.read(source_fd, 1024 * 1024)
-                if not chunk:
-                    break
-                digest.update(chunk)
-                view = memoryview(chunk)
-                while view:
-                    written = os.write(executable_fd, view)
-                    view = view[written:]
-            if digest.hexdigest() != expected_sha256:
-                fail("validated executable content changed before service exec")
-            if time.time() >= expires_at:
-                fail("authorization grant expired before service exec", 125)
-
-            os.fchmod(executable_fd, 0o700)
-            os.lseek(executable_fd, 0, os.SEEK_SET)
-            os.set_inheritable(executable_fd, True)
-            os.fchdir(cwd_fd)
-            payload_env = {
-                key: os.environ[key]
-                for key in ("PATH", "LANG", "LC_ALL")
-                if key in os.environ
-            }
-            os.execve(executable_fd, target_argv, payload_env)
-        finally:
-            os.close(executable_fd)
+        executable_fd = copy_sealed(source_fd, "cybercore-governed-exec", expected_sha256, True)
     finally:
         os.close(source_fd)
+
+    code_fd = None
+    try:
+        if code_fields is not None:
+            (
+                code_path,
+                code_device,
+                code_inode,
+                code_size,
+                code_mtime_ns,
+                code_mode,
+                code_sha256,
+                code_argv_index,
+            ) = code_fields
+            try:
+                code_source_fd = os.open(code_path, os.O_RDONLY)
+            except OSError:
+                fail("authorized code input cannot be opened inside service")
+            try:
+                code_stat = os.fstat(code_source_fd)
+                observed_code = (
+                    code_stat.st_dev,
+                    code_stat.st_ino,
+                    code_stat.st_size,
+                    code_stat.st_mtime_ns,
+                    code_stat.st_mode,
+                )
+                expected_code = (
+                    code_device,
+                    code_inode,
+                    code_size,
+                    code_mtime_ns,
+                    code_mode,
+                )
+                if observed_code != expected_code:
+                    fail("authorized code input metadata changed before service exec")
+                code_fd = copy_sealed(
+                    code_source_fd,
+                    "cybercore-governed-code", code_sha256, False
+                )
+            finally:
+                os.close(code_source_fd)
+            os.set_inheritable(code_fd, True)
+            target_argv[code_argv_index] = f"/proc/self/fd/{code_fd}"
+
+        if time.time() >= expires_at:
+            fail("authorization grant expired before service exec", 125)
+        os.set_inheritable(executable_fd, True)
+        os.fchdir(cwd_fd)
+        os.execve(executable_fd, target_argv, payload_env)
+    finally:
+        if code_fd is not None:
+            os.close(code_fd)
+        os.close(executable_fd)
 finally:
     os.close(cwd_fd)
 """
@@ -419,10 +604,11 @@ def _stable_exec_wrapper_argv(
     *,
     grant_expires_at: datetime,
     wrapper_python: str,
+    env: dict[str, str],
 ) -> tuple[str, ...]:
     executable = prepared.executable_identity
     cwd_device, cwd_inode = prepared.cwd_identity
-    return (
+    args: list[str] = [
         wrapper_python,
         "-c",
         _STABLE_EXEC_WRAPPER,
@@ -437,8 +623,30 @@ def _stable_exec_wrapper_argv(
         str(executable.mode),
         executable.sha256,
         repr(grant_expires_at.timestamp()),
-        *prepared.argv,
-    )
+        env["PATH"],
+        env["LANG"],
+        env["LC_ALL"],
+    ]
+    code_input = prepared.code_input
+    if code_input is None:
+        args.append("0")
+    else:
+        identity = code_input.identity
+        args.extend(
+            [
+                "1",
+                str(code_input.path),
+                str(identity.device),
+                str(identity.inode),
+                str(identity.size),
+                str(identity.mtime_ns),
+                str(identity.mode),
+                identity.sha256,
+                str(code_input.argv_index),
+            ]
+        )
+    args.extend(prepared.argv)
+    return tuple(args)
 
 
 def _matches_prefix(argv: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
@@ -468,11 +676,11 @@ def _cwd_identity(path: Path) -> tuple[int, int]:
     return stat.st_dev, stat.st_ino
 
 
-def _executable_identity(path: Path) -> _FileIdentity:
+def _file_identity(path: Path) -> _FileIdentity:
     try:
         stat = path.stat()
     except OSError as exc:
-        raise GovernedRunnerError(f"executable cannot be inspected: {path}") from exc
+        raise GovernedRunnerError(f"file cannot be inspected: {path}") from exc
     return _FileIdentity(
         device=stat.st_dev,
         inode=stat.st_ino,
@@ -481,6 +689,13 @@ def _executable_identity(path: Path) -> _FileIdentity:
         mode=stat.st_mode,
         sha256=_hash_file(path),
     )
+
+
+def _executable_identity(path: Path) -> _FileIdentity:
+    try:
+        return _file_identity(path)
+    except GovernedRunnerError as exc:
+        raise GovernedRunnerError(f"executable cannot be inspected: {path}") from exc
 
 
 def _resolved_cwd(root: Path, raw_cwd: str) -> Path:
@@ -498,15 +713,36 @@ def _resolved_cwd(root: Path, raw_cwd: str) -> Path:
     return resolved
 
 
+def _resolve_input_path(root: Path, cwd: Path, raw_path: str) -> Path:
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = cwd / candidate
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise GovernedRunnerError(f"authorized code input cannot be resolved: {candidate}") from exc
+    if resolved != root and root not in resolved.parents:
+        raise GovernedRunnerError(f"authorized code input escapes allowed root: {resolved}")
+    if not resolved.is_file():
+        raise GovernedRunnerError(f"authorized code input is not a file: {resolved}")
+    return resolved
+
+
 def _deny_blocked_executable(executable: str) -> None:
     name = Path(executable).name.lower()
     if name in _BLOCKED_EXECUTABLES:
         raise GovernedRunnerError(f"executable is denied by policy: {name}")
 
 
-def _require_positive_executable_policy(executable: str) -> None:
+def _require_positive_executable_policy(executable: str, *, strict: bool) -> None:
     name = Path(executable).name.lower()
-    if name in _APPROVED_EXECUTABLE_NAMES or _PYTHON_EXECUTABLE_RE.fullmatch(name):
+    if _PYTHON_EXECUTABLE_RE.fullmatch(name):
+        return
+    if name == "pytest" and strict:
+        raise GovernedRunnerError(
+            "pytest is not approved for production until its complete code graph is content-bound"
+        )
+    if name in _APPROVED_EXECUTABLE_NAMES:
         return
     raise GovernedRunnerError(f"executable is not approved by positive policy: {name}")
 
@@ -550,41 +786,147 @@ def _validate_plan_binding(plan: CommandPlan) -> None:
         raise GovernedRunnerError("authorization grant is expired or not yet valid")
 
 
-def _prepare_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> _PreparedCommand:
-    grant = plan.grant
-    if command.classification is OperationClass.BLOCKED:
-        raise GovernedRunnerError("BLOCKED command class cannot be executed")
+def _select_command_binding(
+    grant: AuthorizationGrant,
+    command: CommandSpec,
+    *,
+    strict: bool,
+) -> CommandBinding | None:
     if command.classification not in grant.allowed_classes:
         raise GovernedRunnerError(
             f"operation class is not authorized: {command.classification.value}"
         )
 
+    if grant.allowed_command_bindings:
+        candidates = [
+            binding
+            for binding in grant.allowed_command_bindings
+            if binding.classification is command.classification
+            and _matches_prefix(command.argv, binding.argv_prefix)
+            and (not binding.exact or command.argv == binding.argv_prefix)
+        ]
+        if not candidates:
+            raise GovernedRunnerError(
+                "command/classification pair is outside authorized bindings"
+            )
+        return max(candidates, key=lambda binding: len(binding.argv_prefix))
+
+    if strict and len(grant.allowed_classes) != 1:
+        raise GovernedRunnerError(
+            "multi-class authorization requires explicit command/class bindings"
+        )
+
+    prefixes = [
+        prefix for prefix in grant.allowed_command_prefixes if _matches_prefix(command.argv, prefix)
+    ]
+    if not prefixes:
+        raise GovernedRunnerError(f"command is outside authorized prefixes: {command.argv!r}")
+    prefix = max(prefixes, key=len)
+    if strict:
+        return CommandBinding(
+            classification=command.classification,
+            argv_prefix=prefix,
+            exact=False,
+        )
+    return None
+
+
+def _prepare_python_code_input(
+    command: CommandSpec,
+    *,
+    root: Path,
+    cwd: Path,
+    binding: CommandBinding | None,
+    strict: bool,
+) -> _PreparedCodeInput | None:
+    if not strict:
+        return None
+    name = Path(command.argv[0]).name.lower()
+    if not _PYTHON_EXECUTABLE_RE.fullmatch(name):
+        if command.code_sha256 is not None:
+            raise GovernedRunnerError("code_sha256 is only supported for Python script execution")
+        return None
+
+    args = command.argv[1:]
+    if args in (("--version",), ("-V",)):
+        if command.code_sha256 is not None:
+            raise GovernedRunnerError("version queries must not carry code_sha256")
+        return None
+    if not args:
+        raise GovernedRunnerError("interactive Python execution is denied by policy")
+    if args[0] == "-c":
+        if binding is None or not binding.exact or binding.argv_prefix != command.argv:
+            raise GovernedRunnerError("Python -c requires an exact authorized command binding")
+        if command.code_sha256 is not None:
+            raise GovernedRunnerError("Python -c content is bound by exact argv, not code_sha256")
+        return None
+    if args[0].startswith("-"):
+        raise GovernedRunnerError("Python option/module/stdin execution is denied by policy")
+    if binding is None or not binding.exact or binding.argv_prefix != command.argv:
+        raise GovernedRunnerError("Python script execution requires an exact authorized command binding")
+    if command.code_sha256 is None:
+        raise GovernedRunnerError("Python script execution requires code_sha256")
+
+    script = _resolve_input_path(root, cwd, args[0])
+    identity = _file_identity(script)
+    if identity.sha256 != command.code_sha256:
+        raise GovernedRunnerError("authorized Python script digest does not match code_sha256")
+    return _PreparedCodeInput(path=script, identity=identity, argv_index=1)
+
+
+def _prepare_command(
+    plan: CommandPlan,
+    command: CommandSpec,
+    *,
+    root: Path,
+    strict: bool = False,
+) -> _PreparedCommand:
+    if command.classification is OperationClass.BLOCKED:
+        raise GovernedRunnerError("BLOCKED command class cannot be executed")
+    if any("\0" in arg for arg in command.argv):
+        raise GovernedRunnerError("command argv must not contain NUL")
+
+    binding = _select_command_binding(plan.grant, command, strict=strict)
     _deny_blocked_executable(command.argv[0])
     raw_executable = Path(command.argv[0])
     if not raw_executable.is_absolute():
-        _require_positive_executable_policy(command.argv[0])
+        _require_positive_executable_policy(command.argv[0], strict=strict)
     if _contains_shell_meta(command.argv):
         raise GovernedRunnerError("shell metacharacters are denied by policy")
-    if not any(_matches_prefix(command.argv, prefix) for prefix in grant.allowed_command_prefixes):
-        raise GovernedRunnerError(f"command is outside authorized prefixes: {command.argv!r}")
 
     cwd = _resolved_cwd(root, command.cwd)
     resolved_executable = _resolve_executable(command.argv[0])
     _deny_blocked_executable(resolved_executable)
-    _require_positive_executable_policy(resolved_executable)
+    _require_positive_executable_policy(resolved_executable, strict=strict)
     executable_path = Path(resolved_executable)
+    code_input = _prepare_python_code_input(
+        command,
+        root=root,
+        cwd=cwd,
+        binding=binding,
+        strict=strict,
+    )
     return _PreparedCommand(
         spec=command,
+        root=root,
         cwd=cwd,
         argv=(resolved_executable, *command.argv[1:]),
         cwd_identity=_cwd_identity(cwd),
         executable_identity=_executable_identity(executable_path),
+        code_input=code_input,
     )
 
 
-def _prepare_plan(plan: CommandPlan, *, root: Path) -> tuple[_PreparedCommand, ...]:
+def _prepare_plan(
+    plan: CommandPlan,
+    *,
+    root: Path,
+    strict: bool = False,
+) -> tuple[_PreparedCommand, ...]:
     _validate_plan_binding(plan)
-    return tuple(_prepare_command(plan, command, root=root) for command in plan.commands)
+    return tuple(
+        _prepare_command(plan, command, root=root, strict=strict) for command in plan.commands
+    )
 
 
 def _revalidate_prepared_command(
@@ -592,9 +934,10 @@ def _revalidate_prepared_command(
     prepared: _PreparedCommand,
     *,
     root: Path,
+    strict: bool = False,
 ) -> _PreparedCommand:
     _validate_plan_binding(plan)
-    current = _prepare_command(plan, prepared.spec, root=root)
+    current = _prepare_command(plan, prepared.spec, root=root, strict=strict)
     if current.cwd_identity != prepared.cwd_identity or current.cwd != prepared.cwd:
         raise GovernedRunnerError("command cwd changed after plan validation")
     if (
@@ -602,6 +945,8 @@ def _revalidate_prepared_command(
         or current.argv[0] != prepared.argv[0]
     ):
         raise GovernedRunnerError("command executable changed after plan validation")
+    if current.code_input != prepared.code_input:
+        raise GovernedRunnerError("authorized code input changed after plan validation")
     return current
 
 
@@ -650,7 +995,9 @@ def _terminate_with_cleanup_budget(
     *,
     cleanup_deadline: float | None = None,
 ) -> float:
-    bounded_deadline = cleanup_deadline or (time.monotonic() + _PROCESS_TERMINATION_BUDGET_SECONDS)
+    bounded_deadline = cleanup_deadline or (
+        time.monotonic() + _PROCESS_TERMINATION_BUDGET_SECONDS
+    )
     containment.terminate(process, deadline=bounded_deadline)
     return bounded_deadline
 
@@ -708,17 +1055,27 @@ class GovernedRunner:
         )
 
     def execute(self, plan: CommandPlan) -> ExecutionReceipt:
-        prepared_commands = _prepare_plan(plan, root=self.allowed_root)
+        strict = self._containment is None
+        prepared_commands = _prepare_plan(plan, root=self.allowed_root, strict=strict)
         containment = self._containment or _SystemdContainment()
         if _requires_nonce_consumption(plan):
-            _consume_authorization_nonce(plan.grant, state_dir=self._nonce_state_dir)
+            _consume_authorization_nonce(
+                plan.grant,
+                state_dir=self._nonce_state_dir,
+                persist_parent_chain=strict,
+            )
         receipts: list[CommandReceipt] = []
         status = "IMPLEMENTED"
-        environment = _bounded_environment(include_user_bus=self._containment is None)
+        environment = _bounded_environment(include_user_bus=strict)
 
         for prepared in prepared_commands:
             try:
-                current = _revalidate_prepared_command(plan, prepared, root=self.allowed_root)
+                current = _revalidate_prepared_command(
+                    plan,
+                    prepared,
+                    root=self.allowed_root,
+                    strict=strict,
+                )
                 _validate_plan_binding(plan)
             except GovernedRunnerError as exc:
                 receipts.append(_revalidation_failure_receipt(prepared, exc))
