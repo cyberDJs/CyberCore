@@ -806,9 +806,7 @@ def _select_command_binding(
             and (not binding.exact or command.argv == binding.argv_prefix)
         ]
         if not candidates:
-            raise GovernedRunnerError(
-                "command/classification pair is outside authorized bindings"
-            )
+            raise GovernedRunnerError("command/classification pair is outside authorized bindings")
         return max(candidates, key=lambda binding: len(binding.argv_prefix))
 
     if strict and len(grant.allowed_classes) != 1:
@@ -997,9 +995,7 @@ def _terminate_with_cleanup_budget(
     *,
     cleanup_deadline: float | None = None,
 ) -> float:
-    bounded_deadline = cleanup_deadline or (
-        time.monotonic() + _PROCESS_TERMINATION_BUDGET_SECONDS
-    )
+    bounded_deadline = cleanup_deadline or (time.monotonic() + _PROCESS_TERMINATION_BUDGET_SECONDS)
     containment.terminate(process, deadline=bounded_deadline)
     return bounded_deadline
 
