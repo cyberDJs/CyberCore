@@ -196,6 +196,8 @@ def test_systemd_spawn_hardens_service_and_wrapper_environment(
     assert "--setenv=PYTHONNOUSERSITE=1" in argv
     assert "--property=ProtectSystem=strict" in argv
     assert "--property=ProtectHome=read-only" in argv
+    assert "--property=RestrictAddressFamilies=AF_INET AF_INET6" in argv
+    assert "--property=UnsetEnvironment=LD_PRELOAD LD_AUDIT LD_LIBRARY_PATH" in argv
     assert f"--property=ReadOnlyPaths={tmp_path}" in argv
 
 
