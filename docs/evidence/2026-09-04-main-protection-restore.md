@@ -6,9 +6,10 @@ Repository: `cyberDJs/CyberCore`
 
 Approved action: restore the missing `main` protection contract and then
 reconcile source-of-truth documentation. This evidence records the already
-completed repository-settings restore and its read-only verification. It does
-not authorize merge, deployment, production mutation, secret changes, or any
-additional repository-settings change.
+completed repository-settings restore, the later approval-gate correction, and
+their read-only verification. It does not authorize merge, deployment,
+production mutation, secret changes, or any additional repository-settings
+change.
 
 ## Pre-restore observation
 
@@ -56,12 +57,14 @@ PR #32 / WB-0026 recorded the original ruleset as:
 - strict required status checks enabled;
 - seven required contexts listed above.
 
-That identifier is retained as historical evidence only.
+That identifier and one-review requirement are retained as historical evidence
+only.
 
 ## Approved restore
 
-After explicit approval `APPROVE CYBERCORE MAIN PROTECTION RESTORE`, an
-equivalent active ruleset was created:
+After explicit approval `APPROVE CYBERCORE MAIN PROTECTION RESTORE`, a
+replacement active ruleset was created using the historical WB-0026 contract as
+the restoration baseline:
 
 - id: `22291749`;
 - name: `main-branch-protection`;
@@ -71,12 +74,12 @@ equivalent active ruleset was created:
 - bypass actors: none;
 - `current_user_can_bypass: never`.
 
-Effective rules verified after creation:
+Effective rules verified immediately after creation:
 
 - deletion protection;
 - non-fast-forward protection;
 - pull request required;
-- one approving review required;
+- one approving review required at that restoration snapshot;
 - stale approvals dismissed after push;
 - review-thread resolution required;
 - CODEOWNERS review not required;
@@ -91,22 +94,68 @@ GitHub also returned
 request rule. This server-returned state is recorded explicitly rather than
 silently omitted.
 
-## Post-restore verification
+## Initial post-restore verification
 
-Read-only verification after the settings change observed:
+Read-only verification after the settings restore observed:
 
 - ruleset `22291749`: present and `active`;
 - `current_user_can_bypass: never`;
 - effective bypass actors: none;
 - `main`: `protected=true`;
-- effective `main` rules include the pull-request, review-thread, deletion,
+- effective `main` rules included the pull-request, review-thread, deletion,
   non-fast-forward, and seven required-check gates.
 
 PR #83 was also inspected as a non-mutating enforcement sanity check. Its head
 `a12eac4eba0e7f0dc77682ad427b45774cd6fa32` remained open, was behind current
 `main`, and still had four current unresolved P1 review findings. The restored
-strict/update and review-thread gates therefore provide independent reasons it
+strict/update and review-thread gates therefore provided independent reasons it
 must not be merged in that state.
+
+## Approval-gate reconciliation
+
+A later source-of-truth check on 2026-09-04 compared the restored live ruleset
+with the newer documented governance model from merged PR #38. PR #38 records
+that external human review is optional for documentation/state-only
+non-production pull requests, while merge still requires explicit operator
+authorization and all required GitHub checks.
+
+The restore had therefore reintroduced a stale historical enforcement detail:
+`required_approving_review_count: 1`.
+
+After separate explicit approval
+`APPROVE CYBERCORE RULESET APPROVAL-GATE REPAIR`, only the ordinary approving
+review count on ruleset `22291749` was changed from `1` to `0`.
+
+Read-only verification after that correction observed:
+
+- ruleset id unchanged: `22291749`;
+- enforcement unchanged: `active`;
+- target unchanged: `~DEFAULT_BRANCH`;
+- bypass actors unchanged: none;
+- `current_user_can_bypass` unchanged: `never`;
+- deletion protection preserved;
+- non-fast-forward protection preserved;
+- pull request requirement preserved;
+- `required_approving_review_count: 0`;
+- review-thread resolution preserved;
+- CODEOWNERS review still not required;
+- last-push approval still not required;
+- `require_extra_approval_for_unattributed_changes=true` still reported by
+  GitHub;
+- strict required status checks preserved;
+- `do_not_enforce_on_create=false` preserved;
+- all seven required status contexts preserved.
+
+PR #88 remained on exact head
+`57d0bf27c1c3804424352ee8a8d9c0ac238199da` at the immediate post-settings
+verification and changed from GitHub `mergeable_state: blocked` to
+`mergeable_state: clean` without adding an external approval. That transition
+confirmed the stale ordinary-review gate had been the active blocker.
+
+The GitHub reviewer count is not a substitute for project authorization. The
+applicable explicit operator approval remains required for merge and other
+governed actions, and consequential mutation classes retain their separate
+approval gates.
 
 ## Provenance gap
 
@@ -120,12 +169,18 @@ automation.
 ## Source-of-truth rule
 
 For current repository-settings decisions, use live GitHub state first and this
-recovery evidence second. Do not use historical ruleset id `18986451` as a
-current settings identifier.
+recovery evidence second. Do not use historical ruleset id `18986451` or its
+historical one-review requirement as current settings identifiers.
 
-Current protection identifier after this recovery:
+Current protection state after the 2026-09-04 reconciliation:
 
-`22291749`
+- ruleset: `22291749`;
+- ordinary approving-review count: `0`;
+- pull request required;
+- review-thread resolution required;
+- strict seven-context status-check policy retained;
+- bypass actors: none;
+- `current_user_can_bypass: never`.
 
 Any future modification, weakening, bypass, replacement, or deletion of this
 protection requires separate explicit repository-settings approval.
