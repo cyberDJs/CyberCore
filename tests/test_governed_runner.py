@@ -6,6 +6,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 import pytest
@@ -29,7 +30,9 @@ class _DirectTestContainment:
         *,
         cwd: Path,
         env: dict[str, str],
+        timeout_seconds: float,
     ) -> subprocess.Popen[bytes]:
+        del timeout_seconds
         return subprocess.Popen(
             list(argv),
             cwd=cwd,
@@ -54,7 +57,11 @@ class _DirectTestContainment:
 
 
 def _runner(root: Path) -> GovernedRunner:
-    return GovernedRunner(root, containment=_DirectTestContainment())
+    return GovernedRunner(
+        root,
+        containment=_DirectTestContainment(),
+        nonce_state_dir=root / ".nonce-state",
+    )
 
 
 def _grant(
@@ -269,8 +276,12 @@ def test_revalidates_grant_before_each_spawn(tmp_path: Path) -> None:
         grant=grant,
     )
 
-    with pytest.raises(GovernedRunnerError, match="expired or not yet valid"):
-        _runner(tmp_path).execute(plan)
+    receipt = _runner(tmp_path).execute(plan)
+
+    assert receipt.status == "FAILED"
+    assert len(receipt.commands) == 2
+    assert receipt.commands[0].exit_code == 0
+    assert receipt.commands[1].exit_code is None
 
 
 def test_revalidates_cwd_before_each_spawn(tmp_path: Path) -> None:
@@ -308,8 +319,12 @@ def test_revalidates_cwd_before_each_spawn(tmp_path: Path) -> None:
         grant=grant,
     )
 
-    with pytest.raises(GovernedRunnerError, match="escapes allowed root"):
-        _runner(tmp_path).execute(plan)
+    receipt = _runner(tmp_path).execute(plan)
+
+    assert receipt.status == "FAILED"
+    assert len(receipt.commands) == 2
+    assert receipt.commands[0].exit_code == 0
+    assert receipt.commands[1].exit_code is None
 
 
 def test_detects_in_place_executable_replacement(tmp_path: Path) -> None:
@@ -346,8 +361,65 @@ def test_detects_in_place_executable_replacement(tmp_path: Path) -> None:
         grant=grant,
     )
 
-    with pytest.raises(GovernedRunnerError, match="executable changed"):
-        _runner(tmp_path).execute(plan)
+    receipt = _runner(tmp_path).execute(plan)
+
+    assert receipt.status == "FAILED"
+    assert len(receipt.commands) == 2
+    assert receipt.commands[0].exit_code == 0
+    assert receipt.commands[1].exit_code is None
+
+
+def test_consumes_mutating_authorization_nonce_atomically_across_runners(
+    tmp_path: Path,
+) -> None:
+    sleeper = tmp_path / "nonce-sleeper.py"
+    sleeper.write_text("import time\ntime.sleep(0.1)\n", encoding="utf-8")
+    grant = _grant(
+        allowed_classes=frozenset({OperationClass.FILE_WRITE}),
+        prefixes=((sys.executable,),),
+    )
+    command = CommandSpec(
+        argv=(sys.executable, str(sleeper)),
+        cwd=".",
+        classification=OperationClass.FILE_WRITE,
+    )
+    plan = _plan(tmp_path, command, grant=grant)
+    nonce_state_dir = tmp_path / "shared-nonce-state"
+    runners = (
+        GovernedRunner(
+            tmp_path,
+            containment=_DirectTestContainment(),
+            nonce_state_dir=nonce_state_dir,
+        ),
+        GovernedRunner(
+            tmp_path,
+            containment=_DirectTestContainment(),
+            nonce_state_dir=nonce_state_dir,
+        ),
+    )
+    barrier = threading.Barrier(2)
+    outcomes: list[tuple[str, str]] = []
+    outcomes_lock = threading.Lock()
+
+    def execute(runner: GovernedRunner) -> None:
+        barrier.wait()
+        try:
+            result = ("receipt", runner.execute(plan).status)
+        except GovernedRunnerError as exc:
+            result = ("error", str(exc))
+        with outcomes_lock:
+            outcomes.append(result)
+
+    threads = [threading.Thread(target=execute, args=(runner,)) for runner in runners]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=2.0)
+
+    assert not any(thread.is_alive() for thread in threads)
+    assert sorted(kind for kind, _detail in outcomes) == ["error", "receipt"]
+    assert next(detail for kind, detail in outcomes if kind == "receipt") == "IMPLEMENTED"
+    assert "nonce" in next(detail for kind, detail in outcomes if kind == "error")
 
 
 def test_bare_executable_ignores_ambient_path(
@@ -407,6 +479,41 @@ def test_timeout_terminates_descendant_processes(tmp_path: Path) -> None:
     assert receipt.status == "FAILED"
     assert receipt.commands[0].timed_out is True
     assert not marker.exists()
+
+
+def test_timeout_reserves_separate_containment_cleanup_budget(tmp_path: Path) -> None:
+    sleeper = tmp_path / "cleanup-budget.py"
+    sleeper.write_text("import time\ntime.sleep(5)\n", encoding="utf-8")
+
+    class _RecordingContainment(_DirectTestContainment):
+        def __init__(self) -> None:
+            self.remaining_budgets: list[float] = []
+
+        def terminate(self, process: subprocess.Popen[bytes], *, deadline: float) -> None:
+            self.remaining_budgets.append(deadline - time.monotonic())
+            super().terminate(process, deadline=deadline)
+
+    containment = _RecordingContainment()
+    command = CommandSpec(
+        argv=(sys.executable, str(sleeper)),
+        cwd=".",
+        classification=OperationClass.COMPUTE,
+        timeout_seconds=0.05,
+    )
+    grant = _grant(
+        allowed_classes=frozenset({OperationClass.COMPUTE}),
+        prefixes=((sys.executable,),),
+    )
+
+    receipt = GovernedRunner(
+        tmp_path,
+        containment=containment,
+        nonce_state_dir=tmp_path / ".nonce-state",
+    ).execute(_plan(tmp_path, command, grant=grant))
+
+    assert receipt.status == "FAILED"
+    assert containment.remaining_budgets
+    assert max(containment.remaining_budgets) > 0.5
 
 
 def test_timeout_remains_active_while_inherited_pipes_are_open(tmp_path: Path) -> None:
@@ -471,11 +578,17 @@ def test_systemd_spawn_binds_validated_working_directory(
     containment = governed_runner_module._SystemdContainment()
     env = governed_runner_module._bounded_environment(include_user_bus=False)
 
-    containment.spawn((sys.executable, "--version"), cwd=tmp_path, env=env)
+    containment.spawn(
+        (sys.executable, "--version"),
+        cwd=tmp_path,
+        env=env,
+        timeout_seconds=5.0,
+    )
 
     argv = captured["argv"]
     assert isinstance(argv, list)
     assert f"--working-directory={tmp_path}" in argv
+    assert "--property=RuntimeMaxSec=5.0s" in argv
 
 
 def test_systemctl_control_call_is_bounded_by_deadline(

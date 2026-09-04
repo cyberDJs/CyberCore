@@ -13,7 +13,12 @@ import time
 from typing import BinaryIO, Protocol
 import uuid
 
-from cybercore.governed_plan import CommandPlan, CommandSpec, OperationClass
+from cybercore.governed_plan import (
+    AuthorizationGrant,
+    CommandPlan,
+    CommandSpec,
+    OperationClass,
+)
 from cybercore.governed_receipt import CommandReceipt, ExecutionReceipt
 
 
@@ -59,9 +64,20 @@ _MAX_OUTPUT_BYTES_PER_STREAM = 1024 * 1024
 _OUTPUT_READ_CHUNK_BYTES = 64 * 1024
 _PROCESS_POLL_SECONDS = 0.01
 _PROCESS_GROUP_TERM_GRACE_SECONDS = 0.1
+_PROCESS_TERMINATION_BUDGET_SECONDS = 1.0
 _REQUIRED_USER_BUS_ENV = ("XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS")
 _APPROVED_EXECUTABLE_NAMES = {"git", "pytest"}
 _PYTHON_EXECUTABLE_RE = re.compile(r"^python(?:3(?:\.\d+)?)?$")
+_REPLAY_SENSITIVE_CLASSES = frozenset(
+    {
+        OperationClass.FILE_WRITE,
+        OperationClass.REPO_WRITE,
+        OperationClass.REMOTE_WRITE,
+        OperationClass.DEPLOY,
+        OperationClass.DESTRUCTIVE,
+        OperationClass.PRIVILEGED,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +105,7 @@ class _Containment(Protocol):
         *,
         cwd: Path,
         env: dict[str, str],
+        timeout_seconds: float,
     ) -> subprocess.Popen[bytes]: ...
 
     def terminate(self, process: subprocess.Popen[bytes], *, deadline: float) -> None: ...
@@ -114,6 +131,7 @@ class _SystemdContainment:
         *,
         cwd: Path,
         env: dict[str, str],
+        timeout_seconds: float,
     ) -> subprocess.Popen[bytes]:
         unit = f"cybercore-governed-{uuid.uuid4().hex}"
         wrapped = (
@@ -125,6 +143,7 @@ class _SystemdContainment:
             "--pipe",
             f"--unit={unit}",
             f"--working-directory={cwd}",
+            f"--property=RuntimeMaxSec={timeout_seconds}s",
             f"--setenv=PATH={env['PATH']}",
             f"--setenv=LANG={env['LANG']}",
             f"--setenv=LC_ALL={env['LC_ALL']}",
@@ -218,6 +237,52 @@ def _bounded_environment(*, include_user_bus: bool) -> dict[str, str]:
             if value:
                 environment[name] = value
     return environment
+
+
+def _default_nonce_state_dir() -> Path:
+    configured = os.environ.get("XDG_STATE_HOME")
+    state_home = Path(configured).expanduser() if configured else Path.home() / ".local" / "state"
+    return state_home / "cybercore" / "governed-runner" / "consumed-nonces"
+
+
+def _requires_nonce_consumption(plan: CommandPlan) -> bool:
+    return bool(plan.grant.allowed_classes & _REPLAY_SENSITIVE_CLASSES)
+
+
+def _consume_authorization_nonce(grant: AuthorizationGrant, *, state_dir: Path) -> None:
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    except OSError as exc:
+        raise GovernedRunnerError("authorization nonce state directory is unavailable") from exc
+
+    nonce_key = hashlib.sha256(
+        f"{grant.issuer}\0{grant.nonce}".encode("utf-8", errors="strict")
+    ).hexdigest()
+    marker = state_dir / nonce_key
+    payload = (
+        f"issuer={grant.issuer}\n"
+        f"operation_id={grant.operation_id}\n"
+        f"canonical_target={grant.canonical_target}\n"
+        f"expires_at={grant.expires_at.isoformat()}\n"
+    ).encode("utf-8")
+    try:
+        fd = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError as exc:
+        raise GovernedRunnerError("authorization grant nonce has already been consumed") from exc
+    except OSError as exc:
+        raise GovernedRunnerError("authorization grant nonce cannot be consumed") from exc
+
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError as exc:
+        try:
+            marker.unlink()
+        except OSError:
+            pass
+        raise GovernedRunnerError("authorization grant nonce cannot be persisted") from exc
 
 
 def _matches_prefix(argv: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
@@ -402,12 +467,44 @@ def _drain_stream(
             pass
 
 
+def _revalidation_failure_receipt(
+    prepared: _PreparedCommand,
+    exc: GovernedRunnerError,
+) -> CommandReceipt:
+    timestamp = datetime.now(timezone.utc).isoformat()
+    empty_digest = hashlib.sha256(b"").hexdigest()
+    error_digest = hashlib.sha256(str(exc).encode("utf-8", errors="replace")).hexdigest()
+    return CommandReceipt(
+        argv=prepared.argv,
+        cwd=str(prepared.cwd),
+        classification=prepared.spec.classification,
+        started_at=timestamp,
+        finished_at=timestamp,
+        exit_code=None,
+        stdout_sha256=empty_digest,
+        stderr_sha256=error_digest,
+        timed_out=False,
+    )
+
+
+def _terminate_with_cleanup_budget(
+    containment: _Containment,
+    process: subprocess.Popen[bytes],
+    *,
+    cleanup_deadline: float | None = None,
+) -> float:
+    bounded_deadline = cleanup_deadline or (time.monotonic() + _PROCESS_TERMINATION_BUDGET_SECONDS)
+    containment.terminate(process, deadline=bounded_deadline)
+    return bounded_deadline
+
+
 def _join_drain_threads_until_deadline(
     containment: _Containment,
     process: subprocess.Popen[bytes],
     stdout_thread: threading.Thread,
     stderr_thread: threading.Thread,
     deadline: float,
+    cleanup_deadline: float | None = None,
 ) -> bool:
     threads = (stdout_thread, stderr_thread)
     for thread in threads:
@@ -419,7 +516,11 @@ def _join_drain_threads_until_deadline(
     if not any(thread.is_alive() for thread in threads):
         return True
 
-    containment.terminate(process, deadline=deadline)
+    cleanup_deadline = _terminate_with_cleanup_budget(
+        containment,
+        process,
+        cleanup_deadline=cleanup_deadline,
+    )
     for stream in (process.stdout, process.stderr):
         if stream is not None:
             try:
@@ -427,7 +528,7 @@ def _join_drain_threads_until_deadline(
             except OSError:
                 pass
     for thread in threads:
-        remaining = deadline - time.monotonic()
+        remaining = cleanup_deadline - time.monotonic()
         if remaining <= 0:
             break
         thread.join(timeout=min(_PROCESS_GROUP_TERM_GRACE_SECONDS, remaining))
@@ -437,21 +538,37 @@ def _join_drain_threads_until_deadline(
 class GovernedRunner:
     """Execute an already-authorized command plan without interpreting new authority."""
 
-    def __init__(self, allowed_root: Path, *, containment: _Containment | None = None):
+    def __init__(
+        self,
+        allowed_root: Path,
+        *,
+        containment: _Containment | None = None,
+        nonce_state_dir: Path | None = None,
+    ):
         self.allowed_root = allowed_root.expanduser().resolve()
         if not self.allowed_root.is_dir():
             raise GovernedRunnerError(f"allowed root does not exist: {self.allowed_root}")
         self._containment = containment
+        self._nonce_state_dir = (
+            (nonce_state_dir or _default_nonce_state_dir()).expanduser().resolve()
+        )
 
     def execute(self, plan: CommandPlan) -> ExecutionReceipt:
         prepared_commands = _prepare_plan(plan, root=self.allowed_root)
         containment = self._containment or _SystemdContainment()
+        if _requires_nonce_consumption(plan):
+            _consume_authorization_nonce(plan.grant, state_dir=self._nonce_state_dir)
         receipts: list[CommandReceipt] = []
         status = "IMPLEMENTED"
         environment = _bounded_environment(include_user_bus=self._containment is None)
 
         for prepared in prepared_commands:
-            current = _revalidate_prepared_command(plan, prepared, root=self.allowed_root)
+            try:
+                current = _revalidate_prepared_command(plan, prepared, root=self.allowed_root)
+            except GovernedRunnerError as exc:
+                receipts.append(_revalidation_failure_receipt(prepared, exc))
+                status = "FAILED"
+                break
             command = current.spec
             started = datetime.now(timezone.utc)
             timed_out = False
@@ -461,12 +578,14 @@ class GovernedRunner:
             stderr_state = _DigestState(_MAX_OUTPUT_BYTES_PER_STREAM)
             output_limit_event = threading.Event()
             deadline = time.monotonic() + command.timeout_seconds
+            cleanup_deadline: float | None = None
 
             try:
                 process = containment.spawn(
                     current.argv,
                     cwd=current.cwd,
                     env=environment,
+                    timeout_seconds=command.timeout_seconds,
                 )
             except OSError as exc:
                 stderr_state.consume(str(exc).encode("utf-8", errors="replace"))
@@ -489,11 +608,19 @@ class GovernedRunner:
                 while process.poll() is None:
                     if output_limit_event.is_set():
                         output_limit_exceeded = True
-                        containment.terminate(process, deadline=deadline)
+                        cleanup_deadline = _terminate_with_cleanup_budget(
+                            containment,
+                            process,
+                            cleanup_deadline=cleanup_deadline,
+                        )
                         break
                     if time.monotonic() >= deadline:
                         timed_out = True
-                        containment.terminate(process, deadline=deadline)
+                        cleanup_deadline = _terminate_with_cleanup_budget(
+                            containment,
+                            process,
+                            cleanup_deadline=cleanup_deadline,
+                        )
                         break
                     time.sleep(_PROCESS_POLL_SECONDS)
 
@@ -501,13 +628,21 @@ class GovernedRunner:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         timed_out = True
-                        containment.terminate(process, deadline=deadline)
+                        cleanup_deadline = _terminate_with_cleanup_budget(
+                            containment,
+                            process,
+                            cleanup_deadline=cleanup_deadline,
+                        )
                     else:
                         try:
                             process.wait(timeout=remaining)
                         except subprocess.TimeoutExpired:
                             timed_out = True
-                            containment.terminate(process, deadline=deadline)
+                            cleanup_deadline = _terminate_with_cleanup_budget(
+                                containment,
+                                process,
+                                cleanup_deadline=cleanup_deadline,
+                            )
 
                 exit_code = process.returncode
                 drains_finished_before_deadline = _join_drain_threads_until_deadline(
@@ -516,6 +651,7 @@ class GovernedRunner:
                     stdout_thread,
                     stderr_thread,
                     deadline,
+                    cleanup_deadline=cleanup_deadline,
                 )
                 if not drains_finished_before_deadline:
                     timed_out = True
