@@ -109,6 +109,7 @@ class FakeInput:
         self.started = False
         self.closed = False
         self.nonblocking_reads = 0
+        self.discard_pending_calls = 0
 
     def start(self) -> None:
         self.started = True
@@ -121,6 +122,9 @@ class FakeInput:
         if not self.nonblocking:
             return None
         return self.nonblocking.pop(0)
+
+    def discard_pending_audio(self) -> None:
+        self.discard_pending_calls += 1
 
     def close(self) -> None:
         self.closed = True
@@ -353,6 +357,17 @@ def test_speech_captured_during_synchronous_tts_is_drained_not_interpreted() -> 
     assert tts.cancelled == 0
     assert transport.flush_count == 0
     assert transport.sent == [20, 21]
+
+
+def test_speak_discards_partial_capture_before_returning_to_listening() -> None:
+    runtime, _, _, _, source, _ = make_runtime()
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    interrupted = runtime.speak("done")
+
+    assert interrupted is False
+    assert source.discard_pending_calls == 1
+    assert runtime.realtime.state is RealtimeState.IDLE
 
 
 def test_doctor_reports_native_capture_to_model_rate(tmp_path: Path) -> None:

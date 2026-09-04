@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from array import array
+from collections import deque
 from dataclasses import dataclass
 from functools import lru_cache
 import importlib
@@ -237,6 +238,95 @@ def _downsample_pcm_s16le(
     return output
 
 
+class _StreamingDownsampler:
+    def __init__(self, source_rate_hz: int, target_rate_hz: int) -> None:
+        if target_rate_hz >= source_rate_hz:
+            raise ValueError("streaming downsampler requires target rate below source rate")
+        self.source_rate_hz = source_rate_hz
+        self.target_rate_hz = target_rate_hz
+        self._common_rate, self._first_offset, self._kernels, self._kernel_totals = (
+            _downsample_kernels(source_rate_hz, target_rate_hz)
+        )
+        self._last_offset = self._first_offset + len(self._kernels[0]) - 1
+        self.reset()
+
+    def reset(self) -> None:
+        self._source: list[int] = []
+        self._source_start = 0
+        self._source_count = 0
+        self._next_output_index = 0
+        self._output: deque[int] = deque()
+
+    @property
+    def available_samples(self) -> int:
+        return len(self._output)
+
+    def feed(self, payload: bytes) -> None:
+        if len(payload) % 2:
+            raise ValueError("PCM_S16LE payload must contain complete samples")
+        samples = array("h")
+        samples.frombytes(payload)
+        if sys.byteorder == "big":
+            samples.byteswap()
+        self._source.extend(samples)
+        self._source_count += len(samples)
+        self._produce_available_output()
+        self._trim_consumed_source()
+
+    def pop_payload(self, sample_count: int) -> bytes:
+        if sample_count < 0 or sample_count > len(self._output):
+            raise ValueError("requested streaming output is not available")
+        pcm = array("h", (self._output.popleft() for _ in range(sample_count)))
+        if sys.byteorder == "big":
+            pcm.byteswap()
+        return pcm.tobytes()
+
+    def _produce_available_output(self) -> None:
+        last_available = self._source_count - 1
+        while True:
+            numerator = self._next_output_index * self.source_rate_hz
+            center = numerator // self.target_rate_hz
+            residue = numerator % self.target_rate_hz
+            phase = residue // self._common_rate
+            high_source = center + self._last_offset
+            if high_source > last_available:
+                return
+
+            kernel = self._kernels[phase]
+            low_offset = max(self._first_offset, -center)
+            kernel_start = low_offset - self._first_offset
+            weighted = 0.0
+            sample_global = center + low_offset
+            sample_index = sample_global - self._source_start
+            for kernel_index in range(kernel_start, len(kernel)):
+                weighted += self._source[sample_index] * kernel[kernel_index]
+                sample_index += 1
+
+            if low_offset == self._first_offset:
+                total_weight = self._kernel_totals[phase]
+            else:
+                total_weight = sum(kernel[kernel_start:])
+            if abs(total_weight) < 1e-12:
+                fallback_global = min(
+                    max(round(numerator / self.target_rate_hz), 0), last_available
+                )
+                value = self._source[fallback_global - self._source_start]
+            else:
+                value = round(weighted / total_weight)
+            self._output.append(max(-32768, min(32767, value)))
+            self._next_output_index += 1
+
+    def _trim_consumed_source(self) -> None:
+        numerator = self._next_output_index * self.source_rate_hz
+        center = numerator // self.target_rate_hz
+        minimum_needed = max(0, center + self._first_offset)
+        trim_count = minimum_needed - self._source_start
+        if trim_count <= 0:
+            return
+        del self._source[:trim_count]
+        self._source_start += trim_count
+
+
 def resample_pcm_s16le_mono(payload: bytes, source_rate_hz: int, target_rate_hz: int) -> bytes:
     if source_rate_hz <= 0 or target_rate_hz <= 0:
         raise ValueError("sample rates must be positive")
@@ -319,6 +409,12 @@ class SoundDeviceInput:
         self._device_frames_per_block = max(
             1, round(self._device_sample_rate_hz * config.block_ms / 1000)
         )
+        self._model_frames_per_block = max(1, round(config.sample_rate_hz * config.block_ms / 1000))
+        self._downsampler = (
+            _StreamingDownsampler(self._device_sample_rate_hz, config.sample_rate_hz)
+            if config.sample_rate_hz < self._device_sample_rate_hz
+            else None
+        )
 
     @property
     def audio_format(self) -> AudioFormat:
@@ -352,16 +448,18 @@ class SoundDeviceInput:
         assert self._stream is not None
         return self._stream
 
-    def read_frame(self) -> AudioFrame:
+    def _read_device_payload(self, frames: int) -> bytes:
         stream = self._ensure_stream()
-        data, overflowed = stream.read(self._device_frames_per_block)
+        data, overflowed = stream.read(frames)
         if overflowed:
+            if self._downsampler is not None:
+                self._downsampler.reset()
             raise AudioInputOverflowError(
                 "microphone input overflowed; audio frame rejected instead of hiding loss"
             )
-        payload = resample_pcm_s16le_mono(
-            bytes(data), self._device_sample_rate_hz, self.config.sample_rate_hz
-        )
+        return bytes(data)
+
+    def _build_frame(self, payload: bytes) -> AudioFrame:
         frame = AudioFrame(
             sequence=self._sequence,
             payload=payload,
@@ -370,15 +468,53 @@ class SoundDeviceInput:
         self._sequence += 1
         return frame
 
+    def _feed_downsampler_block(self) -> None:
+        assert self._downsampler is not None
+        self._downsampler.feed(self._read_device_payload(self._device_frames_per_block))
+
+    def read_frame(self) -> AudioFrame:
+        if self._downsampler is None:
+            payload = resample_pcm_s16le_mono(
+                self._read_device_payload(self._device_frames_per_block),
+                self._device_sample_rate_hz,
+                self.config.sample_rate_hz,
+            )
+            return self._build_frame(payload)
+
+        while self._downsampler.available_samples < self._model_frames_per_block:
+            self._feed_downsampler_block()
+        return self._build_frame(self._downsampler.pop_payload(self._model_frames_per_block))
+
     def read_frame_if_available(self) -> AudioFrame | None:
         stream = self._ensure_stream()
+        if self._downsampler is None:
+            available = int(getattr(stream, "read_available", 0))
+            if available < self._device_frames_per_block:
+                return None
+            return self.read_frame()
+
+        if self._downsampler.available_samples >= self._model_frames_per_block:
+            return self._build_frame(self._downsampler.pop_payload(self._model_frames_per_block))
         available = int(getattr(stream, "read_available", 0))
         if available < self._device_frames_per_block:
             return None
-        return self.read_frame()
+        self._feed_downsampler_block()
+        if self._downsampler.available_samples < self._model_frames_per_block:
+            return None
+        return self._build_frame(self._downsampler.pop_payload(self._model_frames_per_block))
+
+    def discard_pending_audio(self) -> None:
+        stream = self._ensure_stream()
+        available = int(getattr(stream, "read_available", 0))
+        if available > 0:
+            self._read_device_payload(available)
+        if self._downsampler is not None:
+            self._downsampler.reset()
 
     def close(self) -> None:
         stream, self._stream = self._stream, None
+        if self._downsampler is not None:
+            self._downsampler.reset()
         if stream is None:
             return
         try:
