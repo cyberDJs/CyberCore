@@ -6,7 +6,6 @@ import hashlib
 import os
 from pathlib import Path
 import shutil
-import signal
 import subprocess
 import threading
 import time
@@ -53,7 +52,7 @@ _BLOCKED_EXECUTABLES = {
     "printenv",
 }
 
-_SHELL_META = ("|", "&", ";", ">", "<", "`", "$(`, "\n", "\r")
+_SHELL_META = ("|", "&", ";", ">", "<", "`", "$(", "\n", "\r")
 _TRUSTED_EXECUTABLE_PATH = "/usr/local/bin:/usr/bin:/bin"
 _MAX_OUTPUT_BYTES_PER_STREAM = 1024 * 1024
 _OUTPUT_READ_CHUNK_BYTES = 64 * 1024
@@ -89,7 +88,7 @@ class _Containment(Protocol):
 
 
 class _SystemdContainment:
-    """Contain commands in a transient user service cgroup; fail closed if unavailable."""
+    """Contain commands in a transient user-service cgroup; fail closed if unavailable."""
 
     def __init__(self) -> None:
         if os.name != "posix":
@@ -137,6 +136,11 @@ class _SystemdContainment:
         unit = self._units.get(process.pid)
         if unit is None:
             raise GovernedRunnerError("containment unit identity is missing")
+        containment_env = {
+            "PATH": _TRUSTED_EXECUTABLE_PATH,
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+        }
         for sig in ("TERM", "KILL"):
             subprocess.run(
                 [
@@ -147,7 +151,7 @@ class _SystemdContainment:
                     f"--signal={sig}",
                     unit,
                 ],
-                env={"PATH": _TRUSTED_EXECUTABLE_PATH, "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+                env=containment_env,
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -196,7 +200,10 @@ def _resolved_cwd(root: Path, raw_cwd: str) -> Path:
     candidate = Path(raw_cwd)
     if not candidate.is_absolute():
         candidate = root / candidate
-    resolved = candidate.resolve(strict=True)
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as exc:
+        raise GovernedRunnerError(f"command cwd cannot be resolved: {candidate}") from exc
     if resolved != root and root not in resolved.parents:
         raise GovernedRunnerError(f"command cwd escapes allowed root: {resolved}")
     if not resolved.is_dir():
@@ -354,10 +361,11 @@ class GovernedRunner:
         self.allowed_root = allowed_root.expanduser().resolve()
         if not self.allowed_root.is_dir():
             raise GovernedRunnerError(f"allowed root does not exist: {self.allowed_root}")
-        self._containment = containment or _SystemdContainment()
+        self._containment = containment
 
     def execute(self, plan: CommandPlan) -> ExecutionReceipt:
         prepared_commands = _prepare_plan(plan, root=self.allowed_root)
+        containment = self._containment or _SystemdContainment()
         receipts: list[CommandReceipt] = []
         status = "IMPLEMENTED"
 
@@ -379,7 +387,7 @@ class GovernedRunner:
             output_limit_event = threading.Event()
 
             try:
-                process = self._containment.spawn(
+                process = containment.spawn(
                     current.argv,
                     cwd=current.cwd,
                     env=environment,
@@ -406,11 +414,11 @@ class GovernedRunner:
                 while process.poll() is None:
                     if output_limit_event.is_set():
                         output_limit_exceeded = True
-                        self._containment.terminate(process)
+                        containment.terminate(process)
                         break
                     if time.monotonic() >= deadline:
                         timed_out = True
-                        self._containment.terminate(process)
+                        containment.terminate(process)
                         break
                     time.sleep(_PROCESS_POLL_SECONDS)
 
@@ -418,17 +426,17 @@ class GovernedRunner:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         timed_out = True
-                        self._containment.terminate(process)
+                        containment.terminate(process)
                     else:
                         try:
                             process.wait(timeout=remaining)
                         except subprocess.TimeoutExpired:
                             timed_out = True
-                            self._containment.terminate(process)
+                            containment.terminate(process)
 
                 exit_code = process.returncode
                 drains_finished_before_deadline = _join_drain_threads_until_deadline(
-                    self._containment,
+                    containment,
                     process,
                     stdout_thread,
                     stderr_thread,
