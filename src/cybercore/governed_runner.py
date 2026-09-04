@@ -86,6 +86,7 @@ class _FileIdentity:
     inode: int
     size: int
     mtime_ns: int
+    mode: int
     sha256: str
 
 
@@ -101,11 +102,11 @@ class _PreparedCommand:
 class _Containment(Protocol):
     def spawn(
         self,
-        argv: tuple[str, ...],
+        prepared: _PreparedCommand,
         *,
-        cwd: Path,
         env: dict[str, str],
         timeout_seconds: float,
+        grant_expires_at: datetime,
     ) -> subprocess.Popen[bytes]: ...
 
     def terminate(self, process: subprocess.Popen[bytes], *, deadline: float) -> None: ...
@@ -119,21 +120,28 @@ class _SystemdContainment:
             raise GovernedRunnerError("strong process containment is unavailable on this platform")
         systemd_run = shutil.which("systemd-run", path=_TRUSTED_EXECUTABLE_PATH)
         systemctl = shutil.which("systemctl", path=_TRUSTED_EXECUTABLE_PATH)
-        if systemd_run is None or systemctl is None:
+        python3 = shutil.which("python3", path=_TRUSTED_EXECUTABLE_PATH)
+        if systemd_run is None or systemctl is None or python3 is None:
             raise GovernedRunnerError("systemd cgroup containment tools are unavailable")
         self._systemd_run = str(Path(systemd_run).resolve())
         self._systemctl = str(Path(systemctl).resolve())
+        self._wrapper_python = str(Path(python3).resolve())
         self._units: dict[int, str] = {}
 
     def spawn(
         self,
-        argv: tuple[str, ...],
+        prepared: _PreparedCommand,
         *,
-        cwd: Path,
         env: dict[str, str],
         timeout_seconds: float,
+        grant_expires_at: datetime,
     ) -> subprocess.Popen[bytes]:
         unit = f"cybercore-governed-{uuid.uuid4().hex}"
+        payload = _stable_exec_wrapper_argv(
+            prepared,
+            grant_expires_at=grant_expires_at,
+            wrapper_python=self._wrapper_python,
+        )
         wrapped = (
             self._systemd_run,
             "--user",
@@ -142,17 +150,20 @@ class _SystemdContainment:
             "--wait",
             "--pipe",
             f"--unit={unit}",
-            f"--working-directory={cwd}",
+            "--working-directory=/",
             f"--property=RuntimeMaxSec={timeout_seconds}s",
+            f"--property=TimeoutStopSec={_PROCESS_TERMINATION_BUDGET_SECONDS}s",
+            "--property=KillMode=control-group",
+            "--property=SendSIGKILL=yes",
             f"--setenv=PATH={env['PATH']}",
             f"--setenv=LANG={env['LANG']}",
             f"--setenv=LC_ALL={env['LC_ALL']}",
             "--",
-            *argv,
+            *payload,
         )
         process = subprocess.Popen(
             list(wrapped),
-            cwd=cwd,
+            cwd="/",
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -167,10 +178,13 @@ class _SystemdContainment:
         if unit is None:
             raise GovernedRunnerError("containment unit identity is missing")
         containment_env = _bounded_environment(include_user_bus=True)
-        for sig in ("TERM", "KILL"):
+        signals = ("TERM", "KILL")
+        for index, sig in enumerate(signals):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
+            phases_left = len(signals) - index
+            control_timeout = remaining / phases_left
             try:
                 subprocess.run(
                     [
@@ -187,16 +201,16 @@ class _SystemdContainment:
                     stderr=subprocess.DEVNULL,
                     shell=False,
                     check=False,
-                    timeout=remaining,
+                    timeout=control_timeout,
                 )
             except subprocess.TimeoutExpired:
-                break
+                continue
             if process.poll() is not None:
                 return
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            time.sleep(min(_PROCESS_GROUP_TERM_GRACE_SECONDS, remaining))
+            if sig == "TERM":
+                remaining = deadline - time.monotonic()
+                if remaining > 0:
+                    time.sleep(min(_PROCESS_GROUP_TERM_GRACE_SECONDS, remaining / 2))
 
         if process.poll() is None:
             process.kill()
@@ -284,6 +298,148 @@ def _consume_authorization_nonce(grant: AuthorizationGrant, *, state_dir: Path) 
             pass
         raise GovernedRunnerError("authorization grant nonce cannot be persisted") from exc
 
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        directory_fd = os.open(state_dir, directory_flags)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except OSError as exc:
+        # The marker may already be durable. Keep it and fail closed rather than
+        # risk making a consumed authorization reusable.
+        raise GovernedRunnerError(
+            "authorization grant nonce directory cannot be persisted"
+        ) from exc
+
+
+_STABLE_EXEC_WRAPPER = r"""
+import hashlib
+import os
+import sys
+import time
+
+
+def fail(message, code=126):
+    os.write(2, (message + "\n").encode("utf-8", errors="replace"))
+    raise SystemExit(code)
+
+
+cwd_path = sys.argv[1]
+expected_cwd_device = int(sys.argv[2])
+expected_cwd_inode = int(sys.argv[3])
+executable_path = sys.argv[4]
+expected_device = int(sys.argv[5])
+expected_inode = int(sys.argv[6])
+expected_size = int(sys.argv[7])
+expected_mtime_ns = int(sys.argv[8])
+expected_mode = int(sys.argv[9])
+expected_sha256 = sys.argv[10]
+expires_at = float(sys.argv[11])
+target_argv = sys.argv[12:]
+
+if time.time() >= expires_at:
+    fail("authorization grant expired before service exec", 125)
+
+cwd_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+try:
+    cwd_fd = os.open(cwd_path, cwd_flags)
+except OSError:
+    fail("validated cwd cannot be opened inside service")
+
+try:
+    cwd_stat = os.fstat(cwd_fd)
+    if (cwd_stat.st_dev, cwd_stat.st_ino) != (expected_cwd_device, expected_cwd_inode):
+        fail("validated cwd identity changed before service exec")
+
+    try:
+        source_fd = os.open(executable_path, os.O_RDONLY)
+    except OSError:
+        fail("validated executable cannot be opened inside service")
+
+    try:
+        executable_stat = os.fstat(source_fd)
+        observed = (
+            executable_stat.st_dev,
+            executable_stat.st_ino,
+            executable_stat.st_size,
+            executable_stat.st_mtime_ns,
+            executable_stat.st_mode,
+        )
+        expected = (
+            expected_device,
+            expected_inode,
+            expected_size,
+            expected_mtime_ns,
+            expected_mode,
+        )
+        if observed != expected:
+            fail("validated executable metadata changed before service exec")
+
+        if not hasattr(os, "memfd_create") or os.execve not in os.supports_fd:
+            fail("stable executable handle execution is unavailable")
+        executable_fd = os.memfd_create("cybercore-governed-exec", flags=0)
+        try:
+            digest = hashlib.sha256()
+            while True:
+                chunk = os.read(source_fd, 1024 * 1024)
+                if not chunk:
+                    break
+                digest.update(chunk)
+                view = memoryview(chunk)
+                while view:
+                    written = os.write(executable_fd, view)
+                    view = view[written:]
+            if digest.hexdigest() != expected_sha256:
+                fail("validated executable content changed before service exec")
+            if time.time() >= expires_at:
+                fail("authorization grant expired before service exec", 125)
+
+            os.fchmod(executable_fd, 0o700)
+            os.lseek(executable_fd, 0, os.SEEK_SET)
+            os.set_inheritable(executable_fd, True)
+            os.fchdir(cwd_fd)
+            payload_env = {
+                key: os.environ[key]
+                for key in ("PATH", "LANG", "LC_ALL")
+                if key in os.environ
+            }
+            os.execve(executable_fd, target_argv, payload_env)
+        finally:
+            os.close(executable_fd)
+    finally:
+        os.close(source_fd)
+finally:
+    os.close(cwd_fd)
+"""
+
+
+def _stable_exec_wrapper_argv(
+    prepared: _PreparedCommand,
+    *,
+    grant_expires_at: datetime,
+    wrapper_python: str,
+) -> tuple[str, ...]:
+    executable = prepared.executable_identity
+    cwd_device, cwd_inode = prepared.cwd_identity
+    return (
+        wrapper_python,
+        "-c",
+        _STABLE_EXEC_WRAPPER,
+        str(prepared.cwd),
+        str(cwd_device),
+        str(cwd_inode),
+        prepared.argv[0],
+        str(executable.device),
+        str(executable.inode),
+        str(executable.size),
+        str(executable.mtime_ns),
+        str(executable.mode),
+        executable.sha256,
+        repr(grant_expires_at.timestamp()),
+        *prepared.argv,
+    )
+
 
 def _matches_prefix(argv: tuple[str, ...], prefix: tuple[str, ...]) -> bool:
     return len(argv) >= len(prefix) and argv[: len(prefix)] == prefix
@@ -322,6 +478,7 @@ def _executable_identity(path: Path) -> _FileIdentity:
         inode=stat.st_ino,
         size=stat.st_size,
         mtime_ns=stat.st_mtime_ns,
+        mode=stat.st_mode,
         sha256=_hash_file(path),
     )
 
@@ -562,6 +719,7 @@ class GovernedRunner:
         for prepared in prepared_commands:
             try:
                 current = _revalidate_prepared_command(plan, prepared, root=self.allowed_root)
+                _validate_plan_binding(plan)
             except GovernedRunnerError as exc:
                 receipts.append(_revalidation_failure_receipt(prepared, exc))
                 status = "FAILED"
@@ -579,10 +737,10 @@ class GovernedRunner:
 
             try:
                 process = containment.spawn(
-                    current.argv,
-                    cwd=current.cwd,
+                    current,
                     env=environment,
                     timeout_seconds=command.timeout_seconds,
+                    grant_expires_at=plan.grant.expires_at,
                 )
             except OSError as exc:
                 stderr_state.consume(str(exc).encode("utf-8", errors="replace"))

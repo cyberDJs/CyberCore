@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -27,16 +28,16 @@ class _DirectTestContainment:
 
     def spawn(
         self,
-        argv: tuple[str, ...],
+        prepared: governed_runner_module._PreparedCommand,
         *,
-        cwd: Path,
         env: dict[str, str],
         timeout_seconds: float,
+        grant_expires_at: datetime,
     ) -> subprocess.Popen[bytes]:
-        del timeout_seconds
+        del timeout_seconds, grant_expires_at
         return subprocess.Popen(
-            list(argv),
-            cwd=cwd,
+            list(prepared.argv),
+            cwd=prepared.cwd,
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -286,6 +287,61 @@ def test_revalidates_grant_before_each_spawn(tmp_path: Path) -> None:
     assert receipt.commands[1].exit_code is None
 
 
+def test_rechecks_grant_after_executable_hashing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_hash = governed_runner_module._hash_file
+    hash_calls = 0
+
+    def slow_second_hash(path: Path) -> str:
+        nonlocal hash_calls
+        hash_calls += 1
+        if hash_calls >= 2:
+            time.sleep(0.08)
+        return real_hash(path)
+
+    monkeypatch.setattr(governed_runner_module, "_hash_file", slow_second_hash)
+
+    class _RecordingContainment(_DirectTestContainment):
+        def __init__(self) -> None:
+            self.spawned = False
+
+        def spawn(
+            self,
+            prepared: governed_runner_module._PreparedCommand,
+            *,
+            env: dict[str, str],
+            timeout_seconds: float,
+            grant_expires_at: datetime,
+        ) -> subprocess.Popen[bytes]:
+            self.spawned = True
+            return super().spawn(
+                prepared,
+                env=env,
+                timeout_seconds=timeout_seconds,
+                grant_expires_at=grant_expires_at,
+            )
+
+    containment = _RecordingContainment()
+    grant = _grant(expires_in=0.05)
+    command = CommandSpec(
+        argv=(sys.executable, "--version"),
+        cwd=".",
+        classification=OperationClass.READ_ONLY,
+    )
+    runner = GovernedRunner(
+        tmp_path,
+        containment=containment,
+        nonce_state_dir=tmp_path / ".nonce-state",
+    )
+
+    receipt = runner.execute(_plan(tmp_path, command, grant=grant))
+
+    assert receipt.status == "FAILED"
+    assert receipt.commands[0].exit_code is None
+    assert containment.spawned is False
+
+
 def test_revalidates_cwd_before_each_spawn(tmp_path: Path) -> None:
     target = tmp_path / "target"
     target.mkdir()
@@ -392,6 +448,37 @@ def test_rejects_replayed_mutating_authorization_nonce(tmp_path: Path) -> None:
     assert first.status == "IMPLEMENTED"
     with pytest.raises(GovernedRunnerError, match="already been consumed"):
         runner.execute(plan)
+
+
+def test_nonce_marker_fsyncs_containing_directory_before_spawn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_fsync = governed_runner_module.os.fsync
+    fsync_kinds: list[str] = []
+
+    def recording_fsync(fd: int) -> None:
+        mode = governed_runner_module.os.fstat(fd).st_mode
+        fsync_kinds.append("dir" if stat.S_ISDIR(mode) else "file")
+        real_fsync(fd)
+
+    monkeypatch.setattr(governed_runner_module.os, "fsync", recording_fsync)
+    writer = tmp_path / "durable-nonce.py"
+    writer.write_text("pass\n", encoding="utf-8")
+    grant = _grant(
+        allowed_classes=frozenset({OperationClass.FILE_WRITE}),
+        prefixes=((sys.executable,),),
+        nonce="durable-nonce",
+    )
+    command = CommandSpec(
+        argv=(sys.executable, str(writer)),
+        cwd=".",
+        classification=OperationClass.FILE_WRITE,
+    )
+
+    receipt = _runner(tmp_path).execute(_plan(tmp_path, command, grant=grant))
+
+    assert receipt.status == "IMPLEMENTED"
+    assert fsync_kinds[:2] == ["file", "dir"]
 
 
 def test_read_only_plan_does_not_consume_authorization_nonce(tmp_path: Path) -> None:
@@ -619,18 +706,37 @@ def test_systemd_spawn_binds_validated_working_directory(
     monkeypatch.setattr(governed_runner_module.subprocess, "Popen", fake_popen)
     containment = governed_runner_module._SystemdContainment()
     env = governed_runner_module._bounded_environment(include_user_bus=False)
+    grant = _grant()
+    command = CommandSpec(
+        argv=(sys.executable, "--version"),
+        cwd=".",
+        classification=OperationClass.READ_ONLY,
+    )
+    prepared = governed_runner_module._prepare_plan(
+        _plan(tmp_path, command, grant=grant), root=tmp_path
+    )[0]
 
     containment.spawn(
-        (sys.executable, "--version"),
-        cwd=tmp_path,
+        prepared,
         env=env,
         timeout_seconds=5.0,
+        grant_expires_at=grant.expires_at,
     )
 
     argv = captured["argv"]
     assert isinstance(argv, list)
-    assert f"--working-directory={tmp_path}" in argv
+    assert "--working-directory=/" in argv
     assert "--property=RuntimeMaxSec=5.0s" in argv
+    assert "--property=TimeoutStopSec=1.0s" in argv
+    assert "--property=KillMode=control-group" in argv
+    assert "--property=SendSIGKILL=yes" in argv
+    separator = argv.index("--")
+    payload = argv[separator + 1 :]
+    assert payload[0] == containment._wrapper_python
+    assert payload[1] == "-c"
+    assert "memfd_create" in payload[2]
+    assert "fchdir" in payload[2]
+    assert "os.execve" in payload[2]
 
 
 def test_systemctl_control_call_is_bounded_by_deadline(
@@ -640,9 +746,11 @@ def test_systemctl_control_call_is_bounded_by_deadline(
         governed_runner_module.shutil, "which", lambda *_args, **_kwargs: "/usr/bin/true"
     )
     seen_timeouts: list[float] = []
+    seen_signals: list[str] = []
 
-    def fake_run(*_args: object, timeout: float, **_kwargs: object) -> None:
+    def fake_run(args: list[str], *, timeout: float, **_kwargs: object) -> None:
         seen_timeouts.append(timeout)
+        seen_signals.append(next(arg for arg in args if arg.startswith("--signal=")))
         raise subprocess.TimeoutExpired(cmd="systemctl", timeout=timeout)
 
     monkeypatch.setattr(governed_runner_module.subprocess, "run", fake_run)
@@ -671,6 +779,7 @@ def test_systemctl_control_call_is_bounded_by_deadline(
 
     assert seen_timeouts
     assert all(0 < value <= 0.05 for value in seen_timeouts)
+    assert seen_signals == ["--signal=TERM", "--signal=KILL"]
 
 
 def test_rejects_missing_executable_during_prevalidation(tmp_path: Path) -> None:
