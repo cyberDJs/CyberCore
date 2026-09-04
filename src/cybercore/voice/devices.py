@@ -578,6 +578,7 @@ class SoundDeviceTransport:
     def flush_output(self) -> None:
         stream, self._stream = self._stream, None
         self._format = None
+        self._consecutive_underflows = 0
         if stream is None:
             return
         abort = getattr(stream, "abort", None)
