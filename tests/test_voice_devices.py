@@ -72,17 +72,20 @@ class PartialInputStream(FakeInputStream):
 
 
 class FakeOutputStream:
-    def __init__(self) -> None:
+    def __init__(self, *, underflows: list[bool] | None = None) -> None:
         self.started = False
         self.closed = False
         self.aborted = False
         self.payloads: list[bytes] = []
+        self.underflows = list(underflows or [])
 
     def start(self) -> None:
         self.started = True
 
     def write(self, payload: bytes) -> bool:
         self.payloads.append(bytes(payload))
+        if self.underflows:
+            return self.underflows.pop(0)
         return False
 
     def abort(self) -> None:
@@ -95,10 +98,15 @@ class FakeOutputStream:
 class FakeSoundDevice:
     __version__ = "0.5.6"
 
-    def __init__(self, *, overflowed: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        overflowed: bool = False,
+        output_underflows: list[bool] | None = None,
+    ) -> None:
         self.default = SimpleNamespace(device=(0, 1))
         self.input_stream = FakeInputStream(b"\x01\x00" * 3840, overflowed=overflowed)
-        self.output_stream = FakeOutputStream()
+        self.output_stream = FakeOutputStream(underflows=output_underflows)
         self.input_checks: list[dict[str, object]] = []
         self.output_checks: list[dict[str, object]] = []
         self.input_stream_kwargs: dict[str, object] = {}
@@ -293,3 +301,18 @@ def test_sounddevice_transport_writes_and_flushes_output() -> None:
     transport.flush_output()
     assert sd.output_stream.aborted is True
     assert sd.output_stream.closed is True
+
+
+def test_sounddevice_transport_recovers_from_transient_underflow() -> None:
+    sd = FakeSoundDevice(output_underflows=[True, False])
+    transport = SoundDeviceTransport(output_device=1, sounddevice_module=sd)
+    first = AudioFrame(sequence=0, payload=b"\x01\x00" * 160, format=AudioFormat())
+    second = AudioFrame(sequence=1, payload=b"\x02\x00" * 160, format=AudioFormat())
+
+    transport.send(first)
+    transport.send(second)
+
+    assert sd.output_stream.payloads == [first.payload, second.payload]
+    assert transport.underflow_count == 1
+    assert sd.output_stream.aborted is False
+    assert sd.output_stream.closed is False
