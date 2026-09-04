@@ -59,9 +59,12 @@ _MAX_OUTPUT_BYTES_PER_STREAM = 1024 * 1024
 _OUTPUT_READ_CHUNK_BYTES = 64 * 1024
 _PROCESS_POLL_SECONDS = 0.01
 _PROCESS_GROUP_TERM_GRACE_SECONDS = 0.1
+_CONTAINMENT_CLEANUP_SECONDS = 1.0
 _REQUIRED_USER_BUS_ENV = ("XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS")
 _APPROVED_EXECUTABLE_NAMES = {"git", "pytest"}
 _PYTHON_EXECUTABLE_RE = re.compile(r"^python(?:3(?:\.\d+)?)?$")
+_CONSUMED_NONCES: set[tuple[str, str, str, str]] = set()
+_CONSUMED_NONCES_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,6 +331,15 @@ def _validate_plan_binding(plan: CommandPlan) -> None:
         raise GovernedRunnerError("authorization grant is expired or not yet valid")
 
 
+def _consume_authorization_nonce(plan: CommandPlan) -> None:
+    grant = plan.grant
+    nonce_key = (grant.issuer, grant.operation_id, grant.canonical_target, grant.nonce)
+    with _CONSUMED_NONCES_LOCK:
+        if nonce_key in _CONSUMED_NONCES:
+            raise GovernedRunnerError("authorization nonce has already been consumed")
+        _CONSUMED_NONCES.add(nonce_key)
+
+
 def _prepare_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> _PreparedCommand:
     grant = plan.grant
     if command.classification is OperationClass.BLOCKED:
@@ -402,6 +414,10 @@ def _drain_stream(
             pass
 
 
+def _cleanup_deadline() -> float:
+    return time.monotonic() + _CONTAINMENT_CLEANUP_SECONDS
+
+
 def _join_drain_threads_until_deadline(
     containment: _Containment,
     process: subprocess.Popen[bytes],
@@ -419,7 +435,8 @@ def _join_drain_threads_until_deadline(
     if not any(thread.is_alive() for thread in threads):
         return True
 
-    containment.terminate(process, deadline=deadline)
+    cleanup_deadline = _cleanup_deadline()
+    containment.terminate(process, deadline=cleanup_deadline)
     for stream in (process.stdout, process.stderr):
         if stream is not None:
             try:
@@ -427,11 +444,30 @@ def _join_drain_threads_until_deadline(
             except OSError:
                 pass
     for thread in threads:
-        remaining = deadline - time.monotonic()
+        remaining = cleanup_deadline - time.monotonic()
         if remaining <= 0:
             break
         thread.join(timeout=min(_PROCESS_GROUP_TERM_GRACE_SECONDS, remaining))
     return False
+
+
+def _failed_pre_spawn_receipt(
+    prepared: _PreparedCommand,
+    error: GovernedRunnerError,
+) -> CommandReceipt:
+    now = datetime.now(timezone.utc).isoformat()
+    stderr_sha256 = hashlib.sha256(str(error).encode("utf-8", errors="replace")).hexdigest()
+    return CommandReceipt(
+        argv=prepared.argv,
+        cwd=str(prepared.cwd),
+        classification=prepared.spec.classification,
+        started_at=now,
+        finished_at=now,
+        exit_code=None,
+        stdout_sha256=hashlib.sha256(b"").hexdigest(),
+        stderr_sha256=stderr_sha256,
+        timed_out=False,
+    )
 
 
 class GovernedRunner:
@@ -445,13 +481,20 @@ class GovernedRunner:
 
     def execute(self, plan: CommandPlan) -> ExecutionReceipt:
         prepared_commands = _prepare_plan(plan, root=self.allowed_root)
+        _consume_authorization_nonce(plan)
         containment = self._containment or _SystemdContainment()
         receipts: list[CommandReceipt] = []
         status = "IMPLEMENTED"
         environment = _bounded_environment(include_user_bus=self._containment is None)
 
         for prepared in prepared_commands:
-            current = _revalidate_prepared_command(plan, prepared, root=self.allowed_root)
+            try:
+                current = _revalidate_prepared_command(plan, prepared, root=self.allowed_root)
+            except GovernedRunnerError as exc:
+                receipts.append(_failed_pre_spawn_receipt(prepared, exc))
+                status = "FAILED"
+                break
+
             command = current.spec
             started = datetime.now(timezone.utc)
             timed_out = False
@@ -489,11 +532,11 @@ class GovernedRunner:
                 while process.poll() is None:
                     if output_limit_event.is_set():
                         output_limit_exceeded = True
-                        containment.terminate(process, deadline=deadline)
+                        containment.terminate(process, deadline=_cleanup_deadline())
                         break
                     if time.monotonic() >= deadline:
                         timed_out = True
-                        containment.terminate(process, deadline=deadline)
+                        containment.terminate(process, deadline=_cleanup_deadline())
                         break
                     time.sleep(_PROCESS_POLL_SECONDS)
 
@@ -501,13 +544,13 @@ class GovernedRunner:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
                         timed_out = True
-                        containment.terminate(process, deadline=deadline)
+                        containment.terminate(process, deadline=_cleanup_deadline())
                     else:
                         try:
                             process.wait(timeout=remaining)
                         except subprocess.TimeoutExpired:
                             timed_out = True
-                            containment.terminate(process, deadline=deadline)
+                            containment.terminate(process, deadline=_cleanup_deadline())
 
                 exit_code = process.returncode
                 drains_finished_before_deadline = _join_drain_threads_until_deadline(
