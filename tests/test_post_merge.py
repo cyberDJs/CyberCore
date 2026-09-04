@@ -4,6 +4,7 @@ import io
 import json
 from pathlib import Path
 import subprocess
+from typing import Any, Callable
 
 import pytest
 
@@ -62,6 +63,25 @@ def _payload(merge_commit: str, *, merged: bool = True, base: str = "main") -> d
     }
 
 
+def _branch_payload(commit: str) -> dict[str, object]:
+    return {"name": "main", "commit": {"sha": commit}}
+
+
+def _opener(
+    pr_payload: dict[str, object],
+    branch_commit: str,
+) -> Callable[..., _Response]:
+    def open_request(request: Any, *_args: object, **_kwargs: object) -> _Response:
+        url = request.full_url
+        if "/pulls/" in url:
+            return _Response(pr_payload)
+        if "/branches/" in url:
+            return _Response(_branch_payload(branch_commit))
+        raise AssertionError(f"unexpected URL: {url}")
+
+    return open_request
+
+
 def test_post_merge_preview_verifies_merged_pr_on_main(tmp_path: Path) -> None:
     repo, merge_commit = _repo(tmp_path)
 
@@ -69,7 +89,7 @@ def test_post_merge_preview_verifies_merged_pr_on_main(tmp_path: Path) -> None:
         repo,
         22,
         expected_head_sha="head-sha",
-        opener=lambda *_args, **_kwargs: _Response(_payload(merge_commit)),
+        opener=_opener(_payload(merge_commit), merge_commit),
     )
 
     assert preview.pull_request.merge_commit == merge_commit
@@ -86,7 +106,7 @@ def test_post_merge_preview_rejects_unmerged_pr(tmp_path: Path) -> None:
         plan_post_merge_transition(
             repo,
             22,
-            opener=lambda *_args, **_kwargs: _Response(_payload(merge_commit, merged=False)),
+            opener=_opener(_payload(merge_commit, merged=False), merge_commit),
         )
 
 
@@ -97,7 +117,7 @@ def test_post_merge_preview_rejects_wrong_base_branch(tmp_path: Path) -> None:
         plan_post_merge_transition(
             repo,
             22,
-            opener=lambda *_args, **_kwargs: _Response(_payload(merge_commit, base="develop")),
+            opener=_opener(_payload(merge_commit, base="develop"), merge_commit),
         )
 
 
@@ -109,7 +129,21 @@ def test_post_merge_preview_rejects_head_sha_mismatch(tmp_path: Path) -> None:
             repo,
             22,
             expected_head_sha="different-sha",
-            opener=lambda *_args, **_kwargs: _Response(_payload(merge_commit)),
+            opener=_opener(_payload(merge_commit), merge_commit),
+        )
+
+
+def test_post_merge_preview_rejects_local_only_main_descendant(tmp_path: Path) -> None:
+    repo, merge_commit = _repo(tmp_path)
+    (repo / "local-only.txt").write_text("local only\n", encoding="utf-8")
+    _git(repo, "add", "local-only.txt")
+    _git(repo, "commit", "-m", "local-only descendant")
+
+    with pytest.raises(PostMergeTransitionError, match="does not match GitHub main"):
+        plan_post_merge_transition(
+            repo,
+            22,
+            opener=_opener(_payload(merge_commit), merge_commit),
         )
 
 
@@ -121,5 +155,5 @@ def test_post_merge_preview_requires_clean_worktree(tmp_path: Path) -> None:
         plan_post_merge_transition(
             repo,
             22,
-            opener=lambda *_args, **_kwargs: _Response(_payload(merge_commit)),
+            opener=_opener(_payload(merge_commit), merge_commit),
         )

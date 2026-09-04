@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import re
@@ -66,11 +68,57 @@ def _stage(target: Path, content: bytes, suffix: str) -> Path:
     return staged
 
 
-def _replace_required(pattern: str, replacement: str, content: str, label: str) -> str:
-    updated, count = re.subn(pattern, replacement, content, count=1, flags=re.MULTILINE)
+def _literal_replacement(value: str) -> Callable[[re.Match[str]], str]:
+    def replace(_match: re.Match[str]) -> str:
+        return value
+
+    return replace
+
+
+def _replace_required(
+    pattern: str,
+    replacement: str | Callable[[re.Match[str]], str],
+    content: str,
+    label: str,
+) -> str:
+    if isinstance(replacement, str):
+        replacement_fn = _literal_replacement(replacement)
+    else:
+        replacement_fn = replacement
+    updated, count = re.subn(pattern, replacement_fn, content, count=1, flags=re.MULTILINE)
     if count != 1:
         raise PostMergeTransitionError(f"Unable to update {label}")
     return updated
+
+
+def _replace_optional(pattern: str, replacement: str, content: str, label: str) -> str:
+    updated, count = re.subn(pattern, replacement, content, count=1, flags=re.MULTILINE)
+    if count > 1:
+        raise PostMergeTransitionError(f"Unable to update {label}")
+    return updated
+
+
+def _yaml_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _require_non_empty(label: str, value: str | None) -> str:
+    if value is None:
+        raise PostMergeTransitionError(f"{label} is required")
+    normalized = value.strip()
+    if not normalized:
+        raise PostMergeTransitionError(f"{label} must be non-empty")
+    return normalized
+
+
+def _normalize_non_empty_items(label: str, values: tuple[str, ...]) -> tuple[str, ...]:
+    normalized: list[str] = []
+    for value in values:
+        item = value.strip()
+        if not item:
+            raise PostMergeTransitionError(f"{label} must not contain empty values")
+        normalized.append(item)
+    return tuple(normalized)
 
 
 def _set_status(current: str, key: str, value: str) -> str:
@@ -80,7 +128,73 @@ def _set_status(current: str, key: str, value: str) -> str:
     marker = "\ncompleted:\n"
     if marker not in current:
         raise PostMergeTransitionError("Unable to update capability status")
-    return current.replace(marker, f"  {key}: {value}\n{marker}", 1)
+    return current.replace(marker, f"\n  {key}: {value}{marker}", 1)
+
+
+def _set_current(current: str, key: str, value: str) -> str:
+    pattern = rf"(?m)^  {re.escape(key)}: .+$"
+    if re.search(pattern, current):
+        return re.sub(pattern, f"  {key}: {value}", current, count=1)
+    marker = "\nstatus:\n"
+    if marker not in current:
+        raise PostMergeTransitionError("Unable to update current project state")
+    return current.replace(marker, f"\n  {key}: {value}{marker}", 1)
+
+
+def _set_project_state_checkpoint(
+    current: str,
+    preview: PostMergeTransitionPreview,
+) -> str:
+    checkpoint = preview.main_commit
+    base_branch = preview.pull_request.base_branch
+    old_pattern = r"^- Current canonical main: `[^`]+`$"
+    if re.search(old_pattern, current, flags=re.MULTILINE):
+        return re.sub(
+            old_pattern,
+            (
+                f"- Canonical main ref: GitHub `{base_branch}` (resolve live)\n"
+                f"- Last verified canonical checkpoint: `{checkpoint}`"
+            ),
+            current,
+            count=1,
+            flags=re.MULTILINE,
+        )
+    checkpoint_pattern = r"^- Last verified canonical checkpoint: `[^`]+`$"
+    if re.search(checkpoint_pattern, current, flags=re.MULTILINE):
+        return re.sub(
+            checkpoint_pattern,
+            f"- Last verified canonical checkpoint: `{checkpoint}`",
+            current,
+            count=1,
+            flags=re.MULTILINE,
+        )
+    raise PostMergeTransitionError("Unable to update Project State checkpoint")
+
+
+def _replace_next_tasks(current: str, next_tasks: tuple[str, ...]) -> str:
+    task_block = (
+        "next:\n" + "".join(f"  - {_yaml_string(task)}\n" for task in next_tasks)
+        if next_tasks
+        else "next: []\n"
+    )
+    return _replace_required(
+        r"(?ms)^next:(?:[ \t]*\[\])?\n.*?(?=^rules:)",
+        task_block,
+        current,
+        "next task list",
+    )
+
+
+def _insert_completed_entry(current: str, completed_entry: str) -> str:
+    updated, count = re.subn(
+        r"(?m)^next:(?:[ \t]*\[\])?$",
+        lambda match: completed_entry + match.group(0),
+        current,
+        count=1,
+    )
+    if count != 1:
+        raise PostMergeTransitionError("Unable to record completed artifact")
+    return updated
 
 
 def _kernel_transition(
@@ -89,9 +203,10 @@ def _kernel_transition(
     *,
     completed_artifact: str,
     verification: str,
-    next_artifact: str,
-    next_milestone: str,
-    next_branch: str,
+    next_artifact: str | None,
+    next_milestone: str | None,
+    next_branch: str | None,
+    terminal: bool,
     completed_status: str | None,
     next_status: str | None,
     next_tasks: tuple[str, ...],
@@ -109,37 +224,60 @@ def _kernel_transition(
             f"  - artifact: {completed_artifact}\n"
             f"    pull_request: {preview.pull_request.number}\n"
             f"    merge_commit: {preview.pull_request.merge_commit}\n"
-            f"    verification: {verification}\n"
+            f"    verification: {_yaml_string(verification)}\n"
         )
-        current = current.replace("\nnext:\n", "\n" + completed_entry + "\nnext:\n", 1)
+        current = _insert_completed_entry(current, completed_entry)
 
+    current = _set_current(current, "last_verified_main", preview.main_commit)
     current = _replace_required(
-        r"^  milestone: .+$", f"  milestone: {next_milestone}", current, "current milestone"
-    )
-    current = _replace_required(
-        r"^  active_artifact: .+$",
-        f"  active_artifact: {next_artifact}",
-        current,
-        "active artifact",
-    )
-    current = _replace_required(
-        r"^  branch: .+$", f"  branch: {next_branch}", current, "active branch"
-    )
-    current = _replace_required(
-        r"^  pull_request: .+$", "  pull_request: null", current, "pull request"
-    )
-    current = _replace_required(
-        r"^  tests: .+$", f"  tests: {verification}", current, "test baseline"
+        r"^  tests: .+$", f"  tests: {_yaml_string(verification)}", current, "test baseline"
     )
     if completed_status:
         current = _set_status(current, completed_status, "verified")
-    if next_status:
-        current = _set_status(current, next_status, "planned")
-    if next_tasks:
-        task_block = "next:\n" + "".join(f"  - {task}\n" for task in next_tasks)
+
+    if terminal:
+        milestone = _yaml_string(f"Canonical checkpoint after PR #{preview.pull_request.number}")
         current = _replace_required(
-            r"(?ms)^next:\n.*?(?=\nrules:)", task_block, current, "next task list"
+            r"^  milestone: .+$",
+            f"  milestone: {milestone}",
+            current,
+            "current milestone",
         )
+        current = _replace_required(
+            r"^  active_artifact: .+$", "  active_artifact: null", current, "active artifact"
+        )
+        current = _replace_required(
+            r"^  branch: .+$",
+            f"  branch: {preview.pull_request.base_branch}",
+            current,
+            "active branch",
+        )
+        current = _replace_required(
+            r"^  pull_request: .+$", "  pull_request: null", current, "pull request"
+        )
+        current = _replace_next_tasks(current, next_tasks)
+    else:
+        if next_artifact is None or next_milestone is None or next_branch is None:
+            raise PostMergeTransitionError("Successor state contract is incomplete")
+        current = _replace_required(
+            r"^  milestone: .+$", f"  milestone: {next_milestone}", current, "current milestone"
+        )
+        current = _replace_required(
+            r"^  active_artifact: .+$",
+            f"  active_artifact: {next_artifact}",
+            current,
+            "active artifact",
+        )
+        current = _replace_required(
+            r"^  branch: .+$", f"  branch: {next_branch}", current, "active branch"
+        )
+        current = _replace_required(
+            r"^  pull_request: .+$", "  pull_request: null", current, "pull request"
+        )
+        if next_status:
+            current = _set_status(current, next_status, "planned")
+        if next_tasks:
+            current = _replace_next_tasks(current, next_tasks)
     return current
 
 
@@ -149,58 +287,149 @@ def _project_state_transition(
     *,
     completed_artifact: str,
     verification: str,
-    next_artifact: str,
-    next_milestone: str,
-    next_branch: str,
+    next_artifact: str | None,
+    next_milestone: str | None,
+    next_branch: str | None,
     next_action: str,
+    terminal: bool,
     next_objective: str | None,
     next_scope: tuple[str, ...],
 ) -> str:
-    current = _replace_required(
-        r"^- Active branch: `[^`]+`$",
-        f"- Active branch: `{next_branch}`",
-        current,
-        "Project State active branch",
-    )
-    current = _replace_required(
-        r"^- Active work block: `[^`]+`$",
-        f"- Active work block: `{next_artifact} {next_milestone}`",
-        current,
-        "Project State active work block",
-    )
-    current = _replace_required(
-        r"(?ms)(^## Current milestone\n\n).*?(?=\n## )",
-        rf"\1{next_milestone}.\n",
-        current,
-        "Project State milestone",
-    )
-    if next_objective is not None:
-        scope_text = "Scope:\n\n" + "".join(
-            f"{index}. {item.rstrip('.;')};\n" for index, item in enumerate(next_scope, start=1)
-        )
-        replacement = f"\\1{next_objective}\n\n{scope_text}"
-        current = _replace_required(
-            r"(?ms)(^## Active objective\n\n).*?(?=\n## Current status)",
-            replacement,
+    current = _set_project_state_checkpoint(current, preview)
+
+    if terminal:
+        base_branch = preview.pull_request.base_branch
+        current = _replace_optional(
+            r"^- Current coordination artifact: .+$",
+            "- Current coordination artifact: none — terminal canonical state",
             current,
-            "Project State objective and scope",
+            "Project State coordination artifact",
         )
-    current = _replace_required(
-        r"(?ms)(^## Current status\n\n).*?(?=\n## )",
-        (
-            "\\1- Work block: active\n"
-            f"- Branch: `{next_branch}`\n"
-            "- Project Kernel: present\n"
-            "- Runtime implementation: planned\n"
-            f"- Tests: {verification.replace('_', ' ')}\n"
-            "- Pull request: not created\n"
-        ),
-        current,
-        "Project State status",
-    )
+        current = _replace_optional(
+            r"^- Current coordination branch: .+$",
+            f"- Current coordination branch: `{base_branch}`",
+            current,
+            "Project State coordination branch",
+        )
+        current = _replace_optional(
+            r"^- Current coordination pull request: .+$",
+            "- Current coordination pull request: none",
+            current,
+            "Project State coordination pull request",
+        )
+        current = _replace_required(
+            r"^- Active branch: `[^`]+`$",
+            f"- Active branch: `{base_branch}`",
+            current,
+            "Project State active branch",
+        )
+        current = _replace_required(
+            r"^- Active work block: `[^`]+`$",
+            "- Active work block: `none`",
+            current,
+            "Project State active work block",
+        )
+        current = _replace_required(
+            r"(?ms)(^## Current milestone\n\n).*?(?=\n## )",
+            lambda match: (
+                match.group(1)
+                + f"Canonical checkpoint after merged PR #{preview.pull_request.number}.\n"
+            ),
+            current,
+            "Project State milestone",
+        )
+        if re.search(r"(?m)^## Active objective$", current):
+            current = _replace_required(
+                r"(?ms)(^## Active objective\n\n).*?(?=\n## Current status)",
+                lambda match: (
+                    match.group(1)
+                    + "No active coordination work block. Select the next bounded candidate "
+                    + f"explicitly against the live canonical `{base_branch}`.\n"
+                ),
+                current,
+                "Project State terminal objective",
+            )
+        current = _replace_required(
+            r"(?ms)(^## Current status\n\n).*?(?=\n## )",
+            lambda match: (
+                match.group(1)
+                + "- Work block: idle\n"
+                + f"- Branch: `{base_branch}`\n"
+                + "- Project Kernel: present\n"
+                + "- Runtime implementation: canonical\n"
+                + f"- Tests: {verification.replace('_', ' ')}\n"
+                + "- Pull request: none\n"
+            ),
+            current,
+            "Project State status",
+        )
+    else:
+        if next_artifact is None or next_milestone is None or next_branch is None:
+            raise PostMergeTransitionError("Successor state contract is incomplete")
+        current = _replace_optional(
+            r"^- Current coordination artifact: .+$",
+            f"- Current coordination artifact: {next_artifact}",
+            current,
+            "Project State coordination artifact",
+        )
+        current = _replace_optional(
+            r"^- Current coordination branch: .+$",
+            f"- Current coordination branch: `{next_branch}`",
+            current,
+            "Project State coordination branch",
+        )
+        current = _replace_optional(
+            r"^- Current coordination pull request: .+$",
+            "- Current coordination pull request: not created",
+            current,
+            "Project State coordination pull request",
+        )
+        current = _replace_required(
+            r"^- Active branch: `[^`]+`$",
+            f"- Active branch: `{next_branch}`",
+            current,
+            "Project State active branch",
+        )
+        current = _replace_required(
+            r"^- Active work block: `[^`]+`$",
+            f"- Active work block: `{next_artifact} {next_milestone}`",
+            current,
+            "Project State active work block",
+        )
+        current = _replace_required(
+            r"(?ms)(^## Current milestone\n\n).*?(?=\n## )",
+            lambda match: match.group(1) + f"{next_milestone}.\n",
+            current,
+            "Project State milestone",
+        )
+        if next_objective is not None:
+            scope_text = "Scope:\n\n" + "".join(
+                f"{index}. {item.rstrip('.;')};\n" for index, item in enumerate(next_scope, start=1)
+            )
+            current = _replace_required(
+                r"(?ms)(^## Active objective\n\n).*?(?=\n## Current status)",
+                lambda match: match.group(1) + f"{next_objective}\n\n{scope_text}",
+                current,
+                "Project State objective and scope",
+            )
+        current = _replace_required(
+            r"(?ms)(^## Current status\n\n).*?(?=\n## )",
+            lambda match: (
+                match.group(1)
+                + "- Work block: active\n"
+                + f"- Branch: `{next_branch}`\n"
+                + "- Project Kernel: present\n"
+                + "- Runtime implementation: planned\n"
+                + f"- Tests: {verification.replace('_', ' ')}\n"
+                + "- Pull request: not created\n"
+            ),
+            current,
+            "Project State status",
+        )
+
     current = _replace_required(
         r"(?ms)(^## Next action\n\n).*?(?=\n<!-- CYBERCORE:CHECKPOINT:START -->)",
-        rf"\1{next_action}\n\n",
+        lambda match: match.group(1) + f"{next_action}\n\n",
         current,
         "Project State next action",
     )
@@ -229,18 +458,49 @@ def plan_post_merge_state_update(
     *,
     completed_artifact: str,
     verification: str,
-    next_artifact: str,
-    next_milestone: str,
-    next_branch: str,
     next_action: str,
+    next_artifact: str | None = None,
+    next_milestone: str | None = None,
+    next_branch: str | None = None,
+    terminal: bool = False,
     completed_status: str | None = None,
     next_status: str | None = None,
     next_objective: str | None = None,
     next_scope: tuple[str, ...] = (),
     next_tasks: tuple[str, ...] = (),
 ) -> PostMergeStatePlan:
-    if next_objective is not None and not next_scope:
-        raise PostMergeTransitionError("A next objective requires at least one scope item")
+    completed_artifact = _require_non_empty("completed artifact", completed_artifact)
+    verification = _require_non_empty("verification", verification)
+    next_action = _require_non_empty("next action", next_action)
+    next_scope = _normalize_non_empty_items("next scope", next_scope)
+    next_tasks = _normalize_non_empty_items("next tasks", next_tasks)
+
+    if terminal:
+        if (
+            any(
+                value is not None
+                for value in (
+                    next_artifact,
+                    next_milestone,
+                    next_branch,
+                    next_status,
+                    next_objective,
+                )
+            )
+            or next_scope
+        ):
+            raise PostMergeTransitionError(
+                "Terminal closeout cannot declare a successor work block contract"
+            )
+    else:
+        next_artifact = _require_non_empty("next artifact", next_artifact)
+        next_milestone = _require_non_empty("next milestone", next_milestone)
+        next_branch = _require_non_empty("next branch", next_branch)
+        if next_objective is not None:
+            next_objective = _require_non_empty("next objective", next_objective)
+        if next_objective is not None and not next_scope:
+            raise PostMergeTransitionError("A next objective requires at least one scope item")
+
     kernel_path = repo / ".cybercore" / "project.yaml"
     project_state_path = repo / "PROJECT_STATE.md"
     if not kernel_path.is_file() or not project_state_path.is_file():
@@ -254,6 +514,7 @@ def plan_post_merge_state_update(
         next_artifact=next_artifact,
         next_milestone=next_milestone,
         next_branch=next_branch,
+        terminal=terminal,
         completed_status=completed_status,
         next_status=next_status,
         next_tasks=next_tasks,
@@ -267,6 +528,7 @@ def plan_post_merge_state_update(
         next_milestone=next_milestone,
         next_branch=next_branch,
         next_action=next_action,
+        terminal=terminal,
         next_objective=next_objective,
         next_scope=next_scope,
     )

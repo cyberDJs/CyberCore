@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 from typing import Any, Callable
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from cybercore.operation_context_disclosure import sanitize_disclosure_text
@@ -60,14 +61,14 @@ def _repository_slug(repo: Path) -> str:
     raise PostMergeTransitionError("Origin is not a supported GitHub repository")
 
 
-def _fetch_pull_request(
-    repository: str,
-    number: int,
+def _fetch_json(
+    url: str,
     *,
+    label: str,
     opener: Callable[..., Any] = urlopen,
 ) -> dict[str, Any]:
     request = Request(
-        f"https://api.github.com/repos/{repository}/pulls/{number}",
+        url,
         headers={"Accept": "application/vnd.github+json", "User-Agent": "CyberCore"},
     )
     try:
@@ -75,11 +76,24 @@ def _fetch_pull_request(
             payload = json.loads(response.read().decode("utf-8"))
     except Exception as exc:
         raise PostMergeTransitionError(
-            sanitize_disclosure_text(f"Unable to read GitHub PR #{number}: {exc}")
+            sanitize_disclosure_text(f"Unable to read {label}: {exc}")
         ) from exc
     if not isinstance(payload, dict):
-        raise PostMergeTransitionError("GitHub returned an invalid pull-request payload")
+        raise PostMergeTransitionError(f"GitHub returned an invalid {label} payload")
     return payload
+
+
+def _fetch_pull_request(
+    repository: str,
+    number: int,
+    *,
+    opener: Callable[..., Any] = urlopen,
+) -> dict[str, Any]:
+    return _fetch_json(
+        f"https://api.github.com/repos/{repository}/pulls/{number}",
+        label=f"GitHub PR #{number}",
+        opener=opener,
+    )
 
 
 def _require_string(payload: dict[str, Any], key: str) -> str:
@@ -87,6 +101,26 @@ def _require_string(payload: dict[str, Any], key: str) -> str:
     if not isinstance(value, str) or not value:
         raise PostMergeTransitionError(f"GitHub PR payload is missing {key}")
     return value
+
+
+def _fetch_branch_head(
+    repository: str,
+    branch: str,
+    *,
+    opener: Callable[..., Any] = urlopen,
+) -> str:
+    payload = _fetch_json(
+        f"https://api.github.com/repos/{repository}/branches/{quote(branch, safe='')}",
+        label=f"GitHub branch {branch}",
+        opener=opener,
+    )
+    commit = payload.get("commit")
+    if not isinstance(commit, dict):
+        raise PostMergeTransitionError("GitHub branch payload is missing commit metadata")
+    sha = commit.get("sha")
+    if not isinstance(sha, str) or not sha:
+        raise PostMergeTransitionError("GitHub branch payload is missing commit SHA")
+    return sha
 
 
 def plan_post_merge_transition(
@@ -140,6 +174,14 @@ def plan_post_merge_transition(
             f"PR #{pull_request_number} head SHA mismatch: {head_sha} != {expected_head_sha}"
         )
 
+    remote_main_commit = _fetch_branch_head(repository, stable_branch, opener=opener)
+    local_main_commit = _run_git(repo, "rev-parse", stable_branch)
+    if local_main_commit != remote_main_commit:
+        raise PostMergeTransitionError(
+            f"Local {stable_branch} {local_main_commit} does not match GitHub "
+            f"{stable_branch} {remote_main_commit}"
+        )
+
     _run_git(repo, "cat-file", "-e", f"{merge_commit}^{{commit}}")
     ancestor = subprocess.run(
         ["git", "-C", str(repo), "merge-base", "--is-ancestor", merge_commit, stable_branch],
@@ -151,7 +193,6 @@ def plan_post_merge_transition(
         raise PostMergeTransitionError(
             f"Merge commit {merge_commit} is not contained in {stable_branch}"
         )
-    main_commit = _run_git(repo, "rev-parse", stable_branch)
 
     return PostMergeTransitionPreview(
         pull_request=MergedPullRequest(
@@ -163,7 +204,7 @@ def plan_post_merge_transition(
             merge_commit=merge_commit,
             title=title,
         ),
-        main_commit=main_commit,
+        main_commit=remote_main_commit,
     )
 
 
