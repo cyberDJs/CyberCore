@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -76,9 +77,13 @@ class LocalInterruptionProbe:
         self.max_echo_correlation = max_echo_correlation
         self.allow_confirmed_interrupt = allow_confirmed_interrupt
         self._speech_run_frames = 0
+        self._last_frame_sequence: int | None = None
+        self._last_playback_started_monotonic: float | None = None
 
     def reset(self) -> None:
         self._speech_run_frames = 0
+        self._last_frame_sequence = None
+        self._last_playback_started_monotonic = None
 
     def observe(
         self,
@@ -107,6 +112,16 @@ class LocalInterruptionProbe:
                 reason="playback-time microphone frame was not speech",
             )
 
+        if self._echo_correlation_invalid(playback.echo_correlation):
+            self.reset()
+            return self._evidence(
+                frame,
+                vad_state=vad_state,
+                playback=playback,
+                decision=LocalInterruptionDecision.DISCARD,
+                reason="echo correlation was invalid or uncertain during playback",
+            )
+
         if (
             playback.echo_correlation is not None
             and playback.echo_correlation >= self.max_echo_correlation
@@ -120,7 +135,13 @@ class LocalInterruptionProbe:
                 reason="speech-like frame matched local playback echo profile",
             )
 
+        if self._speech_run_discontinuous(frame, playback):
+            self.reset()
+
         self._speech_run_frames += 1
+        self._last_frame_sequence = frame.sequence
+        self._last_playback_started_monotonic = playback.playback_started_monotonic
+
         if (
             self.allow_confirmed_interrupt
             and self._speech_run_frames >= self.min_confirming_speech_frames
@@ -145,6 +166,29 @@ class LocalInterruptionProbe:
             decision=LocalInterruptionDecision.OBSERVE,
             reason=reason,
         )
+
+    def _echo_correlation_invalid(self, echo_correlation: float | None) -> bool:
+        if echo_correlation is None:
+            return False
+        return not math.isfinite(echo_correlation) or not 0.0 <= echo_correlation <= 1.0
+
+    def _speech_run_discontinuous(
+        self,
+        frame: AudioFrame,
+        playback: LocalPlaybackContext,
+    ) -> bool:
+        if (
+            self._last_frame_sequence is not None
+            and frame.sequence != self._last_frame_sequence + 1
+        ):
+            return True
+        if (
+            self._last_playback_started_monotonic
+            != playback.playback_started_monotonic
+            and self._last_playback_started_monotonic is not None
+        ):
+            return True
+        return False
 
     def _evidence(
         self,
