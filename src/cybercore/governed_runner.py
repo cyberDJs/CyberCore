@@ -338,7 +338,9 @@ def _prepare_command(plan: CommandPlan, command: CommandSpec, *, root: Path) -> 
         )
 
     _deny_blocked_executable(command.argv[0])
-    _require_positive_executable_policy(command.argv[0])
+    raw_executable = Path(command.argv[0])
+    if not raw_executable.is_absolute():
+        _require_positive_executable_policy(command.argv[0])
     if _contains_shell_meta(command.argv):
         raise GovernedRunnerError("shell metacharacters are denied by policy")
     if not any(_matches_prefix(command.argv, prefix) for prefix in grant.allowed_command_prefixes):
