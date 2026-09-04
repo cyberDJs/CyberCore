@@ -5,9 +5,7 @@ from cybercore.voice.barge_shadow import FreshSpeechShadowGate
 def test_shadow_gate_rejects_speech_already_present_when_playback_observation_starts() -> None:
     gate = FreshSpeechShadowGate(required_silence_frames=2, required_speech_frames=3)
 
-    results = [
-        gate.observe(VadState.SPEECH, frame_sequence=sequence) for sequence in range(6)
-    ]
+    results = [gate.observe(VadState.SPEECH, frame_sequence=sequence) for sequence in range(6)]
 
     assert results == [False] * 6
     assert gate.snapshot.candidate is False
