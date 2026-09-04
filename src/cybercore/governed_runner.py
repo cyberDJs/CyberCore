@@ -246,7 +246,7 @@ def _default_nonce_state_dir() -> Path:
 
 
 def _requires_nonce_consumption(plan: CommandPlan) -> bool:
-    return bool(plan.grant.allowed_classes & _REPLAY_SENSITIVE_CLASSES)
+    return any(command.classification in _REPLAY_SENSITIVE_CLASSES for command in plan.commands)
 
 
 def _consume_authorization_nonce(grant: AuthorizationGrant, *, state_dir: Path) -> None:
@@ -516,11 +516,8 @@ def _join_drain_threads_until_deadline(
     if not any(thread.is_alive() for thread in threads):
         return True
 
-    cleanup_deadline = _terminate_with_cleanup_budget(
-        containment,
-        process,
-        cleanup_deadline=cleanup_deadline,
-    )
+    if cleanup_deadline is None:
+        cleanup_deadline = _terminate_with_cleanup_budget(containment, process)
     for stream in (process.stdout, process.stderr):
         if stream is not None:
             try:

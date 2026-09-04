@@ -8,6 +8,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 
 import pytest
 
@@ -71,6 +72,7 @@ def _grant(
     allowed_classes: frozenset[OperationClass] | None = None,
     prefixes: tuple[tuple[str, ...], ...] | None = None,
     expires_in: float = 300.0,
+    nonce: str | None = None,
 ) -> AuthorizationGrant:
     now = datetime.now(timezone.utc)
     return AuthorizationGrant(
@@ -81,7 +83,7 @@ def _grant(
         issuer="test-authorizer",
         issued_at=now - timedelta(seconds=1),
         expires_at=now + timedelta(seconds=expires_in),
-        nonce="test-nonce",
+        nonce=nonce or uuid.uuid4().hex,
     )
 
 
@@ -367,6 +369,46 @@ def test_detects_in_place_executable_replacement(tmp_path: Path) -> None:
     assert len(receipt.commands) == 2
     assert receipt.commands[0].exit_code == 0
     assert receipt.commands[1].exit_code is None
+
+
+def test_rejects_replayed_mutating_authorization_nonce(tmp_path: Path) -> None:
+    writer = tmp_path / "nonce-write.py"
+    writer.write_text("pass\n", encoding="utf-8")
+    grant = _grant(
+        allowed_classes=frozenset({OperationClass.FILE_WRITE}),
+        prefixes=((sys.executable,),),
+        nonce="one-shot-mutation",
+    )
+    command = CommandSpec(
+        argv=(sys.executable, str(writer)),
+        cwd=".",
+        classification=OperationClass.FILE_WRITE,
+    )
+    plan = _plan(tmp_path, command, grant=grant)
+    runner = _runner(tmp_path)
+
+    first = runner.execute(plan)
+
+    assert first.status == "IMPLEMENTED"
+    with pytest.raises(GovernedRunnerError, match="already been consumed"):
+        runner.execute(plan)
+
+
+def test_read_only_plan_does_not_consume_authorization_nonce(tmp_path: Path) -> None:
+    grant = _grant(nonce="reusable-read-only")
+    command = CommandSpec(
+        argv=(sys.executable, "--version"),
+        cwd=".",
+        classification=OperationClass.READ_ONLY,
+    )
+    plan = _plan(tmp_path, command, grant=grant)
+    runner = _runner(tmp_path)
+
+    first = runner.execute(plan)
+    second = runner.execute(plan)
+
+    assert first.status == "IMPLEMENTED"
+    assert second.status == "IMPLEMENTED"
 
 
 def test_consumes_mutating_authorization_nonce_atomically_across_runners(
