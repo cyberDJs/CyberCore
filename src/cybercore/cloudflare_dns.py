@@ -487,6 +487,14 @@ def load_manifest(path: Path) -> DnsManifest:
             raise CloudflareDnsError(
                 f"CNAME cannot coexist with other desired record types at {name}"
             )
+        mx_records = [record for record in owner_records if record.record_type == "MX"]
+        null_mx = [record for record in mx_records if record.content == "."]
+        if null_mx:
+            if len(mx_records) != 1 or len(null_mx) != 1 or null_mx[0].priority != 0:
+                raise CloudflareDnsError(
+                    f"Null MX at {name} must be the sole MX record with priority 0"
+                )
+
         address_records = [
             record for record in owner_records if record.record_type in ADDRESS_TYPES
         ]

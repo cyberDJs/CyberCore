@@ -22,7 +22,7 @@ The provider is fail-closed:
 12. Supported record types in v0.1: `A`, `AAAA`, `CNAME`, `MX`, `TXT`.
 13. Repository examples can declare `template: true`; template manifests may be planned but are rejected by `apply` before any provider access or mutation.
 14. Discovery does not hide a zone merely because nameserver cutover is incomplete. Planning/mutation is allowed only for Cloudflare `active` or `pending` zones, and the observed status is bound into the approved fingerprint so a `pending` -> `active` cutover invalidates the prior approval.
-15. Domain-valued CNAME and MX content is canonicalized to lowercase without a trailing root dot before comparison, preventing false updates and post-write non-convergence.
+15. Domain-valued CNAME and MX content is canonicalized to lowercase without a trailing root dot before comparison, while the Null MX `.` sentinel is preserved. A Null MX must be the sole MX record at its owner name and use priority 0.
 
 ## CLI
 

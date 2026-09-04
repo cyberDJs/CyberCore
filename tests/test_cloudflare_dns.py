@@ -588,3 +588,39 @@ records:
     assert api_record.content == "."
     plan = build_plan(manifest, zone_id="zone-1", current_records=(api_record,))
     assert plan.changes == ()
+
+
+def test_null_mx_requires_priority_zero_and_exclusivity(tmp_path: Path) -> None:
+    nonzero = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: MX
+    name: "@"
+records:
+  - type: MX
+    name: "@"
+    content: "."
+    priority: 10
+"""
+    with pytest.raises(CloudflareDnsError, match="sole MX record with priority 0"):
+        _load_inline_manifest(tmp_path, "null-mx-nonzero.yaml", nonzero)
+
+    mixed = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: MX
+    name: "@"
+records:
+  - type: MX
+    name: "@"
+    content: "."
+    priority: 0
+  - type: MX
+    name: "@"
+    content: mail.example.net
+    priority: 10
+"""
+    with pytest.raises(CloudflareDnsError, match="sole MX record with priority 0"):
+        _load_inline_manifest(tmp_path, "null-mx-mixed.yaml", mixed)
