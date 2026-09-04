@@ -316,3 +316,34 @@ def test_sounddevice_transport_recovers_from_transient_underflow() -> None:
     assert transport.underflow_count == 1
     assert sd.output_stream.aborted is False
     assert sd.output_stream.closed is False
+
+
+def test_sounddevice_transport_recovers_from_isolated_underflow() -> None:
+    sd = FakeSoundDevice()
+    sd.output_stream = FakeOutputStream(underflows=[True, False])
+    transport = SoundDeviceTransport(output_device=1, sounddevice_module=sd)
+    frame = AudioFrame(sequence=0, payload=b"\x00\x00" * 160, format=AudioFormat())
+
+    transport.send(frame)
+    transport.send(frame)
+
+    assert transport.underflow_count == 1
+    assert sd.output_stream.aborted is False
+    assert sd.output_stream.closed is False
+    assert sd.output_stream.payloads == [frame.payload, frame.payload]
+
+
+def test_sounddevice_transport_fails_closed_on_persistent_underflow() -> None:
+    sd = FakeSoundDevice()
+    sd.output_stream = FakeOutputStream(underflows=[True, True, True])
+    transport = SoundDeviceTransport(output_device=1, sounddevice_module=sd)
+    frame = AudioFrame(sequence=0, payload=b"\x00\x00" * 160, format=AudioFormat())
+
+    transport.send(frame)
+    transport.send(frame)
+    with pytest.raises(voice_devices.AudioOutputUnderflowError):
+        transport.send(frame)
+
+    assert transport.underflow_count == 3
+    assert sd.output_stream.aborted is True
+    assert sd.output_stream.closed is True

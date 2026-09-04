@@ -535,6 +535,8 @@ class SoundDeviceTransport:
         self._stream: Any | None = None
         self._format: AudioFormat | None = None
         self._underflow_count = 0
+        self._consecutive_underflows = 0
+        self._max_consecutive_underflows = 3
 
     @property
     def underflow_count(self) -> int:
@@ -563,6 +565,15 @@ class SoundDeviceTransport:
         underflowed = stream.write(frame.payload)
         if underflowed:
             self._underflow_count += 1
+            self._consecutive_underflows += 1
+            if self._consecutive_underflows >= self._max_consecutive_underflows:
+                self.flush_output()
+                raise AudioOutputUnderflowError(
+                    "speaker output underflow persisted across consecutive writes; "
+                    "output was flushed to avoid reporting lost speech as successful"
+                )
+            return
+        self._consecutive_underflows = 0
 
     def flush_output(self) -> None:
         stream, self._stream = self._stream, None
