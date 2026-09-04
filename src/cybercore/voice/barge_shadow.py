@@ -24,7 +24,9 @@ class FreshSpeechShadowGate:
     playback or change execution authority.
     """
 
-    def __init__(self, *, required_silence_frames: int = 2, required_speech_frames: int = 3) -> None:
+    def __init__(
+        self, *, required_silence_frames: int = 2, required_speech_frames: int = 3
+    ) -> None:
         if required_silence_frames <= 0:
             raise ValueError("required_silence_frames must be positive")
         if required_speech_frames <= 0:
