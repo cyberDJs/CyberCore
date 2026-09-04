@@ -261,7 +261,7 @@ class CloudflareClient:
             raise CloudflareDnsError("Cloudflare DNS record priority is invalid")
         record_type = record_type.upper()
         if record_type in DOMAIN_CONTENT_TYPES:
-            content = _normalize_domain_content(content)
+            content = _normalize_domain_content(record_type, content)
         restore_metadata = {key: item[key] for key in RESTORABLE_METADATA_FIELDS if key in item}
         records.append(
             DnsRecord(
@@ -341,8 +341,11 @@ def _normalize_name(name: object, zone: str) -> str:
     return f"{raw}.{zone}"
 
 
-def _normalize_domain_content(content: str) -> str:
-    value = content.strip().lower().rstrip(".")
+def _normalize_domain_content(record_type: str, content: str) -> str:
+    value = content.strip()
+    if record_type == "MX" and value == ".":
+        return "."
+    value = value.lower().rstrip(".")
     if not value:
         raise CloudflareDnsError("domain-valued DNS record content must be non-empty")
     return value
@@ -366,7 +369,7 @@ def _record_from_manifest(item: object, zone: str) -> DnsRecord:
     if not isinstance(content, str) or not content:
         raise CloudflareDnsError("manifest record content must be a non-empty string")
     if record_type in DOMAIN_CONTENT_TYPES:
-        content = _normalize_domain_content(content)
+        content = _normalize_domain_content(record_type, content)
     ttl = item.get("ttl", 1)
     if not isinstance(ttl, int) or isinstance(ttl, bool) or (ttl != 1 and not 60 <= ttl <= 86400):
         raise CloudflareDnsError("manifest record ttl must be 1 or between 60 and 86400")

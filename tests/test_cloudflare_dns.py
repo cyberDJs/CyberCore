@@ -558,3 +558,33 @@ records: []
     assert snap_record["comment"] == "keep this note"
     assert snap_record["tags"] == ["owner:cybercore"]
     assert snap_record["settings"] == {"flatten_cname": True}
+
+
+def test_null_mx_root_target_is_preserved_in_manifest_and_api(tmp_path: Path) -> None:
+    content = """\
+version: cybercore.cloudflare-dns/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: MX
+    name: "@"
+records:
+  - type: MX
+    name: "@"
+    content: "."
+    priority: 0
+    ttl: 300
+"""
+    manifest = _load_inline_manifest(tmp_path, "null-mx.yaml", content)
+    assert manifest.records[0].content == "."
+
+    def requester(_request):
+        return (
+            200,
+            b'{"success":true,"result":[{"id":"mx-null","type":"MX","name":"example.cz","content":".","ttl":300,"priority":0}]}',
+        )
+
+    client = CloudflareClient("test-token", requester=requester)
+    api_record = client.list_dns_records("zone-1")[0]
+    assert api_record.content == "."
+    plan = build_plan(manifest, zone_id="zone-1", current_records=(api_record,))
+    assert plan.changes == ()
