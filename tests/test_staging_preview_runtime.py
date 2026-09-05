@@ -8,8 +8,9 @@ from cybercore import first_write_runtime
 from cybercore import staging_preview_runtime as preview
 
 RUN_ID = "20260905T010000Z-eimy34"
-AUTH = "approval:eimy-v34-staging:20260905T010000Z-eimy34"
 CONTENT = b"<!doctype html><title>EIMY v34</title><!-- unique-preview -->\n"
+CONTENT_SHA256 = hashlib.sha256(CONTENT).hexdigest()
+AUTH = preview.expected_staging_preview_authorization_reference(RUN_ID, CONTENT_SHA256)
 PASSWORD = "unit-test-only-secret"
 
 
@@ -175,6 +176,47 @@ def test_authorization_blocks_before_credentials_and_factory() -> None:
     assert not result.executed
     assert not mismatch.executed
     assert calls == {"loader": 0, "factory": 0}
+
+
+def test_authorization_reference_is_bound_to_run_and_artifact_before_credentials() -> None:
+    loads = 0
+
+    def loader() -> FirstWriteFtpsCredential:
+        nonlocal loads
+        loads += 1
+        return _credential()
+
+    placeholder = preview.build_staging_preview_input(
+        CONTENT, run_id=RUN_ID, authorization_reference="REQUIRED_BEFORE_REMOTE_WRITE"
+    )
+    wrong_run = preview.StagingPreviewUploadInput(
+        run_id=RUN_ID,
+        authorization_reference=preview.expected_staging_preview_authorization_reference(
+            RUN_ID + "-other", CONTENT_SHA256
+        ),
+        content=CONTENT,
+        sha256=CONTENT_SHA256,
+    )
+    wrong_artifact = preview.StagingPreviewUploadInput(
+        run_id=RUN_ID,
+        authorization_reference=preview.expected_staging_preview_authorization_reference(
+            RUN_ID, "0" * 64
+        ),
+        content=CONTENT,
+        sha256=CONTENT_SHA256,
+    )
+
+    for candidate in (placeholder, wrong_run, wrong_artifact):
+        result = preview.execute_staging_preview_stou(
+            candidate,
+            remote_write_authorized=True,
+            authorization_reference=candidate.authorization_reference,
+            credential_loader=loader,
+        )
+        assert not result.executed
+        assert any("bind the exact run_id and sha256" in error for error in result.errors)
+
+    assert loads == 0
 
 
 def test_digest_drift_blocks_before_credentials() -> None:

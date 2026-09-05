@@ -34,6 +34,7 @@ Additional gates are fail-closed:
 - a protected passive `MLSD` succeeds before mutation;
 - content is non-empty immutable bytes, capped at 32 MiB and hash-bound;
 - run id and authorization reference are validated before credential loading;
+- the authorization reference must be exactly `approval:eimy-v34-staging:<run_id>:sha256:<artifact_sha256>`, binding approval to this run and these exact bytes;
 - literal fresh write authority and exact authorization-reference match are required;
 - any failure after STOU begins is reported conservatively as `remote_mutation_possible=true`;
 - there is no automatic cleanup or deletion authority.

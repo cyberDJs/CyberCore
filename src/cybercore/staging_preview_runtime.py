@@ -18,6 +18,7 @@ EXPECTED_PORT = 21
 EXPECTED_PROTOCOL = "FTPS_EXPLICIT"
 MAX_PREVIEW_BYTES = 32 * 1024 * 1024
 RUN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{5,95}\Z")
+AUTH_PREFIX = "approval:eimy-v34-staging"
 STOU_RESPONSE_PATTERN = re.compile(r"(?:125|150) FILE: (.+)\Z")
 FTPS_OPERATION_ERRORS = ftplib.all_errors + (UnicodeDecodeError,)
 
@@ -91,6 +92,10 @@ class StagingPreviewExecutionResult:
     remote_mutation_possible: bool = False
 
 
+def expected_staging_preview_authorization_reference(run_id: str, sha256: str) -> str:
+    return f"{AUTH_PREFIX}:{run_id}:sha256:{sha256}"
+
+
 def build_staging_preview_input(
     content: bytes,
     *,
@@ -113,8 +118,11 @@ def validate_staging_preview_input(upload_input: StagingPreviewUploadInput) -> t
         errors.append("staging preview endpoint must remain the approved staging hostname")
     if not RUN_ID_PATTERN.fullmatch(upload_input.run_id):
         errors.append("staging preview run_id is invalid")
-    if not upload_input.authorization_reference:
-        errors.append("staging preview authorization reference is required")
+    expected_auth = expected_staging_preview_authorization_reference(
+        upload_input.run_id, upload_input.sha256
+    )
+    if upload_input.authorization_reference != expected_auth:
+        errors.append("staging preview authorization must bind the exact run_id and sha256")
     if not isinstance(upload_input.content, bytes) or not upload_input.content:
         errors.append("staging preview content must be non-empty immutable bytes")
     elif len(upload_input.content) > MAX_PREVIEW_BYTES:
