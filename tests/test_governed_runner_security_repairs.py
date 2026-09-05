@@ -222,6 +222,22 @@ def test_strict_mode_rejects_absolute_python_impostor_outside_trusted_path(
         governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path, strict=True)
 
 
+def test_strict_mode_rejects_git_until_code_graph_is_content_bound(tmp_path: Path) -> None:
+    argv = ("git", "status")
+    grant = _grant(
+        classes=frozenset({OperationClass.READ_ONLY}),
+        prefixes=(argv,),
+    )
+    command = CommandSpec(
+        argv=argv,
+        cwd=".",
+        classification=OperationClass.READ_ONLY,
+    )
+
+    with pytest.raises(GovernedRunnerError, match="git is not approved for production"):
+        governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path, strict=True)
+
+
 def test_systemd_termination_never_kills_only_client_when_unit_stop_unconfirmed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

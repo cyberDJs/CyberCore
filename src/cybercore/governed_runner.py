@@ -763,6 +763,11 @@ def _require_positive_executable_policy(executable: str, *, strict: bool) -> Non
         raise GovernedRunnerError(
             "pytest is not approved for production until its complete code graph is content-bound"
         )
+    if name == "git" and strict:
+        raise GovernedRunnerError(
+            "git is not approved for production until its executable, configuration, "
+            "hooks, and helper code graph is content-bound"
+        )
     if name in _APPROVED_EXECUTABLE_NAMES:
         return
     raise GovernedRunnerError(f"executable is not approved by positive policy: {name}")
