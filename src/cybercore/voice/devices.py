@@ -534,6 +534,13 @@ class SoundDeviceTransport:
         self._sd = _load_sounddevice(sounddevice_module)
         self._stream: Any | None = None
         self._format: AudioFormat | None = None
+        self._underflow_count = 0
+        self._consecutive_underflows = 0
+        self._max_consecutive_underflows = 3
+
+    @property
+    def underflow_count(self) -> int:
+        return self._underflow_count
 
     def _open(self, audio_format: AudioFormat) -> Any:
         if audio_format.encoding is not AudioEncoding.PCM_S16LE:
@@ -557,14 +564,21 @@ class SoundDeviceTransport:
         stream = self._open(frame.format)
         underflowed = stream.write(frame.payload)
         if underflowed:
-            self.flush_output()
-            raise AudioOutputUnderflowError(
-                "speaker output underflowed; output was flushed to avoid stale speech"
-            )
+            self._underflow_count += 1
+            self._consecutive_underflows += 1
+            if self._consecutive_underflows >= self._max_consecutive_underflows:
+                self.flush_output()
+                raise AudioOutputUnderflowError(
+                    "speaker output underflow persisted across consecutive writes; "
+                    "output was flushed to avoid reporting lost speech as successful"
+                )
+            return
+        self._consecutive_underflows = 0
 
     def flush_output(self) -> None:
         stream, self._stream = self._stream, None
         self._format = None
+        self._consecutive_underflows = 0
         if stream is None:
             return
         abort = getattr(stream, "abort", None)
