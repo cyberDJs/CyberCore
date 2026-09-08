@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import sys
+from typing import cast
 
 from cybercore.artifact import ArtifactBuildError
 from cybercore.ccl import CCLValidationError, CCLValidator
@@ -15,6 +16,14 @@ from cybercore.checkpoint import (
 )
 from cybercore.checkpoint_evidence import resolve_test_result
 from cybercore.checkpoint_memory import plan_memory_update, render_memory_preview
+from cybercore.cloudflare_dns import (
+    CloudflareClient,
+    CloudflareDnsError,
+    apply_manifest as apply_cloudflare_dns_manifest,
+    discover as discover_cloudflare_dns,
+    load_manifest as load_cloudflare_dns_manifest,
+    plan_from_manifest as plan_cloudflare_dns_manifest,
+)
 from cybercore.commands.apply import run_apply
 from cybercore.commands.build import run_build
 from cybercore.commands.doctor import run_doctor
@@ -164,6 +173,34 @@ def build_parser() -> argparse.ArgumentParser:
     ccl_validate = ccl_sub.add_parser("validate", help="Validate a canonical record")
     ccl_validate.add_argument("path", type=Path)
 
+    cloudflare_parser = sub.add_parser("cloudflare", help="Manage governed Cloudflare resources")
+    cloudflare_sub = cloudflare_parser.add_subparsers(dest="cloudflare_command", required=True)
+    cloudflare_dns = cloudflare_sub.add_parser("dns", help="Discover, plan, and apply DNS state")
+    cloudflare_dns_sub = cloudflare_dns.add_subparsers(dest="cloudflare_dns_command", required=True)
+
+    cloudflare_discover = cloudflare_dns_sub.add_parser(
+        "discover", help="Read current Cloudflare DNS and DNSSEC state"
+    )
+    cloudflare_discover.add_argument("--zone", required=True)
+
+    cloudflare_plan = cloudflare_dns_sub.add_parser(
+        "plan", help="Calculate a deterministic read-only DNS change plan"
+    )
+    cloudflare_plan.add_argument("--manifest", type=Path, required=True)
+
+    cloudflare_apply = cloudflare_dns_sub.add_parser(
+        "apply", help="Apply one exact plan-bound Cloudflare DNS change set"
+    )
+    cloudflare_apply.add_argument("--manifest", type=Path, required=True)
+    cloudflare_apply.add_argument("--expected-plan", required=True)
+    cloudflare_apply.add_argument("--approve", required=True)
+    cloudflare_apply.add_argument(
+        "--evidence-dir",
+        type=Path,
+        required=True,
+        help="New directory for the pre-write snapshot, rollback manifest, and apply receipt",
+    )
+
     return parser
 
 
@@ -183,6 +220,49 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     try:
+        if args.command == "cloudflare":
+            client = CloudflareClient.from_environment()
+            if args.cloudflare_command != "dns":
+                raise ValueError("unsupported Cloudflare command")
+            if args.cloudflare_dns_command == "discover":
+                payload = discover_cloudflare_dns(client, args.zone)
+            elif args.cloudflare_dns_command == "plan":
+                manifest = load_cloudflare_dns_manifest(args.manifest)
+                payload = plan_cloudflare_dns_manifest(client, manifest).public_dict()
+                payload["mutation"] = "none"
+            elif args.cloudflare_dns_command == "apply":
+                manifest = load_cloudflare_dns_manifest(args.manifest)
+                payload = apply_cloudflare_dns_manifest(
+                    client,
+                    manifest,
+                    expected_plan=args.expected_plan,
+                    approval=args.approve,
+                    evidence_dir=args.evidence_dir,
+                )
+                payload["mutation"] = "cloudflare_dns"
+            else:
+                raise ValueError("unsupported Cloudflare DNS command")
+            if args.as_json:
+                print(json.dumps(payload, indent=2))
+            elif args.cloudflare_dns_command == "discover":
+                records = cast(list[object], payload["records"])
+                dnssec = cast(dict[str, object], payload["dnssec"])
+                print(f"CLOUDFLARE DNS DISCOVERED {payload['zone']} records={len(records)}")
+                print(f"DNSSEC {dnssec.get('status', 'unknown')}")
+            elif args.cloudflare_dns_command == "plan":
+                print(
+                    f"CLOUDFLARE DNS PLAN {payload['zone']} "
+                    f"changes={payload['change_count']} fingerprint={payload['fingerprint']}"
+                )
+                print(f"APPROVAL {payload['approval_text']}")
+            else:
+                applied = cast(list[object], payload["applied"])
+                print(
+                    f"CLOUDFLARE DNS APPLIED {payload['zone']} "
+                    f"verified={payload['verified']} changes={len(applied)}"
+                )
+            return 0
+
         if args.command == "demo":
             if args.delay < 0:
                 raise ValueError("Demo delay must be zero or greater")
@@ -415,6 +495,7 @@ def main(argv: list[str] | None = None) -> int:
         ArtifactBuildError,
         CCLValidationError,
         CheckpointError,
+        CloudflareDnsError,
         FileNotFoundError,
         PostMergeTransitionError,
         RuntimeError,
