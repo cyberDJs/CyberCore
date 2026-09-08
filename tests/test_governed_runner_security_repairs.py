@@ -241,6 +241,27 @@ def test_current_python_symlink_loop_is_a_governed_failure(
         governed_runner_module._require_trusted_absolute_executable(str(trusted_python))
 
 
+def test_trusted_path_symlink_loop_is_a_governed_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    candidate = tmp_path / "approved-tool"
+    candidate.write_text("#!/bin/sh\nexit 0\n")
+    candidate.chmod(0o755)
+    loop = tmp_path / "trusted-loop"
+    loop.symlink_to(loop)
+
+    def fake_which(name: str, mode: int = 0, path: str | None = None) -> str | None:
+        del mode, path
+        if name == "approved-tool":
+            return str(loop)
+        return None
+
+    monkeypatch.setattr(governed_runner_module.shutil, "which", fake_which)
+
+    with pytest.raises(GovernedRunnerError, match="trusted executable cannot be resolved"):
+        governed_runner_module._require_trusted_absolute_executable(str(candidate))
+
+
 def test_symlink_loop_code_input_is_a_governed_failure(tmp_path: Path) -> None:
     loop = tmp_path / "loop.py"
     loop.symlink_to(loop)

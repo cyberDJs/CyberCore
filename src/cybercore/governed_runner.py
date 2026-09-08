@@ -752,7 +752,14 @@ def _require_trusted_absolute_executable(executable: str) -> None:
     if _PYTHON_EXECUTABLE_RE.fullmatch(resolved.name.lower()) and resolved == current_python:
         return
     trusted = shutil.which(resolved.name, path=_TRUSTED_EXECUTABLE_PATH)
-    if trusted is None or Path(trusted).resolve(strict=True) != resolved:
+    if trusted is None:
+        raise GovernedRunnerError(
+            f"absolute executable is outside trusted runtime identities: {candidate}"
+        )
+    trusted_resolved = _resolve_strict_path(
+        Path(trusted), error="trusted executable cannot be resolved"
+    )
+    if trusted_resolved != resolved:
         raise GovernedRunnerError(
             f"absolute executable is outside trusted runtime identities: {candidate}"
         )
