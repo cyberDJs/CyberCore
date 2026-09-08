@@ -1,0 +1,42 @@
+services:
+  vikunja:
+    image: ${VIKUNJA_IMAGE:?set a pinned Vikunja image digest}
+    environment:
+      VIKUNJA_SERVICE_PUBLICURL: https://tasks.cyberdjs.org/
+      VIKUNJA_DATABASE_TYPE: sqlite
+      VIKUNJA_DATABASE_PATH: /db/vikunja.db
+      VIKUNJA_SERVICE_SECRET_FILE: /run/secrets/vikunja_service_secret
+      VIKUNJA_SERVICE_ENABLEREGISTRATION: ${VIKUNJA_REGISTRATION_ENABLED:-false}
+    ports:
+      - 127.0.0.1:3456:3456
+    volumes:
+      - /srv/vikunja/files:/app/vikunja/files
+      - /srv/vikunja/db:/db
+    secrets:
+      - vikunja_service_secret
+    networks:
+      - vikunja_internal
+    restart: unless-stopped
+
+  caddy:
+    image: ${CADDY_IMAGE:?set a pinned Caddy image digest}
+    depends_on:
+      - vikunja
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /srv/vikunja/caddy_data:/data
+      - /srv/vikunja/caddy_config:/config
+    networks:
+      - vikunja_internal
+    restart: unless-stopped
+
+networks:
+  vikunja_internal:
+    driver: bridge
+
+secrets:
+  vikunja_service_secret:
+    file: ${VIKUNJA_SECRET_SOURCE:?set runtime secret source path}
