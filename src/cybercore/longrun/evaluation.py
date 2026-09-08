@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from hashlib import sha256
 import json
 
@@ -26,18 +26,38 @@ class EvaluationResult:
     verdict: str
     reasons: tuple[str, ...]
     evidence_digest: str
+    metadata: dict[str, object] = field(default_factory=dict)
 
     def validate(self, *, expected_evidence_digest: str) -> None:
-        if not self.evaluator_id.strip() or not self.evaluator_version.strip():
+        if not isinstance(self.evaluator_id, str) or not self.evaluator_id.strip():
             raise ValueError("evaluator identity and version are required")
-        if isinstance(self.score, bool) or not 0.0 <= self.score <= 1.0:
+        if not isinstance(self.evaluator_version, str) or not self.evaluator_version.strip():
+            raise ValueError("evaluator identity and version are required")
+        if isinstance(self.score, bool) or not isinstance(self.score, (int, float)):
+            raise ValueError("evaluation score must be numeric")
+        if not 0.0 <= float(self.score) <= 1.0:
             raise ValueError("evaluation score must be between 0 and 1")
         if self.verdict not in _ALLOWED_VERDICTS:
             raise ValueError("evaluation verdict must be PASS or FAIL")
-        if not self.reasons or not all(reason.strip() for reason in self.reasons):
+        if not self.reasons or not all(
+            isinstance(reason, str) and reason.strip() for reason in self.reasons
+        ):
             raise ValueError("evaluation reasons must contain non-empty strings")
         if self.evidence_digest != expected_evidence_digest:
             raise ValueError("evaluation evidence digest does not match executor evidence")
+        if not isinstance(self.metadata, dict) or not all(
+            isinstance(key, str) for key in self.metadata
+        ):
+            raise ValueError("evaluation metadata must be an object with string keys")
+        try:
+            json.dumps(
+                self.metadata,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("evaluation metadata must contain canonical JSON values") from exc
 
     def canonical_payload(self) -> dict[str, object]:
         return {
@@ -47,6 +67,7 @@ class EvaluationResult:
             "verdict": self.verdict,
             "reasons": list(self.reasons),
             "evidence_digest": self.evidence_digest,
+            "metadata": self.metadata,
         }
 
     @property

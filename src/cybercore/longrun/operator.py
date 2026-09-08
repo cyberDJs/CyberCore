@@ -94,6 +94,11 @@ def _deterministic_targets(context: LongRunOperatorContext) -> tuple[Path, ...]:
 
 
 def deterministic_engine(context: LongRunOperatorContext) -> LongRunEngine:
+    if context.manifest.model_bindings:
+        raise RuntimeError(
+            "model-bound missions require an explicitly injected provider runtime; "
+            "CLI live provider execution is not enabled"
+        )
     targets = _deterministic_targets(context)
     fingerprints = {
         f"repo-read:{path.relative_to(context.repo).as_posix()}": path for path in targets
