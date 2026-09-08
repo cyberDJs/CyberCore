@@ -216,6 +216,30 @@ def test_strict_mode_rejects_absolute_python_impostor_outside_trusted_path(
         governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path, strict=True)
 
 
+def test_strict_mode_rejects_python_through_non_python_symlink_alias(tmp_path: Path) -> None:
+    alias = tmp_path / "approved-tool"
+    alias.symlink_to(Path(sys.executable).resolve())
+    argv = (
+        str(alias),
+        "-c",
+        "__import__('subprocess').run(['/bin/echo', 'bypass'])",
+    )
+    binding = CommandBinding(OperationClass.COMPUTE, argv, exact=True)
+    grant = _grant(
+        classes=frozenset({OperationClass.COMPUTE}),
+        prefixes=(argv,),
+        bindings=(binding,),
+    )
+    command = CommandSpec(
+        argv=argv,
+        cwd=".",
+        classification=OperationClass.COMPUTE,
+    )
+
+    with pytest.raises(GovernedRunnerError, match="descendant executable graph"):
+        governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path, strict=True)
+
+
 def test_strict_mode_rejects_git_until_code_graph_is_content_bound(tmp_path: Path) -> None:
     argv = ("git", "status")
     grant = _grant(

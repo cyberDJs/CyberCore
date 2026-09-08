@@ -858,6 +858,7 @@ def _select_command_binding(
 def _prepare_python_code_input(
     command: CommandSpec,
     *,
+    resolved_executable: str,
     root: Path,
     cwd: Path,
     binding: CommandBinding | None,
@@ -865,7 +866,7 @@ def _prepare_python_code_input(
 ) -> _PreparedCodeInput | None:
     if not strict:
         return None
-    name = Path(command.argv[0]).name.lower()
+    name = Path(resolved_executable).name.lower()
     if not _PYTHON_EXECUTABLE_RE.fullmatch(name):
         if command.code_sha256 is not None:
             raise GovernedRunnerError("code_sha256 is only supported for Python script execution")
@@ -909,6 +910,7 @@ def _prepare_command(
     executable_path = Path(resolved_executable)
     code_input = _prepare_python_code_input(
         command,
+        resolved_executable=resolved_executable,
         root=root,
         cwd=cwd,
         binding=binding,
