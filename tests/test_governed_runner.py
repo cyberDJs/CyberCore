@@ -733,10 +733,10 @@ def test_systemd_spawn_binds_validated_working_directory(
     separator = argv.index("--")
     payload = argv[separator + 1 :]
     assert payload[0] == containment._wrapper_python
-    assert payload[1] == "-c"
-    assert "memfd_create" in payload[2]
-    assert "fchdir" in payload[2]
-    assert "os.execve" in payload[2]
+    assert payload[1:4] == ["-I", "-S", "-c"]
+    assert "memfd_create" in payload[4]
+    assert "fchdir" in payload[4]
+    assert "os.execve" in payload[4]
 
 
 def test_systemctl_control_call_is_bounded_by_deadline(

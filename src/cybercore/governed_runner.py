@@ -614,6 +614,8 @@ def _stable_exec_wrapper_argv(
     cwd_device, cwd_inode = prepared.cwd_identity
     args: list[str] = [
         wrapper_python,
+        "-I",
+        "-S",
         "-c",
         _STABLE_EXEC_WRAPPER,
         str(prepared.cwd),
@@ -702,14 +704,18 @@ def _executable_identity(path: Path) -> _FileIdentity:
         raise GovernedRunnerError(f"executable cannot be inspected: {path}") from exc
 
 
+def _resolve_strict_path(candidate: Path, *, error: str) -> Path:
+    try:
+        return candidate.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise GovernedRunnerError(f"{error}: {candidate}") from exc
+
+
 def _resolved_cwd(root: Path, raw_cwd: str) -> Path:
     candidate = Path(raw_cwd)
     if not candidate.is_absolute():
         candidate = root / candidate
-    try:
-        resolved = candidate.resolve(strict=True)
-    except OSError as exc:
-        raise GovernedRunnerError(f"command cwd cannot be resolved: {candidate}") from exc
+    resolved = _resolve_strict_path(candidate, error="command cwd cannot be resolved")
     if resolved != root and root not in resolved.parents:
         raise GovernedRunnerError(f"command cwd escapes allowed root: {resolved}")
     if not resolved.is_dir():
@@ -721,10 +727,7 @@ def _resolve_input_path(root: Path, cwd: Path, raw_path: str) -> Path:
     candidate = Path(raw_path)
     if not candidate.is_absolute():
         candidate = cwd / candidate
-    try:
-        resolved = candidate.resolve(strict=True)
-    except OSError as exc:
-        raise GovernedRunnerError(f"authorized code input cannot be resolved: {candidate}") from exc
+    resolved = _resolve_strict_path(candidate, error="authorized code input cannot be resolved")
     if resolved != root and root not in resolved.parents:
         raise GovernedRunnerError(f"authorized code input escapes allowed root: {resolved}")
     if not resolved.is_file():
@@ -742,7 +745,7 @@ def _require_trusted_absolute_executable(executable: str) -> None:
     candidate = Path(executable)
     if not candidate.is_absolute():
         return
-    resolved = candidate.resolve(strict=True)
+    resolved = _resolve_strict_path(candidate, error="absolute executable cannot be resolved")
     current_python = Path(sys.executable).resolve(strict=True)
     if _PYTHON_EXECUTABLE_RE.fullmatch(resolved.name.lower()) and resolved == current_python:
         return
@@ -776,12 +779,7 @@ def _require_positive_executable_policy(executable: str, *, strict: bool) -> Non
 def _resolve_executable(raw_executable: str) -> str:
     candidate = Path(raw_executable)
     if candidate.is_absolute():
-        try:
-            resolved = candidate.resolve(strict=True)
-        except OSError as exc:
-            raise GovernedRunnerError(
-                f"authorized executable cannot be resolved: {raw_executable}"
-            ) from exc
+        resolved = _resolve_strict_path(candidate, error="authorized executable cannot be resolved")
         if not resolved.is_file() or not os.access(resolved, os.X_OK):
             raise GovernedRunnerError(f"authorized executable is not executable: {resolved}")
         return str(resolved)
@@ -796,7 +794,9 @@ def _resolve_executable(raw_executable: str) -> str:
         raise GovernedRunnerError(
             f"authorized executable was not found on the trusted path: {raw_executable}"
         )
-    resolved = Path(resolved_name).resolve(strict=True)
+    resolved = _resolve_strict_path(
+        Path(resolved_name), error="authorized executable cannot be resolved"
+    )
     if not resolved.is_file() or not os.access(resolved, os.X_OK):
         raise GovernedRunnerError(f"authorized executable is not executable: {resolved}")
     return str(resolved)

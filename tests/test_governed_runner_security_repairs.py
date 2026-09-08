@@ -193,6 +193,48 @@ def test_systemd_spawn_hardens_service_and_wrapper_environment(
     assert "--property=RestrictAddressFamilies=AF_INET AF_INET6" in argv
     assert "--property=UnsetEnvironment=LD_PRELOAD LD_AUDIT LD_LIBRARY_PATH" in argv
     assert f"--property=ReadOnlyPaths={tmp_path}" in argv
+    separator = argv.index("--")
+    assert argv[separator + 1 : separator + 5] == ["/usr/bin/true", "-I", "-S", "-c"]
+
+
+def test_symlink_loop_cwd_is_a_governed_failure(tmp_path: Path) -> None:
+    loop = tmp_path / "loop"
+    loop.symlink_to(loop)
+    command = CommandSpec(
+        argv=(sys.executable, "--version"),
+        cwd="loop",
+        classification=OperationClass.READ_ONLY,
+    )
+    grant = _grant(
+        classes=frozenset({OperationClass.READ_ONLY}),
+        prefixes=((sys.executable, "--version"),),
+    )
+
+    with pytest.raises(GovernedRunnerError, match="command cwd cannot be resolved"):
+        governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path)
+
+
+def test_symlink_loop_executable_is_a_governed_failure(tmp_path: Path) -> None:
+    loop = tmp_path / "loop-exec"
+    loop.symlink_to(loop)
+    argv = (str(loop),)
+    command = CommandSpec(
+        argv=argv,
+        cwd=".",
+        classification=OperationClass.READ_ONLY,
+    )
+    grant = _grant(classes=frozenset({OperationClass.READ_ONLY}), prefixes=(argv,))
+
+    with pytest.raises(GovernedRunnerError, match="authorized executable cannot be resolved"):
+        governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path)
+
+
+def test_symlink_loop_code_input_is_a_governed_failure(tmp_path: Path) -> None:
+    loop = tmp_path / "loop.py"
+    loop.symlink_to(loop)
+
+    with pytest.raises(GovernedRunnerError, match="authorized code input cannot be resolved"):
+        governed_runner_module._resolve_input_path(tmp_path, tmp_path, "loop.py")
 
 
 def test_strict_mode_rejects_absolute_python_impostor_outside_trusted_path(
