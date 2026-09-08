@@ -2,7 +2,7 @@
 
 Project: **CyberDJS / CyberCore**  
 Started: **2026-07-08**  
-Updated: **2026-09-02**
+Updated: **2026-09-04**
 Mode: living roadmap; GitHub `main` is the stable source of truth.
 
 ## Strategic outcome
@@ -366,28 +366,33 @@ Completion evidence:
   before merge, with no bypass actors and seven required status contexts.
 - This closeout does not claim a separate post-merge repository-settings read.
 
-The post-merge state transition closes WB-0026 and activates the planned
-successor:
+Current protection recovery evidence (2026-09-04):
 
-`WB-0027 — Visual Documentation and Learn Capture v0.1`
+- Live preflight against `main@14d4c6c4beb6b03aaedfaf2a76a521a038c98cb1`
+  observed `rulesets=[]` and `main` not protected.
+- The original ruleset `18986451` remains historical evidence only; it is not
+  a current live settings identifier.
+- After explicit repository-settings approval, equivalent protection was
+  restored as ruleset `22291749` (`main-branch-protection`).
+- Post-restore verification observed enforcement `active`, no bypass actors,
+  `current_user_can_bypass: never`, all seven required status contexts,
+  strict required status checks, and `main` reporting `protected=true`.
+- The cause and deletion provenance of the missing historical ruleset remain
+  unknown; no actor or cause is inferred without audit evidence.
+- Detailed evidence:
+  `docs/evidence/2026-09-04-main-protection-restore.md`.
 
-Expected implementation branch:
+Historical successor status:
 
-`feat/visual-documentation-learn-capture`
-
-WB-0027 visual documentation and Learn capture is locally verified on
-`feat/visual-documentation-learn-capture`, including rendering, capture, media
-review, and the repository verification suite. It is committed on the feature
-branch and has not been proposed for review.
-
-Next:
-
-- review and merge the WB-0026 closeout change;
-- synchronize protected `main`;
-- create `feat/visual-documentation-learn-capture` from current `main`;
-- run the verification baseline;
-- review the committed WB-0027 change set without modifying GitHub settings
-  or production systems.
+- WB-0026 was closed by its post-merge transition.
+- WB-0027 — Visual Documentation and Learn Capture v0.1 was subsequently
+  independently approved and squash-merged through PR #34 as
+  `94cb1998274e31e9ce3314f59d2e0ae290bc40cc`.
+- The former instructions to review the WB-0026 closeout, create the WB-0027
+  implementation branch, and propose WB-0027 are retired and must not be used
+  as current operator actions.
+- Current work selection must resolve live `main` and the current canonical
+  project-state artifacts before any implementation or merge decision.
 
 Critical flow:
 
