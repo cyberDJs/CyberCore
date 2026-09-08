@@ -876,28 +876,10 @@ def _prepare_python_code_input(
         if command.code_sha256 is not None:
             raise GovernedRunnerError("version queries must not carry code_sha256")
         return None
-    if not args:
-        raise GovernedRunnerError("interactive Python execution is denied by policy")
-    if args[0] == "-c":
-        if binding is None or not binding.exact or binding.argv_prefix != command.argv:
-            raise GovernedRunnerError("Python -c requires an exact authorized command binding")
-        if command.code_sha256 is not None:
-            raise GovernedRunnerError("Python -c content is bound by exact argv, not code_sha256")
-        return None
-    if args[0].startswith("-"):
-        raise GovernedRunnerError("Python option/module/stdin execution is denied by policy")
-    if binding is None or not binding.exact or binding.argv_prefix != command.argv:
-        raise GovernedRunnerError(
-            "Python script execution requires an exact authorized command binding"
-        )
-    if command.code_sha256 is None:
-        raise GovernedRunnerError("Python script execution requires code_sha256")
-
-    script = _resolve_input_path(root, cwd, args[0])
-    identity = _file_identity(script)
-    if identity.sha256 != command.code_sha256:
-        raise GovernedRunnerError("authorized Python script digest does not match code_sha256")
-    return _PreparedCodeInput(path=script, identity=identity, argv_index=1)
+    raise GovernedRunnerError(
+        "Python execution is not approved for production until its descendant executable "
+        "graph can be constrained"
+    )
 
 
 def _prepare_command(

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-import hashlib
 from pathlib import Path
 import subprocess
 import sys
@@ -93,11 +92,13 @@ def test_exact_binding_prevents_operation_class_relabel(tmp_path: Path) -> None:
         governed_runner_module._prepare_plan(_plan(relabeled, grant), root=tmp_path, strict=True)
 
 
-def test_python_script_is_bound_to_exact_authorized_digest(tmp_path: Path) -> None:
+@pytest.mark.parametrize("python_args", [("-c", "print('ok')"), ("approved.py",)])
+def test_strict_mode_rejects_python_launchers_until_descendants_are_constrained(
+    tmp_path: Path, python_args: tuple[str, ...]
+) -> None:
     script = tmp_path / "approved.py"
     script.write_text("print('approved')\n", encoding="utf-8")
-    digest = hashlib.sha256(script.read_bytes()).hexdigest()
-    argv = (sys.executable, str(script))
+    argv = (sys.executable, *python_args)
     binding = CommandBinding(OperationClass.COMPUTE, argv, exact=True)
     grant = _grant(
         classes=frozenset({OperationClass.COMPUTE}),
@@ -108,17 +109,10 @@ def test_python_script_is_bound_to_exact_authorized_digest(tmp_path: Path) -> No
         argv=argv,
         cwd=".",
         classification=OperationClass.COMPUTE,
-        code_sha256=digest,
     )
-    plan = _plan(command, grant)
-    prepared = governed_runner_module._prepare_plan(plan, root=tmp_path, strict=True)[0]
 
-    script.write_text("print('replaced')\n", encoding="utf-8")
-
-    with pytest.raises(GovernedRunnerError, match="digest|code input"):
-        governed_runner_module._revalidate_prepared_command(
-            plan, prepared, root=tmp_path, strict=True
-        )
+    with pytest.raises(GovernedRunnerError, match="descendant executable graph"):
+        governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path, strict=True)
 
 
 def test_service_wrapper_clears_environment_and_seals_memfds() -> None:
