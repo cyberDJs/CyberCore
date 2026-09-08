@@ -746,7 +746,9 @@ def _require_trusted_absolute_executable(executable: str) -> None:
     if not candidate.is_absolute():
         return
     resolved = _resolve_strict_path(candidate, error="absolute executable cannot be resolved")
-    current_python = Path(sys.executable).resolve(strict=True)
+    current_python = _resolve_strict_path(
+        Path(sys.executable), error="current Python executable cannot be resolved"
+    )
     if _PYTHON_EXECUTABLE_RE.fullmatch(resolved.name.lower()) and resolved == current_python:
         return
     trusted = shutil.which(resolved.name, path=_TRUSTED_EXECUTABLE_PATH)

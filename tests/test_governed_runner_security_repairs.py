@@ -229,6 +229,18 @@ def test_symlink_loop_executable_is_a_governed_failure(tmp_path: Path) -> None:
         governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path)
 
 
+def test_current_python_symlink_loop_is_a_governed_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    loop = tmp_path / "current-python-loop"
+    loop.symlink_to(loop)
+    trusted_python = Path(sys.executable).resolve()
+    monkeypatch.setattr(governed_runner_module.sys, "executable", str(loop))
+
+    with pytest.raises(GovernedRunnerError, match="current Python executable cannot be resolved"):
+        governed_runner_module._require_trusted_absolute_executable(str(trusted_python))
+
+
 def test_symlink_loop_code_input_is_a_governed_failure(tmp_path: Path) -> None:
     loop = tmp_path / "loop.py"
     loop.symlink_to(loop)
