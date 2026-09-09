@@ -28,6 +28,13 @@ class GovernedRunnerError(RuntimeError):
     """Raised when a command plan violates the governed runner contract."""
 
 
+class _TrustedNonceConsumer(Protocol):
+    """Trusted replay-prevention boundary for production nonce consumption."""
+
+    def consume(self, grant: AuthorizationGrant) -> None:
+        """Persist consumption outside the governed user's writable namespace."""
+
+
 _BLOCKED_EXECUTABLES = {
     "bash",
     "sh",
@@ -401,6 +408,32 @@ def _consume_authorization_nonce(
         raise GovernedRunnerError(
             "authorization grant nonce directory cannot be persisted"
         ) from exc
+
+
+def _consume_authorization_nonce_for_execution(
+    grant: AuthorizationGrant,
+    *,
+    state_dir: Path,
+    persist_parent_chain: bool,
+    trusted_nonce_consumer: _TrustedNonceConsumer | None,
+) -> None:
+    if trusted_nonce_consumer is not None:
+        try:
+            trusted_nonce_consumer.consume(grant)
+        except GovernedRunnerError:
+            raise
+        except Exception as exc:
+            raise GovernedRunnerError("trusted authorization nonce consumer failed") from exc
+        return
+    if persist_parent_chain:
+        raise GovernedRunnerError(
+            "trusted authorization nonce consumer is required for replay-sensitive production plans"
+        )
+    _consume_authorization_nonce(
+        grant,
+        state_dir=state_dir,
+        persist_parent_chain=persist_parent_chain,
+    )
 
 
 _STABLE_EXEC_WRAPPER = r"""
@@ -1062,6 +1095,7 @@ class GovernedRunner:
         *,
         containment: _Containment | None = None,
         nonce_state_dir: Path | None = None,
+        trusted_nonce_consumer: _TrustedNonceConsumer | None = None,
     ):
         self.allowed_root = allowed_root.expanduser().resolve()
         if not self.allowed_root.is_dir():
@@ -1070,17 +1104,19 @@ class GovernedRunner:
         self._nonce_state_dir = (
             (nonce_state_dir or _default_nonce_state_dir()).expanduser().resolve()
         )
+        self._trusted_nonce_consumer = trusted_nonce_consumer
 
     def execute(self, plan: CommandPlan) -> ExecutionReceipt:
         strict = self._containment is None
         prepared_commands = _prepare_plan(plan, root=self.allowed_root, strict=strict)
-        containment = self._containment or _SystemdContainment()
         if _requires_nonce_consumption(plan):
-            _consume_authorization_nonce(
+            _consume_authorization_nonce_for_execution(
                 plan.grant,
                 state_dir=self._nonce_state_dir,
                 persist_parent_chain=strict,
+                trusted_nonce_consumer=self._trusted_nonce_consumer,
             )
+        containment = self._containment or _SystemdContainment()
         receipts: list[CommandReceipt] = []
         status = "IMPLEMENTED"
         environment = _bounded_environment(include_user_bus=strict)

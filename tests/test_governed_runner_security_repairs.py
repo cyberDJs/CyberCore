@@ -125,6 +125,89 @@ def test_service_wrapper_clears_environment_and_seals_memfds() -> None:
     assert "sealed memfd content verification failed" in source
 
 
+def test_strict_replay_sensitive_plan_requires_trusted_nonce_consumer(
+    tmp_path: Path,
+) -> None:
+    command = CommandSpec(
+        argv=(sys.executable, "--version"),
+        cwd=".",
+        classification=OperationClass.FILE_WRITE,
+    )
+    grant = _grant(
+        classes=frozenset({OperationClass.FILE_WRITE}),
+        prefixes=((sys.executable, "--version"),),
+    )
+    state_dir = tmp_path / "user-controlled-nonces"
+
+    with pytest.raises(GovernedRunnerError, match="trusted authorization nonce consumer"):
+        governed_runner_module.GovernedRunner(
+            tmp_path,
+            nonce_state_dir=state_dir,
+        ).execute(_plan(command, grant))
+
+    assert not state_dir.exists()
+
+
+def test_strict_replay_sensitive_plan_uses_trusted_nonce_consumer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    consumed: list[str] = []
+
+    class _TrustedConsumer:
+        def consume(self, grant: AuthorizationGrant) -> None:
+            consumed.append(grant.nonce)
+
+    class _FakeStrictContainment:
+        def spawn(
+            self,
+            prepared: governed_runner_module._PreparedCommand,
+            *,
+            env: dict[str, str],
+            timeout_seconds: float,
+            grant_expires_at: datetime,
+        ) -> subprocess.Popen[bytes]:
+            del timeout_seconds, grant_expires_at
+            return subprocess.Popen(
+                list(prepared.argv),
+                cwd=prepared.cwd,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                shell=False,
+            )
+
+        def terminate(self, process: subprocess.Popen[bytes], *, deadline: float) -> None:
+            del deadline
+            if process.poll() is None:
+                process.kill()
+
+    monkeypatch.setattr(
+        governed_runner_module,
+        "_SystemdContainment",
+        _FakeStrictContainment,
+    )
+    command = CommandSpec(
+        argv=(sys.executable, "--version"),
+        cwd=".",
+        classification=OperationClass.FILE_WRITE,
+    )
+    grant = _grant(
+        classes=frozenset({OperationClass.FILE_WRITE}),
+        prefixes=((sys.executable, "--version"),),
+    )
+    state_dir = tmp_path / "user-controlled-nonces"
+
+    receipt = governed_runner_module.GovernedRunner(
+        tmp_path,
+        nonce_state_dir=state_dir,
+        trusted_nonce_consumer=_TrustedConsumer(),
+    ).execute(_plan(command, grant))
+
+    assert receipt.status == "IMPLEMENTED"
+    assert consumed == [grant.nonce]
+    assert not state_dir.exists()
+
+
 def test_nonce_directory_creation_fsyncs_each_new_parent_entry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
