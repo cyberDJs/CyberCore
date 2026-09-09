@@ -774,6 +774,13 @@ def _deny_blocked_executable(executable: str) -> None:
         raise GovernedRunnerError(f"executable is denied by policy: {name}")
 
 
+def _trusted_path_identity(executable_name: str) -> Path | None:
+    trusted = shutil.which(executable_name, path=_TRUSTED_EXECUTABLE_PATH)
+    if trusted is None:
+        return None
+    return _resolve_strict_path(Path(trusted), error="trusted executable cannot be resolved")
+
+
 def _require_trusted_absolute_executable(executable: str) -> None:
     candidate = Path(executable)
     if not candidate.is_absolute():
@@ -782,16 +789,15 @@ def _require_trusted_absolute_executable(executable: str) -> None:
     current_python = _resolve_strict_path(
         Path(sys.executable), error="current Python executable cannot be resolved"
     )
-    if _PYTHON_EXECUTABLE_RE.fullmatch(resolved.name.lower()) and resolved == current_python:
+    trusted_resolved = _trusted_path_identity(candidate.name)
+    if trusted_resolved != resolved:
+        trusted_resolved = _trusted_path_identity(resolved.name)
+    if resolved == current_python:
+        if trusted_resolved != current_python:
+            raise GovernedRunnerError(
+                f"current Python executable is outside trusted runtime identities: {candidate}"
+            )
         return
-    trusted = shutil.which(resolved.name, path=_TRUSTED_EXECUTABLE_PATH)
-    if trusted is None:
-        raise GovernedRunnerError(
-            f"absolute executable is outside trusted runtime identities: {candidate}"
-        )
-    trusted_resolved = _resolve_strict_path(
-        Path(trusted), error="trusted executable cannot be resolved"
-    )
     if trusted_resolved != resolved:
         raise GovernedRunnerError(
             f"absolute executable is outside trusted runtime identities: {candidate}"
@@ -1096,19 +1102,24 @@ class GovernedRunner:
         containment: _Containment | None = None,
         nonce_state_dir: Path | None = None,
         trusted_nonce_consumer: _TrustedNonceConsumer | None = None,
+        test_policy_mode: bool = False,
     ):
         self.allowed_root = allowed_root.expanduser().resolve()
         if not self.allowed_root.is_dir():
             raise GovernedRunnerError(f"allowed root does not exist: {self.allowed_root}")
+        if test_policy_mode and containment is None:
+            raise GovernedRunnerError("test policy mode requires injected containment")
         self._containment = containment
         self._nonce_state_dir = (
             (nonce_state_dir or _default_nonce_state_dir()).expanduser().resolve()
         )
         self._trusted_nonce_consumer = trusted_nonce_consumer
+        self._test_policy_mode = test_policy_mode
 
     def execute(self, plan: CommandPlan) -> ExecutionReceipt:
-        strict = self._containment is None
+        strict = not self._test_policy_mode
         prepared_commands = _prepare_plan(plan, root=self.allowed_root, strict=strict)
+        containment = self._containment or _SystemdContainment()
         if _requires_nonce_consumption(plan):
             _consume_authorization_nonce_for_execution(
                 plan.grant,
@@ -1116,7 +1127,6 @@ class GovernedRunner:
                 persist_parent_chain=strict,
                 trusted_nonce_consumer=self._trusted_nonce_consumer,
             )
-        containment = self._containment or _SystemdContainment()
         receipts: list[CommandReceipt] = []
         status = "IMPLEMENTED"
         environment = _bounded_environment(include_user_bus=strict)

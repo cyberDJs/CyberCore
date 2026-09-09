@@ -63,6 +63,7 @@ def _runner(root: Path) -> GovernedRunner:
         root,
         containment=_DirectTestContainment(),
         nonce_state_dir=root / ".nonce-state",
+        test_policy_mode=True,
     )
 
 
@@ -519,11 +520,13 @@ def test_consumes_mutating_authorization_nonce_atomically_across_runners(
             tmp_path,
             containment=_DirectTestContainment(),
             nonce_state_dir=nonce_state_dir,
+            test_policy_mode=True,
         ),
         GovernedRunner(
             tmp_path,
             containment=_DirectTestContainment(),
             nonce_state_dir=nonce_state_dir,
+            test_policy_mode=True,
         ),
     )
     barrier = threading.Barrier(2)
@@ -638,6 +641,7 @@ def test_timeout_reserves_separate_containment_cleanup_budget(tmp_path: Path) ->
         tmp_path,
         containment=containment,
         nonce_state_dir=tmp_path / ".nonce-state",
+        test_policy_mode=True,
     ).execute(_plan(tmp_path, command, grant=grant))
 
     assert receipt.status == "FAILED"

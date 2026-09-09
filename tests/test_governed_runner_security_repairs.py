@@ -74,6 +74,44 @@ def test_strict_mode_requires_command_class_binding_for_multi_class_grant(
         governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path, strict=True)
 
 
+def test_injected_containment_keeps_strict_validation_enabled(tmp_path: Path) -> None:
+    class _NeverUsedContainment:
+        def spawn(self, *args: object, **kwargs: object) -> subprocess.Popen[bytes]:
+            raise AssertionError("strict validation should run before spawn")
+
+        def terminate(self, process: subprocess.Popen[bytes], *, deadline: float) -> None:
+            raise AssertionError("no process should be terminated")
+
+    grant = _grant(
+        classes=frozenset({OperationClass.READ_ONLY, OperationClass.FILE_WRITE}),
+        prefixes=((sys.executable, "--version"),),
+    )
+    command = CommandSpec(
+        argv=(sys.executable, "--version"),
+        cwd=".",
+        classification=OperationClass.READ_ONLY,
+    )
+
+    with pytest.raises(GovernedRunnerError, match="explicit command/class bindings"):
+        governed_runner_module.GovernedRunner(
+            tmp_path,
+            containment=_NeverUsedContainment(),
+        ).execute(_plan(command, grant))
+
+
+def test_current_python_must_be_trusted_path_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fake_python = tmp_path / "python3.99"
+    fake_python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+    monkeypatch.setattr(governed_runner_module.sys, "executable", str(fake_python))
+    monkeypatch.setattr(governed_runner_module.shutil, "which", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(GovernedRunnerError, match="outside trusted runtime identities"):
+        governed_runner_module._require_trusted_absolute_executable(str(fake_python))
+
+
 def test_exact_binding_prevents_operation_class_relabel(tmp_path: Path) -> None:
     argv = (sys.executable, "-c", "print('ok')")
     binding = CommandBinding(OperationClass.FILE_WRITE, argv, exact=True)
@@ -126,16 +164,30 @@ def test_service_wrapper_clears_environment_and_seals_memfds() -> None:
 
 
 def test_strict_replay_sensitive_plan_requires_trusted_nonce_consumer(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    class _FakeStrictContainment:
+        def spawn(self, *args: object, **kwargs: object) -> subprocess.Popen[bytes]:
+            raise AssertionError("nonce gate should run before spawn")
+
+        def terminate(self, process: subprocess.Popen[bytes], *, deadline: float) -> None:
+            raise AssertionError("no process should be terminated")
+
+    trusted_python = str(Path(sys.executable).resolve())
+    monkeypatch.setattr(
+        governed_runner_module.shutil,
+        "which",
+        lambda name, **_kwargs: trusted_python if name == Path(trusted_python).name else None,
+    )
+    monkeypatch.setattr(governed_runner_module, "_SystemdContainment", _FakeStrictContainment)
     command = CommandSpec(
-        argv=(sys.executable, "--version"),
+        argv=(trusted_python, "--version"),
         cwd=".",
         classification=OperationClass.FILE_WRITE,
     )
     grant = _grant(
         classes=frozenset({OperationClass.FILE_WRITE}),
-        prefixes=((sys.executable, "--version"),),
+        prefixes=((trusted_python, "--version"),),
     )
     state_dir = tmp_path / "user-controlled-nonces"
 
@@ -151,13 +203,16 @@ def test_strict_replay_sensitive_plan_requires_trusted_nonce_consumer(
 def test_strict_replay_sensitive_plan_uses_trusted_nonce_consumer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    consumed: list[str] = []
+    events: list[str] = []
 
     class _TrustedConsumer:
         def consume(self, grant: AuthorizationGrant) -> None:
-            consumed.append(grant.nonce)
+            events.append(f"consume:{grant.nonce}")
 
     class _FakeStrictContainment:
+        def __init__(self) -> None:
+            events.append("containment-init")
+
         def spawn(
             self,
             prepared: governed_runner_module._PreparedCommand,
@@ -181,19 +236,25 @@ def test_strict_replay_sensitive_plan_uses_trusted_nonce_consumer(
             if process.poll() is None:
                 process.kill()
 
+    trusted_python = str(Path(sys.executable).resolve())
+    monkeypatch.setattr(
+        governed_runner_module.shutil,
+        "which",
+        lambda name, **_kwargs: trusted_python if name == Path(trusted_python).name else None,
+    )
     monkeypatch.setattr(
         governed_runner_module,
         "_SystemdContainment",
         _FakeStrictContainment,
     )
     command = CommandSpec(
-        argv=(sys.executable, "--version"),
+        argv=(trusted_python, "--version"),
         cwd=".",
         classification=OperationClass.FILE_WRITE,
     )
     grant = _grant(
         classes=frozenset({OperationClass.FILE_WRITE}),
-        prefixes=((sys.executable, "--version"),),
+        prefixes=((trusted_python, "--version"),),
     )
     state_dir = tmp_path / "user-controlled-nonces"
 
@@ -204,7 +265,7 @@ def test_strict_replay_sensitive_plan_uses_trusted_nonce_consumer(
     ).execute(_plan(command, grant))
 
     assert receipt.status == "IMPLEMENTED"
-    assert consumed == [grant.nonce]
+    assert events == ["containment-init", f"consume:{grant.nonce}"]
     assert not state_dir.exists()
 
 
