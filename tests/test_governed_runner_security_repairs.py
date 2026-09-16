@@ -132,8 +132,14 @@ def test_exact_binding_prevents_operation_class_relabel(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("python_args", [("-c", "print('ok')"), ("approved.py",)])
 def test_strict_mode_rejects_python_launchers_until_descendants_are_constrained(
-    tmp_path: Path, python_args: tuple[str, ...]
+    tmp_path: Path, python_args: tuple[str, ...], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    trusted_python = Path(sys.executable).resolve()
+    monkeypatch.setattr(
+        governed_runner_module,
+        "_trusted_path_identity",
+        lambda _name: trusted_python,
+    )
     script = tmp_path / "approved.py"
     script.write_text("print('approved')\n", encoding="utf-8")
     argv = (sys.executable, *python_args)
@@ -435,7 +441,15 @@ def test_strict_mode_rejects_absolute_python_impostor_outside_trusted_path(
         governed_runner_module._prepare_plan(_plan(command, grant), root=tmp_path, strict=True)
 
 
-def test_strict_mode_rejects_python_through_non_python_symlink_alias(tmp_path: Path) -> None:
+def test_strict_mode_rejects_python_through_non_python_symlink_alias(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trusted_python = Path(sys.executable).resolve()
+    monkeypatch.setattr(
+        governed_runner_module,
+        "_trusted_path_identity",
+        lambda _name: trusted_python,
+    )
     alias = tmp_path / "approved-tool"
     alias.symlink_to(Path(sys.executable).resolve())
     argv = (

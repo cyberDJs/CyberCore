@@ -334,6 +334,7 @@ def test_rechecks_grant_after_executable_hashing(
         tmp_path,
         containment=containment,
         nonce_state_dir=tmp_path / ".nonce-state",
+        test_policy_mode=True,
     )
 
     receipt = runner.execute(_plan(tmp_path, command, grant=grant))
