@@ -134,8 +134,10 @@ selected input device native/default rate
 ```
 
 String device names must resolve exactly once. Invalid or ambiguous selections fail closed.
-Microphone overflow rejects the affected frame instead of hiding loss. Speaker underflow
-flushes the output stream so stale speech is not replayed.
+Microphone overflow rejects the affected frame instead of hiding loss. A blocking speaker write
+may report a transient underflow when the device experiences a gap between writes; Local Voice
+records that condition and continues sending the remaining TTS frames. Explicit cancellation or
+transport shutdown still flushes the output stream so stale speech is not replayed.
 
 ## Input onset and bounded pre-roll
 
