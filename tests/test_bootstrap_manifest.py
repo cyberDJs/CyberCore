@@ -236,13 +236,9 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert index["verify-vikunja-backup-service-inactive"] < index["remove-vikunja-backup-run-unit"]
     assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
     assert (
-        index["remove-vikunja-backup-install-unit"]
-        < index["systemd-reload-after-wrapper-removal"]
+        index["remove-vikunja-backup-install-unit"] < index["systemd-reload-after-wrapper-removal"]
     )
-    assert (
-        index["remove-vikunja-backup-run-unit"]
-        < index["systemd-reload-after-wrapper-removal"]
-    )
+    assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload-after-wrapper-removal"]
     assert (
         index["systemd-reload-after-wrapper-removal"]
         < index["unmask-vikunja-backup-install-unit-runtime"]
@@ -272,8 +268,7 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
         < index["verify-vikunja-backup-install-unit-gone"]
     )
     assert (
-        index["systemd-reload-after-runtime-unmask"]
-        < index["verify-vikunja-backup-run-unit-gone"]
+        index["systemd-reload-after-runtime-unmask"] < index["verify-vikunja-backup-run-unit-gone"]
     )
     assert (
         by_id["verify-vikunja-backup-install-unit-gone"].action_type.value
