@@ -1,11 +1,56 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from copy import deepcopy
+from dataclasses import dataclass, field
 from hashlib import sha256
 import json
+import math
 
 
 _ALLOWED_VERDICTS = {"PASS", "FAIL"}
+
+
+def _validate_json_value(
+    value: object,
+    *,
+    label: str,
+    _active_containers: set[int] | None = None,
+) -> None:
+    if value is None or isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"{label} must contain canonical JSON values with finite numbers")
+        return
+    if isinstance(value, (list, dict)):
+        active = _active_containers if _active_containers is not None else set()
+        identity = id(value)
+        if identity in active:
+            raise ValueError(f"{label} must contain acyclic canonical JSON values")
+        active.add(identity)
+        try:
+            if isinstance(value, list):
+                for index, item in enumerate(value):
+                    _validate_json_value(
+                        item,
+                        label=f"{label}[{index}]",
+                        _active_containers=active,
+                    )
+                return
+            if not all(isinstance(key, str) for key in value):
+                raise ValueError(
+                    f"{label} must contain canonical JSON values with string-keyed objects"
+                )
+            for key, item in value.items():
+                _validate_json_value(
+                    item,
+                    label=f"{label}.{key}",
+                    _active_containers=active,
+                )
+            return
+        finally:
+            active.remove(identity)
+    raise ValueError(f"{label} must contain canonical JSON values")
 
 
 def evidence_digest(evidence: dict[str, object]) -> str:
@@ -26,20 +71,33 @@ class EvaluationResult:
     verdict: str
     reasons: tuple[str, ...]
     evidence_digest: str
+    metadata: dict[str, object] = field(default_factory=dict)
 
     def validate(self, *, expected_evidence_digest: str) -> None:
-        if not self.evaluator_id.strip() or not self.evaluator_version.strip():
+        if not isinstance(self.evaluator_id, str) or not self.evaluator_id.strip():
             raise ValueError("evaluator identity and version are required")
-        if isinstance(self.score, bool) or not 0.0 <= self.score <= 1.0:
+        if not isinstance(self.evaluator_version, str) or not self.evaluator_version.strip():
+            raise ValueError("evaluator identity and version are required")
+        if isinstance(self.score, bool) or not isinstance(self.score, (int, float)):
+            raise ValueError("evaluation score must be numeric")
+        if not 0 <= self.score <= 1:
             raise ValueError("evaluation score must be between 0 and 1")
         if self.verdict not in _ALLOWED_VERDICTS:
             raise ValueError("evaluation verdict must be PASS or FAIL")
-        if not self.reasons or not all(reason.strip() for reason in self.reasons):
+        if not self.reasons or not all(
+            isinstance(reason, str) and reason.strip() for reason in self.reasons
+        ):
             raise ValueError("evaluation reasons must contain non-empty strings")
         if self.evidence_digest != expected_evidence_digest:
             raise ValueError("evaluation evidence digest does not match executor evidence")
+        if not isinstance(self.metadata, dict) or not all(
+            isinstance(key, str) for key in self.metadata
+        ):
+            raise ValueError("evaluation metadata must be an object with string keys")
+        _validate_json_value(self.metadata, label="evaluation metadata")
 
     def canonical_payload(self) -> dict[str, object]:
+        _validate_json_value(self.metadata, label="evaluation metadata")
         return {
             "evaluator_id": self.evaluator_id,
             "evaluator_version": self.evaluator_version,
@@ -47,20 +105,24 @@ class EvaluationResult:
             "verdict": self.verdict,
             "reasons": list(self.reasons),
             "evidence_digest": self.evidence_digest,
+            "metadata": deepcopy(self.metadata),
         }
 
-    @property
-    def digest(self) -> str:
+    @staticmethod
+    def _payload_digest(payload: dict[str, object]) -> str:
         encoded = json.dumps(
-            self.canonical_payload(),
+            payload,
             sort_keys=True,
             separators=(",", ":"),
             allow_nan=False,
         ).encode("utf-8")
         return sha256(encoded).hexdigest()
 
+    @property
+    def digest(self) -> str:
+        return self._payload_digest(self.canonical_payload())
+
     def event_payload(self) -> dict[str, object]:
-        payload = asdict(self)
-        payload["reasons"] = list(self.reasons)
-        payload["evaluation_digest"] = self.digest
+        payload = self.canonical_payload()
+        payload["evaluation_digest"] = self._payload_digest(payload)
         return payload

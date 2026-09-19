@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 
+from cybercore.longrun.provider import ModelBinding
+
 
 @dataclass(frozen=True, slots=True)
 class LongRunManifest:
@@ -24,6 +26,7 @@ class LongRunManifest:
         "billing_mutation",
         "permission_mutation",
     )
+    model_bindings: tuple[ModelBinding, ...] = ()
     metadata: dict[str, str] = field(default_factory=dict)
 
     def validate(self) -> None:
@@ -49,6 +52,26 @@ class LongRunManifest:
         if overlap:
             raise ValueError(f"effects cannot be both allowed and prohibited: {sorted(overlap)}")
 
+        roles: set[str] = set()
+        binding_ids: set[str] = set()
+        for binding in self.model_bindings:
+            if not isinstance(binding, ModelBinding):
+                raise ValueError("model_bindings must contain ModelBinding values")
+            binding.validate()
+            if binding.role in roles:
+                raise ValueError(f"duplicate model binding role: {binding.role}")
+            if binding.binding_id in binding_ids:
+                raise ValueError(f"duplicate model binding_id: {binding.binding_id}")
+            roles.add(binding.role)
+            binding_ids.add(binding.binding_id)
+
+    def model_binding(self, role: str) -> ModelBinding | None:
+        self.validate()
+        for binding in self.model_bindings:
+            if binding.role == role:
+                return binding
+        return None
+
     def canonical_payload(self) -> dict[str, object]:
         return {
             "run_id": self.run_id,
@@ -63,6 +86,13 @@ class LongRunManifest:
             "independent_evaluation_required": self.independent_evaluation_required,
             "allowed_effects": list(self.allowed_effects),
             "prohibited_effects": list(self.prohibited_effects),
+            "model_bindings": [
+                binding.canonical_payload()
+                for binding in sorted(
+                    self.model_bindings,
+                    key=lambda item: (item.role, item.binding_id),
+                )
+            ],
             "metadata": dict(sorted(self.metadata.items())),
         }
 

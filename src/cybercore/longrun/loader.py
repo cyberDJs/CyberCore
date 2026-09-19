@@ -7,6 +7,7 @@ from typing import Any
 import yaml
 
 from cybercore.longrun.manifest import LongRunManifest
+from cybercore.longrun.provider import ModelBinding
 
 
 _PROFILE_KEYS = {
@@ -22,19 +23,62 @@ _PROFILE_KEYS = {
     "prohibited_effects",
     "policy",
 }
-_MISSION_KEYS = {"version", "run_id", "objective", "metadata"}
+_MISSION_KEYS = {"version", "run_id", "objective", "metadata", "model_bindings"}
 _POLICY_KEYS = {
     "evidence_required",
     "independent_evaluation_required",
     "immutable_mission_required",
     "fail_closed_on_unknown_effect",
 }
+_BINDING_KEYS = {"binding_id", "role", "provider_id", "model_id"}
 _RUN_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+
+class _StrictSafeLoader(yaml.SafeLoader):
+    pass
+
+
+def _construct_mapping_without_duplicates(
+    loader: _StrictSafeLoader,
+    node: yaml.nodes.MappingNode,
+    deep: bool = False,
+) -> dict[Any, Any]:
+    loader.flatten_mapping(node)
+    mapping: dict[Any, Any] = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        try:
+            duplicate = key in mapping
+        except TypeError as exc:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                "found unhashable mapping key",
+                key_node.start_mark,
+            ) from exc
+        if duplicate:
+            raise yaml.constructor.ConstructorError(
+                "while constructing a mapping",
+                node.start_mark,
+                f"found duplicate mapping key: {key!r}",
+                key_node.start_mark,
+            )
+        mapping[key] = loader.construct_object(value_node, deep=deep)
+    return mapping
+
+
+_StrictSafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_mapping_without_duplicates,
+)
 
 
 def _load_mapping(path: Path, *, label: str) -> dict[str, Any]:
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+        raw = yaml.load(
+            path.read_text(encoding="utf-8"),
+            Loader=_StrictSafeLoader,
+        )
     except yaml.YAMLError as exc:
         raise ValueError(f"invalid {label} YAML: {path}") from exc
     if not isinstance(raw, dict):
@@ -77,6 +121,29 @@ def _require_string_list(mapping: dict[str, Any], key: str, *, label: str) -> tu
     if not all(cleaned):
         raise ValueError(f"{label}.{key} cannot contain blank values")
     return cleaned
+
+
+def _model_bindings(mission: dict[str, Any]) -> tuple[ModelBinding, ...]:
+    raw_bindings = mission.get("model_bindings", [])
+    if not isinstance(raw_bindings, list):
+        raise ValueError("mission.model_bindings must be a list")
+    bindings: list[ModelBinding] = []
+    for index, raw in enumerate(raw_bindings):
+        label = f"mission.model_bindings[{index}]"
+        if not isinstance(raw, dict):
+            raise ValueError(f"{label} must be a mapping")
+        _reject_unknown(raw, _BINDING_KEYS, label=label)
+        if set(raw) != _BINDING_KEYS:
+            raise ValueError(f"{label} is missing required fields")
+        binding = ModelBinding(
+            binding_id=_require_string(raw, "binding_id", label=label),
+            role=_require_string(raw, "role", label=label),
+            provider_id=_require_string(raw, "provider_id", label=label),
+            model_id=_require_string(raw, "model_id", label=label),
+        )
+        binding.validate()
+        bindings.append(binding)
+    return tuple(bindings)
 
 
 def load_manifest(profile_path: Path, mission_path: Path) -> LongRunManifest:
@@ -128,6 +195,7 @@ def load_manifest(profile_path: Path, mission_path: Path) -> LongRunManifest:
         independent_evaluation_required=bool(policy["independent_evaluation_required"]),
         allowed_effects=_require_string_list(profile, "allowed_effects", label="profile"),
         prohibited_effects=_require_string_list(profile, "prohibited_effects", label="profile"),
+        model_bindings=_model_bindings(mission),
         metadata=metadata,
     )
     manifest.validate()
