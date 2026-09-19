@@ -32,8 +32,14 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
         RollbackAction(
             "remove-privilege-policy",
             RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
-            "/etc/sudoers.d/cybercore-exec",
+            "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
             "deploy/cybercore-exec/cybercore-exec.policy",
+        ),
+        RollbackAction(
+            "remove-vikunja-backup-install",
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
+            "/usr/local/libexec/cybercore-exec/vikunja-backup-install",
+            "deploy/cybercore-exec/vikunja-backup-install",
         ),
         RollbackAction(
             "remove-dispatcher",
