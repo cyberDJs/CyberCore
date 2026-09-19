@@ -735,9 +735,7 @@ def test_client_rollback_batch_includes_restorable_metadata() -> None:
         return 200, b'{"success":true,"result":{}}'
 
     client = CloudflareClient("test-token", requester=requester)
-    before = DnsRecord(
-        "CNAME", "www.example.cz", "old.example.net", 1, True, None, "c1"
-    )
+    before = DnsRecord("CNAME", "www.example.cz", "old.example.net", 1, True, None, "c1")
     after = DnsRecord(
         "CNAME",
         "www.example.cz",
