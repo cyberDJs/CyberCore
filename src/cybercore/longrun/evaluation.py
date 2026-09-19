@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from hashlib import sha256
 import json
@@ -79,7 +80,7 @@ class EvaluationResult:
             raise ValueError("evaluator identity and version are required")
         if isinstance(self.score, bool) or not isinstance(self.score, (int, float)):
             raise ValueError("evaluation score must be numeric")
-        if not 0.0 <= float(self.score) <= 1.0:
+        if not 0 <= self.score <= 1:
             raise ValueError("evaluation score must be between 0 and 1")
         if self.verdict not in _ALLOWED_VERDICTS:
             raise ValueError("evaluation verdict must be PASS or FAIL")
@@ -104,20 +105,24 @@ class EvaluationResult:
             "verdict": self.verdict,
             "reasons": list(self.reasons),
             "evidence_digest": self.evidence_digest,
-            "metadata": self.metadata,
+            "metadata": deepcopy(self.metadata),
         }
 
-    @property
-    def digest(self) -> str:
+    @staticmethod
+    def _payload_digest(payload: dict[str, object]) -> str:
         encoded = json.dumps(
-            self.canonical_payload(),
+            payload,
             sort_keys=True,
             separators=(",", ":"),
             allow_nan=False,
         ).encode("utf-8")
         return sha256(encoded).hexdigest()
 
+    @property
+    def digest(self) -> str:
+        return self._payload_digest(self.canonical_payload())
+
     def event_payload(self) -> dict[str, object]:
         payload = self.canonical_payload()
-        payload["evaluation_digest"] = self.digest
+        payload["evaluation_digest"] = self._payload_digest(payload)
         return payload
