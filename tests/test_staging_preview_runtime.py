@@ -69,8 +69,19 @@ AUTH = _signed_auth()
 
 
 @pytest.fixture(autouse=True)
-def _trusted_approval_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def _trusted_approval_key(monkeypatch: pytest.MonkeyPatch) -> set[str]:
+    consumed: set[str] = set()
+
+    def consume(nonce: str, _authorization_reference: str) -> None:
+        if nonce in consumed:
+            raise FirstWriteRuntimeError(
+                "staging preview authorization nonce has already been consumed"
+            )
+        consumed.add(nonce)
+
     monkeypatch.setattr(preview, "_load_trusted_approval_public_key", lambda: _PUBLIC_KEY)
+    monkeypatch.setattr(preview, "_consume_trusted_authorization_nonce", consume)
+    return consumed
 
 
 class _Sock:
@@ -458,6 +469,59 @@ def test_transport_loss_after_stou_is_conservatively_mutation_possible() -> None
     assert not result.executed
     assert result.remote_mutation_possible
     assert PASSWORD not in repr(result)
+
+
+def test_same_signed_approval_cannot_reach_stou_twice(
+    _trusted_approval_key: set[str],
+) -> None:
+    fake = FakeFtps()
+    first = preview.execute_staging_preview_stou(
+        _input(),
+        remote_write_authorized=True,
+        authorization_reference=AUTH,
+        credential_loader=_credential,
+        ftp_factory=lambda _context: fake,
+    )
+    second = preview.execute_staging_preview_stou(
+        _input(),
+        remote_write_authorized=True,
+        authorization_reference=AUTH,
+        credential_loader=_credential,
+        ftp_factory=lambda _context: fake,
+    )
+
+    assert first.executed
+    assert not second.executed
+    assert second.errors == ("staging preview authorization nonce has already been consumed",)
+    assert len([command for command in fake.commands if command.startswith("STOU ")]) == 1
+    assert _trusted_approval_key == {"unit-test-nonce-0001"}
+
+
+def test_non_string_sha256_fails_closed_without_hashing_or_credentials() -> None:
+    loads = 0
+
+    def loader() -> FirstWriteFtpsCredential:
+        nonlocal loads
+        loads += 1
+        return _credential()
+
+    candidate = preview.StagingPreviewUploadInput(
+        source_commit=COMMIT,
+        run_id=RUN_ID,
+        authorization_reference=AUTH,
+        content=CONTENT,
+        sha256=None,  # type: ignore[arg-type]
+    )
+    result = preview.execute_staging_preview_stou(
+        candidate,
+        remote_write_authorized=True,
+        authorization_reference=AUTH,
+        credential_loader=loader,
+    )
+
+    assert not result.executed
+    assert result.errors == ("staging preview sha256 is invalid",)
+    assert loads == 0
 
 
 def test_non_bytes_content_fails_closed_without_hashing_or_credentials() -> None:

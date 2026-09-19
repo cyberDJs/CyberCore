@@ -11,8 +11,10 @@ import json
 import os
 from pathlib import Path
 import re
+import socket
 import ssl
 import stat
+import struct
 from typing import Protocol, cast
 from urllib.parse import quote
 
@@ -39,6 +41,7 @@ AUTH_CLOCK_SKEW = timedelta(seconds=30)
 EXPECTED_SCOPE_REFERENCE = "evidence:wb0034:scope:ftps"
 EXPECTED_DESTINATION = "staging-root/STOU-unique-child"
 TRUSTED_APPROVAL_PUBLIC_KEY_PATH = Path("/etc/cybercore/staging-preview-approval-ed25519.pub")
+TRUSTED_NONCE_SOCKET_PATH = Path("/run/cybercore/staging-preview-approval-nonce.sock")
 STOU_RESPONSE_PATTERN = re.compile(r"(?:125|150) FILE: (.+)\Z")
 FTPS_OPERATION_ERRORS = ftplib.all_errors + (UnicodeDecodeError,)
 
@@ -150,15 +153,16 @@ def validate_staging_preview_input(upload_input: StagingPreviewUploadInput) -> t
         or not upload_input.authorization_reference
     ):
         errors.append("staging preview authorization evidence is required")
-    if not isinstance(upload_input.sha256, str) or not SHA256_PATTERN.fullmatch(
-        upload_input.sha256
-    ):
+    sha256_valid = isinstance(upload_input.sha256, str) and bool(
+        SHA256_PATTERN.fullmatch(upload_input.sha256)
+    )
+    if not sha256_valid:
         errors.append("staging preview sha256 is invalid")
     if not isinstance(upload_input.content, bytes) or not upload_input.content:
         errors.append("staging preview content must be non-empty immutable bytes")
     elif len(upload_input.content) > MAX_PREVIEW_BYTES:
         errors.append("staging preview content exceeds the bounded size limit")
-    elif SHA256_PATTERN.fullmatch(upload_input.sha256):
+    elif sha256_valid:
         if hashlib.sha256(upload_input.content).hexdigest() != upload_input.sha256:
             errors.append("staging preview content digest does not match sealed bytes")
     return tuple(errors)
@@ -303,6 +307,91 @@ def _verify_authorization_evidence(
     return None
 
 
+def _trusted_nonce_service_peer_uid(client: socket.socket) -> int:
+    getpeereid = getattr(client, "getpeereid", None)
+    if callable(getpeereid):
+        peer_ids = cast(tuple[int, int], getpeereid())
+        return int(peer_ids[0])
+    if hasattr(socket, "SO_PEERCRED"):
+        size = struct.calcsize("3i")
+        raw = client.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, size)
+        _pid, uid, _gid = struct.unpack("3i", raw)
+        return int(uid)
+    raise FirstWriteRuntimeError("trusted staging nonce service peer identity is unavailable")
+
+
+def _consume_trusted_authorization_nonce(nonce: str, authorization_reference: str) -> None:
+    path = TRUSTED_NONCE_SOCKET_PATH
+    parent = path.parent
+    try:
+        parent_stat = os.lstat(parent)
+        socket_stat = os.lstat(path)
+    except OSError as exc:
+        raise FirstWriteRuntimeError("trusted staging nonce service is unavailable") from exc
+    if not stat.S_ISDIR(parent_stat.st_mode) or parent_stat.st_uid != 0:
+        raise FirstWriteRuntimeError("trusted staging nonce service directory is not root-owned")
+    if parent_stat.st_mode & 0o022:
+        raise FirstWriteRuntimeError(
+            "trusted staging nonce service directory is writable by untrusted users"
+        )
+    if not stat.S_ISSOCK(socket_stat.st_mode) or socket_stat.st_uid != 0:
+        raise FirstWriteRuntimeError("trusted staging nonce service socket is not root-owned")
+    if socket_stat.st_mode & 0o022:
+        raise FirstWriteRuntimeError(
+            "trusted staging nonce service socket is writable by untrusted users"
+        )
+
+    request = (
+        json.dumps(
+            {
+                "version": 1,
+                "operation": AUTH_OPERATION,
+                "nonce": nonce,
+                "authorization_sha256": hashlib.sha256(
+                    authorization_reference.encode("utf-8", errors="strict")
+                ).hexdigest(),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        + b"\n"
+    )
+    if len(request) > 4096:
+        raise FirstWriteRuntimeError("trusted staging nonce request is unexpectedly large")
+
+    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        client.settimeout(2.0)
+        client.connect(str(path))
+        if _trusted_nonce_service_peer_uid(client) != 0:
+            raise FirstWriteRuntimeError("trusted staging nonce service peer is not root")
+        client.sendall(request)
+        client.shutdown(socket.SHUT_WR)
+        response = client.recv(4097)
+        if len(response) > 4096:
+            raise FirstWriteRuntimeError("trusted staging nonce response is unexpectedly large")
+    except FirstWriteRuntimeError:
+        raise
+    except OSError as exc:
+        raise FirstWriteRuntimeError("trusted staging nonce service failed") from exc
+    finally:
+        client.close()
+
+    try:
+        payload = json.loads(response)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise FirstWriteRuntimeError(
+            "trusted staging nonce service returned invalid evidence"
+        ) from exc
+    if payload == {"consumed": True}:
+        return
+    if payload == {"consumed": False, "error": "replay"}:
+        raise FirstWriteRuntimeError(
+            "staging preview authorization nonce has already been consumed"
+        )
+    raise FirstWriteRuntimeError("trusted staging nonce service returned invalid evidence")
+
+
 def _default_ftps_factory(context: ssl.SSLContext) -> _FtpsClient:
     return cast(_FtpsClient, _CapturingFtps(context=context, timeout=15))
 
@@ -444,6 +533,19 @@ def execute_staging_preview_stou(
         if client.pwd() != "/":
             raise FirstWriteRuntimeError("FTPS identity is not rooted at the approved staging root")
         _verify_protected_data_channel(client)
+
+        token = upload_input.authorization_reference.removeprefix(AUTH_TOKEN_PREFIX)
+        try:
+            payload_text, _signature_text = token.split(".", 1)
+            claims = json.loads(_b64url_decode(payload_text))
+            nonce = claims["nonce"]
+            if not isinstance(nonce, str):
+                raise ValueError("authorization nonce is invalid")
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise FirstWriteRuntimeError(
+                "validated authorization nonce could not be consumed"
+            ) from exc
+        _consume_trusted_authorization_nonce(nonce, upload_input.authorization_reference)
 
         prefix = f"eimy-v34-{upload_input.run_id}.html"
         write_started = True

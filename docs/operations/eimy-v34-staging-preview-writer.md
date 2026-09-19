@@ -41,6 +41,9 @@ Additional gates are fail-closed:
 - signature verification uses only the trusted public key at `/etc/cybercore/staging-preview-approval-ed25519.pub`;
 - the trusted key directory and key file must be root-owned and not group/world writable; symlinked key files are rejected by `O_NOFOLLOW` where supported;
 - no trusted approval public key is provisioned by this PR; when the trusted key is absent or invalid, execution stops before credential loading or network access;
+- each signed approval nonce must be atomically consumed by the trusted local nonce service at `/run/cybercore/staging-preview-approval-nonce.sock` after read-only FTPS preflight and immediately before `STOU`;
+- the nonce-service directory/socket and connected peer must be root-owned/trusted, and replay or service unavailability fails closed before mutation;
+- the nonce service is responsible for durable shared replay state outside the governed user's writable namespace and is not provisioned by this PR;
 - literal fresh write authority and exact signed authorization-reference match are still required;
 - any failure after STOU begins is reported conservatively as `remote_mutation_possible=true`;
 - there is no automatic cleanup or deletion authority.
