@@ -449,10 +449,11 @@ def run_local_voice_session(
             )
             if utterance is None:
                 continue
-            print(f"YOU: {utterance.text}")
+            current_utterance: Utterance = utterance
+            print(f"YOU: {current_utterance.text}")
             if controller is None:
                 response = router.handle(
-                    utterance,
+                    current_utterance,
                     context,
                     session=local.session,
                 )
@@ -462,7 +463,7 @@ def run_local_voice_session(
             else:
                 controlled = local.process_with_live_input(
                     lambda: controller.handle(
-                        utterance,
+                        current_utterance,
                         context,
                         session=local.session,
                     )
