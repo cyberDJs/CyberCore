@@ -22,6 +22,9 @@ Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
 5. Execution receipts exposed the raw authorization reference.
 6. Existing tests did not exercise the real client payload against the server parser.
 7. Mutating client and server paths treated a non-empty authorization reference as sufficient without structurally requiring an authorization verifier.
+8. Upgrade ordering could leave the legacy Polkit rule effective while static wrapper names were being established.
+9. The strict installer sandbox ignored a missing `/opt/backups/vikunja`, causing first-run installation failure on a clean target.
+10. Rollback could continue removing static wrapper units when an exact-match privilege-policy removal was skipped because of local drift.
 
 ## Repair invariants
 
@@ -30,9 +33,12 @@ Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
 - Transport timeout exceeds connection plus maximum server-operation budget.
 - Mutating operations map only to preinstalled static wrapper services.
 - Bootstrap file, unit, sshd, and Polkit installs encode explicit root:root ownership.
-- systemd is reloaded before the Polkit rule becomes available.
+- Existing managed privilege is revoked and verified ineffective before either static wrapper name is installed or reused.
+- Both wrapper names must be verified free of unsafe transient-unit occupation before installation proceeds.
+- `/opt/backups/vikunja` is created as `root:root` mode `0700` before the strict installer sandbox can start.
+- systemd is reloaded before the narrowed Polkit rule becomes available.
 - Polkit authorizes only `start` for the two exact static wrapper unit names.
-- Rollback revokes the privilege rule before removing wrapper units.
+- Rollback verifies effective privilege revocation before removing wrapper units; failure stops rollback and retains the occupied wrapper names.
 - Raw authorization references are replaced by SHA-256 bindings in both local and server receipts.
 - Mutating client and server operations fail closed unless an `ExecutionAuthorizationVerifier` explicitly authorizes the exact operation/target/plan/revision/reference tuple.
 - The default verifier denies all mutations; the standalone server entrypoint has no permissive fallback.
