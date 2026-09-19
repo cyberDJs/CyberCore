@@ -71,7 +71,10 @@ def test_bootstrap_installs_static_wrappers_before_privilege_policy() -> None:
     by_id = {action.action_id: action for action in manifest}
 
     assert index["revoke-existing-privilege-policy"] < index["verify-privilege-policy-revoked"]
-    assert index["verify-privilege-policy-revoked"] < index["verify-vikunja-backup-install-unit-safe"]
+    assert (
+        index["verify-privilege-policy-revoked"]
+        < index["verify-vikunja-backup-install-unit-safe"]
+    )
     assert index["verify-privilege-policy-revoked"] < index["verify-vikunja-backup-run-unit-safe"]
 
     backup_root = by_id["backup-root-directory"]
