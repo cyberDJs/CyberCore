@@ -142,8 +142,8 @@ status:
   wb0038e_remote_deployment_authorized: false
   wb0038e_merge_authorized: true
   wb0038e_post_merge_unresolved_p1: active_wrapper_must_stop_before_unit_removal
-  wb0038f_active_wrapper_rollback_repair: draft_pr_97_review_repair_in_progress
-  wb0038f_review_findings: p1_spawned_backup_lifetime_and_p2_managed_wrapper_identity
+  wb0038f_active_wrapper_rollback_repair: draft_pr_97_final_review_pending
+  wb0038f_review_findings: p1_wrapper_lifetime_p2_managed_identity_p1_scheduled_timer_quiesce_addressed
   wb0038f_remote_deployment_authorized: false
   wb0038f_merge_authorized: false
   source_of_truth_reconciliation_needed_after_pr97: true
