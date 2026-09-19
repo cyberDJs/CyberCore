@@ -54,11 +54,13 @@ The response must contain exactly `kind`, `operation`, `target`, `language`, `co
 
 ## Live-data rule
 
-The intelligence bridge has no read-only tools in WB-0039. The controller independently detects
-live/current-state requests from intent kind and deterministic language markers; it does not trust
-a model-supplied `needs_live_data=false` as an enforcement decision. A model-supplied
-`needs_live_data=true` remains additive. Requests that need changing external state are refused a
-factual model-memory answer and require an allowed read-only tool.
+The intelligence bridge has no read-only tools in WB-0039. Model questions fail closed unless the
+utterance matches a deterministic positive allowlist for stable definitional or mechanistic
+questions. Search, inspect, monitor and non-allowlisted questions require live evidence regardless
+of a model-supplied `needs_live_data=false`; a model-supplied `needs_live_data=true` remains
+additive. Dynamic-topic markers provide an additional denial layer rather than the primary trust
+boundary. Requests that may depend on changing external state are refused a factual model-memory
+answer and require an allowed read-only tool.
 
 ## Local Ollama reference provider
 
