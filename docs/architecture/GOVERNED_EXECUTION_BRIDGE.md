@@ -1,7 +1,7 @@
 # Governed Execution Bridge V1
 
 Status: repository repair under review; not deployed
-Work block: `WB-0037` with `WB-0038E` execution-boundary repair
+Work block: `WB-0037` with `WB-0038E` execution-boundary repair and `WB-0038F-R2` rollback-quiesce reconciliation
 
 ## Purpose
 
@@ -131,10 +131,23 @@ to exist as an explicit writable sandbox path; a missing path is a hard failure,
 not an ignored exception.
 
 Rollback is also fail-closed. It first removes the managed privilege rule and
-must verify effective revocation before removing either static wrapper. If the
-rule is locally drifted or otherwise cannot be revoked, rollback stops and keeps
-the wrapper names occupied rather than exposing an authorized-but-unclaimed
-systemd unit name. After safe wrapper removal it reloads systemd.
+must verify effective revocation. It then runtime-masks both CyberCore wrapper
+names and verifies the masks before stopping either wrapper. Both wrappers,
+`vikunja-backup.timer`, and the downstream `vikunja-backup.service` must be
+stopped and proven inactive-or-absent before either managed wrapper file is
+removed.
+
+After the managed wrapper files are removed, rollback creates persistent masks
+for both wrapper names and verifies those masks before reloading systemd. The
+persistent masks are tombstones: they override any lower-priority or generated
+unit fragment with the same name across reboot. Rollback never un-masks them.
+Creating a persistent mask is idempotent only when the exact persistent mask is
+already present; any conflicting occupant fails closed.
+
+A future installer must treat an existing persistent wrapper mask as an unsafe
+occupied name and refuse to overwrite or remove it automatically. Reactivating
+either wrapper name therefore requires a separate, explicitly reviewed
+administrative action rather than being an implicit side effect of install.
 
 ## Execution receipts
 
@@ -166,7 +179,7 @@ verification must establish at minimum:
 
 ## Deployment boundary
 
-WB-0038E is repository-only. It does not create credentials, modify sshd or
+WB-0038E and WB-0038F-R2 are repository-only. It does not create credentials, modify sshd or
 Polkit on a target, deploy the subsystem, run A6 backups, mutate a VPS, or grant
 production authority. Any deployment requires a separate target-bound plan, a real server-side
 authorization verifier, fresh verification, and explicit authorization.
