@@ -761,3 +761,110 @@ def test_client_rollback_batch_includes_restorable_metadata() -> None:
     assert patch["comment"] == "restored note"
     assert patch["tags"] == ["owner:cybercore"]
     assert patch["settings"] == {"flatten_cname": True}
+
+
+def test_rollback_plan_fingerprint_binds_restore_metadata() -> None:
+    current = DnsRecord(
+        "CNAME",
+        "www.example.cz",
+        "target.example.net",
+        1,
+        True,
+        None,
+        "c1",
+        {
+            "comment": "current note",
+            "tags": ["owner:current"],
+            "settings": {"flatten_cname": False},
+            "private_routing": False,
+        },
+    )
+    baseline_metadata = {
+        "comment": "approved note",
+        "tags": ["owner:cybercore"],
+        "settings": {"flatten_cname": True},
+        "private_routing": True,
+    }
+
+    def rollback_manifest(metadata: dict[str, object]) -> DnsManifest:
+        desired = DnsRecord(
+            "CNAME",
+            "www.example.cz",
+            "target.example.net",
+            1,
+            True,
+            None,
+            None,
+            metadata,
+        )
+        return DnsManifest(
+            zone="example.cz",
+            managed_recordsets=(("CNAME", "www.example.cz"),),
+            records=(desired,),
+            template=False,
+            rollback=True,
+        )
+
+    baseline = build_plan(
+        rollback_manifest(baseline_metadata),
+        zone_id="zone-1",
+        current_records=(current,),
+    )
+    assert baseline.changes
+
+    variants = (
+        {**baseline_metadata, "comment": "different note"},
+        {**baseline_metadata, "tags": ["owner:other"]},
+        {**baseline_metadata, "settings": {"flatten_cname": False}},
+        {**baseline_metadata, "private_routing": False},
+    )
+    for metadata in variants:
+        variant = build_plan(
+            rollback_manifest(metadata),
+            zone_id="zone-1",
+            current_records=(current,),
+        )
+        assert variant.changes
+        assert variant.fingerprint != baseline.fingerprint
+        assert variant.approval_text != baseline.approval_text
+
+
+def test_apply_revalidates_managed_records_immediately_before_batch(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+    initial = (
+        DnsRecord("A", "example.cz", "192.0.2.9", 300, False, None, "a1"),
+    )
+    drifted = (
+        DnsRecord("A", "example.cz", "192.0.2.8", 300, False, None, "a1"),
+    )
+
+    class BoundaryRecordDriftApi(FakeApi):
+        def __init__(self) -> None:
+            super().__init__(initial)
+            self.list_dns_calls = 0
+
+        def list_dns_records(self, zone_id: str) -> tuple[DnsRecord, ...]:
+            self.list_dns_calls += 1
+            if self.list_dns_calls >= 3:
+                return drifted
+            return super().list_dns_records(zone_id)
+
+    api = BoundaryRecordDriftApi()
+    plan = plan_from_manifest(api, manifest)
+    evidence_dir = tmp_path / "managed-record-boundary-drift"
+
+    with pytest.raises(
+        CloudflareDnsError, match="managed DNS records drifted at mutation boundary"
+    ):
+        apply_manifest(
+            api,
+            manifest,
+            expected_plan=plan.fingerprint,
+            approval=plan.approval_text,
+            evidence_dir=evidence_dir,
+        )
+
+    assert api.list_dns_calls >= 3
+    assert api.writes == []
+    assert (evidence_dir / "pre-write-zone-snapshot.json").is_file()
+    assert (evidence_dir / "rollback-manifest.yaml").is_file()
