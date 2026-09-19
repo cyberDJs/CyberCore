@@ -302,9 +302,7 @@ class ModelRuntime:
             try:
                 current_request_digest = request.digest
             except ValueError as exc:
-                raise RuntimeError(
-                    "model request mutated during provider invocation"
-                ) from exc
+                raise RuntimeError("model request mutated during provider invocation") from exc
             if current_request_digest != request_digest:
                 raise RuntimeError("model request mutated during provider invocation")
 
