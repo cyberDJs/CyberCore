@@ -131,7 +131,7 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "/etc/systemd/system/cybercore-vikunja-backup-run.service",
             "deploy/cybercore-exec/cybercore-vikunja-backup-run.service",
         ),
-        RollbackAction("systemd-reload-after-wrapper-removal", RollbackActionType.RELOAD_SYSTEMD),
+        RollbackAction("systemd-reload", RollbackActionType.RELOAD_SYSTEMD),
         RollbackAction(
             "persistent-mask-vikunja-backup-install-wrapper",
             RollbackActionType.MASK_SYSTEMD_UNIT_PERSISTENT,
