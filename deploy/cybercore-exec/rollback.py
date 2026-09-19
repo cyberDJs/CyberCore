@@ -9,6 +9,9 @@ class RollbackActionType(str, Enum):
     REMOVE_MANAGED_FILE_IF_EXACT = "REMOVE_MANAGED_FILE_IF_EXACT"
     VERIFY_PRIVILEGE_POLICY_REVOKED = "VERIFY_PRIVILEGE_POLICY_REVOKED"
     VERIFY_SYSTEMD_UNIT_MANAGED_EXACT = "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT"
+    VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT = "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT"
+    DISABLE_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT = "DISABLE_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT"
+    STOP_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT = "STOP_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT"
     STOP_SYSTEMD_UNIT_AND_WAIT = "STOP_SYSTEMD_UNIT_AND_WAIT"
     RELOAD_SYSTEMD = "RELOAD_SYSTEMD"
     VALIDATE_SSHD_CONFIG = "VALIDATE_SSHD_CONFIG"
@@ -35,6 +38,30 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "verify-privilege-policy-revoked",
             RollbackActionType.VERIFY_PRIVILEGE_POLICY_REVOKED,
             "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
+        ),
+        RollbackAction(
+            "verify-vikunja-backup-timer-managed-or-absent",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT,
+            "vikunja-backup.timer",
+            "deploy/cybercore-exec/vikunja-backup.timer",
+        ),
+        RollbackAction(
+            "verify-vikunja-backup-service-managed-or-absent",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT,
+            "vikunja-backup.service",
+            "deploy/cybercore-exec/vikunja-backup.service",
+        ),
+        RollbackAction(
+            "disable-vikunja-backup-timer",
+            RollbackActionType.DISABLE_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT,
+            "vikunja-backup.timer",
+            "deploy/cybercore-exec/vikunja-backup.timer",
+        ),
+        RollbackAction(
+            "stop-vikunja-backup-service",
+            RollbackActionType.STOP_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT,
+            "vikunja-backup.service",
+            "deploy/cybercore-exec/vikunja-backup.service",
         ),
         RollbackAction(
             "verify-vikunja-backup-install-wrapper-managed",
