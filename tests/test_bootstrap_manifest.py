@@ -171,12 +171,109 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert "/usr/local/libexec/cybercore-exec/authorization.py" in targets
 
     index = {action.action_id: position for position, action in enumerate(manifest)}
+    by_id = {action.action_id: action for action in manifest}
     assert index["remove-privilege-policy"] < index["verify-privilege-policy-revoked"]
-    assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-install-unit"]
-    assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-run-unit"]
-    assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
-    assert index["remove-vikunja-backup-install-unit"] < index["systemd-reload"]
-    assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload"]
+
+    runtime_masks = (
+        (
+            "mask-vikunja-backup-install-unit-runtime",
+            "verify-vikunja-backup-install-unit-runtime-masked",
+            "cybercore-vikunja-backup-install.service",
+        ),
+        (
+            "mask-vikunja-backup-run-unit-runtime",
+            "verify-vikunja-backup-run-unit-runtime-masked",
+            "cybercore-vikunja-backup-run.service",
+        ),
+    )
+    for mask_id, verify_id, unit in runtime_masks:
+        assert by_id[mask_id].action_type.value == "MASK_SYSTEMD_UNIT_RUNTIME"
+        assert by_id[mask_id].target == unit
+        assert by_id[verify_id].action_type.value == "VERIFY_SYSTEMD_UNIT_MASKED"
+        assert by_id[verify_id].target == unit
+        assert index["verify-privilege-policy-revoked"] < index[mask_id]
+        assert index[mask_id] < index[verify_id]
+
+    quiesce = (
+        (
+            "stop-vikunja-backup-install-unit",
+            "verify-vikunja-backup-install-unit-inactive",
+            "cybercore-vikunja-backup-install.service",
+        ),
+        (
+            "stop-vikunja-backup-run-unit",
+            "verify-vikunja-backup-run-unit-inactive",
+            "cybercore-vikunja-backup-run.service",
+        ),
+        (
+            "stop-vikunja-backup-timer",
+            "verify-vikunja-backup-timer-inactive",
+            "vikunja-backup.timer",
+        ),
+        (
+            "stop-vikunja-backup-service",
+            "verify-vikunja-backup-service-inactive",
+            "vikunja-backup.service",
+        ),
+    )
+    for stop_id, verify_id, unit in quiesce:
+        assert by_id[stop_id].action_type.value == "STOP_SYSTEMD_UNIT_IF_PRESENT"
+        assert by_id[stop_id].target == unit
+        assert by_id[verify_id].action_type.value == "VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT"
+        assert by_id[verify_id].target == unit
+        assert index["verify-privilege-policy-revoked"] < index[stop_id]
+        assert index[stop_id] < index[verify_id]
+        assert index[verify_id] < index["remove-vikunja-backup-install-unit"]
+        assert index[verify_id] < index["remove-vikunja-backup-run-unit"]
+
+    assert index["verify-vikunja-backup-timer-inactive"] < index["stop-vikunja-backup-service"]
+    assert (
+        index["verify-vikunja-backup-service-inactive"]
+        < index["remove-vikunja-backup-install-unit"]
+    )
+    assert index["verify-vikunja-backup-service-inactive"] < index["remove-vikunja-backup-run-unit"]
+
+    persistent_masks = (
+        (
+            "mask-vikunja-backup-install-unit-persistent",
+            "verify-vikunja-backup-install-unit-persistently-masked",
+            "cybercore-vikunja-backup-install.service",
+        ),
+        (
+            "mask-vikunja-backup-run-unit-persistent",
+            "verify-vikunja-backup-run-unit-persistently-masked",
+            "cybercore-vikunja-backup-run.service",
+        ),
+    )
+    for mask_id, verify_id, unit in persistent_masks:
+        assert by_id[mask_id].action_type.value == "MASK_SYSTEMD_UNIT_PERSISTENT"
+        assert by_id[mask_id].target == unit
+        assert by_id[verify_id].action_type.value == "VERIFY_SYSTEMD_UNIT_PERSISTENTLY_MASKED"
+        assert by_id[verify_id].target == unit
+        assert index["remove-vikunja-backup-install-unit"] < index[mask_id]
+        assert index["remove-vikunja-backup-run-unit"] < index[mask_id]
+        assert index[mask_id] < index[verify_id]
+        assert index[verify_id] < index["systemd-reload-after-persistent-mask"]
+
+    assert (
+        index["systemd-reload-after-persistent-mask"]
+        < index["verify-vikunja-backup-install-unit-masked-after-reload"]
+    )
+    assert (
+        index["systemd-reload-after-persistent-mask"]
+        < index["verify-vikunja-backup-run-unit-masked-after-reload"]
+    )
+    assert (
+        by_id["verify-vikunja-backup-install-unit-masked-after-reload"].action_type.value
+        == "VERIFY_SYSTEMD_UNIT_MASKED"
+    )
+    assert (
+        by_id["verify-vikunja-backup-run-unit-masked-after-reload"].action_type.value
+        == "VERIFY_SYSTEMD_UNIT_MASKED"
+    )
+
+    assert "UNMASK_SYSTEMD_UNIT_RUNTIME" not in {action.action_type.value for action in manifest}
+    assert "UNMASK_SYSTEMD_UNIT_PERSISTENT" not in {action.action_type.value for action in manifest}
 
 
 def test_bootstrap_scripts_are_declarative_only() -> None:
