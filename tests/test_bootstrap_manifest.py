@@ -229,25 +229,31 @@ def test_rollback_quiesces_optional_managed_backup_schedule_before_wrapper_teard
     assert stop_service.action_type.value == "STOP_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT"
     assert stop_service.target == "vikunja-backup.service"
 
-    assert index["verify-privilege-policy-revoked"] < index[
-        "verify-vikunja-backup-timer-managed-or-absent"
-    ]
-    assert index["verify-privilege-policy-revoked"] < index[
-        "verify-vikunja-backup-service-managed-or-absent"
-    ]
-    assert index["verify-vikunja-backup-timer-managed-or-absent"] < index[
-        "disable-vikunja-backup-timer"
-    ]
-    assert index["verify-vikunja-backup-service-managed-or-absent"] < index[
-        "stop-vikunja-backup-service"
-    ]
+    assert (
+        index["verify-privilege-policy-revoked"]
+        < index["verify-vikunja-backup-timer-managed-or-absent"]
+    )
+    assert (
+        index["verify-privilege-policy-revoked"]
+        < index["verify-vikunja-backup-service-managed-or-absent"]
+    )
+    assert (
+        index["verify-vikunja-backup-timer-managed-or-absent"]
+        < index["disable-vikunja-backup-timer"]
+    )
+    assert (
+        index["verify-vikunja-backup-service-managed-or-absent"]
+        < index["stop-vikunja-backup-service"]
+    )
     assert index["disable-vikunja-backup-timer"] < index["stop-vikunja-backup-service"]
-    assert index["stop-vikunja-backup-service"] < index[
-        "verify-vikunja-backup-install-wrapper-managed"
-    ]
-    assert index["stop-vikunja-backup-service"] < index[
-        "verify-vikunja-backup-run-wrapper-managed"
-    ]
+    assert (
+        index["stop-vikunja-backup-service"]
+        < index["verify-vikunja-backup-install-wrapper-managed"]
+    )
+    assert (
+        index["stop-vikunja-backup-service"]
+        < index["verify-vikunja-backup-run-wrapper-managed"]
+    )
 
 
 def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
