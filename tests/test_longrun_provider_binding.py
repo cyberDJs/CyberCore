@@ -699,3 +699,40 @@ def test_evaluation_rejects_cyclic_metadata_fail_closed():
         _ = evaluation.digest
     with pytest.raises(ValueError, match="acyclic canonical JSON"):
         evaluation.event_payload()
+
+
+def test_evaluation_event_payload_snapshots_metadata_and_digest():
+    metadata = {"nested": {"value": "original"}}
+    evaluation = EvaluationResult(
+        evaluator_id="judge",
+        evaluator_version="1",
+        score=1.0,
+        verdict="PASS",
+        reasons=("verified",),
+        evidence_digest="abc",
+        metadata=metadata,
+    )
+
+    payload = evaluation.event_payload()
+    digest = payload["evaluation_digest"]
+    metadata["nested"]["value"] = "mutated"
+
+    assert payload["metadata"] == {"nested": {"value": "original"}}
+    assert payload["evaluation_digest"] == digest
+    assert payload["evaluation_digest"] == EvaluationResult._payload_digest(
+        {key: value for key, value in payload.items() if key != "evaluation_digest"}
+    )
+
+
+def test_evaluation_rejects_oversized_integer_score_as_value_error():
+    evaluation = EvaluationResult(
+        evaluator_id="judge",
+        evaluator_version="1",
+        score=10**400,
+        verdict="PASS",
+        reasons=("verified",),
+        evidence_digest="abc",
+    )
+
+    with pytest.raises(ValueError, match="score must be between 0 and 1"):
+        evaluation.validate(expected_evidence_digest="abc")
