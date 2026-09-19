@@ -273,9 +273,7 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     )
 
     assert "UNMASK_SYSTEMD_UNIT_RUNTIME" not in {action.action_type.value for action in manifest}
-    assert "UNMASK_SYSTEMD_UNIT_PERSISTENT" not in {
-        action.action_type.value for action in manifest
-    }
+    assert "UNMASK_SYSTEMD_UNIT_PERSISTENT" not in {action.action_type.value for action in manifest}
 
 
 def test_bootstrap_scripts_are_declarative_only() -> None:
