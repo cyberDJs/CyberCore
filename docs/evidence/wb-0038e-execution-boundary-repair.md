@@ -1,17 +1,20 @@
 # WB-0038E — Execution Boundary Repair Evidence
 
-Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
+Status: MERGED_CANONICAL / REPOSITORY_VERIFIED / NOT_DEPLOYED
 
 ## Provenance
 
 - Repository: cyberDJs/CyberCore
-- Branch: wb-0038e-execution-boundary-repair
-- Exact base: bb5fecce19aa7bf6ac0edaf0f780ff6364d020f1
-- Authority: repo-only repair approved by the operator
+- Repair branch: wb-0038e-execution-boundary-repair
+- Pull request: #95
+- Exact repair base: bb5fecce19aa7bf6ac0edaf0f780ff6364d020f1
+- Exact approved head: 4dbb0202cf959443f768871fa299e2d370ce680f
+- Merge commit: 3884f6b605a1fb3b0003b142044485cb9ba6ecce
+- Authority: repo-only repair plus explicit exact-head merge approval
 - Remote deployment authority: false
 - VPS mutation authority: false
 - Credential or secret mutation authority: false
-- Merge authority: false
+- Production execution authority: false
 
 ## Confirmed defects addressed
 
@@ -26,10 +29,10 @@ Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
 9. The strict installer sandbox ignored a missing `/opt/backups/vikunja`, causing first-run installation failure on a clean target.
 10. Rollback could continue removing static wrapper units when an exact-match privilege-policy removal was skipped because of local drift.
 
-## Repair invariants
+## Canonical repair invariants
 
-- Protocol version is one exact integer and is shared by client and server.
-- Client payload must parse through the real `ServerRequest` contract.
+- Protocol version is one exact integer shared by client and server.
+- Client payload parses through the real `ServerRequest` contract.
 - Transport timeout exceeds connection plus maximum server-operation budget.
 - Mutating operations map only to preinstalled static wrapper services.
 - Bootstrap file, unit, sshd, and Polkit installs encode explicit root:root ownership.
@@ -39,17 +42,39 @@ Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
 - systemd is reloaded before the narrowed Polkit rule becomes available.
 - Polkit authorizes only `start` for the two exact static wrapper unit names.
 - Rollback verifies effective privilege revocation before removing wrapper units; failure stops rollback and retains the occupied wrapper names.
-- Raw authorization references are replaced by SHA-256 bindings in both local and server receipts.
+- Raw authorization references are replaced by SHA-256 bindings in local and server receipts.
 - Mutating client and server operations fail closed unless an `ExecutionAuthorizationVerifier` explicitly authorizes the exact operation/target/plan/revision/reference tuple.
 - The default verifier denies all mutations; the standalone server entrypoint has no permissive fallback.
-- No deployment, VPS action, credential action, provider action, or production mutation is performed by this branch.
 
-## Required verification before readiness
+## Exact-head verification
 
-- focused execution/server/bootstrap tests;
-- full repository CI on the exact branch head;
-- CodeQL on the exact branch head;
-- fresh independent review on the exact branch head;
-- zero unresolved valid P1/P2 security or correctness findings.
+On repair head `4dbb0202cf959443f768871fa299e2d370ce680f`:
 
-Merge remains separately approval-gated.
+- CI #857: PASS.
+- CodeQL #858: PASS.
+- Fresh exact-head Codex review: completed with no major issues.
+- Unresolved review threads before merge: 0.
+
+Post-merge on canonical `main@3884f6b605a1fb3b0003b142044485cb9ba6ecce`:
+
+- CI #858: PASS.
+- CodeQL #859: PASS.
+
+## Effect boundary
+
+The repository contract is repaired and canonical. This is not proof of deployed runtime mutation readiness.
+
+WB-0038E did not:
+
+- deploy the subsystem;
+- create or rotate SSH credentials;
+- mutate sshd or Polkit on a target;
+- install a production authorization verifier;
+- execute Vikunja backup mutations;
+- grant production or provider authority.
+
+A future deployment still requires a separately reviewed target-bound plan, a real authorization verifier backed by canonical approval state, runtime verification, rollback evidence, and explicit deployment authority.
+
+## Residual follow-up
+
+Open PR #94 is mostly superseded by PR #95, but it contains one narrower response-hardening change not present in canonical main: rejected `RequestValidationError` details are replaced with a fixed remote-facing message. That hardening should be extracted as a separate minimal change rather than merging the stale eight-file PR.
