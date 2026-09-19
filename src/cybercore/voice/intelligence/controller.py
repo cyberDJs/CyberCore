@@ -43,76 +43,11 @@ class _FixedIntentCompiler:
 
 
 _LIVE_DATA_INTENT_KINDS = frozenset({IntentKind.SEARCH, IntentKind.INSPECT, IntentKind.MONITOR})
-_DYNAMIC_TOPIC_TOKENS = frozenset(
-    {
-        "now",
-        "current",
-        "currently",
-        "latest",
-        "today",
-        "tomorrow",
-        "status",
-        "healthy",
-        "health",
-        "online",
-        "running",
-        "deployed",
-        "outage",
-        "incident",
-        "weather",
-        "forecast",
-        "rain",
-        "temperature",
-        "president",
-        "minister",
-        "ceo",
-        "mayor",
-        "price",
-        "stock",
-        "exchange",
-        "score",
-        "version",
-        "release",
-        "election",
-        "poll",
-        "schedule",
-        "result",
-        "winner",
-        "ted",
-        "aktualne",
-        "dnes",
-        "zitra",
-        "stav",
-        "bezi",
-        "bezici",
-        "zdravi",
-        "nasazeno",
-        "vypadek",
-        "pocasi",
-        "predpoved",
-        "dest",
-        "teplota",
-        "prezident",
-        "premier",
-        "starosta",
-        "cena",
-        "kurz",
-        "skore",
-        "verze",
-        "vysledek",
-        "volby",
-        "pruzkum",
-    }
-)
-_STABLE_QUESTION_PATTERNS = (
-    re.compile(r"what (?:is|are) .+"),
-    re.compile(r"what does .+ mean"),
-    re.compile(r"how does .+ work"),
-    re.compile(r"(?:explain|define) .+"),
-    re.compile(r"co (?:je|jsou) .+"),
-    re.compile(r"co znamena .+"),
-    re.compile(r"jak funguje .+"),
-    re.compile(r"(?:vysvetli|definuj) .+"),
+_LEXICAL_DEFINITION_PATTERNS = (
+    re.compile(r"what does (?P<term>[a-z0-9_-]{1,64}) mean"),
+    re.compile(r"define (?P<term>[a-z0-9_-]{1,64})"),
+    re.compile(r"co znamena (?P<term>[a-z0-9_-]{1,64})"),
+    re.compile(r"definuj (?P<term>[a-z0-9_-]{1,64})"),
 )
 
 
@@ -123,18 +58,16 @@ def _normalize_query(text: str) -> str:
     return " ".join(words_only.strip().split())
 
 
-def _is_stable_general_knowledge_question(text: str) -> bool:
+def _is_explicit_lexical_definition(text: str) -> bool:
     normalized = _normalize_query(text)
-    if set(normalized.split()) & _DYNAMIC_TOPIC_TOKENS:
-        return False
-    return any(pattern.fullmatch(normalized) for pattern in _STABLE_QUESTION_PATTERNS)
+    return any(pattern.fullmatch(normalized) for pattern in _LEXICAL_DEFINITION_PATTERNS)
 
 
 def _requires_live_data(utterance: Utterance, intent: VoiceIntent) -> bool:
     if intent.kind in _LIVE_DATA_INTENT_KINDS:
         return True
     if intent.kind is IntentKind.QUESTION:
-        return not _is_stable_general_knowledge_question(utterance.text)
+        return not _is_explicit_lexical_definition(utterance.text)
     return False
 
 
