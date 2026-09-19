@@ -67,6 +67,7 @@ def _signed_auth(
 
 
 AUTH = _signed_auth()
+_REAL_CONSUME_TRUSTED_AUTHORIZATION_NONCE = preview._consume_trusted_authorization_nonce
 
 
 @pytest.fixture(autouse=True)
@@ -185,58 +186,119 @@ def _credential(
     return FirstWriteFtpsCredential(host, user, port, PASSWORD)
 
 
-def test_nonce_socket_allows_root_owned_governed_client_group(
+def test_nonce_service_accepts_trusted_client_group_and_split_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class SocketStat:
-        st_mode = stat.S_IFSOCK | 0o660
-        st_uid = 0
-        st_gid = 4242
+    class FakeStat:
+        def __init__(self, mode: int, uid: int, gid: int) -> None:
+            self.st_mode = mode
+            self.st_uid = uid
+            self.st_gid = gid
 
+    def fake_lstat(path):
+        if str(path) == str(preview.TRUSTED_NONCE_SOCKET_PATH.parent):
+            return FakeStat(stat.S_IFDIR | 0o755, 0, 0)
+        if str(path) == str(preview.TRUSTED_NONCE_SOCKET_PATH):
+            return FakeStat(stat.S_IFSOCK | 0o660, 0, 4242)
+        raise AssertionError(f"unexpected lstat path: {path}")
+
+    class FakeUnixSocket:
+        def __init__(self) -> None:
+            self.responses = [b'{"consumed":', b"true}", b""]
+            self.connected = False
+            self.sent = b""
+            self.closed = False
+
+        def settimeout(self, timeout: float) -> None:
+            assert timeout == 2.0
+
+        def connect(self, path: str) -> None:
+            assert path == str(preview.TRUSTED_NONCE_SOCKET_PATH)
+            self.connected = True
+
+        def getsockopt(self, level: int, optname: int, size: int) -> bytes:
+            assert level == preview.socket.SOL_SOCKET
+            assert optname == preview.socket.SO_PEERCRED
+            assert size == preview.struct.calcsize("3i")
+            return preview.struct.pack("3i", 123, 0, 0)
+
+        def sendall(self, payload: bytes) -> None:
+            self.sent += payload
+
+        def shutdown(self, how: int) -> None:
+            assert how == preview.socket.SHUT_WR
+
+        def recv(self, size: int) -> bytes:
+            chunk = self.responses.pop(0)
+            assert len(chunk) <= size
+            return chunk
+
+        def close(self) -> None:
+            self.closed = True
+
+    fake_socket = FakeUnixSocket()
+    monkeypatch.setattr(preview.os, "lstat", fake_lstat)
     monkeypatch.setattr(preview.os, "geteuid", lambda: 1000)
     monkeypatch.setattr(preview.os, "getegid", lambda: 1000)
     monkeypatch.setattr(preview.os, "getgroups", lambda: [4242])
+    monkeypatch.setattr(preview.socket, "socket", lambda *_args, **_kwargs: fake_socket)
 
-    socket_stat = SocketStat()
-    assert socket_stat.st_mode & stat.S_IWGRP
-    assert not socket_stat.st_mode & stat.S_IWOTH
-    assert socket_stat.st_gid in set(preview.os.getgroups()) | {preview.os.getegid()}
+    _REAL_CONSUME_TRUSTED_AUTHORIZATION_NONCE("unit-test-nonce-0002", AUTH)
+
+    assert fake_socket.connected
+    assert fake_socket.closed
+    assert fake_socket.sent.endswith(b"\n")
+    assert b'"nonce":"unit-test-nonce-0002"' in fake_socket.sent
 
 
-def test_nonce_socket_rejects_world_writable_or_unassigned_group(
+@pytest.mark.parametrize(
+    ("socket_mode", "socket_gid", "error"),
+    [
+        (
+            stat.S_IFSOCK | 0o662,
+            4242,
+            "trusted staging nonce service socket is writable by untrusted users",
+        ),
+        (
+            stat.S_IFSOCK | 0o660,
+            4242,
+            "trusted staging nonce service socket is not accessible to the governed client group",
+        ),
+    ],
+)
+def test_nonce_service_rejects_unsafe_socket_access(
     monkeypatch: pytest.MonkeyPatch,
+    socket_mode: int,
+    socket_gid: int,
+    error: str,
 ) -> None:
+    class FakeStat:
+        def __init__(self, mode: int, uid: int, gid: int) -> None:
+            self.st_mode = mode
+            self.st_uid = uid
+            self.st_gid = gid
+
+    def fake_lstat(path):
+        if str(path) == str(preview.TRUSTED_NONCE_SOCKET_PATH.parent):
+            return FakeStat(stat.S_IFDIR | 0o755, 0, 0)
+        if str(path) == str(preview.TRUSTED_NONCE_SOCKET_PATH):
+            return FakeStat(socket_mode, 0, socket_gid)
+        raise AssertionError(f"unexpected lstat path: {path}")
+
+    monkeypatch.setattr(preview.os, "lstat", fake_lstat)
     monkeypatch.setattr(preview.os, "geteuid", lambda: 1000)
     monkeypatch.setattr(preview.os, "getegid", lambda: 1000)
     monkeypatch.setattr(preview.os, "getgroups", lambda: [2000])
+    monkeypatch.setattr(
+        preview.socket,
+        "socket",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("socket must not be opened for unsafe permissions")
+        ),
+    )
 
-    world_writable_mode = stat.S_IFSOCK | 0o662
-    unassigned_group_mode = stat.S_IFSOCK | 0o660
-
-    assert world_writable_mode & stat.S_IWOTH
-    assert not unassigned_group_mode & stat.S_IWOTH
-    assert 4242 not in set(preview.os.getgroups()) | {preview.os.getegid()}
-
-
-def test_nonce_service_response_stream_may_arrive_in_multiple_chunks() -> None:
-    chunks = [b'{"consumed":', b"true}", b""]
-
-    class SplitResponseSocket:
-        def recv(self, _size: int) -> bytes:
-            return chunks.pop(0)
-
-    client = SplitResponseSocket()
-    parts: list[bytes] = []
-    total = 0
-    while True:
-        chunk = client.recv(min(1024, 4097 - total))
-        if not chunk:
-            break
-        parts.append(chunk)
-        total += len(chunk)
-        assert total <= 4096
-
-    assert b"".join(parts) == b'{"consumed":true}'
+    with pytest.raises(FirstWriteRuntimeError, match=error):
+        _REAL_CONSUME_TRUSTED_AUTHORIZATION_NONCE("unit-test-nonce-0003", AUTH)
 
 
 def test_capturing_ftps_records_rfc1123_stou_response(monkeypatch) -> None:
