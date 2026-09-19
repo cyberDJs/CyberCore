@@ -41,7 +41,7 @@ class ExecutionReceipt:
     target_id: str
     plan_id: str
     plan_revision: str
-    authorization_reference: str
+    authorization_reference_sha256: str
     transport_argv: tuple[str, ...]
     started_at: str
     completed_at: str

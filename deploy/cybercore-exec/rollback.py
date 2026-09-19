@@ -7,6 +7,8 @@ import json
 
 class RollbackActionType(str, Enum):
     REMOVE_MANAGED_FILE_IF_EXACT = "REMOVE_MANAGED_FILE_IF_EXACT"
+    VERIFY_PRIVILEGE_POLICY_REVOKED = "VERIFY_PRIVILEGE_POLICY_REVOKED"
+    RELOAD_SYSTEMD = "RELOAD_SYSTEMD"
     VALIDATE_SSHD_CONFIG = "VALIDATE_SSHD_CONFIG"
     RELOAD_SSHD = "RELOAD_SSHD"
 
@@ -22,6 +24,17 @@ class RollbackAction:
 def build_rollback_manifest() -> tuple[RollbackAction, ...]:
     actions = [
         RollbackAction(
+            "remove-privilege-policy",
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
+            "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
+            "deploy/cybercore-exec/cybercore-exec.policy",
+        ),
+        RollbackAction(
+            "verify-privilege-policy-revoked",
+            RollbackActionType.VERIFY_PRIVILEGE_POLICY_REVOKED,
+            "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
+        ),
+        RollbackAction(
             "remove-sshd-config",
             RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
             "/etc/ssh/sshd_config.d/60-cybercore-exec.conf",
@@ -30,10 +43,29 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
         RollbackAction("sshd-validate", RollbackActionType.VALIDATE_SSHD_CONFIG),
         RollbackAction("sshd-reload", RollbackActionType.RELOAD_SSHD),
         RollbackAction(
-            "remove-privilege-policy",
+            "remove-vikunja-backup-install-unit",
             RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
-            "/etc/sudoers.d/cybercore-exec",
-            "deploy/cybercore-exec/cybercore-exec.policy",
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service",
+            "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
+        ),
+        RollbackAction(
+            "remove-vikunja-backup-run-unit",
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service",
+            "deploy/cybercore-exec/cybercore-vikunja-backup-run.service",
+        ),
+        RollbackAction("systemd-reload", RollbackActionType.RELOAD_SYSTEMD),
+        RollbackAction(
+            "remove-vikunja-backup-install",
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
+            "/usr/local/libexec/cybercore-exec/vikunja-backup-install",
+            "deploy/cybercore-exec/vikunja-backup-install",
+        ),
+        RollbackAction(
+            "remove-authorization",
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
+            "/usr/local/libexec/cybercore-exec/authorization.py",
+            "src/cybercore/execution/authorization.py",
         ),
         RollbackAction(
             "remove-dispatcher",
@@ -60,7 +92,7 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
 def main() -> int:
     payload = {
         "status": "PROPOSED",
-        "operation_id": "WB0038B-BOOTSTRAP-ROLLBACK",
+        "operation_id": "WB0038E-BOOTSTRAP-ROLLBACK",
         "actions": [asdict(action) for action in build_rollback_manifest()],
         "service_user_removed": False,
         "execution_required": True,

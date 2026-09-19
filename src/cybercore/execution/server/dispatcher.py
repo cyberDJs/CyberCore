@@ -9,7 +9,19 @@ from pathlib import Path
 from typing import Any, Callable
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    server_dir = Path(__file__).resolve().parent
+    sys.path.insert(0, str(server_dir))
+    try:
+        from authorization import (  # type: ignore[import-not-found]
+            DenyAllExecutionAuthorizationVerifier,
+            ExecutionAuthorizationVerifier,
+        )
+    except ImportError:
+        sys.path.insert(0, str(server_dir.parents[2]))
+        from cybercore.execution.authorization import (
+            DenyAllExecutionAuthorizationVerifier,
+            ExecutionAuthorizationVerifier,
+        )
     from operations import resolve_operation  # type: ignore[import-not-found]
     from protocol import (  # type: ignore[import-not-found]
         MAX_REQUEST_BYTES,
@@ -18,6 +30,10 @@ if __package__ in {None, ""}:
         ServerRequest,
     )
 else:
+    from cybercore.execution.authorization import (
+        DenyAllExecutionAuthorizationVerifier,
+        ExecutionAuthorizationVerifier,
+    )
     from cybercore.execution.server.operations import resolve_operation
     from cybercore.execution.server.protocol import (
         MAX_REQUEST_BYTES,
@@ -49,9 +65,23 @@ def _timeout_bytes(value: str | bytes | None) -> bytes:
 def execute_request(
     request: ServerRequest,
     *,
+    authorization_verifier: ExecutionAuthorizationVerifier | None = None,
     runner: RunCallable = subprocess.run,
 ) -> ServerReceipt:
     spec = resolve_operation(request)
+    if spec.mutating:
+        verifier = authorization_verifier or DenyAllExecutionAuthorizationVerifier()
+        authorization = verifier.verify(
+            operation_id=request.operation_id,
+            operation=request.operation,
+            target_id=request.target_id,
+            plan_id=request.plan_id,
+            plan_revision=request.plan_revision,
+            authorization_reference=request.authorization_reference,
+        )
+        if not authorization.authorized:
+            raise RequestValidationError("mutating request lacks verified authorization")
+
     started_at = _utc_now()
 
     try:
@@ -78,7 +108,7 @@ def execute_request(
         target_id=request.target_id,
         plan_id=request.plan_id,
         plan_revision=request.plan_revision,
-        authorization_reference=request.authorization_reference,
+        authorization_reference_sha256=_digest(request.authorization_reference.encode("utf-8")),
         started_at=started_at,
         completed_at=completed_at,
         exit_code=exit_code,

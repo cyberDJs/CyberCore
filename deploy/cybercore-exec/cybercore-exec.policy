@@ -1,5 +1,7 @@
-// Managed by CyberCore WB-0038D.
-// Permit only the fixed systemd unit transitions reachable through cybercore-exec.
+// Managed by CyberCore WB-0038E.
+// Only preinstalled, root-owned static wrapper units are startable by cybercore-exec.
+// The bootstrap manifest reloads systemd before this policy is installed so these
+// unit names cannot be claimed with StartTransientUnit.
 polkit.addRule(function(action, subject) {
     if (subject.user !== "cybercore-exec") {
         return polkit.Result.NOT_HANDLED;
@@ -12,7 +14,10 @@ polkit.addRule(function(action, subject) {
     if (verb !== "start") {
         return polkit.Result.NOT_HANDLED;
     }
-    if (unit === "vikunja-backup.service" || unit === "cybercore-vikunja-backup-install.service") {
+    if (
+        unit === "cybercore-vikunja-backup-install.service" ||
+        unit === "cybercore-vikunja-backup-run.service"
+    ) {
         return polkit.Result.YES;
     }
     return polkit.Result.NOT_HANDLED;

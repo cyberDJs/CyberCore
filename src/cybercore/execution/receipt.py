@@ -32,7 +32,7 @@ def build_receipt(
         target_id=action.target_id,
         plan_id=action.plan_id,
         plan_revision=action.plan_revision,
-        authorization_reference=action.authorization_reference,
+        authorization_reference_sha256=digest_bytes(action.authorization_reference.encode("utf-8")),
         transport_argv=transport_argv,
         started_at=started_at,
         completed_at=completed_at,

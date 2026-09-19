@@ -4,9 +4,14 @@ import json
 import subprocess
 from typing import Callable
 
+from cybercore.execution.authorization import (
+    DenyAllExecutionAuthorizationVerifier,
+    ExecutionAuthorizationVerifier,
+)
 from cybercore.execution.models import ExecutionReceipt, ExecutionTarget, GovernedAction
 from cybercore.execution.policy import evaluate_action
 from cybercore.execution.receipt import build_receipt, utc_now
+from cybercore.execution.server.protocol import PROTOCOL_VERSION
 
 
 class ExecutionBlockedError(RuntimeError):
@@ -14,6 +19,7 @@ class ExecutionBlockedError(RuntimeError):
 
 
 RunCallable = Callable[..., subprocess.CompletedProcess[bytes]]
+TRANSPORT_TIMEOUT_SECONDS = 180
 
 
 def build_transport_argv(target: ExecutionTarget) -> tuple[str, ...]:
@@ -35,7 +41,7 @@ def build_transport_argv(target: ExecutionTarget) -> tuple[str, ...]:
 
 def _request_bytes(action: GovernedAction) -> bytes:
     payload = {
-        "version": 1,
+        "version": PROTOCOL_VERSION,
         "operation_id": action.operation_id,
         "operation": action.operation,
         "target_id": action.target_id,
@@ -59,11 +65,25 @@ def execute_action(
     action: GovernedAction,
     target: ExecutionTarget,
     *,
+    authorization_verifier: ExecutionAuthorizationVerifier | None = None,
     run: RunCallable = subprocess.run,
 ) -> ExecutionReceipt:
     decision = evaluate_action(action, target)
     if not decision.allowed:
         raise ExecutionBlockedError(decision.reason)
+
+    if decision.mutating:
+        verifier = authorization_verifier or DenyAllExecutionAuthorizationVerifier()
+        authorization = verifier.verify(
+            operation_id=action.operation_id,
+            operation=action.operation,
+            target_id=action.target_id,
+            plan_id=action.plan_id,
+            plan_revision=action.plan_revision,
+            authorization_reference=action.authorization_reference,
+        )
+        if not authorization.authorized:
+            raise ExecutionBlockedError(authorization.reason)
 
     argv = build_transport_argv(target)
     started_at = utc_now()
@@ -75,7 +95,7 @@ def execute_action(
             stderr=subprocess.PIPE,
             check=False,
             shell=False,
-            timeout=30,
+            timeout=TRANSPORT_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired as exc:
         completed_at = utc_now()
