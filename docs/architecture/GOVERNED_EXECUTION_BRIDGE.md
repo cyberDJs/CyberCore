@@ -133,11 +133,13 @@ not an ignored exception.
 Rollback is also fail-closed. It first removes the managed privilege rule and
 must verify effective revocation before any execution unit is quiesced or any
 static wrapper file is removed. After revocation is proven, rollback stops and
-verifies inactive-or-absent state for both CyberCore wrapper units and for
-`vikunja-backup.service`, because the run wrapper may already have handed work
-off to that downstream root oneshot. If the policy is locally drifted, a stop
-fails, or inactivity cannot be proven, rollback stops and keeps the static unit
-files in place. Only after quiescence is verified may wrapper files be removed
+verifies inactive-or-absent state for both CyberCore wrapper units, then stops
+and verifies `vikunja-backup.timer` before stopping and verifying
+`vikunja-backup.service`. The timer gate prevents a previously enabled timer
+from reactivating the downstream root oneshot after its inactivity check. The
+service gate covers work the run wrapper may already have handed off. If the
+policy is locally drifted, a stop fails, or inactivity cannot be proven,
+rollback stops and keeps the static unit files in place. Only after quiescence is verified may wrapper files be removed
 and systemd reloaded. This prevents already-authorized root work from continuing
 past rollback while its execution boundary disappears.
 

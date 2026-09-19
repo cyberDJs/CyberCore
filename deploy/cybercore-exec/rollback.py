@@ -57,6 +57,16 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "cybercore-vikunja-backup-run.service",
         ),
         RollbackAction(
+            "stop-vikunja-backup-timer",
+            RollbackActionType.STOP_SYSTEMD_UNIT_IF_PRESENT,
+            "vikunja-backup.timer",
+        ),
+        RollbackAction(
+            "verify-vikunja-backup-timer-inactive",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT,
+            "vikunja-backup.timer",
+        ),
+        RollbackAction(
             "stop-vikunja-backup-service",
             RollbackActionType.STOP_SYSTEMD_UNIT_IF_PRESENT,
             "vikunja-backup.service",

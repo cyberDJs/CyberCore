@@ -186,6 +186,11 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
             "cybercore-vikunja-backup-run.service",
         ),
         (
+            "stop-vikunja-backup-timer",
+            "verify-vikunja-backup-timer-inactive",
+            "vikunja-backup.timer",
+        ),
+        (
             "stop-vikunja-backup-service",
             "verify-vikunja-backup-service-inactive",
             "vikunja-backup.service",
@@ -201,6 +206,9 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
         assert index[verify_id] < index["remove-vikunja-backup-install-unit"]
         assert index[verify_id] < index["remove-vikunja-backup-run-unit"]
 
+    assert index["verify-vikunja-backup-timer-inactive"] < index["stop-vikunja-backup-service"]
+    assert index["verify-vikunja-backup-service-inactive"] < index["remove-vikunja-backup-install-unit"]
+    assert index["verify-vikunja-backup-service-inactive"] < index["remove-vikunja-backup-run-unit"]
     assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
     assert index["remove-vikunja-backup-install-unit"] < index["systemd-reload"]
     assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload"]
