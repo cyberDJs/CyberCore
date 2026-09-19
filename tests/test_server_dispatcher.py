@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 from typing import Any
 
@@ -36,6 +37,37 @@ def _request(operation: str = "vikunja.health.verify") -> ServerRequest:
     )
 
 
+def _inventory_payload() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "host": {
+            "hostname": "tasks",
+            "cpu_logical": 2,
+            "load_1m": 0.1,
+            "load_5m": 0.2,
+            "load_15m": 0.3,
+        },
+        "memory": {
+            "total_bytes": 4_000_000_000,
+            "available_bytes": 2_000_000_000,
+            "swap_total_bytes": 2_000_000_000,
+            "swap_free_bytes": 2_000_000_000,
+        },
+        "root_filesystem": {
+            "total_bytes": 80_000_000_000,
+            "used_bytes": 10_000_000_000,
+            "free_bytes": 70_000_000_000,
+        },
+        "docker": {
+            "cli_present": True,
+            "access_status": "denied_or_unreachable",
+            "server_version": None,
+            "containers": [],
+            "storage": [],
+        },
+    }
+
+
 def test_dispatcher_uses_fixed_argv_and_shell_false() -> None:
     calls: list[tuple[list[str], dict[str, Any]]] = []
 
@@ -49,6 +81,34 @@ def test_dispatcher_uses_fixed_argv_and_shell_false() -> None:
     assert calls[0][0][0] == "/usr/bin/curl"
     assert calls[0][1]["shell"] is False
     assert calls[0][1]["capture_output"] is True
+
+
+def test_inventory_promotes_only_validated_structured_result() -> None:
+    def runner(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        assert argv == [
+            "/usr/bin/python3",
+            "/usr/local/libexec/cybercore-exec/inventory.py",
+        ]
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=json.dumps(_inventory_payload()).encode(),
+            stderr=b"",
+        )
+
+    receipt = execute_request(_request("system.inventory"), runner=runner)
+    assert receipt.status == "EXECUTED"
+    assert receipt.mutation_possible is False
+    assert receipt.result is not None
+    assert receipt.result["schema_version"] == 1
+
+
+def test_inventory_rejects_unvalidated_output() -> None:
+    def runner(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(argv, 0, stdout=b'{"secret":"no"}', stderr=b"")
+
+    with pytest.raises(RequestValidationError, match="inventory output failed validation"):
+        execute_request(_request("system.inventory"), runner=runner)
 
 
 def test_receipt_hashes_authorization_reference_instead_of_emitting_it() -> None:

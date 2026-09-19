@@ -11,6 +11,7 @@ from cybercore.execution.authorization import (
 from cybercore.execution.models import ExecutionReceipt, ExecutionTarget, GovernedAction
 from cybercore.execution.policy import evaluate_action
 from cybercore.execution.receipt import build_receipt, utc_now
+from cybercore.execution.server.inventory import validate_inventory_payload
 from cybercore.execution.server.protocol import PROTOCOL_VERSION
 
 
@@ -59,6 +60,32 @@ def _timeout_bytes(value: str | bytes | None) -> bytes:
     if isinstance(value, str):
         return value.encode()
     return b""
+
+
+def _inventory_result_from_server_response(
+    action: GovernedAction,
+    stdout: bytes,
+) -> dict[str, object]:
+    try:
+        payload = json.loads(stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("server response is not valid inventory JSON") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("server response is not an object")
+    expected = {
+        "operation_id": action.operation_id,
+        "operation": action.operation,
+        "target_id": action.target_id,
+        "plan_id": action.plan_id,
+        "plan_revision": action.plan_revision,
+        "status": "EXECUTED",
+        "mutation_possible": False,
+        "secret_values_recorded": False,
+    }
+    for key, expected_value in expected.items():
+        if payload.get(key) != expected_value:
+            raise ValueError(f"server response binding mismatch: {key}")
+    return validate_inventory_payload(payload.get("result"))
 
 
 def execute_action(
@@ -114,13 +141,23 @@ def execute_action(
 
     stdout = completed.stdout if isinstance(completed.stdout, bytes) else b""
     stderr = completed.stderr if isinstance(completed.stderr, bytes) else b""
+    exit_code = int(completed.returncode)
+    result = None
+    if action.operation == "system.inventory" and exit_code == 0:
+        try:
+            result = _inventory_result_from_server_response(action, stdout)
+        except ValueError:
+            exit_code = 65
+            stderr += b"\ncybercore-exec structured inventory response failed validation"
+
     return build_receipt(
         action,
         transport_argv=argv,
         started_at=started_at,
         completed_at=completed_at,
-        exit_code=completed.returncode,
+        exit_code=exit_code,
         stdout=stdout,
         stderr=stderr,
         mutation_possible=decision.mutating,
+        result=result,
     )

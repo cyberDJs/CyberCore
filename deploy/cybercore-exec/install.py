@@ -56,6 +56,15 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "root",
         ),
         BootstrapAction(
+            "server-inventory",
+            BootstrapActionType.INSTALL_SERVER_FILE,
+            "src/cybercore/execution/server/inventory.py",
+            "/usr/local/libexec/cybercore-exec/inventory.py",
+            "0644",
+            "root",
+            "root",
+        ),
+        BootstrapAction(
             "server-operations",
             BootstrapActionType.INSTALL_SERVER_FILE,
             "src/cybercore/execution/server/operations.py",

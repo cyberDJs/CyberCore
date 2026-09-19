@@ -33,6 +33,7 @@ def test_dispatcher_loads_as_standalone_source_artifact() -> None:
 
 def test_operation_surface_is_exact() -> None:
     assert SUPPORTED_SERVER_OPERATIONS == {
+        "system.inventory",
         "vikunja.backup.install",
         "vikunja.backup.run",
         "vikunja.backup.status",
@@ -108,6 +109,9 @@ def test_bootstrap_installs_every_fixed_helper_source_with_private_mode() -> Non
     assert server_files["/usr/local/libexec/cybercore-exec/authorization.py"].source == (
         "src/cybercore/execution/authorization.py"
     )
+    assert server_files["/usr/local/libexec/cybercore-exec/inventory.py"].source == (
+        "src/cybercore/execution/server/inventory.py"
+    )
     helper = server_files["/usr/local/libexec/cybercore-exec/vikunja-backup-install"]
     assert helper.source == "deploy/cybercore-exec/vikunja-backup-install"
     assert helper.mode == "0700"
@@ -130,10 +134,11 @@ def test_privileged_config_installs_are_explicitly_root_owned() -> None:
     assert all(action.owner == "root" and action.group == "root" for action in privileged)
 
 
-def test_operation_map_uses_only_static_wrapper_units() -> None:
+def test_operation_map_uses_only_static_wrapper_units_and_fixed_inventory_helper() -> None:
     operations = (ROOT / "src/cybercore/execution/server/operations.py").read_text()
     assert "systemd-run" not in operations
     assert "/usr/bin/sudo" not in operations
+    assert '"/usr/local/libexec/cybercore-exec/inventory.py"' in operations
     assert '"cybercore-vikunja-backup-install.service"' in operations
     assert '"cybercore-vikunja-backup-run.service"' in operations
 
@@ -155,7 +160,7 @@ def test_backup_installer_is_fixed_shell_free_and_private() -> None:
     assert "sh -c" not in text
 
 
-def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
+def test_rollback_revokes_policy_and_managed_files_symmetrically() -> None:
     module = load_deploy_module("rollback")
     manifest = module.build_rollback_manifest()
     targets = {action.target for action in manifest if action.target}
@@ -169,6 +174,7 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert "/etc/systemd/system/cybercore-vikunja-backup-run.service" in targets
     assert "/usr/local/libexec/cybercore-exec/vikunja-backup-install" in targets
     assert "/usr/local/libexec/cybercore-exec/authorization.py" in targets
+    assert "/usr/local/libexec/cybercore-exec/inventory.py" in targets
 
     index = {action.action_id: position for position, action in enumerate(manifest)}
     assert index["remove-privilege-policy"] < index["verify-privilege-policy-revoked"]
