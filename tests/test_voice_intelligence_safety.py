@@ -8,7 +8,18 @@ def utterance(text: str) -> Utterance:
     return Utterance(id="u1", session_id="s1", actor_id="johnny", text=text)
 
 
-@pytest.mark.parametrize("text", ["stop", "Please cancel this", "zruš to", "prosím abort"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "stop",
+        "Please cancel this",
+        "zruš to",
+        "prosím abort",
+        "can you stop now",
+        "could you please cancel this",
+        "můžeš prosím zrušit to",
+    ],
+)
 def test_cancel_is_deterministic(text: str) -> None:
     result = SafetyIntentGuard().compile(utterance(text), VoiceContext())
     assert result is not None and result.kind is IntentKind.CANCEL
