@@ -13,6 +13,7 @@ class BootstrapActionType(str, Enum):
     INSTALL_SSHD_CONFIG = "INSTALL_SSHD_CONFIG"
     INSTALL_PRIVILEGE_POLICY = "INSTALL_PRIVILEGE_POLICY"
     ENSURE_SERVICE_IDENTITY = "ENSURE_SERVICE_IDENTITY"
+    RELOAD_SYSTEMD = "RELOAD_SYSTEMD"
     VALIDATE_PRIVILEGE_POLICY = "VALIDATE_PRIVILEGE_POLICY"
     VALIDATE_SSHD_CONFIG = "VALIDATE_SSHD_CONFIG"
     RELOAD_SSHD = "RELOAD_SSHD"
@@ -58,6 +59,13 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "0755",
         ),
         BootstrapAction(
+            "backup-installer-unit",
+            BootstrapActionType.INSTALL_SERVER_FILE,
+            "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service",
+            "0644",
+        ),
+        BootstrapAction(
             "sshd-config",
             BootstrapActionType.INSTALL_SSHD_CONFIG,
             "deploy/cybercore-exec/cybercore-exec.subsystem.conf",
@@ -72,6 +80,7 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "0644",
         ),
         BootstrapAction("service-identity", BootstrapActionType.ENSURE_SERVICE_IDENTITY),
+        BootstrapAction("systemd-reload", BootstrapActionType.RELOAD_SYSTEMD),
         BootstrapAction("policy-validate", BootstrapActionType.VALIDATE_PRIVILEGE_POLICY),
         BootstrapAction("sshd-validate", BootstrapActionType.VALIDATE_SSHD_CONFIG),
         BootstrapAction("sshd-reload", BootstrapActionType.RELOAD_SSHD),

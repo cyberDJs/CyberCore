@@ -4,9 +4,17 @@ from dataclasses import dataclass
 from typing import Mapping
 
 if __package__ in {None, ""}:
-    from protocol import RequestValidationError, ServerRequest  # type: ignore[import-not-found]
+    from protocol import (  # type: ignore[import-not-found]
+        MAX_SERVER_OPERATION_TIMEOUT_SECONDS,
+        RequestValidationError,
+        ServerRequest,
+    )
 else:
-    from cybercore.execution.server.protocol import RequestValidationError, ServerRequest
+    from cybercore.execution.server.protocol import (
+        MAX_SERVER_OPERATION_TIMEOUT_SECONDS,
+        RequestValidationError,
+        ServerRequest,
+    )
 
 
 @dataclass(frozen=True)
@@ -21,11 +29,9 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
     "vikunja.backup.install": OperationSpec(
         name="vikunja.backup.install",
         argv=(
-            "/usr/bin/systemd-run",
-            "--unit=cybercore-vikunja-backup-install",
-            "--wait",
-            "--collect",
-            "/usr/local/libexec/cybercore-exec/vikunja-backup-install",
+            "/usr/bin/systemctl",
+            "start",
+            "cybercore-vikunja-backup-install.service",
         ),
         mutating=True,
         timeout_seconds=120,
@@ -61,6 +67,12 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
         timeout_seconds=15,
     ),
 }
+
+if any(
+    spec.timeout_seconds > MAX_SERVER_OPERATION_TIMEOUT_SECONDS for spec in _OPERATION_SPECS.values()
+):
+    raise RuntimeError("server operation timeout exceeds the protocol ceiling")
+
 
 SUPPORTED_SERVER_OPERATIONS = frozenset(_OPERATION_SPECS)
 

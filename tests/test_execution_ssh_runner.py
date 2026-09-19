@@ -5,7 +5,11 @@ import pytest
 
 from cybercore.execution.models import ExecutionStatus, GovernedAction
 from cybercore.execution.policy import VIKUNJA_TARGET
+from cybercore.execution.server.dispatcher import _load_request
+from cybercore.execution.server.protocol import MAX_SERVER_OPERATION_TIMEOUT_SECONDS
 from cybercore.execution.ssh_runner import (
+    TRANSPORT_TIMEOUT_SECONDS,
+    _request_bytes,
     ExecutionBlockedError,
     build_transport_argv,
     execute_action,
@@ -43,10 +47,20 @@ def test_execute_uses_shell_false_and_structured_stdin() -> None:
     receipt = execute_action(_action(), VIKUNJA_TARGET, run=fake_run)
     assert observed["shell"] is False
     payload = json.loads(observed["input"])  # type: ignore[arg-type]
+    assert payload["version"] == 1
     assert payload["operation"] == "vikunja.health.verify"
     assert payload["target_id"] == "tasks.cyberdjs.org"
+    assert observed["timeout"] == TRANSPORT_TIMEOUT_SECONDS
+    assert TRANSPORT_TIMEOUT_SECONDS > MAX_SERVER_OPERATION_TIMEOUT_SECONDS
     assert receipt.exit_code == 0
     assert receipt.mutation_possible is False
+
+
+def test_client_request_is_accepted_by_server_protocol() -> None:
+    request = _load_request(_request_bytes(_action()))
+    assert request.version == 1
+    assert request.operation == "vikunja.health.verify"
+    assert request.target_id == "tasks.cyberdjs.org"
 
 
 def test_mutating_operation_marks_mutation_possible() -> None:
@@ -61,7 +75,7 @@ def test_timeout_returns_failed_receipt_and_preserves_mutation_uncertainty() -> 
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         raise subprocess.TimeoutExpired(
             cmd=argv,
-            timeout=30,
+            timeout=TRANSPORT_TIMEOUT_SECONDS,
             output=b"partial-output",
             stderr=b"partial-error",
         )
@@ -78,7 +92,7 @@ def test_timeout_returns_failed_receipt_and_preserves_mutation_uncertainty() -> 
 
 def test_timeout_for_read_only_operation_is_not_marked_mutating() -> None:
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
-        raise subprocess.TimeoutExpired(cmd=argv, timeout=30)
+        raise subprocess.TimeoutExpired(cmd=argv, timeout=TRANSPORT_TIMEOUT_SECONDS)
 
     receipt = execute_action(_action("vikunja.health.verify"), VIKUNJA_TARGET, run=fake_run)
 

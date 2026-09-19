@@ -90,6 +90,27 @@ V1 deliberately does not support:
 - arbitrary sudo;
 - arbitrary filesystem paths.
 
+## Server boundary hardening
+
+The paired client/server request contract uses protocol version `1`. The client emits
+that version explicitly and the server requires the exact version before accepting a
+request.
+
+Server operations have a 120-second execution ceiling. The SSH transport waits 150
+seconds, leaving a bounded transport margin so the server-side timeout can complete
+before the client gives up. A transport timeout still records mutation uncertainty for
+mutating operations.
+
+The privileged backup installer is reachable only through the root-owned static
+`cybercore-vikunja-backup-install.service` unit with a fixed `ExecStart`.
+`systemd-run` and transient-unit execution are not part of the governed operation
+map. Bootstrap installs the static unit and requests a systemd daemon reload. Rollback
+revokes the Polkit rule, removes the static unit and fixed helper when their contents
+match the repository sources, and requests another daemon reload.
+
+These artifacts define an installation and rollback contract only. They do not grant
+VPS deployment, credential, production, or merge authority.
+
 ## Execution receipt
 
 The receipt records only non-secret execution metadata:

@@ -13,6 +13,7 @@ from cybercore.execution.server.protocol import RequestValidationError, ServerRe
 def _request(operation: str = "vikunja.health.verify") -> ServerRequest:
     return ServerRequest.from_mapping(
         {
+            "version": 1,
             "operation_id": "op-1",
             "operation": operation,
             "target_id": "tasks.cyberdjs.org",

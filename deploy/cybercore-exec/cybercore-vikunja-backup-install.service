@@ -1,0 +1,9 @@
+[Unit]
+Description=CyberCore fixed Vikunja backup installer
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/libexec/cybercore-exec/vikunja-backup-install

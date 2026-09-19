@@ -7,6 +7,7 @@ import json
 
 class RollbackActionType(str, Enum):
     REMOVE_MANAGED_FILE_IF_EXACT = "REMOVE_MANAGED_FILE_IF_EXACT"
+    RELOAD_SYSTEMD = "RELOAD_SYSTEMD"
     VALIDATE_SSHD_CONFIG = "VALIDATE_SSHD_CONFIG"
     RELOAD_SSHD = "RELOAD_SSHD"
 
@@ -32,8 +33,21 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
         RollbackAction(
             "remove-privilege-policy",
             RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
-            "/etc/sudoers.d/cybercore-exec",
+            "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
             "deploy/cybercore-exec/cybercore-exec.policy",
+        ),
+        RollbackAction(
+            "remove-backup-installer-unit",
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service",
+            "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
+        ),
+        RollbackAction("systemd-reload", RollbackActionType.RELOAD_SYSTEMD),
+        RollbackAction(
+            "remove-backup-installer",
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
+            "/usr/local/libexec/cybercore-exec/vikunja-backup-install",
+            "deploy/cybercore-exec/vikunja-backup-install",
         ),
         RollbackAction(
             "remove-dispatcher",

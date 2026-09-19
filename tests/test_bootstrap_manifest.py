@@ -11,9 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DEPLOY = ROOT / "deploy/cybercore-exec"
 
 
-def load_install_module():
-    path = DEPLOY / "install.py"
-    spec = importlib.util.spec_from_file_location("cybercore_exec_install", path)
+def load_deploy_module(name: str):
+    path = DEPLOY / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(f"cybercore_exec_{name}", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -54,7 +54,7 @@ def test_privilege_policy_is_polkit_and_exact() -> None:
 
 
 def test_bootstrap_installs_every_fixed_helper_source() -> None:
-    module = load_install_module()
+    module = load_deploy_module("install")
     manifest = module.build_install_manifest()
     server_files = {
         action.destination: action.source
@@ -68,12 +68,22 @@ def test_bootstrap_installs_every_fixed_helper_source() -> None:
         assert (ROOT / source).is_file(), source
 
 
-def test_operation_map_references_only_deployed_helper() -> None:
+def test_operation_map_uses_only_fixed_systemd_units() -> None:
     operations = (ROOT / "src/cybercore/execution/server/operations.py").read_text()
-    assert "/usr/local/libexec/cybercore-exec/vikunja-backup-install" in operations
     assert "/usr/bin/sudo" not in operations
-    assert "systemd-run" in operations
-    assert "cybercore-vikunja-backup-install" in operations
+    assert "systemd-run" not in operations
+    assert "/usr/bin/systemctl" in operations
+    assert "cybercore-vikunja-backup-install.service" in operations
+    assert "/usr/local/libexec/cybercore-exec/vikunja-backup-install" not in operations
+
+
+def test_backup_installer_unit_has_fixed_root_execstart() -> None:
+    text = (DEPLOY / "cybercore-vikunja-backup-install.service").read_text()
+    assert "Type=oneshot" in text
+    assert "User=root" in text
+    assert "Group=root" in text
+    assert "ExecStart=/usr/local/libexec/cybercore-exec/vikunja-backup-install" in text
+    assert "systemd-run" not in text
 
 
 def test_backup_installer_is_fixed_and_shell_free() -> None:
@@ -87,6 +97,35 @@ def test_backup_installer_is_fixed_and_shell_free() -> None:
     assert "shell=True" not in text
     assert "bash -c" not in text
     assert "sh -c" not in text
+
+
+def test_bootstrap_manifest_installs_static_unit_and_reloads_systemd() -> None:
+    module = load_deploy_module("install")
+    manifest = module.build_install_manifest()
+    actions = {action.action_id: action for action in manifest}
+
+    unit = actions["backup-installer-unit"]
+    assert unit.destination == "/etc/systemd/system/cybercore-vikunja-backup-install.service"
+    assert unit.source == "deploy/cybercore-exec/cybercore-vikunja-backup-install.service"
+    assert unit.mode == "0644"
+    assert actions["systemd-reload"].action_type.value == "RELOAD_SYSTEMD"
+
+
+def test_rollback_revokes_policy_helper_and_static_unit() -> None:
+    module = load_deploy_module("rollback")
+    manifest = module.build_rollback_manifest()
+    actions = {action.action_id: action for action in manifest}
+
+    assert actions["remove-privilege-policy"].target == (
+        "/etc/polkit-1/rules.d/60-cybercore-exec.rules"
+    )
+    assert actions["remove-backup-installer"].target == (
+        "/usr/local/libexec/cybercore-exec/vikunja-backup-install"
+    )
+    assert actions["remove-backup-installer-unit"].target == (
+        "/etc/systemd/system/cybercore-vikunja-backup-install.service"
+    )
+    assert actions["systemd-reload"].action_type.value == "RELOAD_SYSTEMD"
 
 
 def test_bootstrap_scripts_are_declarative_only() -> None:
