@@ -7,6 +7,7 @@ from cybercore.execution.server.protocol import RequestValidationError, ServerRe
 
 def _request(**overrides: object) -> dict[str, object]:
     value: dict[str, object] = {
+        "version": 1,
         "operation_id": "op-1",
         "operation": "vikunja.health.verify",
         "target_id": "tasks.cyberdjs.org",
@@ -21,8 +22,22 @@ def _request(**overrides: object) -> dict[str, object]:
 
 def test_protocol_accepts_exact_bound_request() -> None:
     request = ServerRequest.from_mapping(_request())
+    assert request.version == 1
     assert request.operation == "vikunja.health.verify"
     assert request.arguments == {}
+
+
+def test_protocol_rejects_missing_version() -> None:
+    value = _request()
+    del value["version"]
+    with pytest.raises(RequestValidationError):
+        ServerRequest.from_mapping(value)
+
+
+@pytest.mark.parametrize("version", [0, 2, True, "1"])
+def test_protocol_rejects_unsupported_or_non_integer_version(version: object) -> None:
+    with pytest.raises(RequestValidationError):
+        ServerRequest.from_mapping(_request(version=version))
 
 
 def test_protocol_rejects_extra_field() -> None:
