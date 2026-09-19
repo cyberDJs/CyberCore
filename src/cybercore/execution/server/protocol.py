@@ -5,9 +5,11 @@ from typing import Any, Mapping
 
 
 MAX_REQUEST_BYTES = 16_384
+PROTOCOL_VERSION = 1
 _TARGET_ID = "tasks.cyberdjs.org"
 _REQUIRED_KEYS = frozenset(
     {
+        "version",
         "operation_id",
         "operation",
         "target_id",
@@ -25,6 +27,7 @@ class RequestValidationError(ValueError):
 
 @dataclass(frozen=True)
 class ServerRequest:
+    version: int
     operation_id: str
     operation: str
     target_id: str
@@ -37,6 +40,10 @@ class ServerRequest:
     def from_mapping(cls, value: Mapping[str, Any]) -> "ServerRequest":
         if frozenset(value) != _REQUIRED_KEYS:
             raise RequestValidationError("request fields do not match the exact protocol schema")
+
+        version = value["version"]
+        if type(version) is not int or version != PROTOCOL_VERSION:
+            raise RequestValidationError("unsupported protocol version")
 
         string_fields = (
             "operation_id",
@@ -61,7 +68,7 @@ class ServerRequest:
         if parsed["target_id"] != _TARGET_ID:
             raise RequestValidationError("request target is not the canonical server target")
 
-        return cls(arguments={}, **parsed)
+        return cls(version=version, arguments={}, **parsed)
 
 
 @dataclass(frozen=True)
