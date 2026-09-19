@@ -28,6 +28,7 @@ Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
 - Client payload must parse through the real `ServerRequest` contract.
 - Transport timeout exceeds connection plus maximum server-operation budget.
 - Mutating operations map only to preinstalled static wrapper services.
+- Bootstrap file, unit, sshd, and Polkit installs encode explicit root:root ownership.
 - systemd is reloaded before the Polkit rule becomes available.
 - Polkit authorizes only `start` for the two exact static wrapper unit names.
 - Rollback revokes the privilege rule before removing wrapper units.

@@ -65,6 +65,8 @@ def test_bootstrap_installs_static_wrappers_before_privilege_policy() -> None:
         assert action.action_type.value == "INSTALL_SYSTEMD_UNIT"
         assert (ROOT / action.source).is_file()
         assert action.mode == "0644"
+        assert action.owner == "root"
+        assert action.group == "root"
         assert index[action_id] < index["systemd-reload"]
 
     assert index["systemd-reload"] < index["privilege-policy"]
@@ -82,7 +84,22 @@ def test_bootstrap_installs_every_fixed_helper_source_with_private_mode() -> Non
     assert helper.source == "deploy/cybercore-exec/vikunja-backup-install"
     assert helper.mode == "0700"
     for action in server_files.values():
+        assert action.owner == "root"
+        assert action.group == "root"
         assert (ROOT / action.source).is_file(), action.source
+
+
+def test_privileged_config_installs_are_explicitly_root_owned() -> None:
+    module = load_deploy_module("install")
+    manifest = module.build_install_manifest()
+    privileged_types = {
+        "INSTALL_SYSTEMD_UNIT",
+        "INSTALL_SSHD_CONFIG",
+        "INSTALL_PRIVILEGE_POLICY",
+    }
+    privileged = [action for action in manifest if action.action_type.value in privileged_types]
+    assert privileged
+    assert all(action.owner == "root" and action.group == "root" for action in privileged)
 
 
 def test_operation_map_uses_only_static_wrapper_units() -> None:

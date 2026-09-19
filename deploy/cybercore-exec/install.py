@@ -27,6 +27,8 @@ class BootstrapAction:
     source: str = ""
     destination: str = ""
     mode: str = ""
+    owner: str = ""
+    group: str = ""
 
 
 def build_install_manifest() -> tuple[BootstrapAction, ...]:
@@ -37,6 +39,8 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "src/cybercore/execution/server/dispatcher.py",
             "/usr/local/libexec/cybercore-exec/dispatcher.py",
             "0755",
+            "root",
+            "root",
         ),
         BootstrapAction(
             "server-operations",
@@ -44,6 +48,8 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "src/cybercore/execution/server/operations.py",
             "/usr/local/libexec/cybercore-exec/operations.py",
             "0644",
+            "root",
+            "root",
         ),
         BootstrapAction(
             "server-protocol",
@@ -51,6 +57,8 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "src/cybercore/execution/server/protocol.py",
             "/usr/local/libexec/cybercore-exec/protocol.py",
             "0644",
+            "root",
+            "root",
         ),
         BootstrapAction(
             "vikunja-backup-install",
@@ -58,6 +66,8 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "deploy/cybercore-exec/vikunja-backup-install",
             "/usr/local/libexec/cybercore-exec/vikunja-backup-install",
             "0700",
+            "root",
+            "root",
         ),
         BootstrapAction(
             "vikunja-backup-install-unit",
@@ -65,6 +75,8 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
             "/etc/systemd/system/cybercore-vikunja-backup-install.service",
             "0644",
+            "root",
+            "root",
         ),
         BootstrapAction(
             "vikunja-backup-run-unit",
@@ -72,6 +84,8 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "deploy/cybercore-exec/cybercore-vikunja-backup-run.service",
             "/etc/systemd/system/cybercore-vikunja-backup-run.service",
             "0644",
+            "root",
+            "root",
         ),
         BootstrapAction(
             "sshd-config",
@@ -79,6 +93,8 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "deploy/cybercore-exec/cybercore-exec.subsystem.conf",
             "/etc/ssh/sshd_config.d/60-cybercore-exec.conf",
             "0644",
+            "root",
+            "root",
         ),
         BootstrapAction("service-identity", BootstrapActionType.ENSURE_SERVICE_IDENTITY),
         BootstrapAction("systemd-reload", BootstrapActionType.RELOAD_SYSTEMD),
@@ -88,6 +104,8 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "deploy/cybercore-exec/cybercore-exec.policy",
             "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
             "0644",
+            "root",
+            "root",
         ),
         BootstrapAction("policy-validate", BootstrapActionType.VALIDATE_PRIVILEGE_POLICY),
         BootstrapAction("sshd-validate", BootstrapActionType.VALIDATE_SSHD_CONFIG),
