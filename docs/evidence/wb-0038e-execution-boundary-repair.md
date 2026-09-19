@@ -21,6 +21,7 @@ Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
 4. Rollback targeted the obsolete `/etc/sudoers.d/cybercore-exec` path instead of the installed Polkit rule.
 5. Execution receipts exposed the raw authorization reference.
 6. Existing tests did not exercise the real client payload against the server parser.
+7. Mutating client and server paths treated a non-empty authorization reference as sufficient without structurally requiring an authorization verifier.
 
 ## Repair invariants
 
@@ -33,6 +34,8 @@ Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
 - Polkit authorizes only `start` for the two exact static wrapper unit names.
 - Rollback revokes the privilege rule before removing wrapper units.
 - Raw authorization references are replaced by SHA-256 bindings in both local and server receipts.
+- Mutating client and server operations fail closed unless an `ExecutionAuthorizationVerifier` explicitly authorizes the exact operation/target/plan/revision/reference tuple.
+- The default verifier denies all mutations; the standalone server entrypoint has no permissive fallback.
 - No deployment, VPS action, credential action, provider action, or production mutation is performed by this branch.
 
 ## Required verification before readiness
