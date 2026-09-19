@@ -173,7 +173,9 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert manifest[3].action_id == "verify-vikunja-backup-run-wrapper-managed"
     assert manifest[3].action_type.value == "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT"
     assert manifest[3].target == "cybercore-vikunja-backup-run.service"
-    assert manifest[3].source_of_truth == "deploy/cybercore-exec/cybercore-vikunja-backup-run.service"
+    assert (
+        manifest[3].source_of_truth == "deploy/cybercore-exec/cybercore-vikunja-backup-run.service"
+    )
     assert manifest[4].action_id == "stop-vikunja-backup-install-wrapper"
     assert manifest[4].action_type.value == "STOP_SYSTEMD_UNIT_AND_WAIT"
     assert manifest[4].target == "cybercore-vikunja-backup-install.service"
