@@ -59,6 +59,24 @@ def test_live_question_is_not_answered_from_model_memory() -> None:
     assert client.calls == 1
 
 
+def test_live_data_gate_does_not_trust_model_false_flag() -> None:
+    client = SequenceClient([intent(kind="question", needs_live_data=False)])
+    response = controller(client).handle(
+        utterance("Is production healthy right now?"), VoiceContext(project="CyberCore")
+    )
+    assert response.status == "needs_live_data"
+    assert client.calls == 1
+
+
+def test_inspect_intent_requires_live_data_even_if_model_flag_is_false() -> None:
+    client = SequenceClient([intent(kind="inspect", needs_live_data=False)])
+    response = controller(client).handle(
+        utterance("Inspect CyberCore"), VoiceContext(project="CyberCore")
+    )
+    assert response.status == "needs_live_data"
+    assert client.calls == 1
+
+
 def test_cancel_uses_existing_router_and_cancels_session() -> None:
     client = SequenceClient([])
     session = VoiceSession("s1")
