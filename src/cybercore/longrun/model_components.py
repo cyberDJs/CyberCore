@@ -138,6 +138,8 @@ def _parse_worker(text: str) -> tuple[bool, dict[str, object]]:
         raise ValueError("worker.success must be boolean")
     if not isinstance(evidence, dict) or not all(isinstance(key, str) for key in evidence):
         raise ValueError("worker.evidence must be an object with string keys")
+    if success and not evidence:
+        raise ValueError("successful worker must return non-empty evidence")
     if _MODEL_CALLS_KEY in evidence:
         raise ValueError(f"worker.evidence cannot use reserved key {_MODEL_CALLS_KEY}")
     return success, evidence
