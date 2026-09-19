@@ -42,6 +42,7 @@ def test_execute_uses_shell_false_and_structured_stdin() -> None:
 
     receipt = execute_action(_action(), VIKUNJA_TARGET, run=fake_run)
     assert observed["shell"] is False
+    assert observed["timeout"] == 150
     payload = json.loads(observed["input"])  # type: ignore[arg-type]
     assert payload["operation"] == "vikunja.health.verify"
     assert payload["target_id"] == "tasks.cyberdjs.org"
