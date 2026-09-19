@@ -614,3 +614,18 @@ model_bindings:
 
     with pytest.raises(ValueError, match="invalid mission YAML"):
         load_manifest(profile, mission)
+
+
+def test_parse_proposal_rejects_nonfinite_computed_value():
+    payload = {
+        "fingerprint": "overflow-step",
+        "expected_quality_gain": 1e308,
+        "expected_information_gain": 1e308,
+        "cost": 1e308,
+        "risk": 1e308,
+        "duplication_probability": 0.0,
+        "effect": "read",
+    }
+
+    with pytest.raises(ValueError, match="proposal value must be finite"):
+        _parse_proposal(__import__("json").dumps(payload))
