@@ -145,6 +145,35 @@ def test_governed_backup_run_executes_backup_inside_wrapper_cgroup() -> None:
     assert "ReadWritePaths=/opt/backups/vikunja" in text
 
 
+def test_backup_unit_templates_are_deployed_as_root_owned_sources_of_truth() -> None:
+    module = load_deploy_module("install")
+    manifest = module.build_install_manifest()
+    by_id = {action.action_id: action for action in manifest}
+
+    service_template = by_id["vikunja-backup-service-template"]
+    assert service_template.action_type.value == "INSTALL_SERVER_FILE"
+    assert service_template.source == "deploy/cybercore-exec/vikunja-backup.service"
+    assert service_template.destination == (
+        "/usr/local/libexec/cybercore-exec/vikunja-backup.service.template"
+    )
+    assert service_template.mode == "0600"
+    assert service_template.owner == "root"
+    assert service_template.group == "root"
+
+    timer_template = by_id["vikunja-backup-timer-template"]
+    assert timer_template.action_type.value == "INSTALL_SERVER_FILE"
+    assert timer_template.source == "deploy/cybercore-exec/vikunja-backup.timer"
+    assert timer_template.destination == (
+        "/usr/local/libexec/cybercore-exec/vikunja-backup.timer.template"
+    )
+    assert timer_template.mode == "0600"
+    assert timer_template.owner == "root"
+    assert timer_template.group == "root"
+
+    assert (DEPLOY / "vikunja-backup.service").is_file()
+    assert (DEPLOY / "vikunja-backup.timer").is_file()
+
+
 def test_backup_installer_is_fixed_shell_free_and_private() -> None:
     text = (DEPLOY / "vikunja-backup-install").read_text()
     assert "/opt/vikunja" in text
@@ -161,6 +190,51 @@ def test_backup_installer_is_fixed_shell_free_and_private() -> None:
     assert "shell=True" not in text
     assert "bash -c" not in text
     assert "sh -c" not in text
+
+
+def test_rollback_quiesces_optional_managed_backup_schedule_before_wrapper_teardown() -> None:
+    module = load_deploy_module("rollback")
+    manifest = module.build_rollback_manifest()
+    by_id = {action.action_id: action for action in manifest}
+    index = {action.action_id: position for position, action in enumerate(manifest)}
+
+    verify_timer = by_id["verify-vikunja-backup-timer-managed-or-absent"]
+    assert verify_timer.action_type.value == "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT"
+    assert verify_timer.target == "vikunja-backup.timer"
+    assert verify_timer.source_of_truth == "deploy/cybercore-exec/vikunja-backup.timer"
+
+    verify_service = by_id["verify-vikunja-backup-service-managed-or-absent"]
+    assert verify_service.action_type.value == "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT"
+    assert verify_service.target == "vikunja-backup.service"
+    assert verify_service.source_of_truth == "deploy/cybercore-exec/vikunja-backup.service"
+
+    disable_timer = by_id["disable-vikunja-backup-timer"]
+    assert disable_timer.action_type.value == "DISABLE_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT"
+    assert disable_timer.target == "vikunja-backup.timer"
+
+    stop_service = by_id["stop-vikunja-backup-service"]
+    assert stop_service.action_type.value == "STOP_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT"
+    assert stop_service.target == "vikunja-backup.service"
+
+    assert index["verify-privilege-policy-revoked"] < index[
+        "verify-vikunja-backup-timer-managed-or-absent"
+    ]
+    assert index["verify-privilege-policy-revoked"] < index[
+        "verify-vikunja-backup-service-managed-or-absent"
+    ]
+    assert index["verify-vikunja-backup-timer-managed-or-absent"] < index[
+        "disable-vikunja-backup-timer"
+    ]
+    assert index["verify-vikunja-backup-service-managed-or-absent"] < index[
+        "stop-vikunja-backup-service"
+    ]
+    assert index["disable-vikunja-backup-timer"] < index["stop-vikunja-backup-service"]
+    assert index["stop-vikunja-backup-service"] < index[
+        "verify-vikunja-backup-install-wrapper-managed"
+    ]
+    assert index["stop-vikunja-backup-service"] < index[
+        "verify-vikunja-backup-run-wrapper-managed"
+    ]
 
 
 def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
