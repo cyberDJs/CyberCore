@@ -559,6 +559,14 @@ def execute_staging_preview_stou(
             ) from exc
         _consume_trusted_authorization_nonce(nonce, upload_input.authorization_reference)
 
+        authorization_error = _verify_authorization_evidence(
+            upload_input,
+            authorization_reference,
+            approval_public_key,
+        )
+        if authorization_error is not None:
+            raise FirstWriteRuntimeError(authorization_error)
+
         prefix = f"eimy-v34-{upload_input.run_id}.html"
         write_started = True
         client.storbinary(
