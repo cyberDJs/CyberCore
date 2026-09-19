@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import unicodedata
 
 from cybercore.voice.intelligence.compiler import ModelIntentCompiler
 from cybercore.voice.intelligence.composer import ModelResponseComposer
@@ -40,6 +41,35 @@ class _FixedIntentCompiler:
         return self.intent
 
 
+_LIVE_DATA_INTENT_KINDS = frozenset({IntentKind.SEARCH, IntentKind.INSPECT, IntentKind.MONITOR})
+_LIVE_DATA_TOKENS = frozenset(
+    {
+        "now", "current", "currently", "latest", "today", "status", "healthy", "health",
+        "online", "running", "deployed", "outage", "incident", "ted", "aktualne", "dnes",
+        "stav", "bezi", "bezici", "zdravi", "nasazeno", "vypadek", "posledni", "nejnovejsi",
+    }
+)
+_LIVE_DATA_PHRASES = (
+    "right now", "at the moment", "jak je na tom", "prave ted", "co se deje",
+    "what is happening",
+)
+
+
+def _normalize_query(text: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", text.casefold())
+    asciiish = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return " ".join(asciiish.strip().split())
+
+
+def _requires_live_data(utterance: Utterance, intent: VoiceIntent) -> bool:
+    if intent.kind in _LIVE_DATA_INTENT_KINDS:
+        return True
+    text = _normalize_query(utterance.text)
+    if any(phrase in text for phrase in _LIVE_DATA_PHRASES):
+        return True
+    return bool(set(text.split()) & _LIVE_DATA_TOKENS)
+
+
 class IntelligentVoiceController:
     def __init__(
         self,
@@ -61,11 +91,12 @@ class IntelligentVoiceController:
     ) -> ControllerResponse:
         compiled = self.compiler.compile_result(utterance, context)
         intent = compiled.intent
+        requires_live_data = compiled.needs_live_data or _requires_live_data(utterance, intent)
 
         if (
             compiled.source is CompileSource.MODEL
             and intent.kind is IntentKind.QUESTION
-            and not compiled.needs_live_data
+            and not requires_live_data
         ):
             if session is not None:
                 session.mark_intent(intent.id)
@@ -82,7 +113,7 @@ class IntelligentVoiceController:
                 status = "answered"
             return ControllerResponse(status=status, message=message, intent=intent)
 
-        if compiled.source is CompileSource.MODEL and compiled.needs_live_data:
+        if compiled.source is CompileSource.MODEL and requires_live_data:
             if session is not None:
                 session.mark_intent(intent.id)
             message = (
