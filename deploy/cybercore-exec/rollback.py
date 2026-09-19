@@ -12,7 +12,6 @@ class RollbackActionType(str, Enum):
     VERIFY_SYSTEMD_UNIT_MASKED = "VERIFY_SYSTEMD_UNIT_MASKED"
     STOP_SYSTEMD_UNIT_IF_PRESENT = "STOP_SYSTEMD_UNIT_IF_PRESENT"
     VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT = "VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT"
-    UNMASK_SYSTEMD_UNIT_RUNTIME = "UNMASK_SYSTEMD_UNIT_RUNTIME"
     RELOAD_SYSTEMD = "RELOAD_SYSTEMD"
     VALIDATE_SSHD_CONFIG = "VALIDATE_SSHD_CONFIG"
     RELOAD_SSHD = "RELOAD_SSHD"
@@ -121,27 +120,13 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
         ),
         RollbackAction("systemd-reload-after-wrapper-removal", RollbackActionType.RELOAD_SYSTEMD),
         RollbackAction(
-            "unmask-vikunja-backup-install-unit-runtime",
-            RollbackActionType.UNMASK_SYSTEMD_UNIT_RUNTIME,
+            "verify-vikunja-backup-install-unit-still-masked",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_MASKED,
             "cybercore-vikunja-backup-install.service",
         ),
         RollbackAction(
-            "unmask-vikunja-backup-run-unit-runtime",
-            RollbackActionType.UNMASK_SYSTEMD_UNIT_RUNTIME,
-            "cybercore-vikunja-backup-run.service",
-        ),
-        RollbackAction(
-            "systemd-reload-after-runtime-unmask",
-            RollbackActionType.RELOAD_SYSTEMD,
-        ),
-        RollbackAction(
-            "verify-vikunja-backup-install-unit-gone",
-            RollbackActionType.VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT,
-            "cybercore-vikunja-backup-install.service",
-        ),
-        RollbackAction(
-            "verify-vikunja-backup-run-unit-gone",
-            RollbackActionType.VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT,
+            "verify-vikunja-backup-run-unit-still-masked",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_MASKED,
             "cybercore-vikunja-backup-run.service",
         ),
         RollbackAction(

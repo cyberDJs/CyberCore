@@ -241,43 +241,21 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload-after-wrapper-removal"]
     assert (
         index["systemd-reload-after-wrapper-removal"]
-        < index["unmask-vikunja-backup-install-unit-runtime"]
+        < index["verify-vikunja-backup-install-unit-still-masked"]
     )
     assert (
         index["systemd-reload-after-wrapper-removal"]
-        < index["unmask-vikunja-backup-run-unit-runtime"]
+        < index["verify-vikunja-backup-run-unit-still-masked"]
     )
     assert (
-        by_id["unmask-vikunja-backup-install-unit-runtime"].action_type.value
-        == "UNMASK_SYSTEMD_UNIT_RUNTIME"
+        by_id["verify-vikunja-backup-install-unit-still-masked"].action_type.value
+        == "VERIFY_SYSTEMD_UNIT_MASKED"
     )
     assert (
-        by_id["unmask-vikunja-backup-run-unit-runtime"].action_type.value
-        == "UNMASK_SYSTEMD_UNIT_RUNTIME"
+        by_id["verify-vikunja-backup-run-unit-still-masked"].action_type.value
+        == "VERIFY_SYSTEMD_UNIT_MASKED"
     )
-    assert (
-        index["unmask-vikunja-backup-install-unit-runtime"]
-        < index["systemd-reload-after-runtime-unmask"]
-    )
-    assert (
-        index["unmask-vikunja-backup-run-unit-runtime"]
-        < index["systemd-reload-after-runtime-unmask"]
-    )
-    assert (
-        index["systemd-reload-after-runtime-unmask"]
-        < index["verify-vikunja-backup-install-unit-gone"]
-    )
-    assert (
-        index["systemd-reload-after-runtime-unmask"] < index["verify-vikunja-backup-run-unit-gone"]
-    )
-    assert (
-        by_id["verify-vikunja-backup-install-unit-gone"].action_type.value
-        == "VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT"
-    )
-    assert (
-        by_id["verify-vikunja-backup-run-unit-gone"].action_type.value
-        == "VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT"
-    )
+    assert "UNMASK_SYSTEMD_UNIT_RUNTIME" not in {action.action_type.value for action in manifest}
 
 
 def test_bootstrap_scripts_are_declarative_only() -> None:

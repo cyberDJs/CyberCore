@@ -143,9 +143,13 @@ service gate covers work the run wrapper may already have handed off. If the
 policy is locally drifted, runtime masking fails, a mask cannot be verified, a
 stop fails, or inactivity cannot be proven, rollback stops and keeps the static
 unit files in place. Only after quiescence is verified may wrapper files be
-removed and systemd reloaded. Runtime masks are removed only after the static
-wrapper files are gone and systemd has reloaded; rollback then reloads systemd
-again and verifies the wrapper names are inactive-or-absent. This prevents both
+removed and systemd reloaded. The runtime masks are intentionally retained for
+the remainder of the current boot and verified still active after wrapper-file
+removal and reload. They are not unmasked by rollback. This avoids exposing any
+lower-priority or generated unit definition with the same name while a
+previously authorized asynchronous `StartUnit` request could still complete.
+The masks disappear naturally on reboot, by which point no in-flight systemd
+transaction from the pre-revocation boot survives. This prevents both
 already-running root work and late completion of previously authorized
 `StartUnit` requests from crossing the rollback boundary.
 

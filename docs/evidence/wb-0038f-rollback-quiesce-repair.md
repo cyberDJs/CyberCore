@@ -14,7 +14,7 @@ Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
 
 ## Confirmed defect
 
-The WB-0038E rollback revoked new Polkit starts before deleting static wrapper files, but it did not quiesce work that had already started. A running `cybercore-vikunja-backup-install.service` could therefore continue privileged installation after rollback began, and `cybercore-vikunja-backup-run.service` could already have handed execution to `vikunja-backup.service`. The first WB-0038F repair also left the already-enabled `vikunja-backup.timer` active, allowing it to re-trigger the downstream service after a one-time inactivity check. A later exact-head review identified a second race: a `StartUnit` authorization already in flight before Polkit revocation could complete after revocation and enqueue a wrapper start after the wrapper inactivity gate.
+The WB-0038E rollback revoked new Polkit starts before deleting static wrapper files, but it did not quiesce work that had already started. A running `cybercore-vikunja-backup-install.service` could therefore continue privileged installation after rollback began, and `cybercore-vikunja-backup-run.service` could already have handed execution to `vikunja-backup.service`. The first WB-0038F repair also left the already-enabled `vikunja-backup.timer` active, allowing it to re-trigger the downstream service after a one-time inactivity check. A later exact-head review identified a second race: a `StartUnit` authorization already in flight before Polkit revocation could complete after revocation and enqueue a wrapper start after the wrapper inactivity gate. A subsequent review found that unmasking after managed-wrapper removal could reveal a lower-priority or generated unit definition with the same name; merely proving that revealed unit inactive would still allow a late pre-revocation `StartUnit` to start it.
 
 ## Repair invariants
 
@@ -25,8 +25,9 @@ The WB-0038E rollback revoked new Polkit starts before deleting static wrapper f
 5. Stop `vikunja-backup.service` if present and verify it is inactive or absent, covering work already handed off by the run wrapper.
 6. Any failed mask, unverifiable mask, failed stop, or unverifiable inactive state is a hard stop; static wrapper files remain installed.
 7. Remove static wrapper files only after all quiescence gates pass, then reload systemd while the runtime masks are still active.
-8. Remove the runtime masks only after wrapper files are gone, reload systemd again, and verify both wrapper names are inactive or absent.
-9. Rollback remains declarative and repository-only; this work block executes no systemd, SSH, VPS, credential, provider, DNS, billing, or production action.
+8. Retain both runtime masks for the remainder of the current boot and verify they are still active after wrapper-file removal and systemd reload; rollback must not unmask them.
+9. Runtime masks may disappear only with reboot. Because the managed Polkit authority is already revoked and in-flight systemd transactions do not survive reboot, no pre-revocation `StartUnit` can cross that boundary.
+10. Rollback remains declarative and repository-only; this work block executes no systemd, SSH, VPS, credential, provider, DNS, billing, or production action.
 
 ## Required verification
 
