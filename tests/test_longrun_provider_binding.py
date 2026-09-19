@@ -7,7 +7,12 @@ import pytest
 from cybercore.longrun.evaluation import EvaluationResult, evidence_digest
 from cybercore.longrun.loader import load_manifest
 from cybercore.longrun.manifest import LongRunManifest
-from cybercore.longrun.model_components import provider_components
+from cybercore.longrun.model_components import (
+    _parse_evaluation,
+    _parse_proposal,
+    _parse_worker,
+    provider_components,
+)
 from cybercore.longrun.provider import (
     ModelBinding,
     ModelRequest,
@@ -371,3 +376,160 @@ def test_provider_components_reject_nonfinite_planner_numbers():
 
     with pytest.raises(ValueError, match="finite"):
         planner(state)
+
+
+@pytest.mark.parametrize(
+    ("parser", "payload"),
+    [
+        (
+            _parse_proposal,
+            (
+                '{"fingerprint":"step-1","fingerprint":"step-2",'
+                '"expected_quality_gain":1.0,"expected_information_gain":1.0,'
+                '"cost":0.1,"risk":0.1,"duplication_probability":0.0,"effect":"read"}'
+            ),
+        ),
+        (
+            _parse_worker,
+            '{"success":true,"success":false,"evidence":{"artifact":"verified"}}',
+        ),
+        (
+            _parse_evaluation,
+            '{"score":0.9,"verdict":"PASS","verdict":"FAIL","reasons":["verified"]}',
+        ),
+    ],
+)
+def test_provider_json_parsers_reject_duplicate_object_keys(parser, payload):
+    with pytest.raises(ValueError, match="duplicate JSON object key"):
+        parser(payload)
+
+
+def test_runtime_rejects_request_mutation_after_successful_invocation():
+    binding = _binding("worker")
+
+    class MutatingProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        @property
+        def binding(self) -> ModelBinding:
+            return binding
+
+        def invoke(
+            self, request: ModelRequest, *, timeout_seconds: float
+        ) -> ModelResponse:
+            self.calls += 1
+            request.payload["task"] = "mutated"
+            return ModelResponse(request_id=request.request_id, output_text="ok")
+
+    provider = MutatingProvider()
+    registry = ProviderRegistry()
+    registry.register(provider)
+    runtime = ModelRuntime(registry)
+
+    with pytest.raises(RuntimeError, match="request mutated during provider invocation"):
+        runtime.call(
+            binding,
+            ModelRequest("run:worker:0", "worker", {"task": "original"}),
+        )
+
+    assert provider.calls == 1
+
+
+def test_runtime_rejects_request_mutation_before_retry():
+    binding = _binding("worker")
+
+    class MutatingRetryProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        @property
+        def binding(self) -> ModelBinding:
+            return binding
+
+        def invoke(
+            self, request: ModelRequest, *, timeout_seconds: float
+        ) -> ModelResponse:
+            self.calls += 1
+            request.payload["task"] = "mutated"
+            raise ProviderError("retry", "retryable", retryable=True)
+
+    provider = MutatingRetryProvider()
+    registry = ProviderRegistry()
+    registry.register(provider)
+    runtime = ModelRuntime(registry)
+
+    with pytest.raises(RuntimeError, match="request mutated during provider invocation"):
+        runtime.call(
+            binding,
+            ModelRequest("run:worker:0", "worker", {"task": "original"}),
+            policy=ProviderCallPolicy(max_attempts=3),
+        )
+
+    assert provider.calls == 1
+
+
+def test_runtime_rechecks_provider_identity_after_invocation():
+    binding = _binding("planner")
+
+    class IdentityDriftProvider:
+        def __init__(self) -> None:
+            self._binding = binding
+            self.calls = 0
+
+        @property
+        def binding(self) -> ModelBinding:
+            return self._binding
+
+        def invoke(
+            self, request: ModelRequest, *, timeout_seconds: float
+        ) -> ModelResponse:
+            self.calls += 1
+            self._binding = ModelBinding(
+                binding_id=binding.binding_id,
+                role=binding.role,
+                provider_id=binding.provider_id,
+                model_id="drifted-model",
+            )
+            return ModelResponse(request_id=request.request_id, output_text="ok")
+
+    provider = IdentityDriftProvider()
+    registry = ProviderRegistry()
+    registry.register(provider)
+    runtime = ModelRuntime(registry)
+
+    with pytest.raises(RuntimeError, match="provider identity drifted"):
+        runtime.call(
+            binding,
+            ModelRequest("run:planner:0", "planner", {"prompt": "x"}),
+        )
+
+    assert provider.calls == 1
+
+
+def test_runtime_rechecks_cancellation_after_successful_invocation():
+    binding = _binding("worker")
+    provider = ScriptedProvider(
+        binding,
+        [ModelResponse(request_id="run:worker:0", output_text="ok")],
+    )
+    registry = ProviderRegistry()
+    registry.register(provider)
+    runtime = ModelRuntime(registry)
+    cancellation_checks = 0
+
+    def cancelled() -> bool:
+        nonlocal cancellation_checks
+        cancellation_checks += 1
+        return cancellation_checks >= 2
+
+    with pytest.raises(ProviderError, match="cancelled") as exc_info:
+        runtime.call(
+            binding,
+            ModelRequest("run:worker:0", "worker", {"task": "x"}),
+            cancelled=cancelled,
+        )
+
+    assert exc_info.value.code == "cancelled"
+    assert cancellation_checks == 2
+    assert len(provider.requests) == 1
