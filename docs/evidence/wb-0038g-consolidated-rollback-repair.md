@@ -25,7 +25,9 @@ The PR #95 / WB-0038E rollback contract correctly revoked future Polkit authorit
 4. an in-flight installer could recreate or re-enable that timer after an earlier quiescence check;
 5. a pre-revocation asynchronous StartUnit could complete after policy revocation;
 6. runtime-only masks did not protect wrapper names across reboot if a lower-priority or generated unit existed;
-7. direct wrapper execution initially dropped Docker startup ordering.
+7. direct wrapper execution initially dropped Docker startup ordering;
+8. a generated service with `PartOf=` could receive propagated stop control before its identity gate;
+9. direct manual and timer-triggered execution could run the same backup script concurrently.
 
 PR #97 and PR #98 each solved only part of this chain. WB-0038G consolidates the required invariants on current canonical main.
 
@@ -38,9 +40,9 @@ Rollback is declarative and fail-closed:
 3. verify both governed wrapper identities against canonical repository units;
 4. runtime-mask both wrapper names and verify those masks;
 5. stop-and-wait the installer wrapper first;
-6. stop-and-wait the governed run wrapper;
-7. only after the installer is quiescent, verify the generated timer and service are absent or exact canonical units;
-8. disable-and-wait the timer if present;
+6. only after the installer is quiescent, verify the generated timer and service are absent or exact canonical units;
+7. disable-and-wait the timer if present, closing the scheduled activation path;
+8. stop-and-wait the governed manual run wrapper;
 9. stop-and-wait the generated backup service if present;
 10. remove the exact managed wrapper unit files;
 11. reload systemd while runtime masks still protect the names;
@@ -56,6 +58,10 @@ The manual governed backup wrapper now directly executes:
 `/usr/local/sbin/vikunja-backup`
 
 The backup process therefore lives inside the verified wrapper cgroup rather than behind a waiting `systemctl start` client.
+
+The canonical generated service deliberately has no `PartOf=cybercore-vikunja-backup-run.service` relationship. Generated-unit identity is verified before any run-wrapper stop, so rollback never relies on unverified stop propagation.
+
+Manual and timer-triggered executions share a root-only advisory lock at `/run/cybercore-vikunja-backup.lock`. The backup script opens it with `O_NOFOLLOW`, mode `0600`, and an exclusive `flock`, serializing both entry paths while keeping the manual process inside the governed wrapper cgroup.
 
 The wrapper preserves:
 
@@ -85,7 +91,9 @@ This lets rollback verify generated-unit identity before controlling them.
 - canonical root-owned generated-unit templates;
 - runtime mask-before-stop ordering;
 - installer stop before generated timer/service revalidation;
-- timer disable before downstream service stop;
+- absence of generated-service `PartOf=` stop propagation;
+- root-only shared backup locking with `O_NOFOLLOW`;
+- timer disable before manual run-wrapper stop and downstream service stop;
 - generated service quiescence before wrapper-file removal;
 - persistent mask installation and verification before the reboot boundary.
 
@@ -102,7 +110,7 @@ Implementation head `aca79cc0dacd8356b3b13877a7ce2ded65882f4a`:
 - Python 3.14: PASS
 - CodeQL #927: PASS
 
-The implementation head was followed by source-of-truth/evidence-only commits, so final readiness still requires CI, CodeQL, and fresh correctness/security review on the final exact head.
+Subsequent fresh review found and repaired two additional findings on the consolidated branch: pre-verification stop propagation through `PartOf=` and concurrent manual/timer backup execution. Final readiness therefore requires new CI, CodeQL, and fresh correctness/security review on the post-repair exact head.
 
 ## Scope boundary
 
