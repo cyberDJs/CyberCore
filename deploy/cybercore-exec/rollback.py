@@ -8,8 +8,11 @@ import json
 class RollbackActionType(str, Enum):
     REMOVE_MANAGED_FILE_IF_EXACT = "REMOVE_MANAGED_FILE_IF_EXACT"
     VERIFY_PRIVILEGE_POLICY_REVOKED = "VERIFY_PRIVILEGE_POLICY_REVOKED"
+    MASK_SYSTEMD_UNIT_RUNTIME = "MASK_SYSTEMD_UNIT_RUNTIME"
+    VERIFY_SYSTEMD_UNIT_MASKED = "VERIFY_SYSTEMD_UNIT_MASKED"
     STOP_SYSTEMD_UNIT_IF_PRESENT = "STOP_SYSTEMD_UNIT_IF_PRESENT"
     VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT = "VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT"
+    UNMASK_SYSTEMD_UNIT_RUNTIME = "UNMASK_SYSTEMD_UNIT_RUNTIME"
     RELOAD_SYSTEMD = "RELOAD_SYSTEMD"
     VALIDATE_SSHD_CONFIG = "VALIDATE_SSHD_CONFIG"
     RELOAD_SSHD = "RELOAD_SSHD"
@@ -35,6 +38,26 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "verify-privilege-policy-revoked",
             RollbackActionType.VERIFY_PRIVILEGE_POLICY_REVOKED,
             "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
+        ),
+        RollbackAction(
+            "mask-vikunja-backup-install-unit-runtime",
+            RollbackActionType.MASK_SYSTEMD_UNIT_RUNTIME,
+            "cybercore-vikunja-backup-install.service",
+        ),
+        RollbackAction(
+            "verify-vikunja-backup-install-unit-masked",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_MASKED,
+            "cybercore-vikunja-backup-install.service",
+        ),
+        RollbackAction(
+            "mask-vikunja-backup-run-unit-runtime",
+            RollbackActionType.MASK_SYSTEMD_UNIT_RUNTIME,
+            "cybercore-vikunja-backup-run.service",
+        ),
+        RollbackAction(
+            "verify-vikunja-backup-run-unit-masked",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_MASKED,
+            "cybercore-vikunja-backup-run.service",
         ),
         RollbackAction(
             "stop-vikunja-backup-install-unit",
@@ -96,7 +119,31 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "/etc/systemd/system/cybercore-vikunja-backup-run.service",
             "deploy/cybercore-exec/cybercore-vikunja-backup-run.service",
         ),
-        RollbackAction("systemd-reload", RollbackActionType.RELOAD_SYSTEMD),
+        RollbackAction("systemd-reload-after-wrapper-removal", RollbackActionType.RELOAD_SYSTEMD),
+        RollbackAction(
+            "unmask-vikunja-backup-install-unit-runtime",
+            RollbackActionType.UNMASK_SYSTEMD_UNIT_RUNTIME,
+            "cybercore-vikunja-backup-install.service",
+        ),
+        RollbackAction(
+            "unmask-vikunja-backup-run-unit-runtime",
+            RollbackActionType.UNMASK_SYSTEMD_UNIT_RUNTIME,
+            "cybercore-vikunja-backup-run.service",
+        ),
+        RollbackAction(
+            "systemd-reload-after-runtime-unmask",
+            RollbackActionType.RELOAD_SYSTEMD,
+        ),
+        RollbackAction(
+            "verify-vikunja-backup-install-unit-gone",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT,
+            "cybercore-vikunja-backup-install.service",
+        ),
+        RollbackAction(
+            "verify-vikunja-backup-run-unit-gone",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT,
+            "cybercore-vikunja-backup-run.service",
+        ),
         RollbackAction(
             "remove-vikunja-backup-install",
             RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,

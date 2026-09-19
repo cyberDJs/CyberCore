@@ -174,6 +174,28 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     by_id = {action.action_id: action for action in manifest}
     assert index["remove-privilege-policy"] < index["verify-privilege-policy-revoked"]
 
+    mask_pairs = (
+        (
+            "mask-vikunja-backup-install-unit-runtime",
+            "verify-vikunja-backup-install-unit-masked",
+            "cybercore-vikunja-backup-install.service",
+        ),
+        (
+            "mask-vikunja-backup-run-unit-runtime",
+            "verify-vikunja-backup-run-unit-masked",
+            "cybercore-vikunja-backup-run.service",
+        ),
+    )
+    for mask_id, verify_mask_id, unit in mask_pairs:
+        assert by_id[mask_id].action_type.value == "MASK_SYSTEMD_UNIT_RUNTIME"
+        assert by_id[mask_id].target == unit
+        assert by_id[verify_mask_id].action_type.value == "VERIFY_SYSTEMD_UNIT_MASKED"
+        assert by_id[verify_mask_id].target == unit
+        assert index["verify-privilege-policy-revoked"] < index[mask_id]
+        assert index[mask_id] < index[verify_mask_id]
+        assert index[verify_mask_id] < index["stop-vikunja-backup-install-unit"]
+        assert index[verify_mask_id] < index["stop-vikunja-backup-run-unit"]
+
     quiesce_pairs = (
         (
             "stop-vikunja-backup-install-unit",
@@ -213,8 +235,54 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     )
     assert index["verify-vikunja-backup-service-inactive"] < index["remove-vikunja-backup-run-unit"]
     assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
-    assert index["remove-vikunja-backup-install-unit"] < index["systemd-reload"]
-    assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload"]
+    assert (
+        index["remove-vikunja-backup-install-unit"]
+        < index["systemd-reload-after-wrapper-removal"]
+    )
+    assert (
+        index["remove-vikunja-backup-run-unit"]
+        < index["systemd-reload-after-wrapper-removal"]
+    )
+    assert (
+        index["systemd-reload-after-wrapper-removal"]
+        < index["unmask-vikunja-backup-install-unit-runtime"]
+    )
+    assert (
+        index["systemd-reload-after-wrapper-removal"]
+        < index["unmask-vikunja-backup-run-unit-runtime"]
+    )
+    assert (
+        by_id["unmask-vikunja-backup-install-unit-runtime"].action_type.value
+        == "UNMASK_SYSTEMD_UNIT_RUNTIME"
+    )
+    assert (
+        by_id["unmask-vikunja-backup-run-unit-runtime"].action_type.value
+        == "UNMASK_SYSTEMD_UNIT_RUNTIME"
+    )
+    assert (
+        index["unmask-vikunja-backup-install-unit-runtime"]
+        < index["systemd-reload-after-runtime-unmask"]
+    )
+    assert (
+        index["unmask-vikunja-backup-run-unit-runtime"]
+        < index["systemd-reload-after-runtime-unmask"]
+    )
+    assert (
+        index["systemd-reload-after-runtime-unmask"]
+        < index["verify-vikunja-backup-install-unit-gone"]
+    )
+    assert (
+        index["systemd-reload-after-runtime-unmask"]
+        < index["verify-vikunja-backup-run-unit-gone"]
+    )
+    assert (
+        by_id["verify-vikunja-backup-install-unit-gone"].action_type.value
+        == "VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT"
+    )
+    assert (
+        by_id["verify-vikunja-backup-run-unit-gone"].action_type.value
+        == "VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT"
+    )
 
 
 def test_bootstrap_scripts_are_declarative_only() -> None:

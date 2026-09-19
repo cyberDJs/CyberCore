@@ -132,16 +132,22 @@ not an ignored exception.
 
 Rollback is also fail-closed. It first removes the managed privilege rule and
 must verify effective revocation before any execution unit is quiesced or any
-static wrapper file is removed. After revocation is proven, rollback stops and
-verifies inactive-or-absent state for both CyberCore wrapper units, then stops
-and verifies `vikunja-backup.timer` before stopping and verifying
-`vikunja-backup.service`. The timer gate prevents a previously enabled timer
+static wrapper file is removed. Because a `StartUnit` request authorized before
+revocation can complete asynchronously afterwards, rollback then applies runtime
+masks to both CyberCore wrapper unit names and verifies those masks before
+stopping either wrapper. The masks remain in place while rollback verifies both
+wrappers inactive-or-absent, stops and verifies `vikunja-backup.timer`, and
+then stops and verifies `vikunja-backup.service`. The timer gate prevents a previously enabled timer
 from reactivating the downstream root oneshot after its inactivity check. The
 service gate covers work the run wrapper may already have handed off. If the
-policy is locally drifted, a stop fails, or inactivity cannot be proven,
-rollback stops and keeps the static unit files in place. Only after quiescence is verified may wrapper files be removed
-and systemd reloaded. This prevents already-authorized root work from continuing
-past rollback while its execution boundary disappears.
+policy is locally drifted, runtime masking fails, a mask cannot be verified, a
+stop fails, or inactivity cannot be proven, rollback stops and keeps the static
+unit files in place. Only after quiescence is verified may wrapper files be
+removed and systemd reloaded. Runtime masks are removed only after the static
+wrapper files are gone and systemd has reloaded; rollback then reloads systemd
+again and verifies the wrapper names are inactive-or-absent. This prevents both
+already-running root work and late completion of previously authorized
+`StartUnit` requests from crossing the rollback boundary.
 
 ## Execution receipts
 
