@@ -15,6 +15,7 @@ MAX_CONTAINERS = 100
 MAX_STORAGE_ROWS = 16
 
 RunCallable = Callable[..., subprocess.CompletedProcess[str]]
+WhichCallable = Callable[[str], str | None]
 
 
 def _read_meminfo(path: Path = Path("/proc/meminfo")) -> dict[str, int]:
@@ -44,22 +45,35 @@ def _read_meminfo(path: Path = Path("/proc/meminfo")) -> dict[str, int]:
     }
 
 
-def _safe_json_lines(value: str, *, limit: int) -> list[Mapping[str, Any]]:
+def _safe_json_lines(
+    value: str,
+    *,
+    limit: int,
+) -> tuple[list[Mapping[str, Any]], bool]:
     rows: list[Mapping[str, Any]] = []
+    complete = True
     for line in value.splitlines():
         if len(rows) >= limit:
             break
+        if not line.strip():
+            continue
         try:
             parsed = json.loads(line)
         except json.JSONDecodeError:
+            complete = False
             continue
-        if isinstance(parsed, dict):
-            rows.append(parsed)
-    return rows
+        if not isinstance(parsed, dict):
+            complete = False
+            continue
+        rows.append(parsed)
+    return rows, complete
 
 
-def _docker_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
-    docker = shutil.which("docker")
+def _docker_inventory(
+    run: RunCallable = subprocess.run,
+    which: WhichCallable = shutil.which,
+) -> dict[str, object]:
+    docker = which("docker")
     if docker is None:
         return {
             "cli_present": False,
@@ -107,7 +121,8 @@ def _docker_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
             **common,
         )
         if listed.returncode == 0:
-            for row in _safe_json_lines(listed.stdout, limit=MAX_CONTAINERS):
+            rows, parsed_ok = _safe_json_lines(listed.stdout, limit=MAX_CONTAINERS)
+            for row in rows:
                 containers.append(
                     {
                         "name": str(row.get("Names", ""))[:256],
@@ -117,6 +132,8 @@ def _docker_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
                         "size": str(row.get("Size", ""))[:128],
                     }
                 )
+            if not parsed_ok:
+                access_status = "partial_failure"
         else:
             access_status = "partial_failure"
     except (OSError, subprocess.TimeoutExpired):
@@ -126,7 +143,8 @@ def _docker_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
     try:
         usage = run([docker, "system", "df", "--format", "{{json .}}"], **common)
         if usage.returncode == 0:
-            for row in _safe_json_lines(usage.stdout, limit=MAX_STORAGE_ROWS):
+            rows, parsed_ok = _safe_json_lines(usage.stdout, limit=MAX_STORAGE_ROWS)
+            for row in rows:
                 storage.append(
                     {
                         "type": str(row.get("Type", ""))[:128],
@@ -136,6 +154,8 @@ def _docker_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
                         "reclaimable": str(row.get("Reclaimable", ""))[:128],
                     }
                 )
+            if not parsed_ok:
+                access_status = "partial_failure"
         else:
             access_status = "partial_failure"
     except (OSError, subprocess.TimeoutExpired):
@@ -151,7 +171,10 @@ def _docker_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
     }
 
 
-def collect_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
+def collect_inventory(
+    run: RunCallable = subprocess.run,
+    which: WhichCallable = shutil.which,
+) -> dict[str, object]:
     try:
         load_1m, load_5m, load_15m = os.getloadavg()
     except OSError:
@@ -173,7 +196,7 @@ def collect_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
             "used_bytes": int(disk.used),
             "free_bytes": int(disk.free),
         },
-        "docker": _docker_inventory(run),
+        "docker": _docker_inventory(run, which),
     }
     return validate_inventory_payload(payload)
 

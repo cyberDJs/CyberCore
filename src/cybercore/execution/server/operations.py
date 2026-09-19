@@ -26,7 +26,7 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
             "/usr/local/libexec/cybercore-exec/inventory.py",
         ),
         mutating=False,
-        timeout_seconds=15,
+        timeout_seconds=20,
         result_kind="system_inventory",
     ),
     "vikunja.backup.install": OperationSpec(

@@ -32,7 +32,7 @@ No environment variables, file contents, process command lines, credentials, mou
 
 ## Docker privilege rule
 
-Docker discovery is best-effort. If the existing service identity cannot access the Docker daemon, the result reports `denied_or_unreachable`. If the daemon is reachable but a later bounded Docker subcommand fails or times out, the result reports `partial_failure` rather than silently treating missing data as an empty successful result. This work block must not make Docker readable by adding `cybercore-exec` to the `docker` group because Docker daemon access is effectively root-equivalent on a normal host.
+Docker discovery is best-effort. If the existing service identity cannot access the Docker daemon, the result reports `denied_or_unreachable`. If the daemon is reachable but a later bounded Docker subcommand fails, times out, or emits malformed JSON rows, the result reports `partial_failure` rather than silently treating missing data as an empty successful result. This work block must not make Docker readable by adding `cybercore-exec` to the `docker` group because Docker daemon access is effectively root-equivalent on a normal host.
 
 ## Result-disclosure rule
 
@@ -57,3 +57,8 @@ Required before merge readiness:
 5. no unresolved P1/P2 security or privilege-boundary finding.
 
 Runtime effect verification is impossible until a later authorized deployment installs the updated server artifact.
+
+
+## Upgrade ordering and timeout budget
+
+Bootstrap installs the inventory helper, operations map, protocol, and authorization dependency before replacing the dispatcher so an interrupted upgrade cannot leave the dispatcher importing a not-yet-installed module. The inventory operation receives a 20-second server budget, which exceeds the aggregate 15-second Docker probe budget plus Python and local collection overhead.

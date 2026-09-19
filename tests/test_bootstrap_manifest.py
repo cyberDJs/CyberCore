@@ -192,3 +192,17 @@ def test_bootstrap_scripts_are_declarative_only() -> None:
         assert "shell=True" not in text
         assert "bash -c" not in text
         assert "sh -c" not in text
+
+
+def test_bootstrap_installs_dispatcher_dependencies_before_dispatcher() -> None:
+    module = load_deploy_module("install")
+    manifest = module.build_install_manifest()
+    index = {action.action_id: position for position, action in enumerate(manifest)}
+
+    for dependency in (
+        "server-authorization",
+        "server-inventory",
+        "server-operations",
+        "server-protocol",
+    ):
+        assert index[dependency] < index["server-dispatcher"]
