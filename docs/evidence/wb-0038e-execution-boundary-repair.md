@@ -19,7 +19,7 @@ Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
 2. The SSH transport timed out after 30 seconds while mutating server operations could run for 120 seconds.
 3. The bootstrap privilege path used `systemd-run`, allowing a transient-unit construction path under a Polkit rule intended only for bounded operations.
 4. Rollback targeted the obsolete `/etc/sudoers.d/cybercore-exec` path instead of the installed Polkit rule.
-5. Server receipts exposed the raw authorization reference.
+5. Execution receipts exposed the raw authorization reference.
 6. Existing tests did not exercise the real client payload against the server parser.
 
 ## Repair invariants
@@ -32,7 +32,7 @@ Status: IMPLEMENTED_IN_BRANCH / VERIFICATION_PENDING
 - systemd is reloaded before the Polkit rule becomes available.
 - Polkit authorizes only `start` for the two exact static wrapper unit names.
 - Rollback revokes the privilege rule before removing wrapper units.
-- Raw authorization references are replaced by a SHA-256 binding in server receipts.
+- Raw authorization references are replaced by SHA-256 bindings in both local and server receipts.
 - No deployment, VPS action, credential action, provider action, or production mutation is performed by this branch.
 
 ## Required verification before readiness

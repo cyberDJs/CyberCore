@@ -117,9 +117,9 @@ transient service.
 Rollback removes the privilege rule before removing either static wrapper and
 reloads systemd after the wrapper files are removed.
 
-## Execution receipt
+## Execution receipts
 
-The server receipt records only non-secret execution metadata:
+Both local and server receipts record only non-secret execution metadata:
 
 - operation and target binding;
 - plan/revision;
@@ -129,8 +129,8 @@ The server receipt records only non-secret execution metadata:
 - SHA-256 digests of stdout and stderr;
 - whether mutation was possible.
 
-Raw stdout/stderr and the raw authorization reference are not embedded in the
-server receipt. `secret_values_recorded` remains false by construction.
+Raw stdout/stderr and the raw authorization reference are not embedded in
+execution receipts. `secret_values_recorded` remains false by construction.
 
 An exit code of zero means `EXECUTED`, not `VERIFIED`.
 

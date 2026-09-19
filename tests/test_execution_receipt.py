@@ -2,7 +2,7 @@ from cybercore.execution.models import ExecutionStatus, GovernedAction
 from cybercore.execution.receipt import build_receipt, digest_bytes
 
 
-def test_receipt_contains_digests_not_output() -> None:
+def test_receipt_contains_digests_not_sensitive_values() -> None:
     action = GovernedAction(
         operation_id="A6-OPERATIONS",
         operation="vikunja.health.verify",
@@ -23,8 +23,11 @@ def test_receipt_contains_digests_not_output() -> None:
     )
     assert receipt.status is ExecutionStatus.EXECUTED
     assert receipt.stdout_sha256 == digest_bytes(b"potentially sensitive output")
+    assert receipt.authorization_reference_sha256 == digest_bytes(b"APPROVE-A6-OPERATIONS")
     assert receipt.secret_values_recorded is False
     assert not hasattr(receipt, "stdout")
+    assert not hasattr(receipt, "authorization_reference")
+    assert "APPROVE-A6-OPERATIONS" not in str(receipt)
 
 
 def test_nonzero_exit_is_failed() -> None:
