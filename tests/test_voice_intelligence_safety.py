@@ -18,6 +18,9 @@ def utterance(text: str) -> Utterance:
         "can you stop now",
         "could you please cancel this",
         "můžeš prosím zrušit to",
+        "I need you to stop",
+        "hey, stop",
+        "Stop!",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
