@@ -831,12 +831,8 @@ def test_rollback_plan_fingerprint_binds_restore_metadata() -> None:
 
 def test_apply_revalidates_managed_records_immediately_before_batch(tmp_path: Path) -> None:
     manifest = _manifest(tmp_path)
-    initial = (
-        DnsRecord("A", "example.cz", "192.0.2.9", 300, False, None, "a1"),
-    )
-    drifted = (
-        DnsRecord("A", "example.cz", "192.0.2.8", 300, False, None, "a1"),
-    )
+    initial = (DnsRecord("A", "example.cz", "192.0.2.9", 300, False, None, "a1"),)
+    drifted = (DnsRecord("A", "example.cz", "192.0.2.8", 300, False, None, "a1"),)
 
     class BoundaryRecordDriftApi(FakeApi):
         def __init__(self) -> None:
