@@ -18,53 +18,92 @@ Status: IMPLEMENTED_IN_BRANCH / FINAL_REVIEW_PENDING
 
 PR #95 revoked the managed Polkit rule before removing static wrapper unit files, but rollback did not stop an already-running governed wrapper. Revoking Polkit prevents new starts; it does not terminate a root oneshot already in progress.
 
-Fresh review of the first WB-0038F repair then found two additional requirements:
+Fresh review of WB-0038F then exposed three related rollback-boundary requirements:
 
-- stopping `cybercore-vikunja-backup-run.service` did not necessarily stop the separate `vikunja-backup.service` job it had already submitted;
-- rollback must not stop a transient, shadowed, drop-in-modified, or otherwise locally replaced unit merely because it occupies a managed wrapper name.
+1. stopping `cybercore-vikunja-backup-run.service` did not necessarily stop the separate `vikunja-backup.service` job it had already submitted;
+2. rollback must not stop a transient, shadowed, drop-in-modified, or otherwise locally replaced unit merely because it occupies a managed wrapper name;
+3. an enabled `vikunja-backup.timer` can independently start `vikunja-backup.service` during or after rollback, so wrapper-only quiescing is insufficient.
 
-An interim `PartOf=cybercore-vikunja-backup-run.service` binding in the generated backup unit was not sufficient as the primary safety mechanism. A host can still have an older already-loaded `vikunja-backup.service` without that dependency, or rollback can overlap installation before the new generated unit has been daemon-reloaded.
+An interim `PartOf=cybercore-vikunja-backup-run.service` edge in the generated backup service was retained only as defense-in-depth. Rollback safety must not depend on that edge being present in an older already-loaded unit.
 
 ## Final repair invariant
 
-Rollback ordering is:
+Rollback ordering is now:
 
 1. remove the managed Polkit rule if exact;
 2. verify effective privilege revocation;
-3. verify the loaded/effective identity of both governed wrapper units against exact repository source of truth;
-4. stop and wait for `cybercore-vikunja-backup-install.service`;
-5. stop and wait for `cybercore-vikunja-backup-run.service`;
-6. only then remove either static wrapper unit file;
-7. reload systemd after both wrapper files are removed.
+3. verify `vikunja-backup.timer` is either absent or exactly the managed canonical template;
+4. verify `vikunja-backup.service` is either absent or exactly the managed canonical template;
+5. disable and wait for `vikunja-backup.timer` if present;
+6. stop and wait for `vikunja-backup.service` if present;
+7. verify the loaded/effective identity of both governed wrapper units against exact repository source of truth;
+8. stop and wait for `cybercore-vikunja-backup-install.service`;
+9. stop and wait for `cybercore-vikunja-backup-run.service`;
+10. only then remove either static wrapper unit file and reload systemd.
 
-The governed run wrapper no longer launches a separate `vikunja-backup.service` through `systemctl start`. Its `ExecStart` is now the root-owned fixed executable `/usr/local/sbin/vikunja-backup`, so the backup process runs inside the verified wrapper's own systemd cgroup. `STOP_SYSTEMD_UNIT_AND_WAIT` therefore terminates and waits for the actual governed backup process rather than only a waiting systemctl client.
+The optional generated units are fail-closed: absence is a safe no-op, an exact managed unit may be quiesced, and any drift/mismatch aborts rollback before unit control or wrapper teardown.
 
-Because the wrapper retains `ProtectSystem=strict`, it explicitly grants only the required backup write surface with `ReadWritePaths=/opt/backups/vikunja`.
+## Canonical generated-unit templates
 
-`VERIFY_SYSTEMD_UNIT_MANAGED_EXACT` is fail-closed by contract: rollback must halt before controlling a wrapper whose loaded fragment or effective configuration cannot be proven to match the managed static unit.
+The generated units now have explicit repository sources of truth:
 
-`STOP_SYSTEMD_UNIT_AND_WAIT` is fail-closed by contract: rollback must not advance to wrapper-file removal unless the verified managed wrapper is inactive and no start job remains active.
+- `deploy/cybercore-exec/vikunja-backup.service`
+- `deploy/cybercore-exec/vikunja-backup.timer`
 
-The generated `vikunja-backup.service` may retain `PartOf=cybercore-vikunja-backup-run.service` as defense-in-depth, but rollback correctness no longer depends on that generated unit being new, loaded, or carrying that relationship.
+Bootstrap deploys these templates root:root mode 0600 to:
 
-## TDD evidence
+- `/usr/local/libexec/cybercore-exec/vikunja-backup.service.template`
+- `/usr/local/libexec/cybercore-exec/vikunja-backup.timer.template`
 
-RED commit: `cfa382ef74bd8c586bebb087f6ac43cd9ef082a8`
+The root-owned installer reads those templates when materializing `/etc/systemd/system/vikunja-backup.service` and `vikunja-backup.timer`. This gives rollback an exact identity source rather than relying on embedded text or unit names alone.
 
-The new regression test failed on GitHub Actions because the governed run wrapper still contained:
+## Governed run lifetime
 
-`ExecStart=/usr/bin/systemctl start vikunja-backup.service`
-
-and did not contain:
+The governed run wrapper directly executes the fixed root-owned executable:
 
 `ExecStart=/usr/local/sbin/vikunja-backup`
 
-GREEN commit: `3e6a491005932e3097eb218b4f544d58bc07f087`
+The backup therefore runs inside the verified wrapper's own systemd cgroup. `STOP_SYSTEMD_UNIT_AND_WAIT` stops and waits for the actual governed backup process rather than only a waiting `systemctl start` client.
+
+The wrapper keeps `ProtectSystem=strict` and grants only the required write surface:
+
+`ReadWritePaths=/opt/backups/vikunja`
+
+The generated backup service retains `PartOf=cybercore-vikunja-backup-run.service` as defense-in-depth, but rollback correctness no longer depends on it.
+
+## TDD evidence
+
+### Wrapper lifetime regression
+
+RED: `cfa382ef74bd8c586bebb087f6ac43cd9ef082a8`
+
+The regression test failed because the wrapper delegated to:
+
+`ExecStart=/usr/bin/systemctl start vikunja-backup.service`
+
+instead of directly executing the backup.
+
+GREEN behavior was introduced at `3e6a491005932e3097eb218b4f544d58bc07f087`.
+
+### Scheduled backup rollback regression
+
+RED: `6e69aa06c2b30efd86c2fd6be6c53519fbeb1867`
+
+GitHub Actions failed on the new regression coverage with the expected missing-contract failures:
+
+- missing `vikunja-backup-service-template`;
+- missing `verify-vikunja-backup-timer-managed-or-absent`.
+
+The test-only contract was further tightened at `38098b0e74372ebbf9798f95bdf1de02bd611966` before production implementation.
+
+GREEN final implementation head before this evidence-only update:
+
+`1b7b057f584c9ee52d47f7ef102feab65d427338`
 
 Exact-head verification:
 
-- CI #885: PASS
-- CodeQL #886: PASS
+- CI #900: PASS
+- CodeQL #901: PASS
 - Python 3.11: PASS
 - Python 3.12: PASS
 - Python 3.13: PASS
@@ -74,18 +113,17 @@ Exact-head verification:
 
 ## Regression coverage
 
-`tests/test_bootstrap_manifest.py` asserts:
+`tests/test_bootstrap_manifest.py` verifies:
 
-- both exact managed-wrapper identity checks exist and carry repository source-of-truth bindings;
-- verified privilege revocation precedes both identity checks;
-- each identity check precedes its stop-and-wait action;
-- both stop-and-wait actions exist with exact static wrapper names;
-- each stop action precedes removal of its wrapper;
-- both wrappers are stopped before either wrapper file is removed;
-- the governed run wrapper directly executes `/usr/local/sbin/vikunja-backup`;
-- it no longer delegates governed execution through `systemctl start vikunja-backup.service`;
-- the strict wrapper sandbox explicitly permits writes only to `/opt/backups/vikunja`;
-- the generated backup service retains the `PartOf=` relationship as defense-in-depth.
+- root-owned canonical service/timer template deployment;
+- installer consumption of those templates;
+- optional generated timer/service identity checks before control;
+- timer disable-and-wait before service stop;
+- generated service stop before wrapper identity verification/teardown;
+- exact wrapper identity verification before wrapper stop;
+- wrapper stop before wrapper file removal;
+- direct governed backup execution inside the run wrapper cgroup;
+- strict backup write-surface confinement.
 
 ## Scope boundary
 
@@ -93,6 +131,7 @@ This repair changes repository artifacts only. It does not stop any live service
 
 ## Remaining gate
 
+- final exact-head CI and CodeQL after this evidence/SOT update;
 - fresh independent exact-head Codex review;
 - fresh exact-head security review;
 - zero unresolved valid P0/P1/P2 findings before merge readiness.
