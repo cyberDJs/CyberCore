@@ -13,6 +13,10 @@ class BootstrapActionType(str, Enum):
     INSTALL_SYSTEMD_UNIT = "INSTALL_SYSTEMD_UNIT"
     INSTALL_SSHD_CONFIG = "INSTALL_SSHD_CONFIG"
     INSTALL_PRIVILEGE_POLICY = "INSTALL_PRIVILEGE_POLICY"
+    REVOKE_EXISTING_PRIVILEGE_POLICY = "REVOKE_EXISTING_PRIVILEGE_POLICY"
+    VERIFY_PRIVILEGE_POLICY_REVOKED = "VERIFY_PRIVILEGE_POLICY_REVOKED"
+    VERIFY_SYSTEMD_UNIT_NAME_SAFE = "VERIFY_SYSTEMD_UNIT_NAME_SAFE"
+    ENSURE_DIRECTORY = "ENSURE_DIRECTORY"
     ENSURE_SERVICE_IDENTITY = "ENSURE_SERVICE_IDENTITY"
     RELOAD_SYSTEMD = "RELOAD_SYSTEMD"
     VALIDATE_PRIVILEGE_POLICY = "VALIDATE_PRIVILEGE_POLICY"
@@ -74,6 +78,39 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             BootstrapActionType.INSTALL_SERVER_FILE,
             "deploy/cybercore-exec/vikunja-backup-install",
             "/usr/local/libexec/cybercore-exec/vikunja-backup-install",
+            "0700",
+            "root",
+            "root",
+        ),
+        BootstrapAction(
+            "revoke-existing-privilege-policy",
+            BootstrapActionType.REVOKE_EXISTING_PRIVILEGE_POLICY,
+            "",
+            "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
+        ),
+        BootstrapAction(
+            "verify-privilege-policy-revoked",
+            BootstrapActionType.VERIFY_PRIVILEGE_POLICY_REVOKED,
+            "",
+            "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
+        ),
+        BootstrapAction(
+            "verify-vikunja-backup-install-unit-safe",
+            BootstrapActionType.VERIFY_SYSTEMD_UNIT_NAME_SAFE,
+            "",
+            "cybercore-vikunja-backup-install.service",
+        ),
+        BootstrapAction(
+            "verify-vikunja-backup-run-unit-safe",
+            BootstrapActionType.VERIFY_SYSTEMD_UNIT_NAME_SAFE,
+            "",
+            "cybercore-vikunja-backup-run.service",
+        ),
+        BootstrapAction(
+            "backup-root-directory",
+            BootstrapActionType.ENSURE_DIRECTORY,
+            "",
+            "/opt/backups/vikunja",
             "0700",
             "root",
             "root",
