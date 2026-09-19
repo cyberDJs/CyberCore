@@ -574,3 +574,43 @@ def test_parse_proposal_rejects_invalid_penalty_ranges(field, value, message):
 
     with pytest.raises(ValueError, match=message):
         _parse_proposal(__import__("json").dumps(payload))
+
+
+def test_loader_rejects_duplicate_yaml_binding_keys(tmp_path: Path):
+    profile = tmp_path / "profile.yaml"
+    profile.write_text(
+        """version: 0
+profile: test
+minimum_wall_seconds: 0
+maximum_wall_seconds: 60
+evaluator_threshold: 0.95
+checkpoint_every_steps: 1
+max_consecutive_failures: 3
+max_duplicate_steps: 2
+allowed_effects: [read, sandbox_write]
+prohibited_effects: [production_write, credential_mutation, billing_mutation, permission_mutation]
+policy:
+  evidence_required: true
+  independent_evaluation_required: true
+  immutable_mission_required: true
+  fail_closed_on_unknown_effect: true
+""",
+        encoding="utf-8",
+    )
+    mission = tmp_path / "mission.yaml"
+    mission.write_text(
+        """version: 0
+run_id: provider-test
+objective: reject ambiguous provider binding
+model_bindings:
+  - binding_id: planner-binding
+    role: planner
+    provider_id: first-provider
+    provider_id: second-provider
+    model_id: mock-model
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="invalid mission YAML"):
+        load_manifest(profile, mission)
