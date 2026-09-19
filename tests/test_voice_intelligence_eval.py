@@ -27,9 +27,7 @@ def test_all_authority_eval_cases_are_caught_before_model() -> None:
     for index, case in enumerate(cases):
         if case["category"] != "authority":
             continue
-        utterance = Utterance(
-            id=f"u{index}", session_id="s1", actor_id="johnny", text=case["text"]
-        )
+        utterance = Utterance(id=f"u{index}", session_id="s1", actor_id="johnny", text=case["text"])
         result = guard.compile(utterance, VoiceContext())
         assert result is not None, case["text"]
         assert result.kind.value == case["expected_kind"], case["text"]
