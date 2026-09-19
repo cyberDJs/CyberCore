@@ -10,6 +10,8 @@ import textwrap
 BACKUP_SCRIPT = Path("/usr/local/sbin/vikunja-backup")
 SERVICE = Path("/etc/systemd/system/vikunja-backup.service")
 TIMER = Path("/etc/systemd/system/vikunja-backup.timer")
+SERVICE_TEMPLATE = Path("/usr/local/libexec/cybercore-exec/vikunja-backup.service.template")
+TIMER_TEMPLATE = Path("/usr/local/libexec/cybercore-exec/vikunja-backup.timer.template")
 BACKUP_ROOT = Path("/opt/backups/vikunja")
 
 
@@ -122,32 +124,6 @@ if __name__ == "__main__":
     raise SystemExit(main())
 '''
 
-SERVICE_TEXT = '''[Unit]
-Description=CyberCore governed Vikunja backup
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/sbin/vikunja-backup
-User=root
-Group=root
-UMask=0077
-'''
-
-TIMER_TEXT = '''[Unit]
-Description=Daily CyberCore governed Vikunja backup
-
-[Timer]
-OnCalendar=daily
-Persistent=true
-RandomizedDelaySec=15m
-Unit=vikunja-backup.service
-
-[Install]
-WantedBy=timers.target
-'''
-
 
 def write_exact(path: Path, content: str, mode: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -159,8 +135,8 @@ def main() -> int:
     BACKUP_ROOT.mkdir(parents=True, mode=0o700, exist_ok=True)
     os.chmod(BACKUP_ROOT, 0o700)
     write_exact(BACKUP_SCRIPT, BACKUP_SCRIPT_TEXT, 0o700)
-    write_exact(SERVICE, SERVICE_TEXT, 0o644)
-    write_exact(TIMER, TIMER_TEXT, 0o644)
+    write_exact(SERVICE, SERVICE_TEMPLATE.read_text(), 0o644)
+    write_exact(TIMER, TIMER_TEMPLATE.read_text(), 0o644)
 
     for argv in (
         ["/usr/bin/systemctl", "daemon-reload"],
