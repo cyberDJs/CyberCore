@@ -1,7 +1,7 @@
 # Governed Execution Bridge V1
 
 Status: repository repair under review; not deployed
-Work block: `WB-0037` with `WB-0038E` execution-boundary repair
+Work block: `WB-0037` with `WB-0038E` execution-boundary repair and `WB-0038F` rollback-quiesce repair
 
 ## Purpose
 
@@ -131,10 +131,27 @@ to exist as an explicit writable sandbox path; a missing path is a hard failure,
 not an ignored exception.
 
 Rollback is also fail-closed. It first removes the managed privilege rule and
-must verify effective revocation before removing either static wrapper. If the
-rule is locally drifted or otherwise cannot be revoked, rollback stops and keeps
-the wrapper names occupied rather than exposing an authorized-but-unclaimed
-systemd unit name. After safe wrapper removal it reloads systemd.
+must verify effective revocation before any execution unit is quiesced or any
+static wrapper file is removed. Because a `StartUnit` request authorized before
+revocation can complete asynchronously afterwards, rollback then applies runtime
+masks to both CyberCore wrapper unit names and verifies those masks before
+stopping either wrapper. The masks remain in place while rollback verifies both
+wrappers inactive-or-absent, stops and verifies `vikunja-backup.timer`, and
+then stops and verifies `vikunja-backup.service`. The timer gate prevents a previously enabled timer
+from reactivating the downstream root oneshot after its inactivity check. The
+service gate covers work the run wrapper may already have handed off. If the
+policy is locally drifted, runtime masking fails, a mask cannot be verified, a
+stop fails, or inactivity cannot be proven, rollback stops and keeps the static
+unit files in place. Only after quiescence is verified may wrapper files be
+removed and systemd reloaded. The runtime masks are intentionally retained for
+the remainder of the current boot and verified still active after wrapper-file
+removal and reload. They are not unmasked by rollback. This avoids exposing any
+lower-priority or generated unit definition with the same name while a
+previously authorized asynchronous `StartUnit` request could still complete.
+The masks disappear naturally on reboot, by which point no in-flight systemd
+transaction from the pre-revocation boot survives. This prevents both
+already-running root work and late completion of previously authorized
+`StartUnit` requests from crossing the rollback boundary.
 
 ## Execution receipts
 
@@ -166,7 +183,7 @@ verification must establish at minimum:
 
 ## Deployment boundary
 
-WB-0038E is repository-only. It does not create credentials, modify sshd or
+WB-0038E and WB-0038F are repository-only. It does not create credentials, modify sshd or
 Polkit on a target, deploy the subsystem, run A6 backups, mutate a VPS, or grant
 production authority. Any deployment requires a separate target-bound plan, a real server-side
 authorization verifier, fresh verification, and explicit authorization.
