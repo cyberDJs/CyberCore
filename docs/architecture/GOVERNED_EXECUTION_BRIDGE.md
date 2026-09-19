@@ -116,14 +116,25 @@ properties. Bootstrap installs two root-owned static wrapper units:
 - `cybercore-vikunja-backup-install.service`;
 - `cybercore-vikunja-backup-run.service`.
 
-The bootstrap manifest reloads systemd before installing the Polkit rule. The
-Polkit rule allows the `cybercore-exec` identity to request only `start` for
-those exact wrapper names. Because the static unit fragments already exist when
-authorization becomes available, the names cannot be reused for an arbitrary
-transient service.
+Bootstrap treats upgrades from the earlier transient-unit design as a security
+transition, not as an in-place overwrite. Before either wrapper name is claimed,
+the manifest revokes any existing managed Polkit rule and requires verification
+that the old privilege is no longer effective. It then verifies that neither
+wrapper name is occupied by a transient unit, creates
+`/opt/backups/vikunja` as `root:root` mode `0700`, installs the static
+root-owned unit fragments, reloads systemd, and only then installs the narrowed
+Polkit rule.
 
-Rollback removes the privilege rule before removing either static wrapper and
-reloads systemd after the wrapper files are removed.
+The Polkit rule allows the `cybercore-exec` identity to request only `start`
+for those exact wrapper names. The installer unit requires the backup directory
+to exist as an explicit writable sandbox path; a missing path is a hard failure,
+not an ignored exception.
+
+Rollback is also fail-closed. It first removes the managed privilege rule and
+must verify effective revocation before removing either static wrapper. If the
+rule is locally drifted or otherwise cannot be revoked, rollback stops and keeps
+the wrapper names occupied rather than exposing an authorized-but-unclaimed
+systemd unit name. After safe wrapper removal it reloads systemd.
 
 ## Execution receipts
 
