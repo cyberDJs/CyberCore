@@ -3,9 +3,32 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from hashlib import sha256
 import json
+import math
 
 
 _ALLOWED_VERDICTS = {"PASS", "FAIL"}
+
+
+def _validate_json_value(value: object, *, label: str) -> None:
+    if value is None or isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"{label} must contain canonical JSON values with finite numbers")
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_json_value(item, label=f"{label}[{index}]")
+        return
+    if isinstance(value, dict):
+        if not all(isinstance(key, str) for key in value):
+            raise ValueError(
+                f"{label} must contain canonical JSON values with string-keyed objects"
+            )
+        for key, item in value.items():
+            _validate_json_value(item, label=f"{label}.{key}")
+        return
+    raise ValueError(f"{label} must contain canonical JSON values")
 
 
 def evidence_digest(evidence: dict[str, object]) -> str:
@@ -49,15 +72,7 @@ class EvaluationResult:
             isinstance(key, str) for key in self.metadata
         ):
             raise ValueError("evaluation metadata must be an object with string keys")
-        try:
-            json.dumps(
-                self.metadata,
-                sort_keys=True,
-                separators=(",", ":"),
-                allow_nan=False,
-            )
-        except (TypeError, ValueError) as exc:
-            raise ValueError("evaluation metadata must contain canonical JSON values") from exc
+        _validate_json_value(self.metadata, label="evaluation metadata")
 
     def canonical_payload(self) -> dict[str, object]:
         return {

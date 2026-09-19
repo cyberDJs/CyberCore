@@ -641,3 +641,25 @@ def test_parse_worker_allows_failure_without_execution_evidence():
 
     assert success is False
     assert evidence == {}
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {"nested": {1: "a"}},
+        {"seq": ("x", "y")},
+    ],
+)
+def test_evaluation_rejects_noncanonical_nested_metadata(metadata):
+    evaluation = EvaluationResult(
+        evaluator_id="judge",
+        evaluator_version="1",
+        score=1.0,
+        verdict="PASS",
+        reasons=("verified",),
+        evidence_digest="abc",
+        metadata=metadata,
+    )
+
+    with pytest.raises(ValueError, match="canonical JSON"):
+        evaluation.validate(expected_evidence_digest="abc")
