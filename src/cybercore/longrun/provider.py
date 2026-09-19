@@ -275,6 +275,22 @@ class ModelRuntime:
         call_policy = policy or ProviderCallPolicy()
         call_policy.validate()
         provider = self.registry.resolve(binding)
+        request_digest = request.digest
+
+        def validate_attempt_boundary() -> None:
+            if provider.binding != binding:
+                raise RuntimeError(
+                    "registered provider identity drifted during provider invocation"
+                )
+            try:
+                current_request_digest = request.digest
+            except ValueError as exc:
+                raise RuntimeError(
+                    "model request mutated during provider invocation"
+                ) from exc
+            if current_request_digest != request_digest:
+                raise RuntimeError("model request mutated during provider invocation")
+
         started = self.clock()
         attempts = 0
         while True:
@@ -286,17 +302,22 @@ class ModelRuntime:
                     request,
                     timeout_seconds=float(call_policy.timeout_seconds),
                 )
-                break
             except ProviderError as exc:
+                validate_attempt_boundary()
                 if not exc.retryable or attempts >= call_policy.max_attempts:
                     raise
+            else:
+                validate_attempt_boundary()
+                if cancelled is not None and cancelled():
+                    raise ProviderError("cancelled", "provider call cancelled", retryable=False)
+                break
         response.validate(expected_request_id=request.request_id)
         finished = self.clock()
         latency_ms = max(0.0, (finished - started) * 1000.0)
         receipt = ProviderCallReceipt(
             binding=binding,
             request_id=request.request_id,
-            request_digest=request.digest,
+            request_digest=request_digest,
             response_digest=response.digest,
             attempts=attempts,
             latency_ms=latency_ms,
