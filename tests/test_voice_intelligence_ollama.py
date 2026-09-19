@@ -41,15 +41,10 @@ def test_ollama_transport_disables_environment_proxies_and_redirects(monkeypatch
 
     assert opener is sentinel
     proxy_handler = next(
-        handler
-        for handler in captured["handlers"]
-        if isinstance(handler, request.ProxyHandler)
+        handler for handler in captured["handlers"] if isinstance(handler, request.ProxyHandler)
     )
     assert proxy_handler.proxies == {}
-    assert any(
-        type(handler).__name__ == "_NoRedirectHandler"
-        for handler in captured["handlers"]
-    )
+    assert any(type(handler).__name__ == "_NoRedirectHandler" for handler in captured["handlers"])
 
 
 def test_ollama_sends_nonstreaming_schema_request() -> None:
