@@ -23,13 +23,16 @@ Add a model-backed intelligence layer before the existing governed router with t
 3. Model output is strict, structured, confidence-bounded, and rejected on schema mismatch.
 4. Failure falls back safely; authority-sensitive fallback classifications are downgraded to
    `UNKNOWN`.
-5. Current or changing external-state questions are marked `needs_live_data` and are not answered
-   from model memory.
+5. Current or changing external-state questions are blocked by a deterministic controller gate
+   independent of the model's `needs_live_data` flag; model-declared live-data needs are additive.
 6. Stable general-knowledge questions may be answered by a bounded response composer.
 7. Operational intents continue through the existing VoiceRouter, HOWEDO, OATHDO, CCL approval,
    and governed execution boundaries.
 8. The first provider is local Ollama over explicit loopback HTTP using only the Python standard
-   library. No model is downloaded or started automatically.
+   library. Environment proxies are disabled and redirects are rejected so prompts cannot leave
+   the loopback boundary through client transport behavior.
+9. While synchronous intelligence inference is running, microphone input continues through the
+   realtime input path so speech can trigger the existing PROCESSING-state barge-in behavior.
 
 ## Consequences
 
