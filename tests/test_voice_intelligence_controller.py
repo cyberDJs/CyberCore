@@ -44,10 +44,10 @@ def controller(client):
 
 
 def test_general_question_gets_model_answer() -> None:
-    client = SequenceClient([intent(), "Docker is a container platform."])
-    response = controller(client).handle(utterance("Co je Docker?"), VoiceContext())
+    client = SequenceClient([intent(), "A container is an isolated application package."])
+    response = controller(client).handle(utterance("Co znamená container?"), VoiceContext())
     assert response.status == "answered"
-    assert response.message.startswith("Docker")
+    assert response.message.startswith("A container")
     assert client.calls == 2
 
 
@@ -78,6 +78,23 @@ def test_live_data_gate_does_not_trust_model_false_flag() -> None:
     ],
 )
 def test_non_stable_questions_fail_closed_even_if_model_flag_is_false(text: str) -> None:
+    client = SequenceClient([intent(kind="question", needs_live_data=False)])
+    response = controller(client).handle(utterance(text), VoiceContext())
+    assert response.status == "needs_live_data"
+    assert client.calls == 1
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "What is the time in London?",
+        "What is the population of France?",
+        "What is on CNN?",
+        "What is Docker?",
+        "How does Kubernetes work?",
+    ],
+)
+def test_non_lexical_questions_fail_closed(text: str) -> None:
     client = SequenceClient([intent(kind="question", needs_live_data=False)])
     response = controller(client).handle(utterance(text), VoiceContext())
     assert response.status == "needs_live_data"
