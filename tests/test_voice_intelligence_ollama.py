@@ -28,13 +28,28 @@ def test_ollama_rejects_credentials_in_url() -> None:
 
 
 def test_ollama_transport_disables_environment_proxies_and_redirects(monkeypatch) -> None:
+    captured = {}
+    sentinel = object()
+
+    def build_opener(*handlers):
+        captured["handlers"] = handlers
+        return sentinel
+
     monkeypatch.setenv("HTTP_PROXY", "http://proxy.invalid:3128")
+    monkeypatch.setattr(request, "build_opener", build_opener)
     opener = _build_local_only_opener()
+
+    assert opener is sentinel
     proxy_handler = next(
-        handler for handler in opener.handlers if isinstance(handler, request.ProxyHandler)
+        handler
+        for handler in captured["handlers"]
+        if isinstance(handler, request.ProxyHandler)
     )
     assert proxy_handler.proxies == {}
-    assert any(type(handler).__name__ == "_NoRedirectHandler" for handler in opener.handlers)
+    assert any(
+        type(handler).__name__ == "_NoRedirectHandler"
+        for handler in captured["handlers"]
+    )
 
 
 def test_ollama_sends_nonstreaming_schema_request() -> None:
