@@ -577,6 +577,44 @@ def test_authorization_expiry_is_revalidated_immediately_before_nonce_consumptio
     assert not result.remote_mutation_possible
 
 
+def test_authorization_expiry_after_nonce_consumption_blocks_stou(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    consumed = 0
+    fake = FakeFtps()
+    real_verify = preview._verify_authorization_evidence
+
+    def verify(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            return real_verify(*args, **kwargs)
+        return "staging preview authorization has expired"
+
+    def consume(_nonce: str, _authorization_reference: str) -> None:
+        nonlocal consumed
+        consumed += 1
+
+    monkeypatch.setattr(preview, "_verify_authorization_evidence", verify)
+    monkeypatch.setattr(preview, "_consume_trusted_authorization_nonce", consume)
+
+    result = preview.execute_staging_preview_stou(
+        _input(),
+        remote_write_authorized=True,
+        authorization_reference=AUTH,
+        credential_loader=_credential,
+        ftp_factory=lambda _context: fake,
+    )
+
+    assert not result.executed
+    assert result.errors == ("staging preview authorization has expired",)
+    assert calls == 3
+    assert consumed == 1
+    assert not any(command.startswith("STOU ") for command in fake.commands)
+    assert not result.remote_mutation_possible
+
+
 def test_non_string_sha256_fails_closed_without_hashing_or_credentials() -> None:
     loads = 0
 
