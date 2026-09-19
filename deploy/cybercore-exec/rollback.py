@@ -56,6 +56,12 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "deploy/cybercore-exec/vikunja-backup-install",
         ),
         RollbackAction(
+            "remove-authorization",
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
+            "/usr/local/libexec/cybercore-exec/authorization.py",
+            "src/cybercore/execution/authorization.py",
+        ),
+        RollbackAction(
             "remove-dispatcher",
             RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
             "/usr/local/libexec/cybercore-exec/dispatcher.py",
