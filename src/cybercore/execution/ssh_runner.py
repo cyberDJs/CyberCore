@@ -4,6 +4,10 @@ import json
 import subprocess
 from typing import Callable
 
+from cybercore.execution.authorization import (
+    DenyAllExecutionAuthorizationVerifier,
+    ExecutionAuthorizationVerifier,
+)
 from cybercore.execution.models import ExecutionReceipt, ExecutionTarget, GovernedAction
 from cybercore.execution.policy import evaluate_action
 from cybercore.execution.receipt import build_receipt, utc_now
@@ -61,11 +65,25 @@ def execute_action(
     action: GovernedAction,
     target: ExecutionTarget,
     *,
+    authorization_verifier: ExecutionAuthorizationVerifier | None = None,
     run: RunCallable = subprocess.run,
 ) -> ExecutionReceipt:
     decision = evaluate_action(action, target)
     if not decision.allowed:
         raise ExecutionBlockedError(decision.reason)
+
+    if decision.mutating:
+        verifier = authorization_verifier or DenyAllExecutionAuthorizationVerifier()
+        authorization = verifier.verify(
+            operation_id=action.operation_id,
+            operation=action.operation,
+            target_id=action.target_id,
+            plan_id=action.plan_id,
+            plan_revision=action.plan_revision,
+            authorization_reference=action.authorization_reference,
+        )
+        if not authorization.authorized:
+            raise ExecutionBlockedError(authorization.reason)
 
     argv = build_transport_argv(target)
     started_at = utc_now()
