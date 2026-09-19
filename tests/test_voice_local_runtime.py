@@ -294,6 +294,23 @@ def test_capture_replays_bounded_preroll_before_speech_onset() -> None:
     assert runtime.realtime.state is RealtimeState.PROCESSING
 
 
+def test_processing_pumps_live_input_and_preserves_barge_in() -> None:
+    runtime, session, stt, _, source, _ = make_runtime(nonblocking=[frame(2)])
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    def slow_processing() -> str:
+        time.sleep(0.05)
+        return "done"
+
+    result = runtime.process_with_live_input(slow_processing)
+
+    assert result == "done"
+    assert source.nonblocking_reads > 0
+    assert stt.sequences == [2]
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
 def test_speak_sends_audio_and_returns_to_idle() -> None:
     runtime, _, _, _, _, transport = make_runtime()
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
