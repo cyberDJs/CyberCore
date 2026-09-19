@@ -89,6 +89,13 @@ def test_backup_installer_is_fixed_and_shell_free() -> None:
     assert "sh -c" not in text
 
 
+def test_rollback_matches_current_privilege_policy_and_helper() -> None:
+    text = (DEPLOY / "rollback.py").read_text()
+    assert "/etc/polkit-1/rules.d/60-cybercore-exec.rules" in text
+    assert "/etc/sudoers.d/cybercore-exec" not in text
+    assert "/usr/local/libexec/cybercore-exec/vikunja-backup-install" in text
+
+
 def test_bootstrap_scripts_are_declarative_only() -> None:
     for name in ("install.py", "rollback.py"):
         text = (DEPLOY / name).read_text()
