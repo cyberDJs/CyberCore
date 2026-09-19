@@ -54,15 +54,23 @@ The response must contain exactly `kind`, `operation`, `target`, `language`, `co
 
 ## Live-data rule
 
-The intelligence bridge has no read-only tools in WB-0039. Questions about current repository,
-CI, service, machine, infrastructure, or other changing state must set `needs_live_data=true`.
-The controller refuses to synthesize a factual answer and states that an allowed read-only tool is
-required.
+The intelligence bridge has no read-only tools in WB-0039. The controller independently detects
+live/current-state requests from intent kind and deterministic language markers; it does not trust
+a model-supplied `needs_live_data=false` as an enforcement decision. A model-supplied
+`needs_live_data=true` remains additive. Requests that need changing external state are refused a
+factual model-memory answer and require an allowed read-only tool.
 
 ## Local Ollama reference provider
 
 Only explicit loopback HTTP endpoints are accepted. Credentials, non-loopback hosts, URL paths,
-query strings, and fragments are rejected. No model is downloaded automatically.
+query strings, and fragments are rejected. The HTTP client disables environment proxies and rejects
+redirects, preserving the local-only transport boundary even on hosts with proxy variables set. No
+model is downloaded automatically.
+
+While model inference is synchronous, local microphone input is pumped through
+`RealtimeVoiceRuntime.receive_input`. Speech detected in `PROCESSING` therefore triggers the
+existing interrupt/barge-in transition, and the completed stale model answer is not spoken while the
+runtime is interrupted.
 
 ## Local CLI integration
 
