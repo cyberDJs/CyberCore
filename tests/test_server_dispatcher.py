@@ -46,10 +46,10 @@ def test_dispatcher_uses_fixed_argv_and_shell_false() -> None:
 
 
 def test_receipt_hashes_authorization_reference_instead_of_emitting_it() -> None:
-    receipt = execute_request(
-        _request(),
-        runner=lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b""),
-    )
+    def runner(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
+
+    receipt = execute_request(_request(), runner=runner)
     assert receipt.authorization_reference_sha256 == hashlib.sha256(b"grant-1").hexdigest()
     assert not hasattr(receipt, "authorization_reference")
     assert "grant-1" not in str(receipt.as_dict())
