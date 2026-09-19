@@ -179,7 +179,6 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload"]
 
 
-
 def test_governed_backup_run_owns_process_and_preserves_docker_ordering() -> None:
     text = (DEPLOY / "cybercore-vikunja-backup-run.service").read_text()
     assert "ExecStart=/usr/local/sbin/vikunja-backup" in text
@@ -236,24 +235,30 @@ def test_rollback_blocks_new_wrapper_starts_before_quiescence() -> None:
         "VERIFY_SYSTEMD_UNIT_MASKED_RUNTIME"
     )
 
-    assert index["verify-privilege-policy-revoked"] < index[
-        "verify-vikunja-backup-install-wrapper-managed"
-    ]
-    assert index["verify-vikunja-backup-install-wrapper-managed"] < index[
-        "runtime-mask-vikunja-backup-install-wrapper"
-    ]
-    assert index["runtime-mask-vikunja-backup-install-wrapper"] < index[
-        "verify-vikunja-backup-install-wrapper-runtime-masked"
-    ]
-    assert index["verify-vikunja-backup-install-wrapper-runtime-masked"] < index[
-        "stop-vikunja-backup-install-wrapper"
-    ]
-    assert index["runtime-mask-vikunja-backup-run-wrapper"] < index[
-        "verify-vikunja-backup-run-wrapper-runtime-masked"
-    ]
-    assert index["verify-vikunja-backup-run-wrapper-runtime-masked"] < index[
-        "stop-vikunja-backup-run-wrapper"
-    ]
+    assert (
+        index["verify-privilege-policy-revoked"]
+        < index["verify-vikunja-backup-install-wrapper-managed"]
+    )
+    assert (
+        index["verify-vikunja-backup-install-wrapper-managed"]
+        < index["runtime-mask-vikunja-backup-install-wrapper"]
+    )
+    assert (
+        index["runtime-mask-vikunja-backup-install-wrapper"]
+        < index["verify-vikunja-backup-install-wrapper-runtime-masked"]
+    )
+    assert (
+        index["verify-vikunja-backup-install-wrapper-runtime-masked"]
+        < index["stop-vikunja-backup-install-wrapper"]
+    )
+    assert (
+        index["runtime-mask-vikunja-backup-run-wrapper"]
+        < index["verify-vikunja-backup-run-wrapper-runtime-masked"]
+    )
+    assert (
+        index["verify-vikunja-backup-run-wrapper-runtime-masked"]
+        < index["stop-vikunja-backup-run-wrapper"]
+    )
 
 
 def test_rollback_stops_installer_before_rechecking_schedule_and_service() -> None:
@@ -275,18 +280,22 @@ def test_rollback_stops_installer_before_rechecking_schedule_and_service() -> No
         "STOP_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT"
     )
 
-    assert index["stop-vikunja-backup-install-wrapper"] < index[
-        "verify-vikunja-backup-timer-managed-or-absent"
-    ]
-    assert index["stop-vikunja-backup-install-wrapper"] < index[
-        "verify-vikunja-backup-service-managed-or-absent"
-    ]
-    assert index["verify-vikunja-backup-timer-managed-or-absent"] < index[
-        "disable-vikunja-backup-timer"
-    ]
-    assert index["verify-vikunja-backup-service-managed-or-absent"] < index[
-        "stop-vikunja-backup-service"
-    ]
+    assert (
+        index["stop-vikunja-backup-install-wrapper"]
+        < index["verify-vikunja-backup-timer-managed-or-absent"]
+    )
+    assert (
+        index["stop-vikunja-backup-install-wrapper"]
+        < index["verify-vikunja-backup-service-managed-or-absent"]
+    )
+    assert (
+        index["verify-vikunja-backup-timer-managed-or-absent"]
+        < index["disable-vikunja-backup-timer"]
+    )
+    assert (
+        index["verify-vikunja-backup-service-managed-or-absent"]
+        < index["stop-vikunja-backup-service"]
+    )
     assert index["disable-vikunja-backup-timer"] < index["stop-vikunja-backup-service"]
     assert index["stop-vikunja-backup-service"] < index["remove-vikunja-backup-install-unit"]
     assert index["stop-vikunja-backup-service"] < index["remove-vikunja-backup-run-unit"]
@@ -311,24 +320,30 @@ def test_rollback_persistently_masks_wrapper_names_before_reboot_boundary() -> N
         "VERIFY_SYSTEMD_UNIT_MASKED_PERSISTENT"
     )
 
-    assert index["remove-vikunja-backup-install-unit"] < index[
-        "persistent-mask-vikunja-backup-install-wrapper"
-    ]
-    assert index["remove-vikunja-backup-run-unit"] < index[
-        "persistent-mask-vikunja-backup-run-wrapper"
-    ]
-    assert index["persistent-mask-vikunja-backup-install-wrapper"] < index[
-        "systemd-reload-after-persistent-mask"
-    ]
-    assert index["persistent-mask-vikunja-backup-run-wrapper"] < index[
-        "systemd-reload-after-persistent-mask"
-    ]
-    assert index["systemd-reload-after-persistent-mask"] < index[
-        "verify-vikunja-backup-install-wrapper-persistent-masked"
-    ]
-    assert index["systemd-reload-after-persistent-mask"] < index[
-        "verify-vikunja-backup-run-wrapper-persistent-masked"
-    ]
+    assert (
+        index["remove-vikunja-backup-install-unit"]
+        < index["persistent-mask-vikunja-backup-install-wrapper"]
+    )
+    assert (
+        index["remove-vikunja-backup-run-unit"]
+        < index["persistent-mask-vikunja-backup-run-wrapper"]
+    )
+    assert (
+        index["persistent-mask-vikunja-backup-install-wrapper"]
+        < index["systemd-reload-after-persistent-mask"]
+    )
+    assert (
+        index["persistent-mask-vikunja-backup-run-wrapper"]
+        < index["systemd-reload-after-persistent-mask"]
+    )
+    assert (
+        index["systemd-reload-after-persistent-mask"]
+        < index["verify-vikunja-backup-install-wrapper-persistent-masked"]
+    )
+    assert (
+        index["systemd-reload-after-persistent-mask"]
+        < index["verify-vikunja-backup-run-wrapper-persistent-masked"]
+    )
 
 
 def test_bootstrap_scripts_are_declarative_only() -> None:
