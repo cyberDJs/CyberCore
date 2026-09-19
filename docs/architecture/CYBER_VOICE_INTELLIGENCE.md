@@ -25,10 +25,10 @@ speech -> STT -> Utterance
           v                  v
  existing VoiceRouter   structured model compiler
  HOWEDO/OATHDO/CCL        |              |
-                          | live data    | stable question
-                          v              v
-                   needs read-only    model response
-                        tool             composer
+                          | source needed | lexical definition
+                          v               v
+                   needs read-only     model response
+                        tool              composer
                           \              /
                            \            /
                             spoken response -> TTS
@@ -38,7 +38,9 @@ speech -> STT -> Utterance
 
 `CANCEL`, `APPROVE`, and `EXECUTE` are deliberately absent from the model output schema. A model
 cannot create those intent kinds even if prompted or compromised. Command-like forms are classified
-by a deterministic pre-model guard.
+by a deterministic pre-model guard. Cancellation uses bounded command-token detection anywhere in
+the utterance rather than enumerating conversational prefixes, while explicit mention/definition
+and negation forms remain non-cancelling.
 
 If model classification fails, the fallback rule compiler is sanitized: any authority-sensitive
 fallback result is downgraded to `UNKNOWN`.
@@ -55,12 +57,11 @@ The response must contain exactly `kind`, `operation`, `target`, `language`, `co
 ## Live-data rule
 
 The intelligence bridge has no read-only tools in WB-0039. Model questions fail closed unless the
-utterance matches a deterministic positive allowlist for stable definitional or mechanistic
-questions. Search, inspect, monitor and non-allowlisted questions require live evidence regardless
-of a model-supplied `needs_live_data=false`; a model-supplied `needs_live_data=true` remains
-additive. Dynamic-topic markers provide an additional denial layer rather than the primary trust
-boundary. Requests that may depend on changing external state are refused a factual model-memory
-answer and require an allowed read-only tool.
+utterance is an explicit one-term lexical-definition request such as `what does TERM mean` or
+`define TERM` (including Czech equivalents). Broad factual forms such as `what is ...` and
+mechanistic forms such as `how does ... work` are not trusted as evidence of stability. Search,
+inspect, monitor and every non-allowlisted question therefore require a trusted source regardless of
+a model-supplied `needs_live_data=false`; a model-supplied `needs_live_data=true` remains additive.
 
 ## Local Ollama reference provider
 
