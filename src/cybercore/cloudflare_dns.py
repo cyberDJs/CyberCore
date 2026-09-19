@@ -568,9 +568,7 @@ def load_rollback_manifest(path: Path) -> DnsManifest:
             )
         base = {key: value for key, value in item.items() if key not in RESTORABLE_METADATA_FIELDS}
         record = _record_from_manifest(base, zone)
-        restore_metadata = {
-            key: item[key] for key in RESTORABLE_METADATA_FIELDS if key in item
-        }
+        restore_metadata = {key: item[key] for key in RESTORABLE_METADATA_FIELDS if key in item}
         records.append(
             DnsRecord(
                 record.record_type,
@@ -604,9 +602,7 @@ def load_rollback_manifest(path: Path) -> DnsManifest:
             )
         mx_records = [record for record in owner_records if record.record_type == "MX"]
         null_mx = [record for record in mx_records if record.content == "."]
-        if null_mx and (
-            len(mx_records) != 1 or len(null_mx) != 1 or null_mx[0].priority != 0
-        ):
+        if null_mx and (len(mx_records) != 1 or len(null_mx) != 1 or null_mx[0].priority != 0):
             raise CloudflareDnsError(
                 f"Null MX at {name} must be the sole MX record with priority 0"
             )
