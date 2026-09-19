@@ -302,6 +302,7 @@ def test_rollback_stops_installer_before_rechecking_schedule_and_service() -> No
         index["verify-vikunja-backup-timer-managed-or-absent"]
         < index["disable-vikunja-backup-timer"]
     )
+    assert index["disable-vikunja-backup-timer"] < index["stop-vikunja-backup-run-wrapper"]
     assert (
         index["verify-vikunja-backup-service-managed-or-absent"]
         < index["stop-vikunja-backup-service"]
