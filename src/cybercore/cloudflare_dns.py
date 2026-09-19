@@ -657,6 +657,20 @@ def _canonical_plan_payload(
     )
 
 
+def _managed_snapshot_fingerprint(manifest: DnsManifest, records: tuple[DnsRecord, ...]) -> str:
+    managed = set(manifest.managed_recordsets)
+    payload = [
+        record.public_dict(include_restore_metadata=True)
+        for record in records
+        if record.recordset() in managed
+    ]
+    payload.sort(key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")))
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def _validate_current_name_conflicts(
     manifest: DnsManifest, current_records: tuple[DnsRecord, ...]
 ) -> None:
@@ -976,10 +990,18 @@ def apply_manifest(
                 "Cloudflare zone identity/status drifted at mutation boundary; "
                 "generate a fresh plan and approval"
             )
+        boundary_records = api.list_dns_records(current_zone_id)
+        if _managed_snapshot_fingerprint(
+            manifest, boundary_records
+        ) != _managed_snapshot_fingerprint(manifest, plan.current_records):
+            raise CloudflareDnsError(
+                "Cloudflare managed DNS records drifted at mutation boundary, including "
+                "restorable metadata; generate a fresh plan and approval"
+            )
         boundary_plan = build_plan(
             manifest,
             zone_id=current_zone_id,
-            current_records=api.list_dns_records(current_zone_id),
+            current_records=boundary_records,
             zone_status=current_zone_status,
         )
         if boundary_plan.fingerprint != plan.fingerprint:

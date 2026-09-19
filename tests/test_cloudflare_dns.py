@@ -864,3 +864,62 @@ def test_apply_revalidates_managed_records_immediately_before_batch(tmp_path: Pa
     assert api.writes == []
     assert (evidence_dir / "pre-write-zone-snapshot.json").is_file()
     assert (evidence_dir / "rollback-manifest.yaml").is_file()
+
+
+def test_apply_revalidates_managed_metadata_immediately_before_batch(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+    initial = (
+        DnsRecord(
+            "A",
+            "example.cz",
+            "192.0.2.9",
+            300,
+            False,
+            None,
+            "a1",
+            {"comment": "initial", "tags": ["owner:cybercore"]},
+        ),
+    )
+    drifted = (
+        DnsRecord(
+            "A",
+            "example.cz",
+            "192.0.2.9",
+            300,
+            False,
+            None,
+            "a1",
+            {"comment": "concurrent change", "tags": ["owner:cybercore"]},
+        ),
+    )
+
+    class BoundaryMetadataDriftApi(FakeApi):
+        def __init__(self) -> None:
+            super().__init__(initial)
+            self.list_dns_calls = 0
+
+        def list_dns_records(self, zone_id: str) -> tuple[DnsRecord, ...]:
+            self.list_dns_calls += 1
+            if self.list_dns_calls >= 3:
+                return drifted
+            return super().list_dns_records(zone_id)
+
+    api = BoundaryMetadataDriftApi()
+    plan = plan_from_manifest(api, manifest)
+    evidence_dir = tmp_path / "managed-metadata-boundary-drift"
+
+    with pytest.raises(
+        CloudflareDnsError, match="managed DNS records drifted at mutation boundary"
+    ):
+        apply_manifest(
+            api,
+            manifest,
+            expected_plan=plan.fingerprint,
+            approval=plan.approval_text,
+            evidence_dir=evidence_dir,
+        )
+
+    assert api.list_dns_calls >= 3
+    assert api.writes == []
+    assert (evidence_dir / "pre-write-zone-snapshot.json").is_file()
+    assert (evidence_dir / "rollback-manifest.yaml").is_file()
