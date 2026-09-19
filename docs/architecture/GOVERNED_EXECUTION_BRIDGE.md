@@ -8,7 +8,7 @@ Work block: `WB-0037` with `WB-0038E` execution-boundary repair
 WB-0037 connects a bounded CyberCore action that has already passed continuity,
 governance, and approval checks to an execution transport without creating a
 general-purpose remote shell. WB-0038E repairs the client/server protocol,
-timeout, privilege, receipt-disclosure, and rollback contracts before this
+timeout, privilege, authorization, receipt-disclosure, and rollback contracts before this
 boundary can be considered deployable.
 
 The first target is only `tasks.cyberdjs.org` (`162.35.117.219`). The first
@@ -20,7 +20,9 @@ operation family is only Vikunja operations required by A6.
 Cyber Voice READY / bounded CommandPlan
   -> governed execution policy
   -> exact target + operation + plan binding
+  -> client authorization verifier for mutations
   -> SSH subsystem transport
+  -> server authorization verifier for mutations
   -> server-side cybercore-exec subsystem
   -> execution receipt
   -> separate independent verifier
@@ -77,8 +79,14 @@ Every request must carry:
 Client and server import the same protocol-version constant. Unsupported or
 mistyped versions fail closed.
 
-The bridge does not mint or infer authorization. The authorization verifier that
-precedes this bridge remains authoritative.
+A non-empty authorization reference is binding metadata, not authorization proof.
+Mutating operations therefore require an `ExecutionAuthorizationVerifier` on both
+sides of the transport. The default verifier denies all mutations. The standalone
+server entrypoint has no permissive fallback, so a deployed artifact without a
+real verifier remains fail-closed for mutation.
+
+A future deployment must provide a separately reviewed verifier backed by the
+canonical CyberCore approval source. WB-0038E does not mint or persist authority.
 
 ## Transport invariants
 
@@ -149,5 +157,5 @@ verification must establish at minimum:
 
 WB-0038E is repository-only. It does not create credentials, modify sshd or
 Polkit on a target, deploy the subsystem, run A6 backups, mutate a VPS, or grant
-production authority. Any deployment requires a separate target-bound plan,
-fresh verification, and explicit authorization.
+production authority. Any deployment requires a separate target-bound plan, a real server-side
+authorization verifier, fresh verification, and explicit authorization.
