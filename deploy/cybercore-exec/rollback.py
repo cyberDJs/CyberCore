@@ -124,7 +124,7 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
 def main() -> int:
     payload = {
         "status": "PROPOSED",
-        "operation_id": "WB0038F-BOOTSTRAP-ROLLBACK",
+        "operation_id": "WB0038E-BOOTSTRAP-ROLLBACK",
         "actions": [asdict(action) for action in build_rollback_manifest()],
         "service_user_removed": False,
         "execution_required": True,
