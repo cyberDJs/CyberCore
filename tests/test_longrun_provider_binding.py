@@ -663,3 +663,39 @@ def test_evaluation_rejects_noncanonical_nested_metadata(metadata):
 
     with pytest.raises(ValueError, match="canonical JSON"):
         evaluation.validate(expected_evidence_digest="abc")
+
+
+def test_evaluation_digest_rejects_noncanonical_metadata_without_validate():
+    evaluation = EvaluationResult(
+        evaluator_id="judge",
+        evaluator_version="1",
+        score=1.0,
+        verdict="PASS",
+        reasons=("verified",),
+        evidence_digest="abc",
+        metadata={"seq": ("x", "y")},
+    )
+
+    with pytest.raises(ValueError, match="canonical JSON"):
+        _ = evaluation.digest
+
+
+def test_evaluation_rejects_cyclic_metadata_fail_closed():
+    metadata: dict[str, object] = {}
+    metadata["self"] = metadata
+    evaluation = EvaluationResult(
+        evaluator_id="judge",
+        evaluator_version="1",
+        score=1.0,
+        verdict="PASS",
+        reasons=("verified",),
+        evidence_digest="abc",
+        metadata=metadata,
+    )
+
+    with pytest.raises(ValueError, match="acyclic canonical JSON"):
+        evaluation.validate(expected_evidence_digest="abc")
+    with pytest.raises(ValueError, match="acyclic canonical JSON"):
+        _ = evaluation.digest
+    with pytest.raises(ValueError, match="acyclic canonical JSON"):
+        evaluation.event_payload()
