@@ -15,6 +15,15 @@ class ModelTransportError(RuntimeError):
     pass
 
 
+class _NoRedirectHandler(request.HTTPRedirectHandler):
+    def redirect_request(self, _req, _fp, _code, _msg, _headers, _newurl):
+        return None
+
+
+def _build_local_only_opener():
+    return request.build_opener(request.ProxyHandler({}), _NoRedirectHandler())
+
+
 def _default_transport(url: str, payload: bytes, timeout_s: float) -> bytes:
     req = request.Request(
         url,
@@ -22,8 +31,9 @@ def _default_transport(url: str, payload: bytes, timeout_s: float) -> bytes:
         headers={"Content-Type": "application/json"},
         method="POST",
     )
+    opener = _build_local_only_opener()
     try:
-        with request.urlopen(req, timeout=timeout_s) as response:
+        with opener.open(req, timeout=timeout_s) as response:
             return response.read(1_048_577)
     except (error.HTTPError, error.URLError, TimeoutError, OSError) as exc:
         raise ModelTransportError(f"ollama request failed: {exc}") from exc
