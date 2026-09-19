@@ -21,13 +21,30 @@ def _canonical_digest(payload: object) -> str:
     return sha256(encoded).hexdigest()
 
 
+def _validate_json_value(value: object, *, label: str) -> None:
+    if value is None or isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"{label} must contain finite JSON numbers")
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_json_value(item, label=f"{label}[{index}]")
+        return
+    if isinstance(value, dict):
+        if not all(isinstance(key, str) for key in value):
+            raise ValueError(f"{label} must contain only string-keyed JSON objects")
+        for key, item in value.items():
+            _validate_json_value(item, label=f"{label}.{key}")
+        return
+    raise ValueError(f"{label} must contain canonical JSON values")
+
+
 def _validate_json_object(value: object, *, label: str) -> dict[str, object]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise ValueError(f"{label} must be an object with string keys")
-    try:
-        json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{label} must contain canonical JSON values") from exc
+    _validate_json_value(value, label=label)
     return value
 
 
