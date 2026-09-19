@@ -126,6 +126,7 @@ SERVICE_TEXT = '''[Unit]
 Description=CyberCore governed Vikunja backup
 Requires=docker.service
 After=docker.service
+PartOf=cybercore-vikunja-backup-run.service
 
 [Service]
 Type=oneshot
