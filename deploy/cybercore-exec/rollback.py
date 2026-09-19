@@ -35,6 +35,16 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
         ),
         RollbackAction(
+            "stop-vikunja-backup-install-wrapper",
+            RollbackActionType.STOP_SYSTEMD_UNIT_AND_WAIT,
+            "cybercore-vikunja-backup-install.service",
+        ),
+        RollbackAction(
+            "stop-vikunja-backup-run-wrapper",
+            RollbackActionType.STOP_SYSTEMD_UNIT_AND_WAIT,
+            "cybercore-vikunja-backup-run.service",
+        ),
+        RollbackAction(
             "remove-sshd-config",
             RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
             "/etc/ssh/sshd_config.d/60-cybercore-exec.conf",
