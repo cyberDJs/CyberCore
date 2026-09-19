@@ -182,7 +182,14 @@ def test_backup_installer_is_fixed_shell_free_and_private() -> None:
     assert "vikunja-backup.timer" in text
     assert "RETENTION_DAYS = 14" in text
     assert "write_exact(BACKUP_SCRIPT, BACKUP_SCRIPT_TEXT, 0o700)" in text
-    assert "PartOf=cybercore-vikunja-backup-run.service" in text
+    assert 'SERVICE_TEMPLATE = Path("/usr/local/libexec/cybercore-exec/vikunja-backup.service.template")' in text
+    assert 'TIMER_TEMPLATE = Path("/usr/local/libexec/cybercore-exec/vikunja-backup.timer.template")' in text
+    assert "SERVICE_TEMPLATE.read_text()" in text
+    assert "TIMER_TEMPLATE.read_text()" in text
+    service_template = (DEPLOY / "vikunja-backup.service").read_text()
+    timer_template = (DEPLOY / "vikunja-backup.timer").read_text()
+    assert "PartOf=cybercore-vikunja-backup-run.service" in service_template
+    assert "Unit=vikunja-backup.service" in timer_template
     install_unit = (DEPLOY / "cybercore-vikunja-backup-install.service").read_text()
     assert "ReadWritePaths=/usr/local/sbin /etc/systemd/system /opt/backups/vikunja" in install_unit
     assert "-/opt/backups/vikunja" not in install_unit
