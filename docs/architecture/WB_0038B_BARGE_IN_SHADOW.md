@@ -1,7 +1,7 @@
 # WB-0038B — Local Barge-In Shadow Evidence
 
-Status: SHADOW / NO INTERRUPTION AUTHORITY  
-Base: `14d4c6c4beb6b03aaedfaf2a76a521a038c98cb1`  
+Status: SHADOW / NO INTERRUPTION AUTHORITY
+Base: `14d4c6c4beb6b03aaedfaf2a76a521a038c98cb1`
 Predecessor: WB-0038A / PR #75 + post-merge repair PR #84
 
 ## Goal
