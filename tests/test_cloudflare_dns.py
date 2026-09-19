@@ -627,7 +627,9 @@ records:
         _load_inline_manifest(tmp_path, "null-mx-mixed.yaml", mixed)
 
 
-def test_apply_revalidates_zone_identity_and_status_immediately_before_batch(tmp_path: Path) -> None:
+def test_apply_revalidates_zone_identity_and_status_immediately_before_batch(
+    tmp_path: Path,
+) -> None:
     manifest = _manifest(tmp_path)
 
     class BoundaryDriftApi(FakeApi):
@@ -646,7 +648,9 @@ def test_apply_revalidates_zone_identity_and_status_immediately_before_batch(tmp
     assert plan.zone_status == "pending"
     evidence_dir = tmp_path / "boundary-drift-evidence"
 
-    with pytest.raises(CloudflareDnsError, match="zone identity/status drifted at mutation boundary"):
+    with pytest.raises(
+        CloudflareDnsError, match="zone identity/status drifted at mutation boundary"
+    ):
         apply_manifest(
             api,
             manifest,
