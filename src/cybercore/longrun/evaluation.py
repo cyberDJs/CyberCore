@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 import math
@@ -9,25 +9,46 @@ import math
 _ALLOWED_VERDICTS = {"PASS", "FAIL"}
 
 
-def _validate_json_value(value: object, *, label: str) -> None:
+def _validate_json_value(
+    value: object,
+    *,
+    label: str,
+    _active_containers: set[int] | None = None,
+) -> None:
     if value is None or isinstance(value, (str, bool, int)):
         return
     if isinstance(value, float):
         if not math.isfinite(value):
             raise ValueError(f"{label} must contain canonical JSON values with finite numbers")
         return
-    if isinstance(value, list):
-        for index, item in enumerate(value):
-            _validate_json_value(item, label=f"{label}[{index}]")
-        return
-    if isinstance(value, dict):
-        if not all(isinstance(key, str) for key in value):
-            raise ValueError(
-                f"{label} must contain canonical JSON values with string-keyed objects"
-            )
-        for key, item in value.items():
-            _validate_json_value(item, label=f"{label}.{key}")
-        return
+    if isinstance(value, (list, dict)):
+        active = _active_containers if _active_containers is not None else set()
+        identity = id(value)
+        if identity in active:
+            raise ValueError(f"{label} must contain acyclic canonical JSON values")
+        active.add(identity)
+        try:
+            if isinstance(value, list):
+                for index, item in enumerate(value):
+                    _validate_json_value(
+                        item,
+                        label=f"{label}[{index}]",
+                        _active_containers=active,
+                    )
+                return
+            if not all(isinstance(key, str) for key in value):
+                raise ValueError(
+                    f"{label} must contain canonical JSON values with string-keyed objects"
+                )
+            for key, item in value.items():
+                _validate_json_value(
+                    item,
+                    label=f"{label}.{key}",
+                    _active_containers=active,
+                )
+            return
+        finally:
+            active.remove(identity)
     raise ValueError(f"{label} must contain canonical JSON values")
 
 
@@ -75,6 +96,7 @@ class EvaluationResult:
         _validate_json_value(self.metadata, label="evaluation metadata")
 
     def canonical_payload(self) -> dict[str, object]:
+        _validate_json_value(self.metadata, label="evaluation metadata")
         return {
             "evaluator_id": self.evaluator_id,
             "evaluator_version": self.evaluator_version,
@@ -96,7 +118,6 @@ class EvaluationResult:
         return sha256(encoded).hexdigest()
 
     def event_payload(self) -> dict[str, object]:
-        payload = asdict(self)
-        payload["reasons"] = list(self.reasons)
+        payload = self.canonical_payload()
         payload["evaluation_digest"] = self.digest
         return payload
