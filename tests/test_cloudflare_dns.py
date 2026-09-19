@@ -15,6 +15,7 @@ from cybercore.cloudflare_dns import (
     apply_manifest,
     build_plan,
     load_manifest,
+    load_rollback_manifest,
     plan_from_manifest,
 )
 
@@ -624,3 +625,137 @@ records:
 """
     with pytest.raises(CloudflareDnsError, match="sole MX record with priority 0"):
         _load_inline_manifest(tmp_path, "null-mx-mixed.yaml", mixed)
+
+
+def test_apply_revalidates_zone_identity_and_status_immediately_before_batch(tmp_path: Path) -> None:
+    manifest = _manifest(tmp_path)
+
+    class BoundaryDriftApi(FakeApi):
+        def __init__(self) -> None:
+            super().__init__((), status="pending")
+            self.find_zone_calls = 0
+
+        def find_zone(self, zone: str) -> tuple[str, str]:
+            self.find_zone_calls += 1
+            if self.find_zone_calls >= 3:
+                self.status = "active"
+            return "zone-1", self.status
+
+    api = BoundaryDriftApi()
+    plan = plan_from_manifest(api, manifest)
+    assert plan.zone_status == "pending"
+    evidence_dir = tmp_path / "boundary-drift-evidence"
+
+    with pytest.raises(CloudflareDnsError, match="zone identity/status drifted at mutation boundary"):
+        apply_manifest(
+            api,
+            manifest,
+            expected_plan=plan.fingerprint,
+            approval=plan.approval_text,
+            evidence_dir=evidence_dir,
+        )
+
+    assert api.writes == []
+    assert (evidence_dir / "pre-write-zone-snapshot.json").is_file()
+    assert (evidence_dir / "rollback-manifest.yaml").is_file()
+
+
+def test_rollback_manifest_is_executable_and_restores_metadata(tmp_path: Path) -> None:
+    rollback_path = tmp_path / "rollback.yaml"
+    rollback_path.write_text(
+        """\
+version: cybercore.cloudflare-dns.rollback/v0.1
+zone: example.cz
+managed_recordsets:
+  - type: CNAME
+    name: www
+records:
+  - type: CNAME
+    name: www
+    content: target.example.net
+    ttl: 1
+    proxied: true
+    comment: restored note
+    tags:
+      - owner:cybercore
+    settings:
+      flatten_cname: true
+""",
+        encoding="utf-8",
+    )
+    manifest = load_rollback_manifest(rollback_path)
+    assert manifest.rollback is True
+    desired = manifest.records[0]
+    assert desired.restore_metadata == {
+        "comment": "restored note",
+        "tags": ["owner:cybercore"],
+        "settings": {"flatten_cname": True},
+    }
+
+    current = DnsRecord(
+        "CNAME",
+        "www.example.cz",
+        "different.example.net",
+        1,
+        True,
+        None,
+        "c1",
+        {"comment": "changed note"},
+    )
+    api = FakeApi((current,))
+    plan = plan_from_manifest(api, manifest)
+    assert plan.rollback is True
+    assert plan.approval_text.startswith("ROLLBACK CLOUDFLARE DNS example.cz ")
+    assert len(plan.changes) == 1
+    assert plan.changes[0].after is not None
+    assert plan.changes[0].after.restore_metadata == desired.restore_metadata
+
+    result = apply_manifest(
+        api,
+        manifest,
+        expected_plan=plan.fingerprint,
+        approval=plan.approval_text,
+        evidence_dir=tmp_path / "rollback-execution-evidence",
+    )
+    assert result["verified"] is True
+    restored = api.records[0]
+    assert restored.content == "target.example.net"
+    assert restored.restore_metadata == desired.restore_metadata
+
+
+def test_client_rollback_batch_includes_restorable_metadata() -> None:
+    captured: dict[str, object] = {}
+
+    def requester(request):
+        captured["body"] = request.data
+        return 200, b'{"success":true,"result":{}}'
+
+    client = CloudflareClient("test-token", requester=requester)
+    before = DnsRecord(
+        "CNAME", "www.example.cz", "old.example.net", 1, True, None, "c1"
+    )
+    after = DnsRecord(
+        "CNAME",
+        "www.example.cz",
+        "target.example.net",
+        1,
+        True,
+        None,
+        None,
+        {
+            "comment": "restored note",
+            "tags": ["owner:cybercore"],
+            "settings": {"flatten_cname": True},
+        },
+    )
+    client.apply_dns_batch(
+        "zone-1",
+        (DnsChange("UPDATE", ("CNAME", "www.example.cz"), before, after),),
+    )
+    raw = captured["body"]
+    assert isinstance(raw, bytes)
+    payload = json.loads(raw)
+    patch = payload["patches"][0]
+    assert patch["comment"] == "restored note"
+    assert patch["tags"] == ["owner:cybercore"]
+    assert patch["settings"] == {"flatten_cname": True}
