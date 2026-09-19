@@ -3,6 +3,7 @@ import subprocess
 
 import pytest
 
+from cybercore.execution.authorization import ExecutionAuthorizationCheck
 from cybercore.execution.models import ExecutionStatus, GovernedAction
 from cybercore.execution.policy import VIKUNJA_TARGET
 from cybercore.execution.server.operations import MAX_SERVER_OPERATION_TIMEOUT_SECONDS
@@ -13,6 +14,11 @@ from cybercore.execution.ssh_runner import (
     build_transport_argv,
     execute_action,
 )
+
+
+class AllowAuthorizationVerifier:
+    def verify(self, **kwargs: str) -> ExecutionAuthorizationCheck:
+        return ExecutionAuthorizationCheck(True, "test authorization accepted")
 
 
 def _action(operation: str = "vikunja.health.verify") -> GovernedAction:
@@ -59,11 +65,29 @@ def test_transport_timeout_exceeds_connection_plus_server_operation_budget() -> 
     assert TRANSPORT_TIMEOUT_SECONDS > MAX_SERVER_OPERATION_TIMEOUT_SECONDS + 15
 
 
-def test_mutating_operation_marks_mutation_possible() -> None:
+def test_mutating_operation_fails_closed_without_authorization_verifier() -> None:
+    called = False
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        nonlocal called
+        called = True
+        return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
+
+    with pytest.raises(ExecutionBlockedError, match="no execution authorization verifier"):
+        execute_action(_action("vikunja.backup.run"), VIKUNJA_TARGET, run=fake_run)
+    assert called is False
+
+
+def test_mutating_operation_marks_mutation_possible_when_authorized() -> None:
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         return subprocess.CompletedProcess(argv, 0, stdout=b"ok", stderr=b"")
 
-    receipt = execute_action(_action("vikunja.backup.run"), VIKUNJA_TARGET, run=fake_run)
+    receipt = execute_action(
+        _action("vikunja.backup.run"),
+        VIKUNJA_TARGET,
+        authorization_verifier=AllowAuthorizationVerifier(),
+        run=fake_run,
+    )
     assert receipt.mutation_possible is True
 
 
@@ -76,7 +100,12 @@ def test_timeout_returns_failed_receipt_and_preserves_mutation_uncertainty() -> 
             stderr=b"partial-error",
         )
 
-    receipt = execute_action(_action("vikunja.backup.run"), VIKUNJA_TARGET, run=fake_run)
+    receipt = execute_action(
+        _action("vikunja.backup.run"),
+        VIKUNJA_TARGET,
+        authorization_verifier=AllowAuthorizationVerifier(),
+        run=fake_run,
+    )
 
     assert receipt.status is ExecutionStatus.FAILED
     assert receipt.exit_code == 124
