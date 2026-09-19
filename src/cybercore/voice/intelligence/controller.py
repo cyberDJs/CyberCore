@@ -44,13 +44,38 @@ class _FixedIntentCompiler:
 _LIVE_DATA_INTENT_KINDS = frozenset({IntentKind.SEARCH, IntentKind.INSPECT, IntentKind.MONITOR})
 _LIVE_DATA_TOKENS = frozenset(
     {
-        "now", "current", "currently", "latest", "today", "status", "healthy", "health",
-        "online", "running", "deployed", "outage", "incident", "ted", "aktualne", "dnes",
-        "stav", "bezi", "bezici", "zdravi", "nasazeno", "vypadek", "posledni", "nejnovejsi",
+        "now",
+        "current",
+        "currently",
+        "latest",
+        "today",
+        "status",
+        "healthy",
+        "health",
+        "online",
+        "running",
+        "deployed",
+        "outage",
+        "incident",
+        "ted",
+        "aktualne",
+        "dnes",
+        "stav",
+        "bezi",
+        "bezici",
+        "zdravi",
+        "nasazeno",
+        "vypadek",
+        "posledni",
+        "nejnovejsi",
     }
 )
 _LIVE_DATA_PHRASES = (
-    "right now", "at the moment", "jak je na tom", "prave ted", "co se deje",
+    "right now",
+    "at the moment",
+    "jak je na tom",
+    "prave ted",
+    "co se deje",
     "what is happening",
 )
 
