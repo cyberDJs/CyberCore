@@ -163,6 +163,12 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert manifest[0].action_id == "remove-privilege-policy"
     assert manifest[1].action_id == "verify-privilege-policy-revoked"
     assert manifest[1].action_type.value == "VERIFY_PRIVILEGE_POLICY_REVOKED"
+    assert manifest[2].action_id == "stop-vikunja-backup-install-wrapper"
+    assert manifest[2].action_type.value == "STOP_SYSTEMD_UNIT_AND_WAIT"
+    assert manifest[2].target == "cybercore-vikunja-backup-install.service"
+    assert manifest[3].action_id == "stop-vikunja-backup-run-wrapper"
+    assert manifest[3].action_type.value == "STOP_SYSTEMD_UNIT_AND_WAIT"
+    assert manifest[3].target == "cybercore-vikunja-backup-run.service"
     assert "/etc/polkit-1/rules.d/60-cybercore-exec.rules" in targets
     assert "/etc/sudoers.d/cybercore-exec" not in targets
     assert "/etc/systemd/system/cybercore-vikunja-backup-install.service" in targets
@@ -172,8 +178,17 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
 
     index = {action.action_id: position for position, action in enumerate(manifest)}
     assert index["remove-privilege-policy"] < index["verify-privilege-policy-revoked"]
-    assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-install-unit"]
-    assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-run-unit"]
+    assert index["verify-privilege-policy-revoked"] < index["stop-vikunja-backup-install-wrapper"]
+    assert index["verify-privilege-policy-revoked"] < index["stop-vikunja-backup-run-wrapper"]
+    assert index["stop-vikunja-backup-install-wrapper"] < index["remove-vikunja-backup-install-unit"]
+    assert index["stop-vikunja-backup-run-wrapper"] < index["remove-vikunja-backup-run-unit"]
+    assert max(
+        index["stop-vikunja-backup-install-wrapper"],
+        index["stop-vikunja-backup-run-wrapper"],
+    ) < min(
+        index["remove-vikunja-backup-install-unit"],
+        index["remove-vikunja-backup-run-unit"],
+    )
     assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
     assert index["remove-vikunja-backup-install-unit"] < index["systemd-reload"]
     assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload"]
