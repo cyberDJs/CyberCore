@@ -138,6 +138,13 @@ def test_operation_map_uses_only_static_wrapper_units() -> None:
     assert '"cybercore-vikunja-backup-run.service"' in operations
 
 
+def test_governed_backup_run_executes_backup_inside_wrapper_cgroup() -> None:
+    text = (DEPLOY / "cybercore-vikunja-backup-run.service").read_text()
+    assert "ExecStart=/usr/local/sbin/vikunja-backup" in text
+    assert "ExecStart=/usr/bin/systemctl start vikunja-backup.service" not in text
+    assert "ReadWritePaths=/opt/backups/vikunja" in text
+
+
 def test_backup_installer_is_fixed_shell_free_and_private() -> None:
     text = (DEPLOY / "vikunja-backup-install").read_text()
     assert "/opt/vikunja" in text
