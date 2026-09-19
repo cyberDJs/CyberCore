@@ -21,6 +21,9 @@ def utterance(text: str) -> Utterance:
         "I need you to stop",
         "hey, stop",
         "Stop!",
+        "I would like you to stop",
+        "Cyber, stop",
+        "Could you maybe stop this now",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -43,7 +46,14 @@ def test_execute_is_deterministic(text: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "text", ["What does approve mean?", "Explain the word stop", "Je run anglicky běžet?"]
+    "text",
+    [
+        "What does approve mean?",
+        "Explain the word stop",
+        "Je run anglicky běžet?",
+        "Please do not stop",
+        "Don't cancel this",
+    ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
     assert SafetyIntentGuard().compile(utterance(text), VoiceContext()) is None
