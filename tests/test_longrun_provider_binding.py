@@ -404,6 +404,20 @@ def test_provider_json_parsers_reject_duplicate_object_keys(parser, payload):
         parser(payload)
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"x": {1: "a"}},
+        {"x": ("a", "b")},
+    ],
+)
+def test_model_request_rejects_noncanonical_json_values(payload):
+    request = ModelRequest("run:planner:0", "planner", payload)
+
+    with pytest.raises(ValueError, match="JSON"):
+        request.validate()
+
+
 def test_runtime_rejects_request_mutation_after_successful_invocation():
     binding = _binding("worker")
 
@@ -415,9 +429,7 @@ def test_runtime_rejects_request_mutation_after_successful_invocation():
         def binding(self) -> ModelBinding:
             return binding
 
-        def invoke(
-            self, request: ModelRequest, *, timeout_seconds: float
-        ) -> ModelResponse:
+        def invoke(self, request: ModelRequest, *, timeout_seconds: float) -> ModelResponse:
             self.calls += 1
             request.payload["task"] = "mutated"
             return ModelResponse(request_id=request.request_id, output_text="ok")
@@ -447,9 +459,7 @@ def test_runtime_rejects_request_mutation_before_retry():
         def binding(self) -> ModelBinding:
             return binding
 
-        def invoke(
-            self, request: ModelRequest, *, timeout_seconds: float
-        ) -> ModelResponse:
+        def invoke(self, request: ModelRequest, *, timeout_seconds: float) -> ModelResponse:
             self.calls += 1
             request.payload["task"] = "mutated"
             raise ProviderError("retry", "retryable", retryable=True)
@@ -481,9 +491,7 @@ def test_runtime_rechecks_provider_identity_after_invocation():
         def binding(self) -> ModelBinding:
             return self._binding
 
-        def invoke(
-            self, request: ModelRequest, *, timeout_seconds: float
-        ) -> ModelResponse:
+        def invoke(self, request: ModelRequest, *, timeout_seconds: float) -> ModelResponse:
             self.calls += 1
             self._binding = ModelBinding(
                 binding_id=binding.binding_id,
