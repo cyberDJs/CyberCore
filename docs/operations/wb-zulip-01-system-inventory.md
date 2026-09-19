@@ -32,7 +32,7 @@ No environment variables, file contents, process command lines, credentials, mou
 
 ## Docker privilege rule
 
-Docker discovery is best-effort. If the existing service identity cannot access the Docker daemon, the result reports `denied_or_unreachable`. This work block must not make Docker readable by adding `cybercore-exec` to the `docker` group because Docker daemon access is effectively root-equivalent on a normal host.
+Docker discovery is best-effort. If the existing service identity cannot access the Docker daemon, the result reports `denied_or_unreachable`. If the daemon is reachable but a later bounded Docker subcommand fails or times out, the result reports `partial_failure` rather than silently treating missing data as an empty successful result. This work block must not make Docker readable by adding `cybercore-exec` to the `docker` group because Docker daemon access is effectively root-equivalent on a normal host.
 
 ## Result-disclosure rule
 

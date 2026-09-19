@@ -99,6 +99,7 @@ def _docker_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
     server_version = version.stdout.strip()[:128] or None
     containers: list[dict[str, str]] = []
     storage: list[dict[str, str]] = []
+    access_status = "ok"
 
     try:
         listed = run(
@@ -116,7 +117,10 @@ def _docker_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
                         "size": str(row.get("Size", ""))[:128],
                     }
                 )
+        else:
+            access_status = "partial_failure"
     except (OSError, subprocess.TimeoutExpired):
+        access_status = "partial_failure"
         containers = []
 
     try:
@@ -132,12 +136,15 @@ def _docker_inventory(run: RunCallable = subprocess.run) -> dict[str, object]:
                         "reclaimable": str(row.get("Reclaimable", ""))[:128],
                     }
                 )
+        else:
+            access_status = "partial_failure"
     except (OSError, subprocess.TimeoutExpired):
+        access_status = "partial_failure"
         storage = []
 
     return {
         "cli_present": True,
-        "access_status": "ok",
+        "access_status": access_status,
         "server_version": server_version,
         "containers": containers,
         "storage": storage,
@@ -249,7 +256,7 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
     if not isinstance(docker["cli_present"], bool):
         raise ValueError("docker cli_present must be boolean")
     access_status = _require_text(docker["access_status"], "docker access_status", 64)
-    if access_status not in {"ok", "not_installed", "denied_or_unreachable"}:
+    if access_status not in {"ok", "partial_failure", "not_installed", "denied_or_unreachable"}:
         raise ValueError("docker access_status is not allowed")
     version = docker["server_version"]
     if version is not None:

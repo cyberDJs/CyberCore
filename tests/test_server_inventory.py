@@ -118,3 +118,53 @@ def test_docker_permission_failure_does_not_escalate() -> None:
     assert isinstance(docker, dict)
     assert docker["access_status"] in {"denied_or_unreachable", "not_installed"}
     assert docker["containers"] == []
+
+
+def test_docker_subcommand_failure_is_reported_as_partial_failure() -> None:
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if argv[1:3] == ["version", "--format"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="27.5.1\n", stderr="")
+        if argv[1:3] == ["ps", "--size"]:
+            return subprocess.CompletedProcess(argv, 1, stdout="", stderr="daemon error")
+        if argv[1:3] == ["system", "df"]:
+            row = {
+                "Type": "Images",
+                "TotalCount": "2",
+                "Active": "1",
+                "Size": "1GB",
+                "Reclaimable": "100MB (10%)",
+            }
+            return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(row) + "\n", stderr="")
+        raise AssertionError(argv)
+
+    payload = collect_inventory(run=fake_run)
+    docker = payload["docker"]
+    assert isinstance(docker, dict)
+    assert docker["access_status"] == "partial_failure"
+    assert docker["containers"] == []
+    assert docker["storage"][0]["type"] == "Images"
+
+
+def test_docker_timeout_is_reported_as_partial_failure() -> None:
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if argv[1:3] == ["version", "--format"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="27.5.1\n", stderr="")
+        if argv[1:3] == ["ps", "--size"]:
+            row = {
+                "Names": "vikunja",
+                "Image": "vikunja/vikunja:latest",
+                "Status": "Up",
+                "Ports": "",
+                "Size": "12MB",
+            }
+            return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(row) + "\n", stderr="")
+        if argv[1:3] == ["system", "df"]:
+            raise subprocess.TimeoutExpired(argv, 5)
+        raise AssertionError(argv)
+
+    payload = collect_inventory(run=fake_run)
+    docker = payload["docker"]
+    assert isinstance(docker, dict)
+    assert docker["access_status"] == "partial_failure"
+    assert docker["containers"][0]["name"] == "vikunja"
+    assert docker["storage"] == []
