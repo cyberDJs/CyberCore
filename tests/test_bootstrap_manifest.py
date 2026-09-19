@@ -252,24 +252,25 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert manifest[0].action_id == "remove-privilege-policy"
     assert manifest[1].action_id == "verify-privilege-policy-revoked"
     assert manifest[1].action_type.value == "VERIFY_PRIVILEGE_POLICY_REVOKED"
-    assert manifest[2].action_id == "verify-vikunja-backup-install-wrapper-managed"
-    assert manifest[2].action_type.value == "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT"
-    assert manifest[2].target == "cybercore-vikunja-backup-install.service"
-    assert manifest[2].source_of_truth == (
+    by_id = {action.action_id: action for action in manifest}
+    verify_install_wrapper = by_id["verify-vikunja-backup-install-wrapper-managed"]
+    assert verify_install_wrapper.action_type.value == "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT"
+    assert verify_install_wrapper.target == "cybercore-vikunja-backup-install.service"
+    assert verify_install_wrapper.source_of_truth == (
         "deploy/cybercore-exec/cybercore-vikunja-backup-install.service"
     )
-    assert manifest[3].action_id == "verify-vikunja-backup-run-wrapper-managed"
-    assert manifest[3].action_type.value == "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT"
-    assert manifest[3].target == "cybercore-vikunja-backup-run.service"
-    assert (
-        manifest[3].source_of_truth == "deploy/cybercore-exec/cybercore-vikunja-backup-run.service"
+    verify_run_wrapper = by_id["verify-vikunja-backup-run-wrapper-managed"]
+    assert verify_run_wrapper.action_type.value == "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT"
+    assert verify_run_wrapper.target == "cybercore-vikunja-backup-run.service"
+    assert verify_run_wrapper.source_of_truth == (
+        "deploy/cybercore-exec/cybercore-vikunja-backup-run.service"
     )
-    assert manifest[4].action_id == "stop-vikunja-backup-install-wrapper"
-    assert manifest[4].action_type.value == "STOP_SYSTEMD_UNIT_AND_WAIT"
-    assert manifest[4].target == "cybercore-vikunja-backup-install.service"
-    assert manifest[5].action_id == "stop-vikunja-backup-run-wrapper"
-    assert manifest[5].action_type.value == "STOP_SYSTEMD_UNIT_AND_WAIT"
-    assert manifest[5].target == "cybercore-vikunja-backup-run.service"
+    stop_install_wrapper = by_id["stop-vikunja-backup-install-wrapper"]
+    assert stop_install_wrapper.action_type.value == "STOP_SYSTEMD_UNIT_AND_WAIT"
+    assert stop_install_wrapper.target == "cybercore-vikunja-backup-install.service"
+    stop_run_wrapper = by_id["stop-vikunja-backup-run-wrapper"]
+    assert stop_run_wrapper.action_type.value == "STOP_SYSTEMD_UNIT_AND_WAIT"
+    assert stop_run_wrapper.target == "cybercore-vikunja-backup-run.service"
     assert "/etc/polkit-1/rules.d/60-cybercore-exec.rules" in targets
     assert "/etc/sudoers.d/cybercore-exec" not in targets
     assert "/etc/systemd/system/cybercore-vikunja-backup-install.service" in targets
