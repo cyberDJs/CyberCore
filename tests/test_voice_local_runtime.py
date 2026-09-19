@@ -342,9 +342,7 @@ def test_once_mode_continues_after_processing_barge_in(monkeypatch) -> None:
             self.process_calls += 1
             result = operation()
             self.realtime.state = (
-                RealtimeState.INTERRUPTED
-                if self.process_calls == 1
-                else RealtimeState.PROCESSING
+                RealtimeState.INTERRUPTED if self.process_calls == 1 else RealtimeState.PROCESSING
             )
             return result
 
