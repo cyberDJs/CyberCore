@@ -23,11 +23,11 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0038E execution boundary repair
-  active_artifact: WB-0038E
-  branch: wb-0038e-execution-boundary-repair
-  pull_request: 95
-  last_verified_main: bb5fecce19aa7bf6ac0edaf0f780ff6364d020f1
+  milestone: WB-0038F active wrapper rollback repair
+  active_artifact: WB-0038F
+  branch: wb-0038f-rollback-active-wrapper-repair
+  pull_request: 97
+  last_verified_main: 3884f6b605a1fb3b0003b142044485cb9ba6ecce
 
 status:
   ccl_specification: complete_draft
@@ -42,7 +42,7 @@ status:
   verification_evidence: verified
   idempotent_canonical_memory: verified
   post_merge_state_transition: verified
-  coordination_state: active_repo_only_repair_in_review
+  coordination_state: active_repo_only_post_merge_repair_in_review
   terminal_post_merge_closeout: implemented
   remote_aware_repository_identity: verified
   repository_identity_diagnostics: verified
@@ -137,10 +137,15 @@ status:
   pr79_governed_bootstrap_artifact: merged_canonical_repair_in_progress
   pr79_exact_head_ci_codeql: passed_ci_658_codeql_657
   pr79_unresolved_review_threads: 4
-  wb0038e_execution_boundary_repair: draft_pr_95_verification_pending
+  wb0038e_execution_boundary_repair: merged_post_merge_p1_followup_required
+  wb0038e_merge_commit: 3884f6b605a1fb3b0003b142044485cb9ba6ecce
   wb0038e_remote_deployment_authorized: false
-  wb0038e_merge_authorized: false
-  source_of_truth_reconciliation_needed_after_pr95: true
+  wb0038e_merge_authorized: true
+  wb0038e_post_merge_unresolved_p1: active_wrapper_must_stop_before_unit_removal
+  wb0038f_active_wrapper_rollback_repair: draft_pr_97_verification_pending
+  wb0038f_remote_deployment_authorized: false
+  wb0038f_merge_authorized: false
+  source_of_truth_reconciliation_needed_after_pr97: true
   wb0035_identifier: conflict_needs_review
   wb0036_identifier: conflict_needs_review
   wb0037_identifier: conflict_needs_review
@@ -332,8 +337,8 @@ completed:
     verification: ci_658_codeql_657_passed_review_findings_unresolved
 
 next:
-  - verify PR95 WB0038E on its exact head with CI, CodeQL and fresh independent review; repair any valid findings before readiness
-  - keep PR95 repo-only; do not deploy or merge without separate explicit operator approval
+  - verify PR97 WB0038F on its exact head with CI, CodeQL and fresh independent review; repair any valid findings before readiness
+  - keep PR97 repo-only; do not deploy or merge without separate explicit operator approval
   - only after PR79 repair is canonical, select one bounded candidate among PR75, PR74 and PR67; do not infer merge priority from recency
   - reconcile the selected candidate against live GitHub main and rerun exact-head CI, CodeQL and independent review before readiness
   - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
