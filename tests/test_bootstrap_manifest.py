@@ -180,7 +180,9 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert index["remove-privilege-policy"] < index["verify-privilege-policy-revoked"]
     assert index["verify-privilege-policy-revoked"] < index["stop-vikunja-backup-install-wrapper"]
     assert index["verify-privilege-policy-revoked"] < index["stop-vikunja-backup-run-wrapper"]
-    assert index["stop-vikunja-backup-install-wrapper"] < index["remove-vikunja-backup-install-unit"]
+    assert (
+        index["stop-vikunja-backup-install-wrapper"] < index["remove-vikunja-backup-install-unit"]
+    )
     assert index["stop-vikunja-backup-run-wrapper"] < index["remove-vikunja-backup-run-unit"]
     assert max(
         index["stop-vikunja-backup-install-wrapper"],
