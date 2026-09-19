@@ -554,7 +554,12 @@ def load_rollback_manifest(path: Path) -> DnsManifest:
         raise CloudflareDnsError("rollback manifest records must be a list")
     records: list[DnsRecord] = []
     allowed_record_keys = {
-        "type", "name", "content", "ttl", "proxied", "priority",
+        "type",
+        "name",
+        "content",
+        "ttl",
+        "proxied",
+        "priority",
         *RESTORABLE_METADATA_FIELDS,
     }
     for item in raw_records:
