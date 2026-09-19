@@ -85,7 +85,9 @@ def default_intelligence_config_path() -> Path:
 
 
 def load_intelligence_config(path: Path | str | None = None) -> IntelligenceConfig:
-    config_path = Path(path).expanduser() if path is not None else default_intelligence_config_path()
+    config_path = (
+        Path(path).expanduser() if path is not None else default_intelligence_config_path()
+    )
     try:
         raw = json.loads(config_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
