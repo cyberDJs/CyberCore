@@ -9,16 +9,17 @@ from cybercore.voice.models import IntentKind, Utterance, VoiceContext, VoiceInt
 def _normalize(text: str) -> str:
     decomposed = unicodedata.normalize("NFKD", text.casefold())
     asciiish = "".join(char for char in decomposed if not unicodedata.combining(char))
-    return " ".join(asciiish.strip().split())
+    words_only = re.sub(r"[^\w\s]", " ", asciiish)
+    return " ".join(words_only.strip().split())
 
 
 class SafetyIntentGuard:
     _CANCEL = re.compile(
-        r"^(?:"
-        r"(?:(?:please|prosim)\s+)"
-        r"|(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)"
-        r"|(?:(?:muzes|mohl\s+bys|mohla\s+bys)\s+(?:prosim\s+)?)"
-        r")?"
+        r"^(?:(?:hey|hele|ok|okay)\s+)?"
+        r"(?:(?:please|prosim)\s+)?"
+        r"(?:(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)"
+        r"|(?:i\s+(?:need|want)\s+you\s+to\s+)"
+        r"|(?:(?:muzes|mohl\s+bys|mohla\s+bys)\s+(?:prosim\s+)?))?"
         r"(?:cancel|stop|abort|zrus|zrusit|zastav|storno|stornuj)"
         r"(?:\s+.*)?$"
     )
