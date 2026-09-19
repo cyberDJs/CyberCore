@@ -19,7 +19,9 @@ BACKUP_SCRIPT_TEXT = r'''#!/usr/bin/python3
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import fcntl
 import hashlib
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -28,6 +30,7 @@ import tarfile
 
 APP_ROOT = Path("/opt/vikunja")
 BACKUP_ROOT = Path("/opt/backups/vikunja")
+LOCK_PATH = Path("/run/cybercore-vikunja-backup.lock")
 RETENTION_DAYS = 14
 
 
@@ -62,7 +65,20 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def acquire_backup_lock():
+    fd = os.open(
+        LOCK_PATH,
+        os.O_CREAT | os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW,
+        0o600,
+    )
+    os.fchmod(fd, 0o600)
+    handle = os.fdopen(fd, "r+")
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    return handle
+
+
 def main() -> int:
+    lock_handle = acquire_backup_lock()
     env = read_env(APP_ROOT / ".env")
     db_user = env.get("POSTGRES_USER", "vikunja")
     db_name = env.get("POSTGRES_DB", "vikunja")
@@ -117,6 +133,7 @@ def main() -> int:
             continue
         if created < cutoff:
             shutil.rmtree(child)
+    lock_handle.close()
     return 0
 
 
