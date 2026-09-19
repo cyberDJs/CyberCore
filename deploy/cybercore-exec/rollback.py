@@ -7,6 +7,7 @@ import json
 
 class RollbackActionType(str, Enum):
     REMOVE_MANAGED_FILE_IF_EXACT = "REMOVE_MANAGED_FILE_IF_EXACT"
+    VERIFY_PRIVILEGE_POLICY_REVOKED = "VERIFY_PRIVILEGE_POLICY_REVOKED"
     RELOAD_SYSTEMD = "RELOAD_SYSTEMD"
     VALIDATE_SSHD_CONFIG = "VALIDATE_SSHD_CONFIG"
     RELOAD_SSHD = "RELOAD_SSHD"
@@ -27,6 +28,11 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
             "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
             "deploy/cybercore-exec/cybercore-exec.policy",
+        ),
+        RollbackAction(
+            "verify-privilege-policy-revoked",
+            RollbackActionType.VERIFY_PRIVILEGE_POLICY_REVOKED,
+            "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
         ),
         RollbackAction(
             "remove-sshd-config",
