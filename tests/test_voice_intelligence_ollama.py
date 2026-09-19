@@ -1,8 +1,14 @@
 import json
+from urllib import request
+
 import pytest
 
 from cybercore.voice.intelligence.config import IntelligenceConfig
-from cybercore.voice.intelligence.ollama import ModelTransportError, OllamaModelClient
+from cybercore.voice.intelligence.ollama import (
+    ModelTransportError,
+    OllamaModelClient,
+    _build_local_only_opener,
+)
 
 
 def config(**kwargs):
@@ -19,6 +25,16 @@ def test_ollama_rejects_remote_endpoint() -> None:
 def test_ollama_rejects_credentials_in_url() -> None:
     with pytest.raises(ValueError, match="credentials"):
         OllamaModelClient(config(base_url="http://user:pass@127.0.0.1:11434"))
+
+
+def test_ollama_transport_disables_environment_proxies_and_redirects(monkeypatch) -> None:
+    monkeypatch.setenv("HTTP_PROXY", "http://proxy.invalid:3128")
+    opener = _build_local_only_opener()
+    proxy_handler = next(
+        handler for handler in opener.handlers if isinstance(handler, request.ProxyHandler)
+    )
+    assert proxy_handler.proxies == {}
+    assert any(type(handler).__name__ == "_NoRedirectHandler" for handler in opener.handlers)
 
 
 def test_ollama_sends_nonstreaming_schema_request() -> None:
