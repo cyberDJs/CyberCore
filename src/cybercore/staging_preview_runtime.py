@@ -340,10 +340,17 @@ def _consume_trusted_authorization_nonce(nonce: str, authorization_reference: st
         )
     if not stat.S_ISSOCK(socket_stat.st_mode) or socket_stat.st_uid != 0:
         raise FirstWriteRuntimeError("trusted staging nonce service socket is not root-owned")
-    if socket_stat.st_mode & 0o022:
+    if socket_stat.st_mode & stat.S_IWOTH:
         raise FirstWriteRuntimeError(
             "trusted staging nonce service socket is writable by untrusted users"
         )
+    if os.geteuid() != 0:
+        client_groups = set(os.getgroups())
+        client_groups.add(os.getegid())
+        if not socket_stat.st_mode & stat.S_IWGRP or socket_stat.st_gid not in client_groups:
+            raise FirstWriteRuntimeError(
+                "trusted staging nonce service socket is not accessible to the governed client group"
+            )
 
     request = (
         json.dumps(
@@ -371,9 +378,19 @@ def _consume_trusted_authorization_nonce(nonce: str, authorization_reference: st
             raise FirstWriteRuntimeError("trusted staging nonce service peer is not root")
         client.sendall(request)
         client.shutdown(socket.SHUT_WR)
-        response = client.recv(4097)
-        if len(response) > 4096:
-            raise FirstWriteRuntimeError("trusted staging nonce response is unexpectedly large")
+        response_parts: list[bytes] = []
+        response_size = 0
+        while True:
+            chunk = client.recv(min(1024, 4097 - response_size))
+            if not chunk:
+                break
+            response_parts.append(chunk)
+            response_size += len(chunk)
+            if response_size > 4096:
+                raise FirstWriteRuntimeError(
+                    "trusted staging nonce response is unexpectedly large"
+                )
+        response = b"".join(response_parts)
     except FirstWriteRuntimeError:
         raise
     except OSError as exc:
