@@ -1,14 +1,24 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+import base64
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 import ftplib
 import hashlib
 import io
+import json
+import os
+from pathlib import Path
 import re
 import ssl
+import stat
 from typing import Protocol, cast
 from urllib.parse import quote
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from cybercore.first_write_runtime import FirstWriteFtpsCredential, FirstWriteRuntimeError
 
@@ -18,7 +28,17 @@ EXPECTED_PORT = 21
 EXPECTED_PROTOCOL = "FTPS_EXPLICIT"
 MAX_PREVIEW_BYTES = 32 * 1024 * 1024
 RUN_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{5,95}\Z")
-AUTH_PREFIX = "approval:eimy-v34-staging"
+SOURCE_COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
+SHA256_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
+NONCE_PATTERN = re.compile(r"[A-Za-z0-9_-]{16,128}\Z")
+AUTH_TOKEN_PREFIX = "approval-ed25519-v1:"
+AUTH_ISSUER = "cybercore-operator-approval"
+AUTH_OPERATION = "eimy-v34-staging-preview-stou"
+AUTH_MAX_LIFETIME = timedelta(minutes=15)
+AUTH_CLOCK_SKEW = timedelta(seconds=30)
+EXPECTED_SCOPE_REFERENCE = "evidence:wb0034:scope:ftps"
+EXPECTED_DESTINATION = "staging-root/STOU-unique-child"
+TRUSTED_APPROVAL_PUBLIC_KEY_PATH = Path("/etc/cybercore/staging-preview-approval-ed25519.pub")
 STOU_RESPONSE_PATTERN = re.compile(r"(?:125|150) FILE: (.+)\Z")
 FTPS_OPERATION_ERRORS = ftplib.all_errors + (UnicodeDecodeError,)
 
@@ -62,12 +82,15 @@ CredentialLoader = Callable[[], FirstWriteFtpsCredential]
 
 @dataclass(frozen=True)
 class StagingPreviewUploadInput:
+    source_commit: str
     run_id: str
     authorization_reference: str
     content: bytes = field(repr=False)
     sha256: str
     endpoint_hostname: str = EXPECTED_ENDPOINT
     protocol: str = EXPECTED_PROTOCOL
+    deploy_identity_scope_reference: str = EXPECTED_SCOPE_REFERENCE
+    destination: str = EXPECTED_DESTINATION
 
 
 @dataclass(frozen=True)
@@ -92,17 +115,15 @@ class StagingPreviewExecutionResult:
     remote_mutation_possible: bool = False
 
 
-def expected_staging_preview_authorization_reference(run_id: str, sha256: str) -> str:
-    return f"{AUTH_PREFIX}:{run_id}:sha256:{sha256}"
-
-
 def build_staging_preview_input(
     content: bytes,
     *,
+    source_commit: str,
     run_id: str,
     authorization_reference: str,
 ) -> StagingPreviewUploadInput:
     return StagingPreviewUploadInput(
+        source_commit=source_commit,
         run_id=run_id,
         authorization_reference=authorization_reference,
         content=bytes(content),
@@ -116,20 +137,170 @@ def validate_staging_preview_input(upload_input: StagingPreviewUploadInput) -> t
         errors.append("staging preview runtime requires FTPS_EXPLICIT")
     if upload_input.endpoint_hostname != EXPECTED_ENDPOINT:
         errors.append("staging preview endpoint must remain the approved staging hostname")
+    if upload_input.deploy_identity_scope_reference != EXPECTED_SCOPE_REFERENCE:
+        errors.append("staging preview identity scope reference is not approved")
+    if upload_input.destination != EXPECTED_DESTINATION:
+        errors.append("staging preview destination is not the approved STOU boundary")
+    if not SOURCE_COMMIT_PATTERN.fullmatch(upload_input.source_commit):
+        errors.append("staging preview source_commit is invalid")
     if not RUN_ID_PATTERN.fullmatch(upload_input.run_id):
         errors.append("staging preview run_id is invalid")
-    expected_auth = expected_staging_preview_authorization_reference(
-        upload_input.run_id, upload_input.sha256
-    )
-    if upload_input.authorization_reference != expected_auth:
-        errors.append("staging preview authorization must bind the exact run_id and sha256")
+    if (
+        not isinstance(upload_input.authorization_reference, str)
+        or not upload_input.authorization_reference
+    ):
+        errors.append("staging preview authorization evidence is required")
+    if not isinstance(upload_input.sha256, str) or not SHA256_PATTERN.fullmatch(
+        upload_input.sha256
+    ):
+        errors.append("staging preview sha256 is invalid")
     if not isinstance(upload_input.content, bytes) or not upload_input.content:
         errors.append("staging preview content must be non-empty immutable bytes")
     elif len(upload_input.content) > MAX_PREVIEW_BYTES:
         errors.append("staging preview content exceeds the bounded size limit")
-    if hashlib.sha256(upload_input.content).hexdigest() != upload_input.sha256:
-        errors.append("staging preview content digest does not match sealed bytes")
+    elif SHA256_PATTERN.fullmatch(upload_input.sha256):
+        if hashlib.sha256(upload_input.content).hexdigest() != upload_input.sha256:
+            errors.append("staging preview content digest does not match sealed bytes")
     return tuple(errors)
+
+
+def _b64url_decode(value: str) -> bytes:
+    if not value or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+        raise ValueError("authorization evidence is not base64url")
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(value + padding)
+
+
+def _parse_authorization_time(value: object, field_name: str) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError(f"authorization {field_name} is invalid")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"authorization {field_name} is invalid") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"authorization {field_name} must be timezone-aware")
+    return parsed.astimezone(timezone.utc)
+
+
+def _expected_authorization_claims(upload_input: StagingPreviewUploadInput) -> dict[str, object]:
+    return {
+        "version": 1,
+        "issuer": AUTH_ISSUER,
+        "operation": AUTH_OPERATION,
+        "source_commit": upload_input.source_commit,
+        "run_id": upload_input.run_id,
+        "sha256": upload_input.sha256,
+        "byte_length": len(upload_input.content),
+        "endpoint_hostname": upload_input.endpoint_hostname,
+        "protocol": upload_input.protocol,
+        "scope_reference": upload_input.deploy_identity_scope_reference,
+        "destination": upload_input.destination,
+        "rollback_authorized": False,
+    }
+
+
+def _load_trusted_approval_public_key() -> Ed25519PublicKey:
+    path = TRUSTED_APPROVAL_PUBLIC_KEY_PATH
+    parent = path.parent
+    try:
+        parent_stat = os.lstat(parent)
+    except OSError as exc:
+        raise FirstWriteRuntimeError(
+            "trusted staging approval key directory is unavailable"
+        ) from exc
+    if not stat.S_ISDIR(parent_stat.st_mode) or parent_stat.st_uid != 0:
+        raise FirstWriteRuntimeError("trusted staging approval key directory is not root-owned")
+    if parent_stat.st_mode & 0o022:
+        raise FirstWriteRuntimeError(
+            "trusted staging approval key directory is writable by untrusted users"
+        )
+
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        raise FirstWriteRuntimeError("trusted staging approval public key is unavailable") from exc
+    try:
+        key_stat = os.fstat(fd)
+        if not stat.S_ISREG(key_stat.st_mode) or key_stat.st_uid != 0:
+            raise FirstWriteRuntimeError("trusted staging approval public key is not root-owned")
+        if key_stat.st_mode & 0o022:
+            raise FirstWriteRuntimeError(
+                "trusted staging approval public key is writable by untrusted users"
+            )
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            key_bytes = handle.read(16 * 1024 + 1)
+        if len(key_bytes) > 16 * 1024:
+            raise FirstWriteRuntimeError(
+                "trusted staging approval public key is unexpectedly large"
+            )
+    finally:
+        os.close(fd)
+
+    try:
+        key = serialization.load_pem_public_key(key_bytes)
+    except (TypeError, ValueError) as exc:
+        raise FirstWriteRuntimeError("trusted staging approval public key is invalid") from exc
+    if not isinstance(key, Ed25519PublicKey):
+        raise FirstWriteRuntimeError("trusted staging approval key must be Ed25519")
+    return key
+
+
+def _verify_authorization_evidence(
+    upload_input: StagingPreviewUploadInput,
+    reference: str,
+    public_key: Ed25519PublicKey,
+    *,
+    now: datetime | None = None,
+) -> str | None:
+    if not reference.startswith(AUTH_TOKEN_PREFIX):
+        return "staging preview authorization evidence is not a trusted signed approval"
+    token = reference.removeprefix(AUTH_TOKEN_PREFIX)
+    try:
+        payload_text, signature_text = token.split(".", 1)
+        payload_bytes = _b64url_decode(payload_text)
+        signature = _b64url_decode(signature_text)
+        if len(signature) != 64:
+            raise ValueError("authorization signature length is invalid")
+        public_key.verify(signature, payload_bytes)
+    except (ValueError, InvalidSignature):
+        return "staging preview authorization signature is invalid"
+
+    try:
+        claims = json.loads(payload_bytes)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return "staging preview authorization payload is invalid"
+    if not isinstance(claims, dict):
+        return "staging preview authorization payload is invalid"
+    canonical = json.dumps(claims, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    if canonical != payload_bytes:
+        return "staging preview authorization payload is not canonical"
+
+    required_dynamic = {"issued_at", "expires_at", "nonce"}
+    expected = _expected_authorization_claims(upload_input)
+    if set(claims) != set(expected) | required_dynamic:
+        return "staging preview authorization claims are incomplete or unexpected"
+    for name, value in expected.items():
+        if claims.get(name) != value:
+            return f"staging preview authorization does not bind {name}"
+
+    nonce = claims.get("nonce")
+    if not isinstance(nonce, str) or not NONCE_PATTERN.fullmatch(nonce):
+        return "staging preview authorization nonce is invalid"
+    try:
+        issued_at = _parse_authorization_time(claims.get("issued_at"), "issued_at")
+        expires_at = _parse_authorization_time(claims.get("expires_at"), "expires_at")
+    except ValueError as exc:
+        return f"staging preview {exc}"
+    if expires_at <= issued_at or expires_at - issued_at > AUTH_MAX_LIFETIME:
+        return "staging preview authorization lifetime is invalid"
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    if current + AUTH_CLOCK_SKEW < issued_at:
+        return "staging preview authorization is not active yet"
+    if current >= expires_at:
+        return "staging preview authorization has expired"
+    return None
 
 
 def _default_ftps_factory(context: ssl.SSLContext) -> _FtpsClient:
@@ -209,6 +380,22 @@ def execute_staging_preview_stou(
         return StagingPreviewExecutionResult(
             False,
             ("authorization reference does not match sealed preview input",),
+            upload_input=upload_input,
+        )
+
+    try:
+        approval_public_key = _load_trusted_approval_public_key()
+    except FirstWriteRuntimeError as exc:
+        return StagingPreviewExecutionResult(False, (str(exc),), upload_input=upload_input)
+    authorization_error = _verify_authorization_evidence(
+        upload_input,
+        authorization_reference,
+        approval_public_key,
+    )
+    if authorization_error is not None:
+        return StagingPreviewExecutionResult(
+            False,
+            (authorization_error,),
             upload_input=upload_input,
         )
 

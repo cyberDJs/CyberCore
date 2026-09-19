@@ -1,17 +1,76 @@
 from __future__ import annotations
 
+import base64
+from datetime import datetime, timedelta, timezone
 import ftplib
 import hashlib
+import json
 
-from cybercore.first_write_runtime import FirstWriteFtpsCredential
+import pytest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+from cybercore.first_write_runtime import FirstWriteFtpsCredential, FirstWriteRuntimeError
 from cybercore import first_write_runtime
 from cybercore import staging_preview_runtime as preview
 
 RUN_ID = "20260905T010000Z-eimy34"
+COMMIT = "a" * 40
 CONTENT = b"<!doctype html><title>EIMY v34</title><!-- unique-preview -->\n"
 CONTENT_SHA256 = hashlib.sha256(CONTENT).hexdigest()
-AUTH = preview.expected_staging_preview_authorization_reference(RUN_ID, CONTENT_SHA256)
 PASSWORD = "unit-test-only-secret"
+_PRIVATE_KEY = Ed25519PrivateKey.generate()
+_PUBLIC_KEY = _PRIVATE_KEY.public_key()
+
+
+def _b64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+
+
+def _signed_auth(
+    *,
+    source_commit: str = COMMIT,
+    run_id: str = RUN_ID,
+    sha256: str = CONTENT_SHA256,
+    byte_length: int = len(CONTENT),
+    endpoint_hostname: str = preview.EXPECTED_ENDPOINT,
+    protocol: str = preview.EXPECTED_PROTOCOL,
+    scope_reference: str = preview.EXPECTED_SCOPE_REFERENCE,
+    destination: str = preview.EXPECTED_DESTINATION,
+    issued_at: datetime | None = None,
+    expires_at: datetime | None = None,
+    nonce: str = "unit-test-nonce-0001",
+    signing_key: Ed25519PrivateKey = _PRIVATE_KEY,
+) -> str:
+    issued = issued_at or datetime.now(timezone.utc) - timedelta(seconds=1)
+    expires = expires_at or issued + timedelta(minutes=5)
+    claims = {
+        "version": 1,
+        "issuer": preview.AUTH_ISSUER,
+        "operation": preview.AUTH_OPERATION,
+        "source_commit": source_commit,
+        "run_id": run_id,
+        "sha256": sha256,
+        "byte_length": byte_length,
+        "endpoint_hostname": endpoint_hostname,
+        "protocol": protocol,
+        "scope_reference": scope_reference,
+        "destination": destination,
+        "rollback_authorized": False,
+        "issued_at": issued.isoformat().replace("+00:00", "Z"),
+        "expires_at": expires.isoformat().replace("+00:00", "Z"),
+        "nonce": nonce,
+    }
+    payload = json.dumps(claims, sort_keys=True, separators=(",", ":")).encode()
+    signature = signing_key.sign(payload)
+    return f"{preview.AUTH_TOKEN_PREFIX}{_b64url(payload)}.{_b64url(signature)}"
+
+
+AUTH = _signed_auth()
+
+
+@pytest.fixture(autouse=True)
+def _trusted_approval_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(preview, "_load_trusted_approval_public_key", lambda: _PUBLIC_KEY)
 
 
 class _Sock:
@@ -99,6 +158,7 @@ class FakeFtps:
 def _input() -> preview.StagingPreviewUploadInput:
     return preview.build_staging_preview_input(
         CONTENT,
+        source_commit=COMMIT,
         run_id=RUN_ID,
         authorization_reference=AUTH,
     )
@@ -178,7 +238,7 @@ def test_authorization_blocks_before_credentials_and_factory() -> None:
     assert calls == {"loader": 0, "factory": 0}
 
 
-def test_authorization_reference_is_bound_to_run_and_artifact_before_credentials() -> None:
+def test_signed_authorization_binds_full_operation_before_credentials() -> None:
     loads = 0
 
     def loader() -> FirstWriteFtpsCredential:
@@ -186,42 +246,121 @@ def test_authorization_reference_is_bound_to_run_and_artifact_before_credentials
         loads += 1
         return _credential()
 
-    placeholder = preview.build_staging_preview_input(
-        CONTENT, run_id=RUN_ID, authorization_reference="REQUIRED_BEFORE_REMOTE_WRITE"
+    cases = (
+        ("run_id", _signed_auth(run_id=RUN_ID + "-other")),
+        ("sha256", _signed_auth(sha256="0" * 64)),
+        ("source_commit", _signed_auth(source_commit="b" * 40)),
+        ("scope_reference", _signed_auth(scope_reference="evidence:wrong")),
+        ("destination", _signed_auth(destination="somewhere-else")),
     )
-    wrong_run = preview.StagingPreviewUploadInput(
-        run_id=RUN_ID,
-        authorization_reference=preview.expected_staging_preview_authorization_reference(
-            RUN_ID + "-other", CONTENT_SHA256
-        ),
-        content=CONTENT,
-        sha256=CONTENT_SHA256,
-    )
-    wrong_artifact = preview.StagingPreviewUploadInput(
-        run_id=RUN_ID,
-        authorization_reference=preview.expected_staging_preview_authorization_reference(
-            RUN_ID, "0" * 64
-        ),
-        content=CONTENT,
-        sha256=CONTENT_SHA256,
-    )
-
-    for candidate in (placeholder, wrong_run, wrong_artifact):
+    for expected_claim, authorization in cases:
+        original = _input()
+        candidate = preview.StagingPreviewUploadInput(
+            source_commit=original.source_commit,
+            run_id=original.run_id,
+            authorization_reference=authorization,
+            content=original.content,
+            sha256=original.sha256,
+            endpoint_hostname=original.endpoint_hostname,
+            protocol=original.protocol,
+            deploy_identity_scope_reference=original.deploy_identity_scope_reference,
+            destination=original.destination,
+        )
         result = preview.execute_staging_preview_stou(
             candidate,
             remote_write_authorized=True,
-            authorization_reference=candidate.authorization_reference,
+            authorization_reference=authorization,
             credential_loader=loader,
         )
         assert not result.executed
-        assert any("bind the exact run_id and sha256" in error for error in result.errors)
+        assert any(f"does not bind {expected_claim}" in error for error in result.errors)
 
+    assert loads == 0
+
+
+def test_reproducible_legacy_reference_is_not_authorization_evidence() -> None:
+    loads = 0
+
+    def loader() -> FirstWriteFtpsCredential:
+        nonlocal loads
+        loads += 1
+        return _credential()
+
+    old_reference = f"approval:eimy-v34-staging:{RUN_ID}:sha256:{CONTENT_SHA256}"
+    candidate = preview.build_staging_preview_input(
+        CONTENT,
+        source_commit=COMMIT,
+        run_id=RUN_ID,
+        authorization_reference=old_reference,
+    )
+    result = preview.execute_staging_preview_stou(
+        candidate,
+        remote_write_authorized=True,
+        authorization_reference=old_reference,
+        credential_loader=loader,
+    )
+
+    assert not result.executed
+    assert any("trusted signed approval" in error for error in result.errors)
+    assert loads == 0
+
+
+def test_approval_signed_by_untrusted_key_blocks_before_credentials() -> None:
+    loads = 0
+
+    def loader() -> FirstWriteFtpsCredential:
+        nonlocal loads
+        loads += 1
+        return _credential()
+
+    forged = _signed_auth(signing_key=Ed25519PrivateKey.generate())
+    candidate = preview.build_staging_preview_input(
+        CONTENT,
+        source_commit=COMMIT,
+        run_id=RUN_ID,
+        authorization_reference=forged,
+    )
+    result = preview.execute_staging_preview_stou(
+        candidate,
+        remote_write_authorized=True,
+        authorization_reference=forged,
+        credential_loader=loader,
+    )
+
+    assert not result.executed
+    assert result.errors == ("staging preview authorization signature is invalid",)
+    assert loads == 0
+
+
+def test_missing_trusted_approval_key_blocks_before_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    loads = 0
+
+    def loader() -> FirstWriteFtpsCredential:
+        nonlocal loads
+        loads += 1
+        return _credential()
+
+    def unavailable():
+        raise FirstWriteRuntimeError("trusted staging approval public key is unavailable")
+
+    monkeypatch.setattr(preview, "_load_trusted_approval_public_key", unavailable)
+    result = preview.execute_staging_preview_stou(
+        _input(),
+        remote_write_authorized=True,
+        authorization_reference=AUTH,
+        credential_loader=loader,
+    )
+    assert not result.executed
+    assert result.errors == ("trusted staging approval public key is unavailable",)
     assert loads == 0
 
 
 def test_digest_drift_blocks_before_credentials() -> None:
     original = _input()
     tampered = preview.StagingPreviewUploadInput(
+        source_commit=original.source_commit,
         run_id=original.run_id,
         authorization_reference=original.authorization_reference,
         content=original.content + b"tampered",
@@ -319,6 +458,33 @@ def test_transport_loss_after_stou_is_conservatively_mutation_possible() -> None
     assert not result.executed
     assert result.remote_mutation_possible
     assert PASSWORD not in repr(result)
+
+
+def test_non_bytes_content_fails_closed_without_hashing_or_credentials() -> None:
+    loads = 0
+
+    def loader() -> FirstWriteFtpsCredential:
+        nonlocal loads
+        loads += 1
+        return _credential()
+
+    candidate = preview.StagingPreviewUploadInput(
+        source_commit=COMMIT,
+        run_id=RUN_ID,
+        authorization_reference=AUTH,
+        content="not-bytes",  # type: ignore[arg-type]
+        sha256=CONTENT_SHA256,
+    )
+    result = preview.execute_staging_preview_stou(
+        candidate,
+        remote_write_authorized=True,
+        authorization_reference=AUTH,
+        credential_loader=loader,
+    )
+
+    assert not result.executed
+    assert result.errors == ("staging preview content must be non-empty immutable bytes",)
+    assert loads == 0
 
 
 def test_legacy_two_file_first_write_remains_hard_blocked() -> None:
