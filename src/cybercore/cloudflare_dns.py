@@ -101,6 +101,7 @@ class DnsManifest:
     managed_recordsets: tuple[tuple[str, str], ...]
     records: tuple[DnsRecord, ...]
     template: bool
+    rollback: bool = False
 
 
 @dataclass(frozen=True)
@@ -111,10 +112,12 @@ class DnsPlan:
     changes: tuple[DnsChange, ...]
     fingerprint: str
     current_records: tuple[DnsRecord, ...]
+    rollback: bool = False
 
     @property
     def approval_text(self) -> str:
-        return f"APPLY CLOUDFLARE DNS {self.zone} {self.fingerprint}"
+        action = "ROLLBACK" if self.rollback else "APPLY"
+        return f"{action} CLOUDFLARE DNS {self.zone} {self.fingerprint}"
 
     def public_dict(self) -> dict[str, object]:
         return {
@@ -303,9 +306,9 @@ class CloudflareClient:
                     raise CloudflareDnsError(
                         "cannot update Cloudflare DNS record without record id"
                     )
-                patches.append({"id": change.before.record_id, **change.after.api_payload()})
+                patches.append({"id": change.before.record_id, **change.after.restore_payload()})
             elif change.action == "CREATE" and change.after is not None:
-                posts.append(change.after.api_payload())
+                posts.append(change.after.restore_payload())
             else:
                 raise CloudflareDnsError("invalid Cloudflare DNS plan operation")
         self._request(
@@ -503,7 +506,96 @@ def load_manifest(path: Path) -> DnsManifest:
                 f"A/AAAA records at {name} must use one consistent Cloudflare proxy mode"
             )
 
-    return DnsManifest(zone, tuple(managed), records, template)
+    return DnsManifest(zone, tuple(managed), records, template, False)
+
+
+def load_rollback_manifest(path: Path) -> DnsManifest:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise CloudflareDnsError(f"cannot read Cloudflare DNS rollback manifest: {path}") from exc
+    _validate_manifest_yaml(raw)
+    try:
+        document = yaml.safe_load(raw)
+    except yaml.YAMLError as exc:
+        raise CloudflareDnsError("Cloudflare DNS rollback manifest is invalid YAML") from exc
+    if not isinstance(document, dict):
+        raise CloudflareDnsError("Cloudflare DNS rollback manifest must be a mapping")
+    allowed = {"version", "zone", "managed_recordsets", "records"}
+    unknown = set(document) - allowed
+    if unknown:
+        raise CloudflareDnsError(
+            f"rollback manifest contains unsupported keys: {', '.join(sorted(unknown))}"
+        )
+    if document.get("version") != "cybercore.cloudflare-dns.rollback/v0.1":
+        raise CloudflareDnsError(
+            "rollback manifest version must be cybercore.cloudflare-dns.rollback/v0.1"
+        )
+    zone = _normalize_zone(document.get("zone"))
+
+    raw_sets = document.get("managed_recordsets")
+    if not isinstance(raw_sets, list) or not raw_sets:
+        raise CloudflareDnsError("rollback manifest requires non-empty managed_recordsets")
+    managed: list[tuple[str, str]] = []
+    for item in raw_sets:
+        if not isinstance(item, dict) or set(item) != {"type", "name"}:
+            raise CloudflareDnsError(
+                "rollback managed_recordsets entries require exactly type and name"
+            )
+        record_type = item.get("type")
+        if not isinstance(record_type, str) or record_type.upper() not in SUPPORTED_TYPES:
+            raise CloudflareDnsError("rollback managed recordset type is unsupported")
+        managed.append((record_type.upper(), _normalize_name(item.get("name"), zone)))
+    if len(set(managed)) != len(managed):
+        raise CloudflareDnsError("rollback manifest contains duplicate managed_recordsets")
+
+    raw_records = document.get("records")
+    if not isinstance(raw_records, list):
+        raise CloudflareDnsError("rollback manifest records must be a list")
+    records: list[DnsRecord] = []
+    allowed_record_keys = {
+        "type", "name", "content", "ttl", "proxied", "priority",
+        *RESTORABLE_METADATA_FIELDS,
+    }
+    for item in raw_records:
+        if not isinstance(item, dict):
+            raise CloudflareDnsError("rollback manifest records must be mappings")
+        unknown_record_keys = set(item) - allowed_record_keys
+        if unknown_record_keys:
+            raise CloudflareDnsError(
+                "rollback record contains unsupported keys: "
+                + ", ".join(sorted(unknown_record_keys))
+            )
+        base = {key: value for key, value in item.items() if key not in RESTORABLE_METADATA_FIELDS}
+        record = _record_from_manifest(base, zone)
+        restore_metadata = {
+            key: item[key] for key in RESTORABLE_METADATA_FIELDS if key in item
+        }
+        records.append(
+            DnsRecord(
+                record.record_type,
+                record.name,
+                record.content,
+                record.ttl,
+                record.proxied,
+                record.priority,
+                None,
+                restore_metadata or None,
+            )
+        )
+    managed_set = set(managed)
+    if any(record.recordset() not in managed_set for record in records):
+        raise CloudflareDnsError("every rollback record must belong to a managed_recordset")
+    _validate_desired_recordsets(tuple(records))
+    return DnsManifest(zone, tuple(managed), tuple(records), False, True)
+
+
+def _planning_key(record: DnsRecord, *, rollback: bool) -> tuple[object, ...]:
+    key = record.semantic_key()
+    if not rollback:
+        return key
+    metadata = record.restore_metadata or {}
+    return (*key, json.dumps(metadata, sort_keys=True, separators=(",", ":")))
 
 
 def _canonical_plan_payload(
@@ -584,20 +676,26 @@ def build_plan(
     for recordset in manifest.managed_recordsets:
         current_set = sorted(
             [record for record in current if record.recordset() == recordset],
-            key=lambda record: record.semantic_key(),
+            key=lambda record: _planning_key(record, rollback=manifest.rollback),
         )
         desired_set = sorted(
             [record for record in desired if record.recordset() == recordset],
-            key=lambda record: record.semantic_key(),
+            key=lambda record: _planning_key(record, rollback=manifest.rollback),
         )
-        exact_desired = {record.semantic_key(): record for record in desired_set}
+        exact_desired = {
+            _planning_key(record, rollback=manifest.rollback): record for record in desired_set
+        }
         unmatched_current: list[DnsRecord] = []
         for record in current_set:
-            if record.semantic_key() in exact_desired:
-                exact_desired.pop(record.semantic_key())
+            key = _planning_key(record, rollback=manifest.rollback)
+            if key in exact_desired:
+                exact_desired.pop(key)
             else:
                 unmatched_current.append(record)
-        unmatched_desired = sorted(exact_desired.values(), key=lambda record: record.semantic_key())
+        unmatched_desired = sorted(
+            exact_desired.values(),
+            key=lambda record: _planning_key(record, rollback=manifest.rollback),
+        )
 
         pair_count = min(len(unmatched_current), len(unmatched_desired))
         for index in range(pair_count):
@@ -615,7 +713,15 @@ def build_plan(
     fingerprint = hashlib.sha256(
         _canonical_plan_payload(manifest.zone, zone_id, zone_status, changes_tuple)
     ).hexdigest()
-    return DnsPlan(manifest.zone, zone_id, zone_status, changes_tuple, fingerprint, current_records)
+    return DnsPlan(
+        manifest.zone,
+        zone_id,
+        zone_status,
+        changes_tuple,
+        fingerprint,
+        current_records,
+        manifest.rollback,
+    )
 
 
 def discover(api: CloudflareApi, zone: str) -> dict[str, object]:
@@ -813,6 +919,12 @@ def apply_manifest(
             dnssec=dnssec_before,
             evidence_dir=evidence_dir,
         )
+        current_zone_id, current_zone_status = api.find_zone(plan.zone)
+        if current_zone_id != plan.zone_id or current_zone_status != plan.zone_status:
+            raise CloudflareDnsError(
+                "Cloudflare zone identity/status drifted at mutation boundary; "
+                "generate a fresh plan and approval"
+            )
         try:
             api.apply_dns_batch(plan.zone_id, plan.changes)
         except CloudflareDnsError as exc:
