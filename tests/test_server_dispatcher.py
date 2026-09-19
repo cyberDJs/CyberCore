@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from cybercore.execution.authorization import ExecutionAuthorizationCheck
 from cybercore.execution.server.dispatcher import execute_request
 from cybercore.execution.server.operations import resolve_operation
 from cybercore.execution.server.protocol import (
@@ -13,6 +14,11 @@ from cybercore.execution.server.protocol import (
     RequestValidationError,
     ServerRequest,
 )
+
+
+class AllowAuthorizationVerifier:
+    def verify(self, **kwargs: str) -> ExecutionAuthorizationCheck:
+        return ExecutionAuthorizationCheck(True, "test authorization accepted")
 
 
 def _request(operation: str = "vikunja.health.verify") -> ServerRequest:
@@ -61,11 +67,28 @@ def test_unknown_operation_fails_before_execution() -> None:
         resolve_operation(request)
 
 
-def test_mutating_operation_is_marked_but_not_verified() -> None:
+def test_mutating_server_request_fails_closed_without_authorization_verifier() -> None:
+    called = False
+
+    def runner(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
+        nonlocal called
+        called = True
+        return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
+
+    with pytest.raises(RequestValidationError, match="lacks verified authorization"):
+        execute_request(_request("vikunja.backup.run"), runner=runner)
+    assert called is False
+
+
+def test_mutating_operation_is_marked_but_not_verified_when_authorized() -> None:
     def runner(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
         return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
 
-    receipt = execute_request(_request("vikunja.backup.run"), runner=runner)
+    receipt = execute_request(
+        _request("vikunja.backup.run"),
+        authorization_verifier=AllowAuthorizationVerifier(),
+        runner=runner,
+    )
     assert receipt.status == "EXECUTED"
     assert receipt.mutation_possible is True
     assert not hasattr(receipt, "verified")
