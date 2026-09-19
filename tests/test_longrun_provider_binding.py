@@ -629,3 +629,15 @@ def test_parse_proposal_rejects_nonfinite_computed_value():
 
     with pytest.raises(ValueError, match="proposal value must be finite"):
         _parse_proposal(__import__("json").dumps(payload))
+
+
+def test_parse_worker_rejects_success_without_execution_evidence():
+    with pytest.raises(ValueError, match="successful worker must return non-empty evidence"):
+        _parse_worker('{"success":true,"evidence":{}}')
+
+
+def test_parse_worker_allows_failure_without_execution_evidence():
+    success, evidence = _parse_worker('{"success":false,"evidence":{}}')
+
+    assert success is False
+    assert evidence == {}
