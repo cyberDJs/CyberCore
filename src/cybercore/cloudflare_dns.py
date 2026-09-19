@@ -86,12 +86,20 @@ class DnsChange:
     before: DnsRecord | None
     after: DnsRecord | None
 
-    def public_dict(self) -> dict[str, object]:
+    def public_dict(self, *, include_restore_metadata: bool = False) -> dict[str, object]:
         return {
             "action": self.action,
             "recordset": {"type": self.recordset[0], "name": self.recordset[1]},
-            "before": None if self.before is None else self.before.public_dict(),
-            "after": None if self.after is None else self.after.public_dict(),
+            "before": (
+                None
+                if self.before is None
+                else self.before.public_dict(include_restore_metadata=include_restore_metadata)
+            ),
+            "after": (
+                None
+                if self.after is None
+                else self.after.public_dict(include_restore_metadata=include_restore_metadata)
+            ),
         }
 
 
@@ -631,13 +639,20 @@ def _planning_key(record: DnsRecord, *, rollback: bool) -> tuple[object, ...]:
 
 
 def _canonical_plan_payload(
-    zone: str, zone_id: str, zone_status: str, changes: tuple[DnsChange, ...]
+    zone: str,
+    zone_id: str,
+    zone_status: str,
+    changes: tuple[DnsChange, ...],
+    *,
+    rollback: bool,
 ) -> bytes:
     data = {
         "zone": zone,
         "zone_id": zone_id,
         "zone_status": zone_status,
-        "changes": [change.public_dict() for change in changes],
+        "changes": [
+            change.public_dict(include_restore_metadata=rollback) for change in changes
+        ],
     }
     return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode(
         "utf-8"
@@ -743,7 +758,13 @@ def build_plan(
     if len(changes_tuple) > 200:
         raise CloudflareDnsError("Cloudflare DNS v0.1 limits one plan to 200 changes")
     fingerprint = hashlib.sha256(
-        _canonical_plan_payload(manifest.zone, zone_id, zone_status, changes_tuple)
+        _canonical_plan_payload(
+            manifest.zone,
+            zone_id,
+            zone_status,
+            changes_tuple,
+            rollback=manifest.rollback,
+        )
     ).hexdigest()
     return DnsPlan(
         manifest.zone,
@@ -955,6 +976,17 @@ def apply_manifest(
         if current_zone_id != plan.zone_id or current_zone_status != plan.zone_status:
             raise CloudflareDnsError(
                 "Cloudflare zone identity/status drifted at mutation boundary; "
+                "generate a fresh plan and approval"
+            )
+        boundary_plan = build_plan(
+            manifest,
+            zone_id=current_zone_id,
+            current_records=api.list_dns_records(current_zone_id),
+            zone_status=current_zone_status,
+        )
+        if boundary_plan.fingerprint != plan.fingerprint:
+            raise CloudflareDnsError(
+                "Cloudflare managed DNS records drifted at mutation boundary; "
                 "generate a fresh plan and approval"
             )
         try:
