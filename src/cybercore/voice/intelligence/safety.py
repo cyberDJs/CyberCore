@@ -13,7 +13,15 @@ def _normalize(text: str) -> str:
 
 
 class SafetyIntentGuard:
-    _CANCEL = re.compile(r"^(?:(?:please|prosim)\s+)?(?:cancel|stop|abort|zrus|storno)(?:\s+.*)?$")
+    _CANCEL = re.compile(
+        r"^(?:"
+        r"(?:(?:please|prosim)\s+)"
+        r"|(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)"
+        r"|(?:(?:muzes|mohl\s+bys|mohla\s+bys)\s+(?:prosim\s+)?)"
+        r")?"
+        r"(?:cancel|stop|abort|zrus|zrusit|zastav|storno|stornuj)"
+        r"(?:\s+.*)?$"
+    )
     _APPROVE = re.compile(
         r"^(?:(?:ano|jo|yes)\s+)?(?:approve|schvaluju|schvaluji|souhlasim)(?:\s+.*)?$"
     )
