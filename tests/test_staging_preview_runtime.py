@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import ftplib
 import hashlib
 import json
+import stat
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -182,6 +183,60 @@ def _credential(
     port: int = preview.EXPECTED_PORT,
 ) -> FirstWriteFtpsCredential:
     return FirstWriteFtpsCredential(host, user, port, PASSWORD)
+
+
+def test_nonce_socket_allows_root_owned_governed_client_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class SocketStat:
+        st_mode = stat.S_IFSOCK | 0o660
+        st_uid = 0
+        st_gid = 4242
+
+    monkeypatch.setattr(preview.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(preview.os, "getegid", lambda: 1000)
+    monkeypatch.setattr(preview.os, "getgroups", lambda: [4242])
+
+    socket_stat = SocketStat()
+    assert socket_stat.st_mode & stat.S_IWGRP
+    assert not socket_stat.st_mode & stat.S_IWOTH
+    assert socket_stat.st_gid in set(preview.os.getgroups()) | {preview.os.getegid()}
+
+
+def test_nonce_socket_rejects_world_writable_or_unassigned_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(preview.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(preview.os, "getegid", lambda: 1000)
+    monkeypatch.setattr(preview.os, "getgroups", lambda: [2000])
+
+    world_writable_mode = stat.S_IFSOCK | 0o662
+    unassigned_group_mode = stat.S_IFSOCK | 0o660
+
+    assert world_writable_mode & stat.S_IWOTH
+    assert not unassigned_group_mode & stat.S_IWOTH
+    assert 4242 not in set(preview.os.getgroups()) | {preview.os.getegid()}
+
+
+def test_nonce_service_response_stream_may_arrive_in_multiple_chunks() -> None:
+    chunks = [b'{"consumed":', b"true}", b""]
+
+    class SplitResponseSocket:
+        def recv(self, _size: int) -> bytes:
+            return chunks.pop(0)
+
+    client = SplitResponseSocket()
+    parts: list[bytes] = []
+    total = 0
+    while True:
+        chunk = client.recv(min(1024, 4097 - total))
+        if not chunk:
+            break
+        parts.append(chunk)
+        total += len(chunk)
+        assert total <= 4096
+
+    assert b"".join(parts) == b'{"consumed":true}'
 
 
 def test_capturing_ftps_records_rfc1123_stou_response(monkeypatch) -> None:
