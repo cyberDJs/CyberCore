@@ -541,3 +541,36 @@ def test_runtime_rechecks_cancellation_after_successful_invocation():
     assert exc_info.value.code == "cancelled"
     assert cancellation_checks == 2
     assert len(provider.requests) == 1
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("cost", -0.01, "planner.cost must be non-negative"),
+        ("risk", -0.01, "planner.risk must be non-negative"),
+        (
+            "duplication_probability",
+            -0.01,
+            "planner.duplication_probability must be between 0 and 1",
+        ),
+        (
+            "duplication_probability",
+            1.01,
+            "planner.duplication_probability must be between 0 and 1",
+        ),
+    ],
+)
+def test_parse_proposal_rejects_invalid_penalty_ranges(field, value, message):
+    payload = {
+        "fingerprint": "step-1",
+        "expected_quality_gain": 0.0,
+        "expected_information_gain": 0.0,
+        "cost": 0.1,
+        "risk": 0.1,
+        "duplication_probability": 0.0,
+        "effect": "read",
+    }
+    payload[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        _parse_proposal(__import__("json").dumps(payload))
