@@ -22,6 +22,10 @@ if __package__ in {None, ""}:
         ServerRequest,
     )
 else:
+    from cybercore.execution.authorization import (
+        DenyAllExecutionAuthorizationVerifier,
+        ExecutionAuthorizationVerifier,
+    )
     from cybercore.execution.server.operations import resolve_operation
     from cybercore.execution.server.protocol import (
         MAX_REQUEST_BYTES,
