@@ -144,9 +144,13 @@ def validate_staging_preview_input(upload_input: StagingPreviewUploadInput) -> t
         errors.append("staging preview identity scope reference is not approved")
     if upload_input.destination != EXPECTED_DESTINATION:
         errors.append("staging preview destination is not the approved STOU boundary")
-    if not SOURCE_COMMIT_PATTERN.fullmatch(upload_input.source_commit):
+    if not isinstance(upload_input.source_commit, str) or not SOURCE_COMMIT_PATTERN.fullmatch(
+        upload_input.source_commit
+    ):
         errors.append("staging preview source_commit is invalid")
-    if not RUN_ID_PATTERN.fullmatch(upload_input.run_id):
+    if not isinstance(upload_input.run_id, str) or not RUN_ID_PATTERN.fullmatch(
+        upload_input.run_id
+    ):
         errors.append("staging preview run_id is invalid")
     if (
         not isinstance(upload_input.authorization_reference, str)
@@ -533,6 +537,14 @@ def execute_staging_preview_stou(
         if client.pwd() != "/":
             raise FirstWriteRuntimeError("FTPS identity is not rooted at the approved staging root")
         _verify_protected_data_channel(client)
+
+        authorization_error = _verify_authorization_evidence(
+            upload_input,
+            authorization_reference,
+            approval_public_key,
+        )
+        if authorization_error is not None:
+            raise FirstWriteRuntimeError(authorization_error)
 
         token = upload_input.authorization_reference.removeprefix(AUTH_TOKEN_PREFIX)
         try:

@@ -497,6 +497,86 @@ def test_same_signed_approval_cannot_reach_stou_twice(
     assert _trusted_approval_key == {"unit-test-nonce-0001"}
 
 
+def test_non_string_identifiers_fail_closed_before_credentials() -> None:
+    loads = 0
+
+    def loader() -> FirstWriteFtpsCredential:
+        nonlocal loads
+        loads += 1
+        return _credential()
+
+    original = _input()
+    cases = (
+        preview.StagingPreviewUploadInput(
+            source_commit=None,  # type: ignore[arg-type]
+            run_id=original.run_id,
+            authorization_reference=original.authorization_reference,
+            content=original.content,
+            sha256=original.sha256,
+        ),
+        preview.StagingPreviewUploadInput(
+            source_commit=original.source_commit,
+            run_id=None,  # type: ignore[arg-type]
+            authorization_reference=original.authorization_reference,
+            content=original.content,
+            sha256=original.sha256,
+        ),
+    )
+
+    for candidate in cases:
+        result = preview.execute_staging_preview_stou(
+            candidate,
+            remote_write_authorized=True,
+            authorization_reference=AUTH,
+            credential_loader=loader,
+        )
+        assert not result.executed
+        assert any(
+            "source_commit is invalid" in error or "run_id is invalid" in error
+            for error in result.errors
+        )
+
+    assert loads == 0
+
+
+def test_authorization_expiry_is_revalidated_immediately_before_nonce_consumption(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+    consumed = 0
+    fake = FakeFtps()
+    real_verify = preview._verify_authorization_evidence
+
+    def verify(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return real_verify(*args, **kwargs)
+        return "staging preview authorization has expired"
+
+    def consume(_nonce: str, _authorization_reference: str) -> None:
+        nonlocal consumed
+        consumed += 1
+
+    monkeypatch.setattr(preview, "_verify_authorization_evidence", verify)
+    monkeypatch.setattr(preview, "_consume_trusted_authorization_nonce", consume)
+
+    result = preview.execute_staging_preview_stou(
+        _input(),
+        remote_write_authorized=True,
+        authorization_reference=AUTH,
+        credential_loader=_credential,
+        ftp_factory=lambda _context: fake,
+    )
+
+    assert not result.executed
+    assert result.errors == ("staging preview authorization has expired",)
+    assert calls == 2
+    assert consumed == 0
+    assert not any(command.startswith("STOU ") for command in fake.commands)
+    assert not result.remote_mutation_possible
+
+
 def test_non_string_sha256_fails_closed_without_hashing_or_credentials() -> None:
     loads = 0
 
