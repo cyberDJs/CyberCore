@@ -70,6 +70,17 @@ def test_bootstrap_installs_static_wrappers_before_privilege_policy() -> None:
     index = {action.action_id: position for position, action in enumerate(manifest)}
     by_id = {action.action_id: action for action in manifest}
 
+    assert index["revoke-existing-privilege-policy"] < index["verify-privilege-policy-revoked"]
+    assert index["verify-privilege-policy-revoked"] < index["verify-vikunja-backup-install-unit-safe"]
+    assert index["verify-privilege-policy-revoked"] < index["verify-vikunja-backup-run-unit-safe"]
+
+    backup_root = by_id["backup-root-directory"]
+    assert backup_root.action_type.value == "ENSURE_DIRECTORY"
+    assert backup_root.destination == "/opt/backups/vikunja"
+    assert backup_root.mode == "0700"
+    assert backup_root.owner == "root"
+    assert backup_root.group == "root"
+
     for action_id in ("vikunja-backup-install-unit", "vikunja-backup-run-unit"):
         action = by_id[action_id]
         assert action.action_type.value == "INSTALL_SYSTEMD_UNIT"
@@ -77,6 +88,8 @@ def test_bootstrap_installs_static_wrappers_before_privilege_policy() -> None:
         assert action.mode == "0644"
         assert action.owner == "root"
         assert action.group == "root"
+        assert index["verify-privilege-policy-revoked"] < index[action_id]
+        assert index["backup-root-directory"] < index[action_id]
         assert index[action_id] < index["systemd-reload"]
 
     assert index["systemd-reload"] < index["privilege-policy"]
@@ -131,6 +144,9 @@ def test_backup_installer_is_fixed_shell_free_and_private() -> None:
     assert "vikunja-backup.timer" in text
     assert "RETENTION_DAYS = 14" in text
     assert "write_exact(BACKUP_SCRIPT, BACKUP_SCRIPT_TEXT, 0o700)" in text
+    install_unit = (DEPLOY / "cybercore-vikunja-backup-install.service").read_text()
+    assert "ReadWritePaths=/usr/local/sbin /etc/systemd/system /opt/backups/vikunja" in install_unit
+    assert "-/opt/backups/vikunja" not in install_unit
     assert "shell=False" in text
     assert "shell=True" not in text
     assert "bash -c" not in text
@@ -143,6 +159,8 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     targets = {action.target for action in manifest if action.target}
 
     assert manifest[0].action_id == "remove-privilege-policy"
+    assert manifest[1].action_id == "verify-privilege-policy-revoked"
+    assert manifest[1].action_type.value == "VERIFY_PRIVILEGE_POLICY_REVOKED"
     assert "/etc/polkit-1/rules.d/60-cybercore-exec.rules" in targets
     assert "/etc/sudoers.d/cybercore-exec" not in targets
     assert "/etc/systemd/system/cybercore-vikunja-backup-install.service" in targets
@@ -151,6 +169,9 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert "/usr/local/libexec/cybercore-exec/authorization.py" in targets
 
     index = {action.action_id: position for position, action in enumerate(manifest)}
+    assert index["remove-privilege-policy"] < index["verify-privilege-policy-revoked"]
+    assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-install-unit"]
+    assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-run-unit"]
     assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
     assert index["remove-vikunja-backup-install-unit"] < index["systemd-reload"]
     assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload"]
