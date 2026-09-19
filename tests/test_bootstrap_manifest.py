@@ -21,6 +21,16 @@ def load_deploy_module(name: str):
     return module
 
 
+def test_dispatcher_loads_as_standalone_source_artifact() -> None:
+    path = ROOT / "src/cybercore/execution/server/dispatcher.py"
+    spec = importlib.util.spec_from_file_location("wb0038e_dispatcher_standalone", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    assert callable(module.execute_request)
+
+
 def test_operation_surface_is_exact() -> None:
     assert SUPPORTED_SERVER_OPERATIONS == {
         "vikunja.backup.install",
