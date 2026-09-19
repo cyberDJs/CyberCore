@@ -63,7 +63,7 @@ status:
   readme_landing_page: verified
   caser_e_google_drive_workspace: initialized
   caser_e_evidence_mirror: verified_noncanonical
-  caser_e_evidence_mirror_freshness: stale_after_pr79_merge
+  caser_e_evidence_mirror_freshness: stale_after_pr95_merge
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
   pr38_post_merge_reconciliation: merged
