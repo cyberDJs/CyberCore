@@ -650,9 +650,7 @@ def _canonical_plan_payload(
         "zone": zone,
         "zone_id": zone_id,
         "zone_status": zone_status,
-        "changes": [
-            change.public_dict(include_restore_metadata=rollback) for change in changes
-        ],
+        "changes": [change.public_dict(include_restore_metadata=rollback) for change in changes],
     }
     return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode(
         "utf-8"
