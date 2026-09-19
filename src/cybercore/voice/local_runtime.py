@@ -477,8 +477,10 @@ def run_local_voice_session(
                 local.cancel("voice cancellation intent")
                 return 0
 
-            interrupted = False
-            if local.realtime.state is RealtimeState.PROCESSING and message.strip():
+            interrupted = local.realtime.state is RealtimeState.INTERRUPTED
+            if interrupted:
+                print("CYBER VOICE: INTERRUPTED")
+            elif local.realtime.state is RealtimeState.PROCESSING and message.strip():
                 print("CYBER VOICE: SPEAKING")
                 interrupted = local.speak(message)
                 if interrupted:
