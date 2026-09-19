@@ -61,6 +61,20 @@ def _number(value: object, *, label: str) -> float:
     return number
 
 
+def _non_negative_number(value: object, *, label: str) -> float:
+    number = _number(value, label=label)
+    if number < 0:
+        raise ValueError(f"{label} must be non-negative")
+    return number
+
+
+def _probability(value: object, *, label: str) -> float:
+    number = _number(value, label=label)
+    if number < 0 or number > 1:
+        raise ValueError(f"{label} must be between 0 and 1")
+    return number
+
+
 def _string(value: object, *, label: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} must be a non-empty string")
@@ -101,9 +115,9 @@ def _parse_proposal(text: str) -> StepProposal:
         expected_information_gain=_number(
             raw["expected_information_gain"], label="planner.expected_information_gain"
         ),
-        cost=_number(raw["cost"], label="planner.cost"),
-        risk=_number(raw["risk"], label="planner.risk"),
-        duplication_probability=_number(
+        cost=_non_negative_number(raw["cost"], label="planner.cost"),
+        risk=_non_negative_number(raw["risk"], label="planner.risk"),
+        duplication_probability=_probability(
             raw["duplication_probability"], label="planner.duplication_probability"
         ),
         effect=_string(raw["effect"], label="planner.effect"),
