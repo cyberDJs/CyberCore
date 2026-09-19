@@ -22,6 +22,7 @@ from cybercore.cloudflare_dns import (
     apply_manifest as apply_cloudflare_dns_manifest,
     discover as discover_cloudflare_dns,
     load_manifest as load_cloudflare_dns_manifest,
+    load_rollback_manifest as load_cloudflare_dns_rollback_manifest,
     plan_from_manifest as plan_cloudflare_dns_manifest,
 )
 from cybercore.commands.apply import run_apply
@@ -201,6 +202,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="New directory for the pre-write snapshot, rollback manifest, and apply receipt",
     )
 
+    cloudflare_rollback_plan = cloudflare_dns_sub.add_parser(
+        "rollback-plan", help="Calculate a deterministic rollback plan from prepared evidence"
+    )
+    cloudflare_rollback_plan.add_argument("--manifest", type=Path, required=True)
+
+    cloudflare_rollback_apply = cloudflare_dns_sub.add_parser(
+        "rollback-apply", help="Apply one exact plan-bound Cloudflare DNS rollback"
+    )
+    cloudflare_rollback_apply.add_argument("--manifest", type=Path, required=True)
+    cloudflare_rollback_apply.add_argument("--expected-plan", required=True)
+    cloudflare_rollback_apply.add_argument("--approve", required=True)
+    cloudflare_rollback_apply.add_argument(
+        "--evidence-dir",
+        type=Path,
+        required=True,
+        help="New directory for rollback execution evidence",
+    )
+
     return parser
 
 
@@ -240,6 +259,20 @@ def main(argv: list[str] | None = None) -> int:
                     evidence_dir=args.evidence_dir,
                 )
                 payload["mutation"] = "cloudflare_dns"
+            elif args.cloudflare_dns_command == "rollback-plan":
+                manifest = load_cloudflare_dns_rollback_manifest(args.manifest)
+                payload = plan_cloudflare_dns_manifest(client, manifest).public_dict()
+                payload["mutation"] = "none"
+            elif args.cloudflare_dns_command == "rollback-apply":
+                manifest = load_cloudflare_dns_rollback_manifest(args.manifest)
+                payload = apply_cloudflare_dns_manifest(
+                    client,
+                    manifest,
+                    expected_plan=args.expected_plan,
+                    approval=args.approve,
+                    evidence_dir=args.evidence_dir,
+                )
+                payload["mutation"] = "cloudflare_dns_rollback"
             else:
                 raise ValueError("unsupported Cloudflare DNS command")
             if args.as_json:
@@ -249,9 +282,10 @@ def main(argv: list[str] | None = None) -> int:
                 dnssec = cast(dict[str, object], payload["dnssec"])
                 print(f"CLOUDFLARE DNS DISCOVERED {payload['zone']} records={len(records)}")
                 print(f"DNSSEC {dnssec.get('status', 'unknown')}")
-            elif args.cloudflare_dns_command == "plan":
+            elif args.cloudflare_dns_command in {"plan", "rollback-plan"}:
+                kind = "ROLLBACK PLAN" if args.cloudflare_dns_command == "rollback-plan" else "PLAN"
                 print(
-                    f"CLOUDFLARE DNS PLAN {payload['zone']} "
+                    f"CLOUDFLARE DNS {kind} {payload['zone']} "
                     f"changes={payload['change_count']} fingerprint={payload['fingerprint']}"
                 )
                 print(f"APPROVAL {payload['approval_text']}")
