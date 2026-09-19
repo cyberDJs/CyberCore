@@ -80,6 +80,9 @@ def test_bootstrap_installs_every_fixed_helper_source_with_private_mode() -> Non
         for action in manifest
         if action.action_type.value == "INSTALL_SERVER_FILE"
     }
+    assert server_files["/usr/local/libexec/cybercore-exec/authorization.py"].source == (
+        "src/cybercore/execution/authorization.py"
+    )
     helper = server_files["/usr/local/libexec/cybercore-exec/vikunja-backup-install"]
     assert helper.source == "deploy/cybercore-exec/vikunja-backup-install"
     assert helper.mode == "0700"
@@ -135,6 +138,7 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert "/etc/systemd/system/cybercore-vikunja-backup-install.service" in targets
     assert "/etc/systemd/system/cybercore-vikunja-backup-run.service" in targets
     assert "/usr/local/libexec/cybercore-exec/vikunja-backup-install" in targets
+    assert "/usr/local/libexec/cybercore-exec/authorization.py" in targets
 
     index = {action.action_id: position for position, action in enumerate(manifest)}
     assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
