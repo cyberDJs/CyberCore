@@ -4,10 +4,12 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 
+PROTOCOL_VERSION = 1
 MAX_REQUEST_BYTES = 16_384
 _TARGET_ID = "tasks.cyberdjs.org"
 _REQUIRED_KEYS = frozenset(
     {
+        "version",
         "operation_id",
         "operation",
         "target_id",
@@ -25,6 +27,7 @@ class RequestValidationError(ValueError):
 
 @dataclass(frozen=True)
 class ServerRequest:
+    version: int
     operation_id: str
     operation: str
     target_id: str
@@ -37,6 +40,12 @@ class ServerRequest:
     def from_mapping(cls, value: Mapping[str, Any]) -> "ServerRequest":
         if frozenset(value) != _REQUIRED_KEYS:
             raise RequestValidationError("request fields do not match the exact protocol schema")
+
+        version = value["version"]
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise RequestValidationError("protocol version must be an integer")
+        if version != PROTOCOL_VERSION:
+            raise RequestValidationError("unsupported protocol version")
 
         string_fields = (
             "operation_id",
@@ -61,7 +70,7 @@ class ServerRequest:
         if parsed["target_id"] != _TARGET_ID:
             raise RequestValidationError("request target is not the canonical server target")
 
-        return cls(arguments={}, **parsed)
+        return cls(version=version, arguments={}, **parsed)
 
 
 @dataclass(frozen=True)
@@ -71,7 +80,7 @@ class ServerReceipt:
     target_id: str
     plan_id: str
     plan_revision: str
-    authorization_reference: str
+    authorization_reference_sha256: str
     started_at: str
     completed_at: str
     exit_code: int
@@ -88,7 +97,7 @@ class ServerReceipt:
             "target_id": self.target_id,
             "plan_id": self.plan_id,
             "plan_revision": self.plan_revision,
-            "authorization_reference": self.authorization_reference,
+            "authorization_reference_sha256": self.authorization_reference_sha256,
             "started_at": self.started_at,
             "completed_at": self.completed_at,
             "exit_code": self.exit_code,

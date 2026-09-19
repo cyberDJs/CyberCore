@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from typing import Any
 
@@ -7,12 +8,17 @@ import pytest
 
 from cybercore.execution.server.dispatcher import execute_request
 from cybercore.execution.server.operations import resolve_operation
-from cybercore.execution.server.protocol import RequestValidationError, ServerRequest
+from cybercore.execution.server.protocol import (
+    PROTOCOL_VERSION,
+    RequestValidationError,
+    ServerRequest,
+)
 
 
 def _request(operation: str = "vikunja.health.verify") -> ServerRequest:
     return ServerRequest.from_mapping(
         {
+            "version": PROTOCOL_VERSION,
             "operation_id": "op-1",
             "operation": operation,
             "target_id": "tasks.cyberdjs.org",
@@ -37,6 +43,16 @@ def test_dispatcher_uses_fixed_argv_and_shell_false() -> None:
     assert calls[0][0][0] == "/usr/bin/curl"
     assert calls[0][1]["shell"] is False
     assert calls[0][1]["capture_output"] is True
+
+
+def test_receipt_hashes_authorization_reference_instead_of_emitting_it() -> None:
+    receipt = execute_request(
+        _request(),
+        runner=lambda argv, **kwargs: subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b""),
+    )
+    assert receipt.authorization_reference_sha256 == hashlib.sha256(b"grant-1").hexdigest()
+    assert not hasattr(receipt, "authorization_reference")
+    assert "grant-1" not in str(receipt.as_dict())
 
 
 def test_unknown_operation_fails_before_execution() -> None:

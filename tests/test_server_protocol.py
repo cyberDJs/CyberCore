@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from cybercore.execution.server.protocol import RequestValidationError, ServerRequest
+from cybercore.execution.server.protocol import (
+    PROTOCOL_VERSION,
+    RequestValidationError,
+    ServerRequest,
+)
 
 
 def _request(**overrides: object) -> dict[str, object]:
     value: dict[str, object] = {
+        "version": PROTOCOL_VERSION,
         "operation_id": "op-1",
         "operation": "vikunja.health.verify",
         "target_id": "tasks.cyberdjs.org",
@@ -21,8 +26,15 @@ def _request(**overrides: object) -> dict[str, object]:
 
 def test_protocol_accepts_exact_bound_request() -> None:
     request = ServerRequest.from_mapping(_request())
+    assert request.version == PROTOCOL_VERSION
     assert request.operation == "vikunja.health.verify"
     assert request.arguments == {}
+
+
+@pytest.mark.parametrize("version", [0, 2, True, "1"])
+def test_protocol_rejects_unsupported_or_mistyped_version(version: object) -> None:
+    with pytest.raises(RequestValidationError):
+        ServerRequest.from_mapping(_request(version=version))
 
 
 def test_protocol_rejects_extra_field() -> None:

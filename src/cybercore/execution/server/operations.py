@@ -21,11 +21,9 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
     "vikunja.backup.install": OperationSpec(
         name="vikunja.backup.install",
         argv=(
-            "/usr/bin/systemd-run",
-            "--unit=cybercore-vikunja-backup-install",
-            "--wait",
-            "--collect",
-            "/usr/local/libexec/cybercore-exec/vikunja-backup-install",
+            "/usr/bin/systemctl",
+            "start",
+            "cybercore-vikunja-backup-install.service",
         ),
         mutating=True,
         timeout_seconds=120,
@@ -35,7 +33,7 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
         argv=(
             "/usr/bin/systemctl",
             "start",
-            "vikunja-backup.service",
+            "cybercore-vikunja-backup-run.service",
         ),
         mutating=True,
         timeout_seconds=120,
@@ -63,6 +61,9 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
 }
 
 SUPPORTED_SERVER_OPERATIONS = frozenset(_OPERATION_SPECS)
+MAX_SERVER_OPERATION_TIMEOUT_SECONDS = max(
+    spec.timeout_seconds for spec in _OPERATION_SPECS.values()
+)
 
 
 def resolve_operation(request: ServerRequest) -> OperationSpec:

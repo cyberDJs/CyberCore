@@ -1,0 +1,19 @@
+[Unit]
+Description=CyberCore governed Vikunja backup installer
+ConditionPathExists=/usr/local/libexec/cybercore-exec/vikunja-backup-install
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/cybercore-exec/vikunja-backup-install
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/usr/local/sbin /etc/systemd/system /opt/backups/vikunja
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX

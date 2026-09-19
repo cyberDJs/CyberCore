@@ -78,7 +78,7 @@ def execute_request(
         target_id=request.target_id,
         plan_id=request.plan_id,
         plan_revision=request.plan_revision,
-        authorization_reference=request.authorization_reference,
+        authorization_reference_sha256=_digest(request.authorization_reference.encode("utf-8")),
         started_at=started_at,
         completed_at=completed_at,
         exit_code=exit_code,
