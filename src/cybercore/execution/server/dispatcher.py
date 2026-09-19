@@ -115,8 +115,8 @@ def main() -> int:
         request = _load_request(raw)
         payload = execute_request(request).as_dict()
         exit_code = 0 if payload["status"] == "EXECUTED" else 1
-    except RequestValidationError as exc:
-        payload = _blocked(str(exc))
+    except RequestValidationError:
+        payload = _blocked("request validation failed")
         exit_code = 2
     except OSError:
         payload = _blocked("fixed operation executable is unavailable")
