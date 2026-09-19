@@ -14,14 +14,15 @@ def _normalize(text: str) -> str:
 
 
 class SafetyIntentGuard:
-    _CANCEL = re.compile(
-        r"^(?:(?:hey|hele|ok|okay)\s+)?"
-        r"(?:(?:please|prosim)\s+)?"
-        r"(?:(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?)"
-        r"|(?:i\s+(?:need|want)\s+you\s+to\s+)"
-        r"|(?:(?:muzes|mohl\s+bys|mohla\s+bys)\s+(?:prosim\s+)?))?"
-        r"(?:cancel|stop|abort|zrus|zrusit|zastav|storno|stornuj)"
-        r"(?:\s+.*)?$"
+    _CANCEL_MARKERS = frozenset(
+        {"cancel", "stop", "abort", "zrus", "zrusit", "zastav", "storno", "stornuj"}
+    )
+    _CANCEL_NEGATION = re.compile(
+        r"\b(?:do not|don t|dont|never|please do not|prosim nezrus|nezrus|nezastav)\b"
+    )
+    _CANCEL_MENTION = re.compile(
+        r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
+        r"vysvetli|definuj|znamena|slovo|vyraz)\b"
     )
     _APPROVE = re.compile(
         r"^(?:(?:ano|jo|yes)\s+)?(?:approve|schvaluju|schvaluji|souhlasim)(?:\s+.*)?$"
@@ -31,10 +32,21 @@ class SafetyIntentGuard:
         r"^(?:(?:please|prosim)\s+)?(?:execute|apply|run|proved|spust|udelej)(?:\s+.*)?$"
     )
 
+    @classmethod
+    def _is_cancel_command(cls, text: str) -> bool:
+        tokens = set(text.split())
+        if not (tokens & cls._CANCEL_MARKERS):
+            return False
+        if cls._CANCEL_NEGATION.search(text):
+            return False
+        if cls._CANCEL_MENTION.search(text):
+            return False
+        return True
+
     def compile(self, utterance: Utterance, context: VoiceContext) -> VoiceIntent | None:
         text = _normalize(utterance.text)
         kind: IntentKind | None = None
-        if self._CANCEL.fullmatch(text):
+        if self._is_cancel_command(text):
             kind = IntentKind.CANCEL
         elif text in self._APPROVE_PHRASES or self._APPROVE.fullmatch(text):
             kind = IntentKind.APPROVE
@@ -50,3 +62,4 @@ class SafetyIntentGuard:
             target=context.references.get("target"),
             confidence=1.0,
         )
+
