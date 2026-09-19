@@ -157,9 +157,9 @@ status:
   pr67_mcp_foundation: open_draft_requires_current_main_revalidation
   pr74_cyber_voice_intelligence_bridge: open_draft_requires_current_main_revalidation
   pr94_exec_boundary_repair: open_mostly_superseded_unique_response_sanitizer_pending_extraction
-  pr45_staging_plan: open_stale_needs_supersession_review
-  pr13_structured_registry: open_stale_needs_supersession_review
-  pr5_provider_framework: open_stale_needs_supersession_review
+  pr45_staging_plan: closed_unmerged_2026_09_08
+  pr13_structured_registry: closed_unmerged_2026_09_08
+  pr5_provider_framework: closed_unmerged_2026_09_08
   pr69_post_pr65_pr68_sot_reconciliation: merged_verified
 
 completed:
@@ -377,7 +377,7 @@ next:
   - extract the one unique request-validation response-sanitization hardening from mostly superseded PR94 into a separate minimal current-main change
   - after closeout, reconcile one bounded candidate among PR74 and PR67 against live GitHub main; PR75 is already canonical
   - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
-  - review stale open PRs 61, 45, 13 and 5 before any closure or reuse
+  - review PR61 identity conflict before reuse; preserve PR45, PR13 and PR5 as closed historical candidates
   - remediate the six high-severity transitive visual-toolchain npm audit findings in a separately reviewed maintenance change
   - design a separate concurrency-safe first-write mechanism before requesting any future live staging-write authority
   - refresh the verified non-canonical CASER-E evidence mirror after terminal-closeout maintenance becomes canonical
