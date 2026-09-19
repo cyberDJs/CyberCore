@@ -1,0 +1,176 @@
+#!/usr/bin/python3
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import subprocess
+import textwrap
+
+
+BACKUP_SCRIPT = Path("/usr/local/sbin/vikunja-backup")
+SERVICE = Path("/etc/systemd/system/vikunja-backup.service")
+TIMER = Path("/etc/systemd/system/vikunja-backup.timer")
+BACKUP_ROOT = Path("/opt/backups/vikunja")
+
+
+BACKUP_SCRIPT_TEXT = r'''#!/usr/bin/python3
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+import hashlib
+from pathlib import Path
+import shutil
+import subprocess
+import tarfile
+
+
+APP_ROOT = Path("/opt/vikunja")
+BACKUP_ROOT = Path("/opt/backups/vikunja")
+RETENTION_DAYS = 14
+
+
+def read_env(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    return values
+
+
+def run(argv: list[str], *, stdout_path: Path | None = None) -> None:
+    if stdout_path is None:
+        completed = subprocess.run(argv, check=False, shell=False)
+        if completed.returncode != 0:
+            raise SystemExit(completed.returncode)
+        return
+    with stdout_path.open("wb") as handle:
+        completed = subprocess.run(argv, check=False, shell=False, stdout=handle)
+    if completed.returncode != 0:
+        raise SystemExit(completed.returncode)
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def main() -> int:
+    env = read_env(APP_ROOT / ".env")
+    db_user = env.get("POSTGRES_USER", "vikunja")
+    db_name = env.get("POSTGRES_DB", "vikunja")
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    dest = BACKUP_ROOT / stamp
+    dest.mkdir(parents=True, mode=0o700, exist_ok=False)
+
+    db_dump = dest / "vikunja-db.dump"
+    run(
+        [
+            "/usr/bin/docker",
+            "compose",
+            "-f",
+            str(APP_ROOT / "docker-compose.yml"),
+            "exec",
+            "-T",
+            "db",
+            "pg_dump",
+            "-Fc",
+            "-U",
+            db_user,
+            db_name,
+        ],
+        stdout_path=db_dump,
+    )
+    db_dump.chmod(0o600)
+
+    archive = dest / "vikunja-files-config.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        for path in (
+            APP_ROOT / "files",
+            APP_ROOT / "docker-compose.yml",
+            APP_ROOT / ".env",
+        ):
+            tar.add(path, arcname=path.relative_to(APP_ROOT.parent))
+    archive.chmod(0o600)
+
+    checksums = dest / "SHA256SUMS"
+    checksums.write_text(
+        f"{sha256(db_dump)}  {db_dump.name}\n{sha256(archive)}  {archive.name}\n"
+    )
+    checksums.chmod(0o600)
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+    for child in BACKUP_ROOT.iterdir():
+        if child == dest or not child.is_dir():
+            continue
+        try:
+            created = datetime.strptime(child.name, "%Y%m%d-%H%M%S").replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if created < cutoff:
+            shutil.rmtree(child)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+'''
+
+SERVICE_TEXT = '''[Unit]
+Description=CyberCore governed Vikunja backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vikunja-backup
+User=root
+Group=root
+UMask=0077
+'''
+
+TIMER_TEXT = '''[Unit]
+Description=Daily CyberCore governed Vikunja backup
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=15m
+Unit=vikunja-backup.service
+
+[Install]
+WantedBy=timers.target
+'''
+
+
+def write_exact(path: Path, content: str, mode: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(textwrap.dedent(content))
+    os.chmod(path, mode)
+
+
+def main() -> int:
+    BACKUP_ROOT.mkdir(parents=True, mode=0o700, exist_ok=True)
+    os.chmod(BACKUP_ROOT, 0o700)
+    write_exact(BACKUP_SCRIPT, BACKUP_SCRIPT_TEXT, 0o755)
+    write_exact(SERVICE, SERVICE_TEXT, 0o644)
+    write_exact(TIMER, TIMER_TEXT, 0o644)
+
+    for argv in (
+        ["/usr/bin/systemctl", "daemon-reload"],
+        ["/usr/bin/systemctl", "enable", "--now", "vikunja-backup.timer"],
+    ):
+        completed = subprocess.run(argv, check=False, shell=False)
+        if completed.returncode != 0:
+            return completed.returncode
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

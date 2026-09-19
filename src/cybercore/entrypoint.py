@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 
 from cybercore import cli
 from cybercore.longrun_cli import run_longrun
@@ -44,15 +44,16 @@ from cybercore.trusted_operation_context import (
 class _StateArguments(TypedDict):
     completed_artifact: str
     verification: str
-    next_artifact: str
-    next_milestone: str
-    next_branch: str
     next_action: str
-    completed_status: str
-    next_status: str
-    next_objective: str
-    next_scope: tuple[str, ...]
-    next_tasks: tuple[str, ...]
+    terminal: bool
+    next_artifact: NotRequired[str]
+    next_milestone: NotRequired[str]
+    next_branch: NotRequired[str]
+    completed_status: NotRequired[str | None]
+    next_status: NotRequired[str | None]
+    next_objective: NotRequired[str | None]
+    next_scope: NotRequired[tuple[str, ...]]
+    next_tasks: NotRequired[tuple[str, ...]]
 
 
 def _post_merge_parser() -> argparse.ArgumentParser:
@@ -82,6 +83,14 @@ def _post_merge_parser() -> argparse.ArgumentParser:
     post_merge.add_argument("--next-objective")
     post_merge.add_argument("--next-scope", action="append", default=[])
     post_merge.add_argument("--next-task", action="append", default=[])
+    post_merge.add_argument(
+        "--terminal",
+        action="store_true",
+        help=(
+            "Close the merged active artifact into an idle canonical state instead of "
+            "creating a successor work block"
+        ),
+    )
     post_merge.add_argument(
         "--write",
         action="store_true",
@@ -167,6 +176,38 @@ def _context_parser() -> argparse.ArgumentParser:
 
 
 def _state_arguments(args: argparse.Namespace) -> _StateArguments | None:
+    if args.terminal:
+        successor_values = (
+            args.next_artifact,
+            args.next_milestone,
+            args.next_branch,
+            args.next_status,
+            args.next_objective,
+        )
+        if any(value is not None for value in successor_values) or args.next_scope:
+            raise ValueError("--terminal cannot declare a successor work block contract")
+
+        terminal_values = (args.completed_artifact, args.verification, args.next_action)
+        if any(value is None for value in terminal_values):
+            raise ValueError(
+                "--terminal requires --completed-artifact, --verification and --next-action"
+            )
+        if any(not cast(str, value).strip() for value in terminal_values):
+            raise ValueError("--terminal contract values must be non-empty strings")
+
+        next_tasks = tuple(cast(list[str], args.next_task))
+        if any(not task.strip() for task in next_tasks):
+            raise ValueError("--terminal --next-task values must be non-empty strings")
+
+        return {
+            "completed_artifact": cast(str, args.completed_artifact).strip(),
+            "verification": cast(str, args.verification).strip(),
+            "next_action": cast(str, args.next_action).strip(),
+            "terminal": True,
+            "completed_status": args.completed_status,
+            "next_tasks": tuple(task.strip() for task in next_tasks),
+        }
+
     scalar_names = (
         "completed_artifact",
         "verification",
@@ -191,7 +232,9 @@ def _state_arguments(args: argparse.Namespace) -> _StateArguments | None:
             "statuses, next objective, at least one --next-scope and at least one --next-task"
         )
     if args.write and not complete:
-        raise ValueError("--write requires a complete successor work block contract")
+        raise ValueError(
+            "--write requires a complete successor work block contract or --terminal closeout contract"
+        )
     if not complete:
         return None
     return {
@@ -201,6 +244,7 @@ def _state_arguments(args: argparse.Namespace) -> _StateArguments | None:
         "next_milestone": cast(str, args.next_milestone),
         "next_branch": cast(str, args.next_branch),
         "next_action": cast(str, args.next_action),
+        "terminal": False,
         "completed_status": cast(str, args.completed_status),
         "next_status": cast(str, args.next_status),
         "next_objective": cast(str, args.next_objective),

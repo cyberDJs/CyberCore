@@ -34,6 +34,7 @@ rules:
     (repo / "PROJECT_STATE.md").write_text(
         """# CyberCore Project State
 
+- Last verified canonical checkpoint: `old-main`
 - Active branch: `feat/post-merge-state-transition`
 - Active work block: `WB-0019 Post-Merge State Transition`
 
@@ -115,6 +116,7 @@ checkpoint
     assert "define remote identity normalization contract" in plan.kernel_content
     assert "define an explicit post-merge state transition command" not in plan.kernel_content
 
+    assert "Last verified canonical checkpoint: `ca2da8b`" in plan.project_state_content
     assert "Make repository identity stable across clone locations" in plan.project_state_content
     assert "normalize HTTPS and SSH Git remote URLs" in plan.project_state_content
     assert (

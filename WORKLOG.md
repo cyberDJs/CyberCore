@@ -334,3 +334,36 @@ PR #18 is technically verified. Next work should focus on persistent project mem
 - Working tree: **dirty**
 - Test evidence: `git diff --check passed; PYTHON=.venv/bin/python scripts/verify.sh passed: Ruff passed, Ruff format check passed, Pyright 0 errors, pytest 221 passed, compileall passed, build passed; final PR #34 CI and CodeQL passed`
 - Next action: No successor Work Block has been activated; retain the isolated visual-toolchain npm audit findings as deferred security debt until separately reviewed.
+
+## 2026-09-04 — main branch protection recovery
+
+### Observation
+
+- Live GitHub preflight against
+  `main@14d4c6c4beb6b03aaedfaf2a76a521a038c98cb1` found no repository
+  rulesets and `main` unprotected.
+- Historical ruleset `18986451` remained documented but was absent from live
+  repository settings.
+- The cause and deletion provenance could not be established from available
+  audit evidence and remain unknown.
+
+### Approved restore
+
+- Explicit approval: `APPROVE CYBERCORE MAIN PROTECTION RESTORE`.
+- Created replacement ruleset `22291749` named `main-branch-protection`.
+- Verified enforcement `active`, no bypass actors,
+  `current_user_can_bypass: never`, deletion and non-fast-forward protection,
+  pull-request review gates, strict status checks, and the seven canonical
+  required contexts.
+- Verified live `main` reports `protected=true` after restoration.
+- No merge, deployment, secret mutation, or unrelated repository-settings
+  change was performed by the restore.
+
+### Source-of-truth reconciliation
+
+- Branch: `docs/main-protection-sot-reconciliation`.
+- Updated the current security verification runbook to use ruleset `22291749`
+  while preserving `18986451` as historical evidence only.
+- Updated the living roadmap with the 2026-09-04 recovery state.
+- Added `docs/evidence/2026-09-04-main-protection-restore.md`.
+- This documentation reconciliation does not authorize its own merge.
