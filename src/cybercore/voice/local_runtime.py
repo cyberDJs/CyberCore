@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 import importlib
 import json
@@ -297,6 +298,46 @@ class LocalSpeechRuntime:
                     return utterance
         return None
 
+    def process_with_live_input(self, operation: Callable[[], Any]) -> Any:
+        self.open()
+        done = threading.Event()
+        results: list[Any] = []
+        errors: list[Exception] = []
+        block_ms = int(getattr(getattr(self.config, "audio", None), "block_ms", 80))
+        idle_sleep = max(0.005, min(0.05, block_ms / 4000))
+
+        def run_operation() -> None:
+            try:
+                results.append(operation())
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                done.set()
+
+        thread = threading.Thread(
+            target=run_operation,
+            name="cybercore-voice-processing-worker",
+            daemon=True,
+        )
+        thread.start()
+        try:
+            while not done.is_set():
+                incoming = self.audio_input.read_frame_if_available()
+                if incoming is None:
+                    done.wait(idle_sleep)
+                    continue
+                self.realtime.receive_input(incoming)
+        except Exception:
+            if self.realtime.state is not RealtimeState.CANCELLED:
+                self.realtime.cancel("microphone input failed during intelligence processing")
+            raise
+        finally:
+            thread.join()
+
+        if errors:
+            raise errors[0]
+        return results[0]
+
     def _begin_speaking_with_live_input(self, text: str) -> None:
         stop = threading.Event()
         errors: list[Exception] = []
@@ -419,10 +460,12 @@ def run_local_voice_session(
                 message = response.message
                 cancelled = response.status is ResponseStatus.CANCELLED
             else:
-                controlled = controller.handle(
-                    utterance,
-                    context,
-                    session=local.session,
+                controlled = local.process_with_live_input(
+                    lambda: controller.handle(
+                        utterance,
+                        context,
+                        session=local.session,
+                    )
                 )
                 status = controlled.status
                 message = controlled.message
