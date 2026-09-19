@@ -2,8 +2,9 @@ version: cybercore.cloudflare-dns/v0.1
 zone: sarahhairdesign.cz
 template: true
 
-# Template only. Do not apply until the authoritative Seznam Email Profi records,
-# web origin, and DNSSEC transition have been independently verified.
+# CANCELLED_BY_DESIGN_DECISION: sarahhairdesign.cz remains authoritative on WEDOS.
+# Retained only as a non-applicable Cloudflare provider example. Do not use this
+# manifest as a production migration target or run apply for this domain.
 managed_recordsets:
   - type: A
     name: "@"

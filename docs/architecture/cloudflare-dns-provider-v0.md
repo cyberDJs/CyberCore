@@ -38,6 +38,8 @@ cybercore cloudflare dns apply \
 
 `discover` and `plan` are read-only. `apply` is a production mutation boundary.
 
-## Sarah Hair Design rollout
+## Sarah Hair Design decision
 
-`sarahhairdesign.cz` is the first intended real target, but its desired-state manifest must not be guessed. The current public DNS is authoritative on WEDOS and currently exposes WEDOS MX records. Before Cloudflare cutover, the target manifest must be built from independently verified hosting and Seznam Email Profi records and then reviewed as one complete change set (web + mail + TXT + DNSSEC transition).
+Status: **CANCELLED_BY_DESIGN_DECISION** for Cloudflare migration.
+
+`sarahhairdesign.cz` remains authoritative on WEDOS. No Cloudflare nameserver cutover, DNSSEC/DS transition, or Cloudflare DNS apply is planned for this domain. The Sarah manifest below is retained only as a non-applicable provider example and must not be treated as a production migration target. Any future decision to migrate Sarah Hair Design to Cloudflare requires a new explicit architecture decision, fresh discovery, and a separately approved migration plan.
