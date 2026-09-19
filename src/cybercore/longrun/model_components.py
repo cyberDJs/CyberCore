@@ -19,11 +19,28 @@ from cybercore.longrun.state import RunState
 _MODEL_CALLS_KEY = "_cybercore_model_calls"
 
 
+class _DuplicateJsonKeyError(ValueError):
+    pass
+
+
+def _object_without_duplicate_keys(
+    pairs: list[tuple[str, object]],
+) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise _DuplicateJsonKeyError(f"duplicate JSON object key: {key}")
+        value[key] = item
+    return value
+
+
 def _decode_object(text: str, *, label: str) -> dict[str, object]:
     try:
-        value = json.loads(text)
+        value = json.loads(text, object_pairs_hook=_object_without_duplicate_keys)
     except json.JSONDecodeError as exc:
         raise ValueError(f"{label} must return a JSON object") from exc
+    except _DuplicateJsonKeyError as exc:
+        raise ValueError(f"{label} response contains a duplicate JSON object key") from exc
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise ValueError(f"{label} must return a JSON object")
     return value
