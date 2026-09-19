@@ -387,9 +387,7 @@ def _consume_trusted_authorization_nonce(nonce: str, authorization_reference: st
             response_parts.append(chunk)
             response_size += len(chunk)
             if response_size > 4096:
-                raise FirstWriteRuntimeError(
-                    "trusted staging nonce response is unexpectedly large"
-                )
+                raise FirstWriteRuntimeError("trusted staging nonce response is unexpectedly large")
         response = b"".join(response_parts)
     except FirstWriteRuntimeError:
         raise
