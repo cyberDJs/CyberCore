@@ -8,6 +8,7 @@ import json
 class RollbackActionType(str, Enum):
     REMOVE_MANAGED_FILE_IF_EXACT = "REMOVE_MANAGED_FILE_IF_EXACT"
     VERIFY_PRIVILEGE_POLICY_REVOKED = "VERIFY_PRIVILEGE_POLICY_REVOKED"
+    VERIFY_SYSTEMD_UNIT_MANAGED_EXACT = "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT"
     STOP_SYSTEMD_UNIT_AND_WAIT = "STOP_SYSTEMD_UNIT_AND_WAIT"
     RELOAD_SYSTEMD = "RELOAD_SYSTEMD"
     VALIDATE_SSHD_CONFIG = "VALIDATE_SSHD_CONFIG"
@@ -36,14 +37,28 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
         ),
         RollbackAction(
+            "verify-vikunja-backup-install-wrapper-managed",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_MANAGED_EXACT,
+            "cybercore-vikunja-backup-install.service",
+            "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
+        ),
+        RollbackAction(
+            "verify-vikunja-backup-run-wrapper-managed",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_MANAGED_EXACT,
+            "cybercore-vikunja-backup-run.service",
+            "deploy/cybercore-exec/cybercore-vikunja-backup-run.service",
+        ),
+        RollbackAction(
             "stop-vikunja-backup-install-wrapper",
             RollbackActionType.STOP_SYSTEMD_UNIT_AND_WAIT,
             "cybercore-vikunja-backup-install.service",
+            "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
         ),
         RollbackAction(
             "stop-vikunja-backup-run-wrapper",
             RollbackActionType.STOP_SYSTEMD_UNIT_AND_WAIT,
             "cybercore-vikunja-backup-run.service",
+            "deploy/cybercore-exec/cybercore-vikunja-backup-run.service",
         ),
         RollbackAction(
             "remove-sshd-config",
