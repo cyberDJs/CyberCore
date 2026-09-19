@@ -70,9 +70,7 @@ class ModelIntent:
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, object]) -> "ModelIntent":
-        required = {
-            "kind", "operation", "target", "language", "confidence", "needs_live_data"
-        }
+        required = {"kind", "operation", "target", "language", "confidence", "needs_live_data"}
         if set(value) != required:
             extra = sorted(set(value) - required)
             missing = sorted(required - set(value))
