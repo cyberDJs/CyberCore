@@ -10,6 +10,10 @@ from typing import Any, Callable
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from authorization import (  # type: ignore[import-not-found]
+        DenyAllExecutionAuthorizationVerifier,
+        ExecutionAuthorizationVerifier,
+    )
     from operations import resolve_operation  # type: ignore[import-not-found]
     from protocol import (  # type: ignore[import-not-found]
         MAX_REQUEST_BYTES,
@@ -49,9 +53,23 @@ def _timeout_bytes(value: str | bytes | None) -> bytes:
 def execute_request(
     request: ServerRequest,
     *,
+    authorization_verifier: ExecutionAuthorizationVerifier | None = None,
     runner: RunCallable = subprocess.run,
 ) -> ServerReceipt:
     spec = resolve_operation(request)
+    if spec.mutating:
+        verifier = authorization_verifier or DenyAllExecutionAuthorizationVerifier()
+        authorization = verifier.verify(
+            operation_id=request.operation_id,
+            operation=request.operation,
+            target_id=request.target_id,
+            plan_id=request.plan_id,
+            plan_revision=request.plan_revision,
+            authorization_reference=request.authorization_reference,
+        )
+        if not authorization.authorized:
+            raise RequestValidationError("mutating request lacks verified authorization")
+
     started_at = _utc_now()
 
     try:
