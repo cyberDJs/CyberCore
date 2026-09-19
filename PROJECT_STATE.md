@@ -252,7 +252,7 @@ The repository contract is therefore repaired, but runtime deployment readiness 
 - Explicitly excludes arbitrary shell, deploy, provider/cloud mutation and production write.
 - The branch was created from `main@f12eb91ea8dd718f9f3c2d366d578859dab31132` and requires reconciliation against live GitHub `main` plus fresh exact-head gates before readiness.
 
-No merge priority is inferred merely from PR number or recency; each candidate must be independently reconciled and gated. The known canonical PR #79 repair takes precedence because it addresses defects already present on `main`.
+No merge priority is inferred merely from PR number or recency; each candidate must be independently reconciled and gated. The former PR #79 repair priority is historical: its implementation findings were repaired by canonical PR #95.
 
 ## Work-block identity conflicts
 
