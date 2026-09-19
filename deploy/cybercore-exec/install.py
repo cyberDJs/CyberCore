@@ -34,6 +34,15 @@ class BootstrapAction:
 def build_install_manifest() -> tuple[BootstrapAction, ...]:
     actions = [
         BootstrapAction(
+            "server-authorization",
+            BootstrapActionType.INSTALL_SERVER_FILE,
+            "src/cybercore/execution/authorization.py",
+            "/usr/local/libexec/cybercore-exec/authorization.py",
+            "0644",
+            "root",
+            "root",
+        ),
+        BootstrapAction(
             "server-dispatcher",
             BootstrapActionType.INSTALL_SERVER_FILE,
             "src/cybercore/execution/server/dispatcher.py",
