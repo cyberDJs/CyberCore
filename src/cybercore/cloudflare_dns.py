@@ -586,7 +586,38 @@ def load_rollback_manifest(path: Path) -> DnsManifest:
     managed_set = set(managed)
     if any(record.recordset() not in managed_set for record in records):
         raise CloudflareDnsError("every rollback record must belong to a managed_recordset")
-    _validate_desired_recordsets(tuple(records))
+    semantic = [record.semantic_key() for record in records]
+    if len(set(semantic)) != len(semantic):
+        raise CloudflareDnsError("rollback manifest contains duplicate desired records")
+
+    by_name: dict[str, list[DnsRecord]] = {}
+    for record in records:
+        by_name.setdefault(record.name, []).append(record)
+    for name, owner_records in by_name.items():
+        types = {record.record_type for record in owner_records}
+        cname_count = sum(record.record_type == "CNAME" for record in owner_records)
+        if cname_count > 1:
+            raise CloudflareDnsError(f"at most one rollback CNAME is allowed at {name}")
+        if "CNAME" in types and len(types) > 1:
+            raise CloudflareDnsError(
+                f"CNAME cannot coexist with other rollback record types at {name}"
+            )
+        mx_records = [record for record in owner_records if record.record_type == "MX"]
+        null_mx = [record for record in mx_records if record.content == "."]
+        if null_mx and (
+            len(mx_records) != 1 or len(null_mx) != 1 or null_mx[0].priority != 0
+        ):
+            raise CloudflareDnsError(
+                f"Null MX at {name} must be the sole MX record with priority 0"
+            )
+        address_records = [
+            record for record in owner_records if record.record_type in ADDRESS_TYPES
+        ]
+        if len({record.proxied for record in address_records}) > 1:
+            raise CloudflareDnsError(
+                f"A/AAAA rollback records at {name} must use one consistent Cloudflare proxy mode"
+            )
+
     return DnsManifest(zone, tuple(managed), tuple(records), False, True)
 
 
