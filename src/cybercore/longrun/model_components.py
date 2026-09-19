@@ -107,7 +107,7 @@ def _parse_proposal(text: str) -> StepProposal:
     _reject_unknown(raw, allowed, label="planner response")
     if set(raw) != allowed:
         raise ValueError("planner response is missing required fields")
-    return StepProposal(
+    proposal = StepProposal(
         fingerprint=_string(raw["fingerprint"], label="planner.fingerprint"),
         expected_quality_gain=_number(
             raw["expected_quality_gain"], label="planner.expected_quality_gain"
@@ -122,6 +122,9 @@ def _parse_proposal(text: str) -> StepProposal:
         ),
         effect=_string(raw["effect"], label="planner.effect"),
     )
+    if not math.isfinite(proposal.value):
+        raise ValueError("planner proposal value must be finite")
+    return proposal
 
 
 def _parse_worker(text: str) -> tuple[bool, dict[str, object]]:
