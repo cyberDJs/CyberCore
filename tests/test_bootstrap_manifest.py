@@ -250,10 +250,9 @@ def test_rollback_quiesces_optional_managed_backup_schedule_before_wrapper_teard
         index["stop-vikunja-backup-service"]
         < index["verify-vikunja-backup-install-wrapper-managed"]
     )
-    assert (
-        index["stop-vikunja-backup-service"]
-        < index["verify-vikunja-backup-run-wrapper-managed"]
-    )
+    assert index["stop-vikunja-backup-service"] < index[
+        "verify-vikunja-backup-run-wrapper-managed"
+    ]
 
 
 def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
