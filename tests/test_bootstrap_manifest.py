@@ -72,8 +72,7 @@ def test_bootstrap_installs_static_wrappers_before_privilege_policy() -> None:
 
     assert index["revoke-existing-privilege-policy"] < index["verify-privilege-policy-revoked"]
     assert (
-        index["verify-privilege-policy-revoked"]
-        < index["verify-vikunja-backup-install-unit-safe"]
+        index["verify-privilege-policy-revoked"] < index["verify-vikunja-backup-install-unit-safe"]
     )
     assert index["verify-privilege-policy-revoked"] < index["verify-vikunja-backup-run-unit-safe"]
 
