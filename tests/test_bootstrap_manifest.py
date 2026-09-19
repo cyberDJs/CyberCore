@@ -171,9 +171,36 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert "/usr/local/libexec/cybercore-exec/authorization.py" in targets
 
     index = {action.action_id: position for position, action in enumerate(manifest)}
+    by_id = {action.action_id: action for action in manifest}
     assert index["remove-privilege-policy"] < index["verify-privilege-policy-revoked"]
-    assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-install-unit"]
-    assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-run-unit"]
+
+    quiesce_pairs = (
+        (
+            "stop-vikunja-backup-install-unit",
+            "verify-vikunja-backup-install-unit-inactive",
+            "cybercore-vikunja-backup-install.service",
+        ),
+        (
+            "stop-vikunja-backup-run-unit",
+            "verify-vikunja-backup-run-unit-inactive",
+            "cybercore-vikunja-backup-run.service",
+        ),
+        (
+            "stop-vikunja-backup-service",
+            "verify-vikunja-backup-service-inactive",
+            "vikunja-backup.service",
+        ),
+    )
+    for stop_id, verify_id, unit in quiesce_pairs:
+        assert by_id[stop_id].action_type.value == "STOP_SYSTEMD_UNIT_IF_PRESENT"
+        assert by_id[stop_id].target == unit
+        assert by_id[verify_id].action_type.value == "VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT"
+        assert by_id[verify_id].target == unit
+        assert index["verify-privilege-policy-revoked"] < index[stop_id]
+        assert index[stop_id] < index[verify_id]
+        assert index[verify_id] < index["remove-vikunja-backup-install-unit"]
+        assert index[verify_id] < index["remove-vikunja-backup-run-unit"]
+
     assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
     assert index["remove-vikunja-backup-install-unit"] < index["systemd-reload"]
     assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload"]

@@ -1,7 +1,7 @@
 # Governed Execution Bridge V1
 
 Status: repository repair under review; not deployed
-Work block: `WB-0037` with `WB-0038E` execution-boundary repair
+Work block: `WB-0037` with `WB-0038E` execution-boundary repair and `WB-0038F` rollback-quiesce repair
 
 ## Purpose
 
@@ -131,10 +131,15 @@ to exist as an explicit writable sandbox path; a missing path is a hard failure,
 not an ignored exception.
 
 Rollback is also fail-closed. It first removes the managed privilege rule and
-must verify effective revocation before removing either static wrapper. If the
-rule is locally drifted or otherwise cannot be revoked, rollback stops and keeps
-the wrapper names occupied rather than exposing an authorized-but-unclaimed
-systemd unit name. After safe wrapper removal it reloads systemd.
+must verify effective revocation before any execution unit is quiesced or any
+static wrapper file is removed. After revocation is proven, rollback stops and
+verifies inactive-or-absent state for both CyberCore wrapper units and for
+`vikunja-backup.service`, because the run wrapper may already have handed work
+off to that downstream root oneshot. If the policy is locally drifted, a stop
+fails, or inactivity cannot be proven, rollback stops and keeps the static unit
+files in place. Only after quiescence is verified may wrapper files be removed
+and systemd reloaded. This prevents already-authorized root work from continuing
+past rollback while its execution boundary disappears.
 
 ## Execution receipts
 
@@ -166,7 +171,7 @@ verification must establish at minimum:
 
 ## Deployment boundary
 
-WB-0038E is repository-only. It does not create credentials, modify sshd or
+WB-0038E and WB-0038F are repository-only. It does not create credentials, modify sshd or
 Polkit on a target, deploy the subsystem, run A6 backups, mutate a VPS, or grant
 production authority. Any deployment requires a separate target-bound plan, a real server-side
 authorization verifier, fresh verification, and explicit authorization.
