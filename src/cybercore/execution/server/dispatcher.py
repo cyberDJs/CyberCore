@@ -9,11 +9,19 @@ from pathlib import Path
 from typing import Any, Callable
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from authorization import (  # type: ignore[import-not-found]
-        DenyAllExecutionAuthorizationVerifier,
-        ExecutionAuthorizationVerifier,
-    )
+    server_dir = Path(__file__).resolve().parent
+    sys.path.insert(0, str(server_dir))
+    try:
+        from authorization import (  # type: ignore[import-not-found]
+            DenyAllExecutionAuthorizationVerifier,
+            ExecutionAuthorizationVerifier,
+        )
+    except ImportError:
+        sys.path.insert(0, str(server_dir.parents[2]))
+        from cybercore.execution.authorization import (
+            DenyAllExecutionAuthorizationVerifier,
+            ExecutionAuthorizationVerifier,
+        )
     from operations import resolve_operation  # type: ignore[import-not-found]
     from protocol import (  # type: ignore[import-not-found]
         MAX_REQUEST_BYTES,
