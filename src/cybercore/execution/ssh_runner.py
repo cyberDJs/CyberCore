@@ -15,6 +15,8 @@ class ExecutionBlockedError(RuntimeError):
 
 RunCallable = Callable[..., subprocess.CompletedProcess[bytes]]
 
+_TRANSPORT_TIMEOUT_SECONDS = 150
+
 
 def build_transport_argv(target: ExecutionTarget) -> tuple[str, ...]:
     return (
@@ -75,7 +77,7 @@ def execute_action(
             stderr=subprocess.PIPE,
             check=False,
             shell=False,
-            timeout=30,
+            timeout=_TRANSPORT_TIMEOUT_SECONDS,
         )
     except subprocess.TimeoutExpired as exc:
         completed_at = utc_now()
