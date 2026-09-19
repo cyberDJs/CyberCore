@@ -18,16 +18,18 @@ authority path would violate CyberCore's exact-plan approval and evidence model.
 Add a model-backed intelligence layer before the existing governed router with these constraints:
 
 1. Authority-sensitive `CANCEL`, `APPROVE`, and `EXECUTE` intents are classified deterministically
-   before any model call.
+   before any model call. Cancellation is token-based rather than prefix-enumerated, with explicit
+   guards for quoted/definition mentions and negated commands.
 2. Those intent kinds are absent from the model JSON Schema and cannot be returned by the model.
 3. Model output is strict, structured, confidence-bounded, and rejected on schema mismatch.
 4. Failure falls back safely; authority-sensitive fallback classifications are downgraded to
    `UNKNOWN`.
-5. Model questions fail closed unless the utterance matches a deterministic positive allowlist of
-   stable definitional or mechanistic question forms. Search, inspect, monitor, time-sensitive and
-   dynamic-topic requests require live data independently of the model's `needs_live_data` flag;
-   model-declared live-data needs are additive.
-6. Only allowlisted stable general-knowledge questions may reach the bounded response composer.
+5. Model questions fail closed unless the utterance is an explicit lexical-definition request
+   (`what does TERM mean`, `define TERM`, or Czech equivalents) for one bounded term. All broader
+   factual, mechanistic, search, inspect, monitor, or potentially time-varying questions require a
+   trusted source independently of the model's `needs_live_data` flag; model-declared live-data
+   needs are additive.
+6. Only allowlisted lexical-definition requests may reach the bounded response composer.
 7. Operational intents continue through the existing VoiceRouter, HOWEDO, OATHDO, CCL approval,
    and governed execution boundaries.
 8. The first provider is local Ollama over explicit loopback HTTP using only the Python standard
