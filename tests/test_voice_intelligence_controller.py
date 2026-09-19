@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from cybercore.voice.intelligence.compiler import ModelIntentCompiler
 from cybercore.voice.intelligence.composer import ModelResponseComposer
 from cybercore.voice.intelligence.controller import IntelligentVoiceController
@@ -64,6 +66,20 @@ def test_live_data_gate_does_not_trust_model_false_flag() -> None:
     response = controller(client).handle(
         utterance("Is production healthy right now?"), VoiceContext(project="CyberCore")
     )
+    assert response.status == "needs_live_data"
+    assert client.calls == 1
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Will it rain tomorrow?",
+        "Who is the president of France?",
+    ],
+)
+def test_non_stable_questions_fail_closed_even_if_model_flag_is_false(text: str) -> None:
+    client = SequenceClient([intent(kind="question", needs_live_data=False)])
+    response = controller(client).handle(utterance(text), VoiceContext())
     assert response.status == "needs_live_data"
     assert client.calls == 1
 
