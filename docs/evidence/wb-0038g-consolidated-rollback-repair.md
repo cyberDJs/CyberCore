@@ -30,7 +30,8 @@ The PR #95 / WB-0038E rollback contract correctly revoked future Polkit authorit
 9. direct manual and timer-triggered execution could run the same backup script concurrently;
 10. the strict manual-run sandbox did not explicitly expose the dedicated runtime lock directory as writable;
 11. changing from the legacy top-level `/run/cybercore-vikunja-backup.lock` to the dedicated runtime-directory lock could overlap an already-running legacy backup unless the installer quiesced both entry paths before replacement;
-12. `is-active` alone could miss queued systemd start jobs, allowing a pending manual/timer-generated backup to begin while the script was being replaced.
+12. `is-active` alone could miss queued systemd start jobs, allowing a pending manual/timer-generated backup to begin while the script was being replaced;
+13. checking `is-active` before the job queue still allowed a queued job to complete between observations, so quiescence must observe an empty job queue first and then re-check inactivity.
 
 PR #97 and PR #98 each solved only part of this chain. WB-0038G consolidates the required invariants on current canonical main.
 
@@ -66,7 +67,7 @@ The canonical generated service deliberately has no `PartOf=cybercore-vikunja-ba
 
 Manual and timer-triggered executions share a root-only advisory lock at `/run/cybercore-vikunja-backup/backup.lock`. Both unit entry paths declare `RuntimeDirectory=cybercore-vikunja-backup`, mode `0700`, with preservation across unit stop. The strict manual-run sandbox additionally declares only `/run/cybercore-vikunja-backup` as writable, rather than broad `/run`. The backup script opens the lock with `O_NOFOLLOW`, mode `0600`, and an exclusive `flock`, serializing both entry paths while keeping the manual process inside the governed wrapper cgroup.
 
-Before an install/upgrade rewrites the backup script or generated unit templates, the installer runtime-masks `cybercore-vikunja-backup-run.service`, stops the active timer if present, and waits for the manual wrapper, timer, and generated backup service to be both inactive and free of pending systemd jobs. Job presence is checked with exact-unit `systemctl list-jobs --no-legend --plain <unit>` queries. Only then are artifacts replaced. After `daemon-reload`, the installer removes only its runtime mask and re-enables the timer. A 90-second quiescence timeout fails closed before replacement, leaving new manual starts blocked and the timer stopped for operator recovery.
+Before an install/upgrade rewrites the backup script or generated unit templates, the installer runtime-masks `cybercore-vikunja-backup-run.service`, stops the active timer if present, and waits for the manual wrapper, timer, and generated backup service to be both inactive and free of pending systemd jobs. Job presence is checked with exact-unit `systemctl list-jobs --no-legend --plain <unit>` queries, and each quiescence iteration checks the job queue before re-checking `is-active`, so a queued start that completes between observations is caught as active. Only then are artifacts replaced. After `daemon-reload`, the installer removes only its runtime mask and re-enables the timer. A 90-second quiescence timeout fails closed before replacement, leaving new manual starts blocked and the timer stopped for operator recovery.
 
 The wrapper preserves:
 
@@ -117,7 +118,7 @@ Implementation head `aca79cc0dacd8356b3b13877a7ce2ded65882f4a`:
 - Python 3.14: PASS
 - CodeQL #927: PASS
 
-Subsequent fresh review found and repaired pre-verification stop propagation, concurrent manual/timer backup execution, the strict-sandbox lock-path exposure, an upgrade-time lock migration race, and a queued-systemd-job race that `is-active` alone could not detect. The current installer quiesces both backup entry paths before replacing the script, while the manual wrapper explicitly exposes only the dedicated runtime lock directory as writable. Final readiness therefore requires new CI, CodeQL, and fresh correctness/security review on the new exact head.
+Subsequent fresh review found and repaired pre-verification stop propagation, concurrent manual/timer backup execution, the strict-sandbox lock-path exposure, an upgrade-time lock migration race, and queued-systemd-job races, including the observation-order race where a queued start could complete between `is-active` and `list-jobs`. The current installer quiesces both backup entry paths before replacing the script, while the manual wrapper explicitly exposes only the dedicated runtime lock directory as writable. Final readiness therefore requires new CI, CodeQL, and fresh correctness/security review on the new exact head.
 
 ## Scope boundary
 
