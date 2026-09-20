@@ -87,7 +87,8 @@ def test_bootstrap_installs_static_wrappers_before_privilege_policy() -> None:
         action = by_id[action_id]
         assert action.action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_ABSENT"
         assert action.destination == target
-        assert index["verify-privilege-policy-revoked"] < index[action_id]
+        assert index[action_id] < index["server-authorization"]
+        assert index[action_id] < index["revoke-existing-privilege-policy"]
         assert index[action_id] < index[wrapper_safe_id]
 
     backup_root = by_id["backup-root-directory"]
@@ -281,41 +282,67 @@ def test_rollback_publishes_effective_tombstones_before_quiescence() -> None:
 
     pairs = (
         (
+            "verify-vikunja-backup-install-wrapper-managed-or-absent",
+            "ensure-vikunja-backup-install-tombstone-parent-trusted",
             "install-vikunja-backup-install-tombstone",
             "verify-vikunja-backup-install-tombstone",
             "verify-vikunja-backup-install-tombstone-effective",
             "stop-vikunja-backup-install-wrapper",
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d",
             "/etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf",
             "cybercore-vikunja-backup-install.service",
         ),
         (
+            "verify-vikunja-backup-run-wrapper-managed-or-absent",
+            "ensure-vikunja-backup-run-tombstone-parent-trusted",
             "install-vikunja-backup-run-tombstone",
             "verify-vikunja-backup-run-tombstone",
             "verify-vikunja-backup-run-tombstone-effective",
             "stop-vikunja-backup-run-wrapper",
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d",
             "/etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf",
             "cybercore-vikunja-backup-run.service",
         ),
     )
-    for install_id, verify_id, effective_id, stop_id, target, unit in pairs:
+    for (
+        wrapper_verify_id,
+        parent_id,
+        install_id,
+        verify_id,
+        effective_id,
+        stop_id,
+        parent,
+        target,
+        unit,
+    ) in pairs:
+        assert by_id[parent_id].action_type.value == "ENSURE_SYSTEMD_TOMBSTONE_PARENT_TRUSTED"
+        assert by_id[parent_id].target == parent
+        assert by_id[parent_id].mode == "0755"
+        assert by_id[parent_id].owner == "root"
+        assert by_id[parent_id].group == "root"
+
         assert by_id[install_id].action_type.value == (
-            "INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_IF_ABSENT_OR_EXACT"
+            "INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_TRUSTED_IF_ABSENT_OR_EXACT"
         )
         assert by_id[install_id].target == target
         assert by_id[install_id].source_of_truth == (
             "deploy/cybercore-exec/rollback-wrapper-tombstone.conf"
         )
-        assert by_id[verify_id].action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_DROPIN_EXACT"
+        assert by_id[install_id].mode == "0644"
+        assert by_id[install_id].owner == "root"
+        assert by_id[install_id].group == "root"
+
+        assert by_id[verify_id].action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_TRUSTED_EXACT"
         assert by_id[verify_id].target == target
+        assert by_id[verify_id].mode == "0644"
+        assert by_id[verify_id].owner == "root"
+        assert by_id[verify_id].group == "root"
+
         assert by_id[effective_id].action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE"
         assert by_id[effective_id].target == unit
-        wrapper_verify_id = (
-            "verify-vikunja-backup-install-wrapper-managed-or-absent"
-            if "install-tombstone" in install_id
-            else "verify-vikunja-backup-run-wrapper-managed-or-absent"
-        )
         assert index["verify-privilege-policy-revoked"] < index[wrapper_verify_id]
-        assert index[wrapper_verify_id] < index[install_id]
+        assert index[wrapper_verify_id] < index[parent_id]
+        assert index[parent_id] < index[install_id]
         assert index[install_id] < index[verify_id]
         assert index[verify_id] < index["systemd-reload-after-tombstone-barrier"]
         assert index["systemd-reload-after-tombstone-barrier"] < index[effective_id]
