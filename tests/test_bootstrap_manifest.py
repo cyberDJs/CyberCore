@@ -191,8 +191,8 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-install-unit"]
     assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-run-unit"]
     assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
-    assert index["remove-vikunja-backup-install-unit"] < index["systemd-reload"]
-    assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload"]
+    assert index["remove-vikunja-backup-install-unit"] < index["systemd-reload-after-wrapper-removal"]
+    assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload-after-wrapper-removal"]
 
 
 def test_governed_backup_run_owns_process_and_preserves_docker_ordering() -> None:
@@ -307,7 +307,13 @@ def test_rollback_publishes_effective_tombstones_before_quiescence() -> None:
         assert by_id[verify_id].target == target
         assert by_id[effective_id].action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE"
         assert by_id[effective_id].target == unit
-        assert index["verify-privilege-policy-revoked"] < index[install_id]
+        wrapper_verify_id = (
+            "verify-vikunja-backup-install-wrapper-managed-or-absent"
+            if "install-tombstone" in install_id
+            else "verify-vikunja-backup-run-wrapper-managed-or-absent"
+        )
+        assert index["verify-privilege-policy-revoked"] < index[wrapper_verify_id]
+        assert index[wrapper_verify_id] < index[install_id]
         assert index[install_id] < index[verify_id]
         assert index[verify_id] < index["systemd-reload-after-tombstone-barrier"]
         assert index["systemd-reload-after-tombstone-barrier"] < index[effective_id]
@@ -386,7 +392,7 @@ def test_rollback_keeps_tombstones_and_removes_all_managed_templates() -> None:
         ),
     ):
         action = by_id[action_id]
-        assert action.action_type.value == "REMOVE_MANAGED_FILE_IF_EXACT"
+        assert action.action_type.value == "REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT"
         assert action.target == target
         assert action.source_of_truth == source
         assert index["stop-vikunja-backup-service"] < index[action_id]
