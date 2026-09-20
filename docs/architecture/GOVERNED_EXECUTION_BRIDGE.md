@@ -136,11 +136,14 @@ verifies that the wrapper is the exact canonical unit or absent, then publishes
 an exact name-specific administrator tombstone drop-in under
 `/etc/systemd/system/<wrapper>.service.d/90-cybercore-rollback-tombstone.conf`.
 
-Tombstone publication is an atomic/durable action contract: only destination
-absence or the exact canonical tombstone is accepted; bytes are written to a
-same-directory temporary file, made durable, atomically renamed, and followed
-by directory durability. A conflicting or partially written destination fails
-closed.
+Tombstone publication is an atomic/durable trusted-file action contract. The
+drop-in parent must be a real non-symlink root:root directory with mode 0755.
+The destination is opened no-follow and is accepted only when absent or when it
+is a regular root:root mode-0644 file with exact canonical bytes. Publication
+uses a same-directory root-owned mode-0644 temporary regular file, makes its
+bytes durable, atomically renames it, and makes the directory entry durable.
+Symlink, file-type, ownership, mode, byte-content, or partial-publication drift
+fails closed.
 
 The tombstone adds an always-false `ConditionPathExists=` plus
 `RefuseManualStart=yes`. After the exact file is verified, rollback reloads
@@ -157,9 +160,10 @@ wrapper files. The two root-owned generated-unit templates installed under
 `/usr/local/libexec/cybercore-exec` are removed symmetrically as exact-or-absent
 managed files.
 
-A future bootstrap must verify both tombstone paths are absent before claiming
-either wrapper name and must never remove a tombstone implicitly. Reactivation
-therefore requires a separate reviewed administrative action.
+A future bootstrap must verify both tombstone paths are absent before its first
+mutating action, including helper/template installation and privilege-policy
+changes. It must never remove a tombstone implicitly. Reactivation therefore
+requires a separate reviewed administrative action.
 
 ## Execution receipts
 
