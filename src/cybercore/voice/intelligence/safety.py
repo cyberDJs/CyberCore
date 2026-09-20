@@ -23,8 +23,7 @@ class SafetyIntentGuard:
         {"cancel", "stop", "abort", "zrus", "zrusit", "zastav", "storno", "stornuj"}
     )
     _CANCEL_NEGATION = re.compile(
-        r"\b(?:never|cannot|do not|does not|did not|should not|must not|can not|could not|"
-        r"would not|will not|don t|doesn t|didn t|shouldn t|mustn t|can t|couldn t|"
+        r"\b(?:not|never|cannot|don t|doesn t|didn t|shouldn t|mustn t|can t|couldn t|"
         r"wouldn t|won t|nezrus|nezastav|nezastavuj)\b"
     )
     _CANCEL_MODIFIERS = frozenset(
@@ -35,6 +34,10 @@ class SafetyIntentGuard:
     _CANCEL_DESCRIPTION_COPULAS = frozenset(
         {"is", "are", "was", "were", "means", "mean", "refers", "represents", "equals"}
     )
+    _CANCEL_COMMAND_TAIL_START = frozenset(
+        {"the", "a", "an", "this", "that", "it", "my", "our", "your"}
+    )
+    _CANCEL_CONDITION_WORDS = frozenset({"if", "when", "unless"})
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
         r"vysvetli|definuj|znamena|slovo|vyraz)\b"
@@ -85,9 +88,23 @@ class SafetyIntentGuard:
 
     @classmethod
     def _marker_leads_description(cls, tokens: list[str], index: int) -> bool:
-        if index != 0:
+        if index != 0 or len(tokens) < 2:
             return False
-        return any(token in cls._CANCEL_DESCRIPTION_COPULAS for token in tokens[1:])
+        tail = tokens[1:]
+        copula_index = next(
+            (position for position, token in enumerate(tail) if token in cls._CANCEL_DESCRIPTION_COPULAS),
+            None,
+        )
+        if copula_index is None:
+            return False
+        before_copula = tail[:copula_index]
+        if not before_copula:
+            return True
+        if before_copula[0] in cls._CANCEL_COMMAND_TAIL_START:
+            return False
+        if set(before_copula) & cls._CANCEL_CONDITION_WORDS:
+            return False
+        return True
 
     @classmethod
     def _is_cancel_command(cls, raw_text: str) -> bool:
