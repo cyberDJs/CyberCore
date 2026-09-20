@@ -39,6 +39,18 @@ class BootstrapAction:
 def build_install_manifest() -> tuple[BootstrapAction, ...]:
     actions = [
         BootstrapAction(
+            "verify-vikunja-backup-install-tombstone-absent",
+            BootstrapActionType.VERIFY_SYSTEMD_TOMBSTONE_ABSENT,
+            "",
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf",
+        ),
+        BootstrapAction(
+            "verify-vikunja-backup-run-tombstone-absent",
+            BootstrapActionType.VERIFY_SYSTEMD_TOMBSTONE_ABSENT,
+            "",
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf",
+        ),
+        BootstrapAction(
             "server-authorization",
             BootstrapActionType.INSTALL_SERVER_FILE,
             "src/cybercore/execution/authorization.py",
@@ -112,18 +124,6 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             BootstrapActionType.VERIFY_PRIVILEGE_POLICY_REVOKED,
             "",
             "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
-        ),
-        BootstrapAction(
-            "verify-vikunja-backup-install-tombstone-absent",
-            BootstrapActionType.VERIFY_SYSTEMD_TOMBSTONE_ABSENT,
-            "",
-            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf",
-        ),
-        BootstrapAction(
-            "verify-vikunja-backup-run-tombstone-absent",
-            BootstrapActionType.VERIFY_SYSTEMD_TOMBSTONE_ABSENT,
-            "",
-            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf",
         ),
         BootstrapAction(
             "verify-vikunja-backup-install-unit-safe",
