@@ -63,7 +63,11 @@ class SafetyIntentGuard:
         if not remaining:
             return True
 
-        if len(remaining) >= 2 and remaining[0] in cls._CANCEL_MODAL_REQUESTS and remaining[1] == "you":
+        if (
+            len(remaining) >= 2
+            and remaining[0] in cls._CANCEL_MODAL_REQUESTS
+            and remaining[1] == "you"
+        ):
             remaining = remaining[2:]
             while remaining and remaining[0] in cls._CANCEL_MODIFIERS:
                 remaining.pop(0)
@@ -92,7 +96,11 @@ class SafetyIntentGuard:
             return False
         tail = tokens[1:]
         copula_index = next(
-            (position for position, token in enumerate(tail) if token in cls._CANCEL_DESCRIPTION_COPULAS),
+            (
+                position
+                for position, token in enumerate(tail)
+                if token in cls._CANCEL_DESCRIPTION_COPULAS
+            ),
             None,
         )
         if copula_index is None:
