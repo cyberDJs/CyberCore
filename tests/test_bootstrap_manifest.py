@@ -185,7 +185,9 @@ def test_governed_backup_run_owns_process_and_preserves_docker_ordering() -> Non
     assert "ExecStart=/usr/bin/systemctl start vikunja-backup.service" not in text
     assert "Requires=docker.service" in text
     assert "After=docker.service" in text
-    assert "ReadWritePaths=/opt/backups/vikunja" in text
+    assert (
+        "ReadWritePaths=/opt/backups/vikunja /run/cybercore-vikunja-backup" in text
+    )
     assert "RuntimeDirectory=cybercore-vikunja-backup" in text
     assert "RuntimeDirectoryMode=0700" in text
     assert "RuntimeDirectoryPreserve=yes" in text
@@ -228,6 +230,22 @@ def test_backup_unit_templates_are_canonical_root_owned_inputs() -> None:
     assert "fcntl.flock(handle.fileno(), fcntl.LOCK_EX)" in installer
     assert "os.O_NOFOLLOW" in installer
     assert "os.fchmod(fd, 0o600)" in installer
+
+
+def test_backup_installer_quiesces_entry_paths_before_replacing_script() -> None:
+    text = (DEPLOY / "vikunja-backup-install").read_text()
+
+    quiesce = text.index("quiesce_backup_entry_paths()")
+    write_script = text.index("write_exact(BACKUP_SCRIPT, BACKUP_SCRIPT_TEXT, 0o700)")
+    unmask = text.index('require_systemctl("unmask", "--runtime", MANUAL_RUN_UNIT)')
+    enable_timer = text.index('require_systemctl("enable", "--now", BACKUP_TIMER_UNIT)')
+
+    assert 'require_systemctl("mask", "--runtime", MANUAL_RUN_UNIT)' in text
+    assert 'require_systemctl("stop", BACKUP_TIMER_UNIT)' in text
+    assert "wait_until_inactive(MANUAL_RUN_UNIT, deadline)" in text
+    assert "wait_until_inactive(BACKUP_SERVICE_UNIT, deadline)" in text
+    assert "QUIESCE_TIMEOUT_SECONDS = 90.0" in text
+    assert quiesce < write_script < unmask < enable_timer
 
 
 def test_rollback_blocks_new_wrapper_starts_before_quiescence() -> None:
