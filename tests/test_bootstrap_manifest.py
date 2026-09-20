@@ -191,7 +191,9 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-install-unit"]
     assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-run-unit"]
     assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
-    assert index["remove-vikunja-backup-install-unit"] < index["systemd-reload-after-wrapper-removal"]
+    assert (
+        index["remove-vikunja-backup-install-unit"] < index["systemd-reload-after-wrapper-removal"]
+    )
     assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload-after-wrapper-removal"]
 
 
@@ -397,24 +399,26 @@ def test_rollback_keeps_tombstones_and_removes_all_managed_templates() -> None:
         assert action.source_of_truth == source
         assert index["stop-vikunja-backup-service"] < index[action_id]
 
-    assert index["remove-vikunja-backup-install-unit"] < index[
-        "systemd-reload-after-wrapper-removal"
-    ]
-    assert index["remove-vikunja-backup-run-unit"] < index[
-        "systemd-reload-after-wrapper-removal"
-    ]
-    assert index["systemd-reload-after-wrapper-removal"] < index[
-        "verify-vikunja-backup-install-tombstone-effective-after-removal"
-    ]
-    assert index["systemd-reload-after-wrapper-removal"] < index[
-        "verify-vikunja-backup-run-tombstone-effective-after-removal"
-    ]
-    assert by_id[
-        "verify-vikunja-backup-install-tombstone-effective-after-removal"
-    ].action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE"
-    assert by_id[
-        "verify-vikunja-backup-run-tombstone-effective-after-removal"
-    ].action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE"
+    assert (
+        index["remove-vikunja-backup-install-unit"] < index["systemd-reload-after-wrapper-removal"]
+    )
+    assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload-after-wrapper-removal"]
+    assert (
+        index["systemd-reload-after-wrapper-removal"]
+        < index["verify-vikunja-backup-install-tombstone-effective-after-removal"]
+    )
+    assert (
+        index["systemd-reload-after-wrapper-removal"]
+        < index["verify-vikunja-backup-run-tombstone-effective-after-removal"]
+    )
+    assert (
+        by_id["verify-vikunja-backup-install-tombstone-effective-after-removal"].action_type.value
+        == "VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE"
+    )
+    assert (
+        by_id["verify-vikunja-backup-run-tombstone-effective-after-removal"].action_type.value
+        == "VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE"
+    )
 
     tombstone_targets = {
         by_id["install-vikunja-backup-install-tombstone"].target,
