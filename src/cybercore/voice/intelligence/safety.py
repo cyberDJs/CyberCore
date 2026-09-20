@@ -22,9 +22,7 @@ class SafetyIntentGuard:
     _CANCEL_MARKERS = frozenset(
         {"cancel", "stop", "abort", "zrus", "zrusit", "zastav", "storno", "stornuj"}
     )
-    _CANCEL_NEGATION = re.compile(
-        r"\b(?:do not|don t|dont|never|nezrus|nezastav|nezastavuj)\b"
-    )
+    _CANCEL_NEGATION = re.compile(r"\b(?:do not|don t|dont|never|nezrus|nezastav|nezastavuj)\b")
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
         r"vysvetli|definuj|znamena|slovo|vyraz)\b"
