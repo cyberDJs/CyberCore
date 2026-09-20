@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -221,7 +222,13 @@ def _require_int(value: object, label: str) -> int:
 def _require_number(value: object, label: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{label} must be numeric")
-    return float(value)
+    try:
+        normalized = float(value)
+    except OverflowError as exc:
+        raise ValueError(f"{label} is outside the supported numeric range") from exc
+    if not math.isfinite(normalized):
+        raise ValueError(f"{label} must be finite")
+    return normalized
 
 
 def _require_text(value: object, label: str, max_length: int) -> str:

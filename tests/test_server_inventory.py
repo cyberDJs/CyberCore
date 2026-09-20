@@ -190,3 +190,62 @@ def test_malformed_docker_row_is_reported_as_partial_failure() -> None:
     assert isinstance(docker, dict)
     assert docker["access_status"] == "partial_failure"
     assert docker["containers"][0]["name"] == "vikunja"
+
+
+@pytest.mark.parametrize("bad_load", [float("nan"), float("inf"), float("-inf")])
+def test_validator_rejects_non_finite_load_values(bad_load: float) -> None:
+    payload = {
+        "schema_version": 1,
+        "host": {
+            "hostname": "test",
+            "cpu_logical": 2,
+            "load_1m": bad_load,
+            "load_5m": 0.1,
+            "load_15m": 0.1,
+        },
+        "memory": {
+            "total_bytes": 1,
+            "available_bytes": 1,
+            "swap_total_bytes": 0,
+            "swap_free_bytes": 0,
+        },
+        "root_filesystem": {"total_bytes": 1, "used_bytes": 0, "free_bytes": 1},
+        "docker": {
+            "cli_present": False,
+            "access_status": "not_installed",
+            "server_version": None,
+            "containers": [],
+            "storage": [],
+        },
+    }
+    with pytest.raises(ValueError, match="must be finite"):
+        validate_inventory_payload(payload)
+
+
+def test_validator_translates_load_overflow_to_value_error() -> None:
+    payload = {
+        "schema_version": 1,
+        "host": {
+            "hostname": "test",
+            "cpu_logical": 2,
+            "load_1m": 10**10000,
+            "load_5m": 0.1,
+            "load_15m": 0.1,
+        },
+        "memory": {
+            "total_bytes": 1,
+            "available_bytes": 1,
+            "swap_total_bytes": 0,
+            "swap_free_bytes": 0,
+        },
+        "root_filesystem": {"total_bytes": 1, "used_bytes": 0, "free_bytes": 1},
+        "docker": {
+            "cli_present": False,
+            "access_status": "not_installed",
+            "server_version": None,
+            "containers": [],
+            "storage": [],
+        },
+    }
+    with pytest.raises(ValueError, match="outside the supported numeric range"):
+        validate_inventory_payload(payload)

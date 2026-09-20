@@ -62,3 +62,8 @@ Runtime effect verification is impossible until a later authorized deployment in
 ## Upgrade ordering and timeout budget
 
 Bootstrap installs the inventory helper, operations map, protocol, and authorization dependency before replacing the dispatcher so an interrupted upgrade cannot leave the dispatcher importing a not-yet-installed module. The inventory operation receives a 20-second server budget, which exceeds the aggregate 15-second Docker probe budget plus Python and local collection overhead.
+
+
+## Numeric validation
+
+Load-average values are accepted only when they are finite real numbers. `NaN`, positive/negative infinity, and values that overflow Python float conversion fail closed as validation errors and are never promoted into capacity evidence.
