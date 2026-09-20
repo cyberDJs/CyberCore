@@ -38,9 +38,9 @@ speech -> STT -> Utterance
 
 `CANCEL`, `APPROVE`, and `EXECUTE` are deliberately absent from the model output schema. A model
 cannot create those intent kinds even if prompted or compromised. Command-like forms are classified
-by a deterministic pre-model guard. Cancellation uses bounded command-token detection anywhere in
-the utterance rather than enumerating conversational prefixes, while explicit mention/definition
-and negation forms remain non-cancelling.
+by a deterministic pre-model guard. Cancellation requires a bounded marker in recognized command
+syntax (for example a direct imperative or an explicit second-person request). Bare marker mentions,
+questions, descriptions, quoted/definition uses, and locally negated commands remain non-cancelling.
 
 If model classification fails, the fallback rule compiler is sanitized: any authority-sensitive
 fallback result is downgraded to `UNKNOWN`.
