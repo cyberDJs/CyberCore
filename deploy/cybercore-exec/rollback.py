@@ -40,6 +40,18 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
         ),
         RollbackAction(
+            "verify-vikunja-backup-install-wrapper-managed",
+            RollbackActionType.VERIFY_SYSTEMD_UNIT_MANAGED_EXACT,
+            "cybercore-vikunja-backup-install.service",
+            "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
+        ),
+        RollbackAction(
+            "stop-vikunja-backup-install-wrapper",
+            RollbackActionType.STOP_SYSTEMD_UNIT_AND_WAIT,
+            "cybercore-vikunja-backup-install.service",
+            "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
+        ),
+        RollbackAction(
             "verify-vikunja-backup-timer-managed-or-absent",
             RollbackActionType.VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT,
             "vikunja-backup.timer",
@@ -64,22 +76,10 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "deploy/cybercore-exec/vikunja-backup.service",
         ),
         RollbackAction(
-            "verify-vikunja-backup-install-wrapper-managed",
-            RollbackActionType.VERIFY_SYSTEMD_UNIT_MANAGED_EXACT,
-            "cybercore-vikunja-backup-install.service",
-            "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
-        ),
-        RollbackAction(
             "verify-vikunja-backup-run-wrapper-managed",
             RollbackActionType.VERIFY_SYSTEMD_UNIT_MANAGED_EXACT,
             "cybercore-vikunja-backup-run.service",
             "deploy/cybercore-exec/cybercore-vikunja-backup-run.service",
-        ),
-        RollbackAction(
-            "stop-vikunja-backup-install-wrapper",
-            RollbackActionType.STOP_SYSTEMD_UNIT_AND_WAIT,
-            "cybercore-vikunja-backup-install.service",
-            "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
         ),
         RollbackAction(
             "stop-vikunja-backup-run-wrapper",
