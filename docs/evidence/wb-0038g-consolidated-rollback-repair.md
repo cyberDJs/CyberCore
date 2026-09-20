@@ -1,6 +1,6 @@
 # WB-0038G — Consolidated Rollback Repair Evidence
 
-Status: IMPLEMENTED_IN_BRANCH / POST-READY P1 REPAIRED / FINAL_EXACT_HEAD_REVERIFY_PENDING
+Status: IMPLEMENTED_IN_BRANCH / POST-READY P1+P2 REPAIRED / FINAL_EXACT_HEAD_REVERIFY_PENDING
 
 ## Provenance
 
@@ -28,7 +28,8 @@ The PR #95 / WB-0038E rollback contract correctly revoked future Polkit authorit
 7. direct wrapper execution initially dropped Docker startup ordering;
 8. a generated service with `PartOf=` could receive propagated stop control before its identity gate;
 9. direct manual and timer-triggered execution could run the same backup script concurrently;
-10. the strict manual-run sandbox did not provide a writable path for the shared `/run` lock.
+10. the strict manual-run sandbox did not explicitly expose the dedicated runtime lock directory as writable;
+11. changing from the legacy top-level `/run/cybercore-vikunja-backup.lock` to the dedicated runtime-directory lock could overlap an already-running legacy backup unless the installer quiesced both entry paths before replacement.
 
 PR #97 and PR #98 each solved only part of this chain. WB-0038G consolidates the required invariants on current canonical main.
 
@@ -62,14 +63,16 @@ The backup process therefore lives inside the verified wrapper cgroup rather tha
 
 The canonical generated service deliberately has no `PartOf=cybercore-vikunja-backup-run.service` relationship. Generated-unit identity is verified before any run-wrapper stop, so rollback never relies on unverified stop propagation.
 
-Manual and timer-triggered executions share a root-only advisory lock at `/run/cybercore-vikunja-backup/backup.lock`. Both unit entry paths declare `RuntimeDirectory=cybercore-vikunja-backup`, mode `0700`, with preservation across unit stop, so the strict manual-run sandbox receives only the dedicated writable runtime directory rather than a broad `/run` exception. The backup script opens the lock with `O_NOFOLLOW`, mode `0600`, and an exclusive `flock`, serializing both entry paths while keeping the manual process inside the governed wrapper cgroup.
+Manual and timer-triggered executions share a root-only advisory lock at `/run/cybercore-vikunja-backup/backup.lock`. Both unit entry paths declare `RuntimeDirectory=cybercore-vikunja-backup`, mode `0700`, with preservation across unit stop. The strict manual-run sandbox additionally declares only `/run/cybercore-vikunja-backup` as writable, rather than broad `/run`. The backup script opens the lock with `O_NOFOLLOW`, mode `0600`, and an exclusive `flock`, serializing both entry paths while keeping the manual process inside the governed wrapper cgroup.
+
+Before an install/upgrade rewrites the backup script or generated unit templates, the installer runtime-masks `cybercore-vikunja-backup-run.service`, stops the active timer if present, and waits for both the manual wrapper and generated backup service to become inactive. Only then are artifacts replaced. After `daemon-reload`, the installer removes only its runtime mask and re-enables the timer. A 90-second quiescence timeout fails closed before replacement, leaving new manual starts blocked and the timer stopped for operator recovery.
 
 The wrapper preserves:
 
 - `Requires=docker.service`
 - `After=docker.service`
 - `ProtectSystem=strict`
-- `ReadWritePaths=/opt/backups/vikunja`
+- `ReadWritePaths=/opt/backups/vikunja /run/cybercore-vikunja-backup`
 
 This keeps Docker startup ordering while bounding the writable filesystem surface.
 
@@ -94,6 +97,8 @@ This lets rollback verify generated-unit identity before controlling them.
 - installer stop before generated timer/service revalidation;
 - absence of generated-service `PartOf=` stop propagation;
 - root-only shared backup locking with `O_NOFOLLOW` and a dedicated systemd-managed runtime directory;
+- explicit narrow writable exposure for that runtime directory under `ProtectSystem=strict`;
+- install/upgrade quiescence before script replacement: runtime-mask manual entry, stop timer, wait for active manual/generated backups, then replace and reopen entry paths;
 - timer disable before manual run-wrapper stop and downstream service stop;
 - generated service quiescence before wrapper-file removal;
 - persistent mask installation and verification before the reboot boundary.
@@ -111,7 +116,7 @@ Implementation head `aca79cc0dacd8356b3b13877a7ce2ded65882f4a`:
 - Python 3.14: PASS
 - CodeQL #927: PASS
 
-Subsequent fresh review found and repaired two additional findings on the consolidated branch: pre-verification stop propagation through `PartOf=` and concurrent manual/timer backup execution. A later Ready-triggered review then found a P1 sandbox defect: the manual wrapper could not create the shared lock under `/run` while `ProtectSystem=strict` was active. That defect is repaired by a dedicated systemd-managed runtime directory shared by both backup entry paths. Final readiness therefore requires new CI, CodeQL, and fresh correctness/security review on the new exact head.
+Subsequent fresh review found and repaired pre-verification stop propagation, concurrent manual/timer backup execution, the strict-sandbox lock-path exposure, and an upgrade-time lock migration race. The current installer quiesces both backup entry paths before replacing the script, while the manual wrapper explicitly exposes only the dedicated runtime lock directory as writable. Final readiness therefore requires new CI, CodeQL, and fresh correctness/security review on the new exact head.
 
 ## Scope boundary
 
