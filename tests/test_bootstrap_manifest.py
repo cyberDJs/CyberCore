@@ -179,6 +179,217 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload"]
 
 
+def test_governed_backup_run_owns_process_and_preserves_docker_ordering() -> None:
+    text = (DEPLOY / "cybercore-vikunja-backup-run.service").read_text()
+    assert "ExecStart=/usr/local/sbin/vikunja-backup" in text
+    assert "ExecStart=/usr/bin/systemctl start vikunja-backup.service" not in text
+    assert "Requires=docker.service" in text
+    assert "After=docker.service" in text
+    assert "ReadWritePaths=/opt/backups/vikunja /run/cybercore-vikunja-backup" in text
+    assert "RuntimeDirectory=cybercore-vikunja-backup" in text
+    assert "RuntimeDirectoryMode=0700" in text
+    assert "RuntimeDirectoryPreserve=yes" in text
+    assert "ReadWritePaths=/run" not in text
+    generated_service = (DEPLOY / "vikunja-backup.service").read_text()
+    assert "PartOf=cybercore-vikunja-backup-run.service" not in generated_service
+    assert "RuntimeDirectory=cybercore-vikunja-backup" in generated_service
+    assert "RuntimeDirectoryMode=0700" in generated_service
+    assert "RuntimeDirectoryPreserve=yes" in generated_service
+
+
+def test_backup_unit_templates_are_canonical_root_owned_inputs() -> None:
+    module = load_deploy_module("install")
+    manifest = module.build_install_manifest()
+    by_id = {action.action_id: action for action in manifest}
+
+    service_template = by_id["vikunja-backup-service-template"]
+    assert service_template.source == "deploy/cybercore-exec/vikunja-backup.service"
+    assert service_template.destination == (
+        "/usr/local/libexec/cybercore-exec/vikunja-backup.service.template"
+    )
+    assert service_template.mode == "0600"
+    assert service_template.owner == "root"
+    assert service_template.group == "root"
+
+    timer_template = by_id["vikunja-backup-timer-template"]
+    assert timer_template.source == "deploy/cybercore-exec/vikunja-backup.timer"
+    assert timer_template.destination == (
+        "/usr/local/libexec/cybercore-exec/vikunja-backup.timer.template"
+    )
+    assert timer_template.mode == "0600"
+    assert timer_template.owner == "root"
+    assert timer_template.group == "root"
+
+    installer = (DEPLOY / "vikunja-backup-install").read_text()
+    assert "SERVICE_TEMPLATE.read_text()" in installer
+    assert "TIMER_TEMPLATE.read_text()" in installer
+    assert 'LOCK_PATH = Path("/run/cybercore-vikunja-backup/backup.lock")' in installer
+    assert 'LOCK_PATH = Path("/run/cybercore-vikunja-backup.lock")' not in installer
+    assert "fcntl.flock(handle.fileno(), fcntl.LOCK_EX)" in installer
+    assert "os.O_NOFOLLOW" in installer
+    assert "os.fchmod(fd, 0o600)" in installer
+
+
+def test_backup_installer_quiesces_entry_paths_before_replacing_script() -> None:
+    text = (DEPLOY / "vikunja-backup-install").read_text()
+
+    quiesce = text.index("quiesce_backup_entry_paths()")
+    write_script = text.index("write_exact(BACKUP_SCRIPT, BACKUP_SCRIPT_TEXT, 0o700)")
+    unmask = text.index('require_systemctl("unmask", "--runtime", MANUAL_RUN_UNIT)')
+    enable_timer = text.index('require_systemctl("enable", "--now", BACKUP_TIMER_UNIT)')
+
+    assert 'require_systemctl("mask", "--runtime", MANUAL_RUN_UNIT)' in text
+    assert 'require_systemctl("stop", BACKUP_TIMER_UNIT)' in text
+    assert "wait_until_quiescent(MANUAL_RUN_UNIT, deadline)" in text
+    assert "wait_until_quiescent(BACKUP_TIMER_UNIT, deadline)" in text
+    assert "wait_until_quiescent(BACKUP_SERVICE_UNIT, deadline)" in text
+    assert 'systemctl("list-jobs", "--no-legend", "--plain", unit)' in text
+    assert "return bool(completed.stdout.strip())" in text
+    quiescent_block = text[
+        text.index("def wait_until_quiescent") : text.index("def quiesce_backup_entry_paths")
+    ]
+    assert quiescent_block.index("unit_has_pending_job(unit)") < quiescent_block.index(
+        "unit_is_active(unit)"
+    )
+    assert "QUIESCE_TIMEOUT_SECONDS = 90.0" in text
+    assert quiesce < write_script < unmask < enable_timer
+
+
+def test_rollback_blocks_new_wrapper_starts_before_quiescence() -> None:
+    module = load_deploy_module("rollback")
+    manifest = module.build_rollback_manifest()
+    by_id = {action.action_id: action for action in manifest}
+    index = {action.action_id: position for position, action in enumerate(manifest)}
+
+    assert by_id["runtime-mask-vikunja-backup-install-wrapper"].action_type.value == (
+        "MASK_SYSTEMD_UNIT_RUNTIME"
+    )
+    assert by_id["runtime-mask-vikunja-backup-run-wrapper"].action_type.value == (
+        "MASK_SYSTEMD_UNIT_RUNTIME"
+    )
+    assert by_id["verify-vikunja-backup-install-wrapper-runtime-masked"].action_type.value == (
+        "VERIFY_SYSTEMD_UNIT_MASKED_RUNTIME"
+    )
+    assert by_id["verify-vikunja-backup-run-wrapper-runtime-masked"].action_type.value == (
+        "VERIFY_SYSTEMD_UNIT_MASKED_RUNTIME"
+    )
+
+    assert (
+        index["verify-privilege-policy-revoked"]
+        < index["verify-vikunja-backup-install-wrapper-managed"]
+    )
+    assert (
+        index["verify-vikunja-backup-install-wrapper-managed"]
+        < index["runtime-mask-vikunja-backup-install-wrapper"]
+    )
+    assert (
+        index["runtime-mask-vikunja-backup-install-wrapper"]
+        < index["verify-vikunja-backup-install-wrapper-runtime-masked"]
+    )
+    assert (
+        index["verify-vikunja-backup-install-wrapper-runtime-masked"]
+        < index["stop-vikunja-backup-install-wrapper"]
+    )
+    assert (
+        index["runtime-mask-vikunja-backup-run-wrapper"]
+        < index["verify-vikunja-backup-run-wrapper-runtime-masked"]
+    )
+    assert (
+        index["verify-vikunja-backup-run-wrapper-runtime-masked"]
+        < index["stop-vikunja-backup-run-wrapper"]
+    )
+
+
+def test_rollback_stops_installer_before_rechecking_schedule_and_service() -> None:
+    module = load_deploy_module("rollback")
+    manifest = module.build_rollback_manifest()
+    by_id = {action.action_id: action for action in manifest}
+    index = {action.action_id: position for position, action in enumerate(manifest)}
+
+    assert by_id["verify-vikunja-backup-timer-managed-or-absent"].action_type.value == (
+        "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT"
+    )
+    assert by_id["verify-vikunja-backup-service-managed-or-absent"].action_type.value == (
+        "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT"
+    )
+    assert by_id["disable-vikunja-backup-timer"].action_type.value == (
+        "DISABLE_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT"
+    )
+    assert by_id["stop-vikunja-backup-service"].action_type.value == (
+        "STOP_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT"
+    )
+
+    assert (
+        index["stop-vikunja-backup-install-wrapper"]
+        < index["verify-vikunja-backup-timer-managed-or-absent"]
+    )
+    assert (
+        index["stop-vikunja-backup-install-wrapper"]
+        < index["verify-vikunja-backup-service-managed-or-absent"]
+    )
+    assert (
+        index["verify-vikunja-backup-service-managed-or-absent"]
+        < index["stop-vikunja-backup-run-wrapper"]
+    )
+    assert (
+        index["verify-vikunja-backup-timer-managed-or-absent"]
+        < index["disable-vikunja-backup-timer"]
+    )
+    assert index["disable-vikunja-backup-timer"] < index["stop-vikunja-backup-run-wrapper"]
+    assert (
+        index["verify-vikunja-backup-service-managed-or-absent"]
+        < index["stop-vikunja-backup-service"]
+    )
+    assert index["disable-vikunja-backup-timer"] < index["stop-vikunja-backup-service"]
+    assert index["stop-vikunja-backup-service"] < index["remove-vikunja-backup-install-unit"]
+    assert index["stop-vikunja-backup-service"] < index["remove-vikunja-backup-run-unit"]
+
+
+def test_rollback_persistently_masks_wrapper_names_before_reboot_boundary() -> None:
+    module = load_deploy_module("rollback")
+    manifest = module.build_rollback_manifest()
+    by_id = {action.action_id: action for action in manifest}
+    index = {action.action_id: position for position, action in enumerate(manifest)}
+
+    assert by_id["persistent-mask-vikunja-backup-install-wrapper"].action_type.value == (
+        "MASK_SYSTEMD_UNIT_PERSISTENT"
+    )
+    assert by_id["persistent-mask-vikunja-backup-run-wrapper"].action_type.value == (
+        "MASK_SYSTEMD_UNIT_PERSISTENT"
+    )
+    assert by_id["verify-vikunja-backup-install-wrapper-persistent-masked"].action_type.value == (
+        "VERIFY_SYSTEMD_UNIT_MASKED_PERSISTENT"
+    )
+    assert by_id["verify-vikunja-backup-run-wrapper-persistent-masked"].action_type.value == (
+        "VERIFY_SYSTEMD_UNIT_MASKED_PERSISTENT"
+    )
+
+    assert (
+        index["remove-vikunja-backup-install-unit"]
+        < index["persistent-mask-vikunja-backup-install-wrapper"]
+    )
+    assert (
+        index["remove-vikunja-backup-run-unit"]
+        < index["persistent-mask-vikunja-backup-run-wrapper"]
+    )
+    assert (
+        index["persistent-mask-vikunja-backup-install-wrapper"]
+        < index["systemd-reload-after-persistent-mask"]
+    )
+    assert (
+        index["persistent-mask-vikunja-backup-run-wrapper"]
+        < index["systemd-reload-after-persistent-mask"]
+    )
+    assert (
+        index["systemd-reload-after-persistent-mask"]
+        < index["verify-vikunja-backup-install-wrapper-persistent-masked"]
+    )
+    assert (
+        index["systemd-reload-after-persistent-mask"]
+        < index["verify-vikunja-backup-run-wrapper-persistent-masked"]
+    )
+
+
 def test_bootstrap_scripts_are_declarative_only() -> None:
     for name in ("install.py", "rollback.py"):
         text = (DEPLOY / name).read_text()
