@@ -9,3 +9,6 @@ ExecStart=/usr/local/sbin/vikunja-backup
 User=root
 Group=root
 UMask=0077
+RuntimeDirectory=cybercore-vikunja-backup
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
