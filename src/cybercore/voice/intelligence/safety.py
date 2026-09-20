@@ -14,7 +14,7 @@ def _normalize(text: str) -> str:
 
 
 def _unquoted_clauses(text: str) -> tuple[str, ...]:
-    unquoted = re.sub(r'"[^"\n]*"|“[^”\n]*”', " ", text)
+    unquoted = re.sub(r'["„“”][^"„“”\n]*["„“”]', " ", text)
     return tuple(part for part in re.split(r"[;.!?\n]+", unquoted) if part.strip())
 
 
