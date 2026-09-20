@@ -27,14 +27,13 @@ class SafetyIntentGuard:
         r"would not|will not|don t|doesn t|didn t|shouldn t|mustn t|can t|couldn t|"
         r"wouldn t|won t|nezrus|nezastav|nezastavuj)\b"
     )
-    _CANCEL_COMMAND_PREFIX = re.compile(
-        r"^(?:"
-        r"(?:please|prosim|hey|cyber|ok|okay)"
-        r"|(?:(?:can|could|would|will)\s+you(?:\s+(?:please|maybe))?)"
-        r"|(?:i\s+(?:need|want)\s+you\s+to)"
-        r"|(?:i\s+would\s+like\s+you\s+to)"
-        r"|(?:(?:muzes|mohl\s+bys|mohla\s+bys)(?:\s+prosim)?)"
-        r")$"
+    _CANCEL_MODIFIERS = frozenset(
+        {"please", "prosim", "just", "quickly", "kindly", "simply", "maybe", "now", "immediately"}
+    )
+    _CANCEL_DISCOURSE = frozenset({"hey", "cyber", "ok", "okay"})
+    _CANCEL_MODAL_REQUESTS = frozenset({"can", "could", "would", "will"})
+    _CANCEL_DESCRIPTION_COPULAS = frozenset(
+        {"is", "are", "was", "were", "means", "mean", "refers", "represents", "equals"}
     )
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
@@ -49,6 +48,48 @@ class SafetyIntentGuard:
     )
 
     @classmethod
+    def _is_command_prefix(cls, tokens: list[str]) -> bool:
+        if not tokens:
+            return True
+
+        remaining = list(tokens)
+        while remaining and remaining[0] in cls._CANCEL_DISCOURSE:
+            remaining.pop(0)
+        while remaining and remaining[0] in cls._CANCEL_MODIFIERS:
+            remaining.pop(0)
+        if not remaining:
+            return True
+
+        if len(remaining) >= 2 and remaining[0] in cls._CANCEL_MODAL_REQUESTS and remaining[1] == "you":
+            remaining = remaining[2:]
+            while remaining and remaining[0] in cls._CANCEL_MODIFIERS:
+                remaining.pop(0)
+            return not remaining
+
+        request_prefixes = (
+            ("i", "need", "you", "to"),
+            ("i", "want", "you", "to"),
+            ("i", "would", "like", "you", "to"),
+            ("muzes",),
+            ("mohl", "bys"),
+            ("mohla", "bys"),
+        )
+        for prefix in request_prefixes:
+            if tuple(remaining[: len(prefix)]) != prefix:
+                continue
+            tail = remaining[len(prefix) :]
+            while tail and tail[0] in cls._CANCEL_MODIFIERS:
+                tail = tail[1:]
+            return not tail
+        return False
+
+    @classmethod
+    def _marker_leads_description(cls, tokens: list[str], index: int) -> bool:
+        if index != 0:
+            return False
+        return any(token in cls._CANCEL_DESCRIPTION_COPULAS for token in tokens[1:])
+
+    @classmethod
     def _is_cancel_command(cls, raw_text: str) -> bool:
         for raw_clause in _unquoted_clauses(raw_text):
             clause = _normalize(raw_clause)
@@ -58,10 +99,13 @@ class SafetyIntentGuard:
             for index, token in enumerate(tokens):
                 if token not in cls._CANCEL_MARKERS:
                     continue
-                local_prefix = " ".join(tokens[max(0, index - 6) : index])
+                local_prefix_tokens = tokens[max(0, index - 8) : index]
+                local_prefix = " ".join(local_prefix_tokens)
                 if cls._CANCEL_NEGATION.search(local_prefix):
                     continue
-                if index == 0 or cls._CANCEL_COMMAND_PREFIX.fullmatch(local_prefix):
+                if cls._marker_leads_description(tokens, index):
+                    continue
+                if cls._is_command_prefix(local_prefix_tokens):
                     return True
         return False
 
