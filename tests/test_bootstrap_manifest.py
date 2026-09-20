@@ -185,9 +185,7 @@ def test_governed_backup_run_owns_process_and_preserves_docker_ordering() -> Non
     assert "ExecStart=/usr/bin/systemctl start vikunja-backup.service" not in text
     assert "Requires=docker.service" in text
     assert "After=docker.service" in text
-    assert (
-        "ReadWritePaths=/opt/backups/vikunja /run/cybercore-vikunja-backup" in text
-    )
+    assert "ReadWritePaths=/opt/backups/vikunja /run/cybercore-vikunja-backup" in text
     assert "RuntimeDirectory=cybercore-vikunja-backup" in text
     assert "RuntimeDirectoryMode=0700" in text
     assert "RuntimeDirectoryPreserve=yes" in text
