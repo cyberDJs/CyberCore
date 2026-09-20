@@ -186,8 +186,15 @@ def test_governed_backup_run_owns_process_and_preserves_docker_ordering() -> Non
     assert "Requires=docker.service" in text
     assert "After=docker.service" in text
     assert "ReadWritePaths=/opt/backups/vikunja" in text
+    assert "RuntimeDirectory=cybercore-vikunja-backup" in text
+    assert "RuntimeDirectoryMode=0700" in text
+    assert "RuntimeDirectoryPreserve=yes" in text
+    assert "ReadWritePaths=/run" not in text
     generated_service = (DEPLOY / "vikunja-backup.service").read_text()
     assert "PartOf=cybercore-vikunja-backup-run.service" not in generated_service
+    assert "RuntimeDirectory=cybercore-vikunja-backup" in generated_service
+    assert "RuntimeDirectoryMode=0700" in generated_service
+    assert "RuntimeDirectoryPreserve=yes" in generated_service
 
 
 def test_backup_unit_templates_are_canonical_root_owned_inputs() -> None:
@@ -216,7 +223,8 @@ def test_backup_unit_templates_are_canonical_root_owned_inputs() -> None:
     installer = (DEPLOY / "vikunja-backup-install").read_text()
     assert "SERVICE_TEMPLATE.read_text()" in installer
     assert "TIMER_TEMPLATE.read_text()" in installer
-    assert 'LOCK_PATH = Path("/run/cybercore-vikunja-backup.lock")' in installer
+    assert 'LOCK_PATH = Path("/run/cybercore-vikunja-backup/backup.lock")' in installer
+    assert 'LOCK_PATH = Path("/run/cybercore-vikunja-backup.lock")' not in installer
     assert "fcntl.flock(handle.fileno(), fcntl.LOCK_EX)" in installer
     assert "os.O_NOFOLLOW" in installer
     assert "os.fchmod(fd, 0o600)" in installer
