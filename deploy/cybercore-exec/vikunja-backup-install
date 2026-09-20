@@ -30,7 +30,7 @@ import tarfile
 
 APP_ROOT = Path("/opt/vikunja")
 BACKUP_ROOT = Path("/opt/backups/vikunja")
-LOCK_PATH = Path("/run/cybercore-vikunja-backup.lock")
+LOCK_PATH = Path("/run/cybercore-vikunja-backup/backup.lock")
 RETENTION_DAYS = 14
 
 
