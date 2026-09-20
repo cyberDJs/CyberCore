@@ -181,10 +181,18 @@ def unit_is_active(unit: str) -> bool:
     raise RuntimeError(f"{unit}: {detail}")
 
 
-def wait_until_inactive(unit: str, deadline: float) -> None:
-    while unit_is_active(unit):
+def unit_has_pending_job(unit: str) -> bool:
+    completed = systemctl("list-jobs", "--no-legend", "--plain", unit)
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "systemctl list-jobs failed"
+        raise RuntimeError(f"{unit}: {detail}")
+    return bool(completed.stdout.strip())
+
+
+def wait_until_quiescent(unit: str, deadline: float) -> None:
+    while unit_is_active(unit) or unit_has_pending_job(unit):
         if time.monotonic() >= deadline:
-            raise RuntimeError(f"timed out waiting for {unit} to become inactive")
+            raise RuntimeError(f"timed out waiting for {unit} to become quiescent")
         time.sleep(QUIESCE_POLL_SECONDS)
 
 
@@ -194,8 +202,9 @@ def quiesce_backup_entry_paths() -> None:
         require_systemctl("stop", BACKUP_TIMER_UNIT)
 
     deadline = time.monotonic() + QUIESCE_TIMEOUT_SECONDS
-    wait_until_inactive(MANUAL_RUN_UNIT, deadline)
-    wait_until_inactive(BACKUP_SERVICE_UNIT, deadline)
+    wait_until_quiescent(MANUAL_RUN_UNIT, deadline)
+    wait_until_quiescent(BACKUP_TIMER_UNIT, deadline)
+    wait_until_quiescent(BACKUP_SERVICE_UNIT, deadline)
 
 
 def main() -> int:
