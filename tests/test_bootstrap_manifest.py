@@ -142,6 +142,8 @@ def test_governed_backup_run_executes_backup_inside_wrapper_cgroup() -> None:
     text = (DEPLOY / "cybercore-vikunja-backup-run.service").read_text()
     assert "ExecStart=/usr/local/sbin/vikunja-backup" in text
     assert "ExecStart=/usr/bin/systemctl start vikunja-backup.service" not in text
+    assert "Requires=docker.service" in text
+    assert "After=docker.service" in text
     assert "ReadWritePaths=/opt/backups/vikunja" in text
 
 
@@ -244,6 +246,18 @@ def test_rollback_quiesces_optional_managed_backup_schedule_before_wrapper_teard
     assert (
         index["verify-vikunja-backup-service-managed-or-absent"]
         < index["stop-vikunja-backup-service"]
+    )
+    assert (
+        index["verify-vikunja-backup-install-wrapper-managed"]
+        < index["stop-vikunja-backup-install-wrapper"]
+    )
+    assert (
+        index["stop-vikunja-backup-install-wrapper"]
+        < index["verify-vikunja-backup-timer-managed-or-absent"]
+    )
+    assert (
+        index["stop-vikunja-backup-install-wrapper"]
+        < index["verify-vikunja-backup-service-managed-or-absent"]
     )
     assert index["disable-vikunja-backup-timer"] < index["stop-vikunja-backup-service"]
     assert (
