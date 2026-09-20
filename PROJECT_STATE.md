@@ -1,19 +1,19 @@
 # CyberCore Project State
 
-_Last updated: 2026-09-19_
+_Last updated: 2026-09-20_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Canonical product state: GitHub `main`
 - Canonical main ref: GitHub `main` (resolve live)
-- Last verified canonical checkpoint: `1a22865747d0d8ea2bf97d3b455534b610a66a90`
+- Last verified canonical checkpoint: `b6c350ef40d21a3939fd0d3d6c0187a934303d31`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
-- Current coordination artifact: PR #102 — WB-0038G consolidated rollback repair
-- Current coordination branch: `wb-0038g-consolidated-rollback-repair`
-- Current coordination pull request: #102
-- Active branch: `wb-0038g-consolidated-rollback-repair`
-- Active work block: `WB-0038G`
+- Current coordination artifact: PR #103 — WB-0038H canonical rollback hardening
+- Current coordination branch: `wb-0038h-canonical-rollback-hardening`
+- Current coordination pull request: #103
+- Active branch: `wb-0038h-canonical-rollback-hardening`
+- Active work block: `WB-0038H`
 - Governance: provider mutation, secret mutation, staging apply, production mutation, canonical merge, and authority changes require their applicable explicit approval gates
 - CI policy: exact-head GitHub Actions verification is required before merge
 - CodeQL policy: exact-head CodeQL verification is required before merge
@@ -79,33 +79,37 @@ PR #79 remains immutable canonical history with four unresolved historical revie
 
 ## Current milestone
 
-PR #102 / WB-0038G consolidates the rollback concurrency and reboot-boundary findings discovered across PR #97 and PR #98 onto canonical `main@1a22865747d0d8ea2bf97d3b455534b610a66a90`.
+PR #103 / WB-0038H hardens the canonical rollback boundary discovered after PR #102 merged as `b6c350ef40d21a3939fd0d3d6c0187a934303d31`.
 
 ## Active objective
 
-Produce one fail-closed repository contract for governed execution rollback without deploying it.
+Replace the canonical pre-quiescence runtime-mask assumption with a durable name-specific systemd tombstone barrier and close the remaining managed-template cleanup asymmetry without deploying it.
 
 Scope:
 
-1. block late wrapper starts with verified runtime masks before stopping active wrappers;
-2. stop the installer wrapper before revalidating or quiescing the generated backup timer/service;
-3. ensure the governed manual backup process lives inside the verified run-wrapper cgroup;
-4. preserve Docker startup ordering for direct wrapper execution;
-5. verify generated timer/service identity against canonical repository templates before controlling them;
-6. disable/stop generated schedule and service before wrapper teardown;
-7. preserve wrapper-name denial across reboot with verified persistent masks after managed unit removal;
-8. require exact-head CI, CodeQL and fresh correctness/security review before any readiness decision;
-9. preserve all deployment, credential, provider and production authority boundaries.
+1. preserve effective privilege revocation as the first rollback security gate;
+2. verify wrapper identity as exact canonical or absent before claiming the rollback boundary;
+3. atomically and durably publish exact administrator tombstone drop-ins before wrapper quiescence;
+4. daemon-reload and verify tombstone effectiveness before any wrapper stop;
+5. keep tombstones across wrapper removal and reboot and re-verify the boundary after removal;
+6. require future bootstrap to fail closed while tombstones exist and never remove them implicitly;
+7. remove both root-owned generated-unit templates symmetrically during rollback;
+8. preserve WB-0038G installer/job-drain, timer/service quiescence, shared-lock, cgroup, Docker-ordering and bounded-filesystem invariants;
+9. require exact-head CI, CodeQL and fresh correctness/security review before readiness;
+10. preserve all deployment, credential, provider, DNS, billing and production authority boundaries.
 
 ## Current status
 
-- Work block: active WB-0038G consolidated rollback repair
-- Branch: `wb-0038g-consolidated-rollback-repair`
-- Project Kernel: present
+- Work block: active WB-0038H canonical rollback hardening
+- Branch: `wb-0038h-canonical-rollback-hardening`
+- Pull request: #103
+- Canonical base: `b6c350ef40d21a3939fd0d3d6c0187a934303d31`
+- PR #102 / WB-0038G: merged canonical; post-merge CI #975 PASS and CodeQL #976 PASS
 - Runtime implementation: repository-only declarative contract; not deployed
-- Implementation head `aca79cc0dacd8356b3b13877a7ce2ded65882f4a`: CI #926 PASS, CodeQL #927 PASS
+- Implementation head `bee4b87d3f6c64aa55e001349cd53819da0a7ef7`: CI #980 PASS, CodeQL #981 PASS
 - Final source-of-truth/evidence head: verification pending
-- Pull request: #102
+- Merge authority: not granted
+- Remote deployment authority: not granted
 
 ## Current canonical state
 
@@ -291,15 +295,16 @@ Do not merge the two meanings or rewrite history; governance cleanup must assign
 
 At the current live read, relevant open PRs include:
 
-- #102 — WB-0038G consolidated rollback repair — active draft coordination PR;
-- #99 — WB-0039 Cyber Voice Intelligence Bridge forward-port — separate draft track under exact-head repair/review;
-- #97 — earlier WB-0038F active-wrapper rollback repair — source-evidence draft superseded for consolidation by #102;
-- #98 — parallel WB-0038F rollback-quiesce repair — source-evidence draft superseded for consolidation by #102;
-- #74 — original historical WB-0039 branch — superseded by the current-main forward-port #99 unless later evidence requires otherwise;
+- #103 — WB-0038H canonical rollback hardening — active draft coordination PR;
+- #100 — WB-0038F-R2 persistent-mask reconciliation — source-evidence draft with unresolved findings; not a merge candidate;
+- #99 — WB-0039 Cyber Voice Intelligence Bridge forward-port — separate draft track with current cancellation-guard review debt;
+- #97 — earlier WB-0038F active-wrapper rollback repair — source-evidence branch superseded by canonical PR #102 plus WB-0038H;
+- #98 — parallel WB-0038F rollback-quiesce repair — source-evidence branch superseded by canonical PR #102 plus WB-0038H;
+- #74 — original historical WB-0039 branch — superseded by current-main forward-port #99 unless later evidence requires otherwise;
 - #67 — MCP Foundation — draft candidate requiring current-main reconciliation;
 - #61 — old WB-0035 VPS/Vikunja draft — identity conflict / needs review.
 
-PR #94 is closed unmerged; its unique response-sanitization delta remains a separate extraction candidate. PR #96 is merged and canonical.
+PR #102 is merged canonical as `b6c350ef40d21a3939fd0d3d6c0187a934303d31`. PR #94 is closed unmerged; its unique response-sanitization delta remains a separate extraction candidate.
 
 ## CASER-E evidence state
 
@@ -335,9 +340,9 @@ Open PR #94 contains one unique response-hardening delta not included in PR #95:
 
 ## Priority sequence
 
-1. Verify PR #102 / WB-0038G on its final exact head with CI, CodeQL and fresh correctness/security review; merge only after separate explicit approval.
-2. Treat PR #97 and PR #98 as source-evidence drafts; do not merge either if #102 preserves all valid invariants.
-3. Continue PR #99 WB-0039 independently and resolve any current exact-head P0/P1/P2 findings without mixing Voice changes into WB-0038G.
+1. Verify PR #103 / WB-0038H on its final exact head with CI, CodeQL and fresh correctness/security review; merge only after separate explicit approval.
+2. Treat PR #97, PR #98 and PR #100 as source-evidence branches; do not merge them if PR #103 preserves their valid rollback findings.
+3. Continue PR #99 WB-0039 independently after the rollback boundary is canonical; resolve all current exact-head P0/P1/P2 findings.
 4. Extract closed PR #94's unique request-validation response sanitizer as a minimal current-main hardening change.
 5. Resolve WB-0035/WB-0036/WB-0037 identifier collisions without rewriting immutable history.
 6. Address the six high-severity transitive visual-toolchain `npm audit` findings in a separately reviewed maintenance change.
@@ -345,16 +350,16 @@ Open PR #94 contains one unique response-hardening delta not included in PR #95:
 
 ## Next action
 
-Run final exact-head CI, CodeQL and fresh correctness/security review for PR #102. Do not mark Ready or merge without a separate explicit operator approval. No deployment or remote mutation is implied.
+Run final exact-head CI, CodeQL and fresh correctness/security review for PR #103. Do not mark Ready or merge without a separate explicit operator approval. No deployment or remote mutation is implied.
 
 <!-- CYBERCORE:CHECKPOINT:START -->
 <!-- CYBERCORE:PROJECT-STATE-CHECKPOINT:terminal-post-merge-closeout -->
 ## Manual repository checkpoint
 
-- Coordination PR: #102
-- Coordination branch: `wb-0038g-consolidated-rollback-repair`
+- Coordination PR: #103
+- Coordination branch: `wb-0038h-canonical-rollback-hardening`
 - Canonical main ref: GitHub `main` / resolve live
-- Last observed canonical checkpoint: `1a22865747d0d8ea2bf97d3b455534b610a66a90`
+- Last observed canonical checkpoint: `b6c350ef40d21a3939fd0d3d6c0187a934303d31`
 - PR #69 SOT reconciliation: merged as `cb3d705f82d53a1302f9f2ca80615325b1509468`
 - PR #76 LongRun Independent Evaluation Acceptance: merged as `41a0994b3cef083f15b8280724dd788cd31a880e`
 - PR #77 post-merge SOT closeout: merged and gated as `36a16e805390c8c5214eeb4646b6ecf6c8efc4aa`
@@ -362,6 +367,7 @@ Run final exact-head CI, CodeQL and fresh correctness/security review for PR #10
 - PR #75 Cyber Voice live audio acceptance repair: merged as `70ccecc719e004767412cdf2e2cb51cf43fb8ff6`
 - PR #78 Provider Model Binding: merged as `bb5fecce19aa7bf6ac0edaf0f780ff6364d020f1`
 - PR #95 WB-0038E execution-boundary repair: merged as `3884f6b605a1fb3b0003b142044485cb9ba6ecce`; CI #857 PASS; CodeQL #858 PASS; post-merge CI #858 PASS; CodeQL #859 PASS
+- PR #102 WB-0038G consolidated rollback repair: merged as `b6c350ef40d21a3939fd0d3d6c0187a934303d31`; post-merge CI #975 PASS; CodeQL #976 PASS
 - PR #94 earlier execution repair: open / mostly superseded; unique response sanitizer pending extraction
 - PR #74 Cyber Voice Intelligence Bridge: open draft candidate; live-main reconciliation required
 - PR #67 MCP: open draft candidate; live-main reconciliation required
