@@ -137,17 +137,30 @@ names and verifies the masks before stopping either wrapper. Both wrappers,
 stopped and proven inactive-or-absent before either managed wrapper file is
 removed.
 
-After the managed wrapper files are removed, rollback creates persistent masks
-for both wrapper names and verifies those masks before reloading systemd. The
-persistent masks are tombstones: they override any lower-priority or generated
-unit fragment with the same name across reboot. Rollback never un-masks them.
-Creating a persistent mask is idempotent only when the exact persistent mask is
-already present; any conflicting occupant fails closed.
+After the managed wrapper files are removed, rollback installs an exact
+name-specific tombstone drop-in under
+`/etc/systemd/system/<wrapper>.service.d/90-cybercore-rollback-tombstone.conf`
+for each wrapper. The drop-in adds an always-false start condition and
+`RefuseManualStart=yes`. systemd parses name-specific drop-ins after the main
+unit fragment, and administrator drop-ins apply to a unit even when its main
+fragment comes from a higher-priority path such as
+`/run/systemd/generator.early`. This closes the reviewed reboot gap without
+racing another generator for the main unit path.
 
-A future installer must treat an existing persistent wrapper mask as an unsafe
-occupied name and refuse to overwrite or remove it automatically. Reactivating
+Rollback replay is explicit: managed wrapper removal accepts either the exact
+managed source or absence, while tombstone installation accepts only absence or
+the exact canonical tombstone. A conflicting file fails closed. Thus a partial
+rollback can resume after one tombstone has already been written.
+
+The tombstone threat model protects against ordinary static, transient, and
+generated main unit fragments. It does not claim to resist a privileged local
+administrator or generator that deliberately installs a competing drop-in to
+remove the guard; local root can change the systemd policy boundary itself.
+
+A future installer must verify both tombstone paths are absent before claiming
+either wrapper name. It must not remove a tombstone automatically. Reactivating
 either wrapper name therefore requires a separate, explicitly reviewed
-administrative action rather than being an implicit side effect of install.
+administrative action.
 
 ## Execution receipts
 

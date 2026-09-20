@@ -15,6 +15,7 @@ class BootstrapActionType(str, Enum):
     INSTALL_PRIVILEGE_POLICY = "INSTALL_PRIVILEGE_POLICY"
     REVOKE_EXISTING_PRIVILEGE_POLICY = "REVOKE_EXISTING_PRIVILEGE_POLICY"
     VERIFY_PRIVILEGE_POLICY_REVOKED = "VERIFY_PRIVILEGE_POLICY_REVOKED"
+    VERIFY_SYSTEMD_TOMBSTONE_ABSENT = "VERIFY_SYSTEMD_TOMBSTONE_ABSENT"
     VERIFY_SYSTEMD_UNIT_NAME_SAFE = "VERIFY_SYSTEMD_UNIT_NAME_SAFE"
     ENSURE_DIRECTORY = "ENSURE_DIRECTORY"
     ENSURE_SERVICE_IDENTITY = "ENSURE_SERVICE_IDENTITY"
@@ -93,6 +94,18 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             BootstrapActionType.VERIFY_PRIVILEGE_POLICY_REVOKED,
             "",
             "/etc/polkit-1/rules.d/60-cybercore-exec.rules",
+        ),
+        BootstrapAction(
+            "verify-vikunja-backup-install-tombstone-absent",
+            BootstrapActionType.VERIFY_SYSTEMD_TOMBSTONE_ABSENT,
+            "",
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf",
+        ),
+        BootstrapAction(
+            "verify-vikunja-backup-run-tombstone-absent",
+            BootstrapActionType.VERIFY_SYSTEMD_TOMBSTONE_ABSENT,
+            "",
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf",
         ),
         BootstrapAction(
             "verify-vikunja-backup-install-unit-safe",

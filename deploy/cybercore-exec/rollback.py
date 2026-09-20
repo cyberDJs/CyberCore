@@ -7,13 +7,16 @@ import json
 
 class RollbackActionType(str, Enum):
     REMOVE_MANAGED_FILE_IF_EXACT = "REMOVE_MANAGED_FILE_IF_EXACT"
+    REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT = "REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT"
     VERIFY_PRIVILEGE_POLICY_REVOKED = "VERIFY_PRIVILEGE_POLICY_REVOKED"
     MASK_SYSTEMD_UNIT_RUNTIME = "MASK_SYSTEMD_UNIT_RUNTIME"
     VERIFY_SYSTEMD_UNIT_MASKED = "VERIFY_SYSTEMD_UNIT_MASKED"
     STOP_SYSTEMD_UNIT_IF_PRESENT = "STOP_SYSTEMD_UNIT_IF_PRESENT"
     VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT = "VERIFY_SYSTEMD_UNIT_INACTIVE_OR_ABSENT"
-    MASK_SYSTEMD_UNIT_PERSISTENT = "MASK_SYSTEMD_UNIT_PERSISTENT"
-    VERIFY_SYSTEMD_UNIT_PERSISTENTLY_MASKED = "VERIFY_SYSTEMD_UNIT_PERSISTENTLY_MASKED"
+    INSTALL_SYSTEMD_TOMBSTONE_DROPIN_IF_ABSENT_OR_EXACT = (
+        "INSTALL_SYSTEMD_TOMBSTONE_DROPIN_IF_ABSENT_OR_EXACT"
+    )
+    VERIFY_SYSTEMD_TOMBSTONE_DROPIN_EXACT = "VERIFY_SYSTEMD_TOMBSTONE_DROPIN_EXACT"
     RELOAD_SYSTEMD = "RELOAD_SYSTEMD"
     VALIDATE_SSHD_CONFIG = "VALIDATE_SSHD_CONFIG"
     RELOAD_SSHD = "RELOAD_SSHD"
@@ -110,44 +113,48 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
         RollbackAction("sshd-reload", RollbackActionType.RELOAD_SSHD),
         RollbackAction(
             "remove-vikunja-backup-install-unit",
-            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT,
             "/etc/systemd/system/cybercore-vikunja-backup-install.service",
             "deploy/cybercore-exec/cybercore-vikunja-backup-install.service",
         ),
         RollbackAction(
             "remove-vikunja-backup-run-unit",
-            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT,
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT,
             "/etc/systemd/system/cybercore-vikunja-backup-run.service",
             "deploy/cybercore-exec/cybercore-vikunja-backup-run.service",
         ),
         RollbackAction(
-            "mask-vikunja-backup-install-unit-persistent",
-            RollbackActionType.MASK_SYSTEMD_UNIT_PERSISTENT,
-            "cybercore-vikunja-backup-install.service",
+            "install-vikunja-backup-install-unit-tombstone",
+            RollbackActionType.INSTALL_SYSTEMD_TOMBSTONE_DROPIN_IF_ABSENT_OR_EXACT,
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf",
+            "deploy/cybercore-exec/rollback-wrapper-tombstone.conf",
         ),
         RollbackAction(
-            "verify-vikunja-backup-install-unit-persistently-masked",
-            RollbackActionType.VERIFY_SYSTEMD_UNIT_PERSISTENTLY_MASKED,
-            "cybercore-vikunja-backup-install.service",
+            "verify-vikunja-backup-install-unit-tombstone",
+            RollbackActionType.VERIFY_SYSTEMD_TOMBSTONE_DROPIN_EXACT,
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf",
+            "deploy/cybercore-exec/rollback-wrapper-tombstone.conf",
         ),
         RollbackAction(
-            "mask-vikunja-backup-run-unit-persistent",
-            RollbackActionType.MASK_SYSTEMD_UNIT_PERSISTENT,
-            "cybercore-vikunja-backup-run.service",
+            "install-vikunja-backup-run-unit-tombstone",
+            RollbackActionType.INSTALL_SYSTEMD_TOMBSTONE_DROPIN_IF_ABSENT_OR_EXACT,
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf",
+            "deploy/cybercore-exec/rollback-wrapper-tombstone.conf",
         ),
         RollbackAction(
-            "verify-vikunja-backup-run-unit-persistently-masked",
-            RollbackActionType.VERIFY_SYSTEMD_UNIT_PERSISTENTLY_MASKED,
-            "cybercore-vikunja-backup-run.service",
+            "verify-vikunja-backup-run-unit-tombstone",
+            RollbackActionType.VERIFY_SYSTEMD_TOMBSTONE_DROPIN_EXACT,
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf",
+            "deploy/cybercore-exec/rollback-wrapper-tombstone.conf",
         ),
-        RollbackAction("systemd-reload-after-persistent-mask", RollbackActionType.RELOAD_SYSTEMD),
+        RollbackAction("systemd-reload-after-tombstones", RollbackActionType.RELOAD_SYSTEMD),
         RollbackAction(
-            "verify-vikunja-backup-install-unit-masked-after-reload",
+            "verify-vikunja-backup-install-runtime-mask-after-reload",
             RollbackActionType.VERIFY_SYSTEMD_UNIT_MASKED,
             "cybercore-vikunja-backup-install.service",
         ),
         RollbackAction(
-            "verify-vikunja-backup-run-unit-masked-after-reload",
+            "verify-vikunja-backup-run-runtime-mask-after-reload",
             RollbackActionType.VERIFY_SYSTEMD_UNIT_MASKED,
             "cybercore-vikunja-backup-run.service",
         ),

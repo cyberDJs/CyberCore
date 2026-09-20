@@ -70,6 +70,23 @@ def test_bootstrap_installs_static_wrappers_before_privilege_policy() -> None:
     index = {action.action_id: position for position, action in enumerate(manifest)}
     by_id = {action.action_id: action for action in manifest}
 
+    assert by_id["verify-vikunja-backup-install-tombstone-absent"].action_type.value == (
+        "VERIFY_SYSTEMD_TOMBSTONE_ABSENT"
+    )
+    assert by_id["verify-vikunja-backup-run-tombstone-absent"].action_type.value == (
+        "VERIFY_SYSTEMD_TOMBSTONE_ABSENT"
+    )
+    assert (
+        index["verify-privilege-policy-revoked"]
+        < index["verify-vikunja-backup-install-tombstone-absent"]
+        < index["verify-vikunja-backup-install-unit-safe"]
+    )
+    assert (
+        index["verify-privilege-policy-revoked"]
+        < index["verify-vikunja-backup-run-tombstone-absent"]
+        < index["verify-vikunja-backup-run-unit-safe"]
+    )
+
     assert index["revoke-existing-privilege-policy"] < index["verify-privilege-policy-revoked"]
     assert (
         index["verify-privilege-policy-revoked"] < index["verify-vikunja-backup-install-unit-safe"]
@@ -233,47 +250,49 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     )
     assert index["verify-vikunja-backup-service-inactive"] < index["remove-vikunja-backup-run-unit"]
 
-    persistent_masks = (
+    for action_id in ("remove-vikunja-backup-install-unit", "remove-vikunja-backup-run-unit"):
+        assert by_id[action_id].action_type.value == "REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT"
+
+    tombstones = (
         (
-            "mask-vikunja-backup-install-unit-persistent",
-            "verify-vikunja-backup-install-unit-persistently-masked",
-            "cybercore-vikunja-backup-install.service",
+            "install-vikunja-backup-install-unit-tombstone",
+            "verify-vikunja-backup-install-unit-tombstone",
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf",
         ),
         (
-            "mask-vikunja-backup-run-unit-persistent",
-            "verify-vikunja-backup-run-unit-persistently-masked",
-            "cybercore-vikunja-backup-run.service",
+            "install-vikunja-backup-run-unit-tombstone",
+            "verify-vikunja-backup-run-unit-tombstone",
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf",
         ),
     )
-    for mask_id, verify_id, unit in persistent_masks:
-        assert by_id[mask_id].action_type.value == "MASK_SYSTEMD_UNIT_PERSISTENT"
-        assert by_id[mask_id].target == unit
-        assert by_id[verify_id].action_type.value == "VERIFY_SYSTEMD_UNIT_PERSISTENTLY_MASKED"
-        assert by_id[verify_id].target == unit
-        assert index["remove-vikunja-backup-install-unit"] < index[mask_id]
-        assert index["remove-vikunja-backup-run-unit"] < index[mask_id]
-        assert index[mask_id] < index[verify_id]
-        assert index[verify_id] < index["systemd-reload-after-persistent-mask"]
+    for install_id, verify_id, target in tombstones:
+        assert (
+            by_id[install_id].action_type.value
+            == "INSTALL_SYSTEMD_TOMBSTONE_DROPIN_IF_ABSENT_OR_EXACT"
+        )
+        assert by_id[install_id].target == target
+        assert by_id[install_id].source_of_truth == "deploy/cybercore-exec/rollback-wrapper-tombstone.conf"
+        assert by_id[verify_id].action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_DROPIN_EXACT"
+        assert by_id[verify_id].target == target
+        assert index["remove-vikunja-backup-install-unit"] < index[install_id]
+        assert index["remove-vikunja-backup-run-unit"] < index[install_id]
+        assert index[install_id] < index[verify_id]
+        assert index[verify_id] < index["systemd-reload-after-tombstones"]
+
+    tombstone_text = (DEPLOY / "rollback-wrapper-tombstone.conf").read_text()
+    assert "ConditionPathExists=/dev/null/cybercore-exec-wrapper-reactivation" in tombstone_text
+    assert "RefuseManualStart=yes" in tombstone_text
 
     assert (
-        index["systemd-reload-after-persistent-mask"]
-        < index["verify-vikunja-backup-install-unit-masked-after-reload"]
+        index["systemd-reload-after-tombstones"]
+        < index["verify-vikunja-backup-install-runtime-mask-after-reload"]
     )
     assert (
-        index["systemd-reload-after-persistent-mask"]
-        < index["verify-vikunja-backup-run-unit-masked-after-reload"]
+        index["systemd-reload-after-tombstones"]
+        < index["verify-vikunja-backup-run-runtime-mask-after-reload"]
     )
-    assert (
-        by_id["verify-vikunja-backup-install-unit-masked-after-reload"].action_type.value
-        == "VERIFY_SYSTEMD_UNIT_MASKED"
-    )
-    assert (
-        by_id["verify-vikunja-backup-run-unit-masked-after-reload"].action_type.value
-        == "VERIFY_SYSTEMD_UNIT_MASKED"
-    )
-
+    assert "MASK_SYSTEMD_UNIT_PERSISTENT" not in {action.action_type.value for action in manifest}
     assert "UNMASK_SYSTEMD_UNIT_RUNTIME" not in {action.action_type.value for action in manifest}
-    assert "UNMASK_SYSTEMD_UNIT_PERSISTENT" not in {action.action_type.value for action in manifest}
 
 
 def test_bootstrap_scripts_are_declarative_only() -> None:
