@@ -28,6 +28,7 @@ def utterance(text: str) -> Utterance:
         "Please just stop now",
         "Could you quickly stop now?",
         "Just stop now",
+        "Stop the process if it is running",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -67,6 +68,8 @@ def test_execute_is_deterministic(text: str) -> None:
         "You shouldn't stop",
         "Stop is a verb",
         "Cancel is the operation name",
+        "Stop button is red",
+        "Could you please not stop",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
