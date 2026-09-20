@@ -18,8 +18,9 @@ authority path would violate CyberCore's exact-plan approval and evidence model.
 Add a model-backed intelligence layer before the existing governed router with these constraints:
 
 1. Authority-sensitive `CANCEL`, `APPROVE`, and `EXECUTE` intents are classified deterministically
-   before any model call. Cancellation is token-based rather than prefix-enumerated, with explicit
-   guards for quoted/definition mentions and negated commands.
+   before any model call. Cancellation requires deterministic command syntax around a bounded
+   cancel marker; bare mentions, quoted/definition uses, questions, descriptions, and negated
+   commands do not create cancellation authority.
 2. Those intent kinds are absent from the model JSON Schema and cannot be returned by the model.
 3. Model output is strict, structured, confidence-bounded, and rejected on schema mismatch.
 4. Failure falls back safely; authority-sensitive fallback classifications are downgraded to
