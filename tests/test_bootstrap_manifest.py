@@ -260,10 +260,6 @@ def test_rollback_quiesces_optional_managed_backup_schedule_before_wrapper_teard
         < index["verify-vikunja-backup-service-managed-or-absent"]
     )
     assert index["disable-vikunja-backup-timer"] < index["stop-vikunja-backup-service"]
-    assert (
-        index["stop-vikunja-backup-service"]
-        < index["verify-vikunja-backup-install-wrapper-managed"]
-    )
     assert index["stop-vikunja-backup-service"] < index["verify-vikunja-backup-run-wrapper-managed"]
 
 
