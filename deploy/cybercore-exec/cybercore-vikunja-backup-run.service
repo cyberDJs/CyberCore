@@ -1,5 +1,7 @@
 [Unit]
 Description=CyberCore governed Vikunja backup runner
+Requires=docker.service
+After=docker.service
 
 [Service]
 Type=oneshot
