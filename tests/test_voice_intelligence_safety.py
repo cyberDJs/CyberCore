@@ -24,6 +24,7 @@ def utterance(text: str) -> Utterance:
         "I would like you to stop",
         "Cyber, stop",
         "Could you maybe stop this now",
+        "Don't wait; stop now",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -53,6 +54,8 @@ def test_execute_is_deterministic(text: str) -> None:
         "Je run anglicky běžet?",
         "Please do not stop",
         "Don't cancel this",
+        "Is \"stop\" a verb?",
+        "Je „stop“ anglické sloveso?",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
