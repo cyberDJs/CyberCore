@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 import textwrap
+import time
 
 
 BACKUP_SCRIPT = Path("/usr/local/sbin/vikunja-backup")
@@ -13,6 +14,11 @@ TIMER = Path("/etc/systemd/system/vikunja-backup.timer")
 SERVICE_TEMPLATE = Path("/usr/local/libexec/cybercore-exec/vikunja-backup.service.template")
 TIMER_TEMPLATE = Path("/usr/local/libexec/cybercore-exec/vikunja-backup.timer.template")
 BACKUP_ROOT = Path("/opt/backups/vikunja")
+MANUAL_RUN_UNIT = "cybercore-vikunja-backup-run.service"
+BACKUP_SERVICE_UNIT = "vikunja-backup.service"
+BACKUP_TIMER_UNIT = "vikunja-backup.timer"
+QUIESCE_TIMEOUT_SECONDS = 90.0
+QUIESCE_POLL_SECONDS = 0.5
 
 
 BACKUP_SCRIPT_TEXT = r'''#!/usr/bin/python3
@@ -148,20 +154,61 @@ def write_exact(path: Path, content: str, mode: int) -> None:
     os.chmod(path, mode)
 
 
+def systemctl(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["/usr/bin/systemctl", *args],
+        check=False,
+        shell=False,
+        text=True,
+        capture_output=True,
+    )
+
+
+def require_systemctl(*args: str) -> None:
+    completed = systemctl(*args)
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip() or "systemctl failed"
+        raise RuntimeError(f"{' '.join(args)}: {detail}")
+
+
+def unit_is_active(unit: str) -> bool:
+    completed = systemctl("is-active", "--quiet", unit)
+    if completed.returncode == 0:
+        return True
+    if completed.returncode in {3, 4}:
+        return False
+    detail = completed.stderr.strip() or completed.stdout.strip() or "systemctl is-active failed"
+    raise RuntimeError(f"{unit}: {detail}")
+
+
+def wait_until_inactive(unit: str, deadline: float) -> None:
+    while unit_is_active(unit):
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f"timed out waiting for {unit} to become inactive")
+        time.sleep(QUIESCE_POLL_SECONDS)
+
+
+def quiesce_backup_entry_paths() -> None:
+    require_systemctl("mask", "--runtime", MANUAL_RUN_UNIT)
+    if unit_is_active(BACKUP_TIMER_UNIT):
+        require_systemctl("stop", BACKUP_TIMER_UNIT)
+
+    deadline = time.monotonic() + QUIESCE_TIMEOUT_SECONDS
+    wait_until_inactive(MANUAL_RUN_UNIT, deadline)
+    wait_until_inactive(BACKUP_SERVICE_UNIT, deadline)
+
+
 def main() -> int:
+    quiesce_backup_entry_paths()
     BACKUP_ROOT.mkdir(parents=True, mode=0o700, exist_ok=True)
     os.chmod(BACKUP_ROOT, 0o700)
     write_exact(BACKUP_SCRIPT, BACKUP_SCRIPT_TEXT, 0o700)
     write_exact(SERVICE, SERVICE_TEMPLATE.read_text(), 0o644)
     write_exact(TIMER, TIMER_TEMPLATE.read_text(), 0o644)
 
-    for argv in (
-        ["/usr/bin/systemctl", "daemon-reload"],
-        ["/usr/bin/systemctl", "enable", "--now", "vikunja-backup.timer"],
-    ):
-        completed = subprocess.run(argv, check=False, shell=False)
-        if completed.returncode != 0:
-            return completed.returncode
+    require_systemctl("daemon-reload")
+    require_systemctl("unmask", "--runtime", MANUAL_RUN_UNIT)
+    require_systemctl("enable", "--now", BACKUP_TIMER_UNIT)
     return 0
 
 
