@@ -245,6 +245,10 @@ def test_backup_installer_quiesces_entry_paths_before_replacing_script() -> None
     assert "wait_until_quiescent(BACKUP_SERVICE_UNIT, deadline)" in text
     assert 'systemctl("list-jobs", "--no-legend", "--plain", unit)' in text
     assert "return bool(completed.stdout.strip())" in text
+    quiescent_block = text[text.index("def wait_until_quiescent"):text.index("def quiesce_backup_entry_paths")]
+    assert quiescent_block.index("unit_has_pending_job(unit)") < quiescent_block.index(
+        "unit_is_active(unit)"
+    )
     assert "QUIESCE_TIMEOUT_SECONDS = 90.0" in text
     assert quiesce < write_script < unmask < enable_timer
 
