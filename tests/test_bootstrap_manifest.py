@@ -240,8 +240,11 @@ def test_backup_installer_quiesces_entry_paths_before_replacing_script() -> None
 
     assert 'require_systemctl("mask", "--runtime", MANUAL_RUN_UNIT)' in text
     assert 'require_systemctl("stop", BACKUP_TIMER_UNIT)' in text
-    assert "wait_until_inactive(MANUAL_RUN_UNIT, deadline)" in text
-    assert "wait_until_inactive(BACKUP_SERVICE_UNIT, deadline)" in text
+    assert "wait_until_quiescent(MANUAL_RUN_UNIT, deadline)" in text
+    assert "wait_until_quiescent(BACKUP_TIMER_UNIT, deadline)" in text
+    assert "wait_until_quiescent(BACKUP_SERVICE_UNIT, deadline)" in text
+    assert 'systemctl("list-jobs", "--no-legend", "--plain", unit)' in text
+    assert "return bool(completed.stdout.strip())" in text
     assert "QUIESCE_TIMEOUT_SECONDS = 90.0" in text
     assert quiesce < write_script < unmask < enable_timer
 
