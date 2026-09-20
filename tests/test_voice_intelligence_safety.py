@@ -56,6 +56,12 @@ def test_execute_is_deterministic(text: str) -> None:
         "Don't cancel this",
         'Is "stop" a verb?',
         "Je „stop“ anglické sloveso?",
+        "Is stop a verb?",
+        "Can I cancel the deployment?",
+        "The stop button is red",
+        "You should not stop",
+        "You must not cancel this",
+        "You shouldn't stop",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
