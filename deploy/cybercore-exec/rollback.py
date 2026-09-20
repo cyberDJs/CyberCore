@@ -9,10 +9,11 @@ class RollbackActionType(str, Enum):
     REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT = "REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT"
     VERIFY_PRIVILEGE_POLICY_REVOKED = "VERIFY_PRIVILEGE_POLICY_REVOKED"
     VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT = "VERIFY_SYSTEMD_UNIT_MANAGED_EXACT_OR_ABSENT"
-    INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_IF_ABSENT_OR_EXACT = (
-        "INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_IF_ABSENT_OR_EXACT"
+    ENSURE_SYSTEMD_TOMBSTONE_PARENT_TRUSTED = "ENSURE_SYSTEMD_TOMBSTONE_PARENT_TRUSTED"
+    INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_TRUSTED_IF_ABSENT_OR_EXACT = (
+        "INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_TRUSTED_IF_ABSENT_OR_EXACT"
     )
-    VERIFY_SYSTEMD_TOMBSTONE_DROPIN_EXACT = "VERIFY_SYSTEMD_TOMBSTONE_DROPIN_EXACT"
+    VERIFY_SYSTEMD_TOMBSTONE_TRUSTED_EXACT = "VERIFY_SYSTEMD_TOMBSTONE_TRUSTED_EXACT"
     VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE = "VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE"
     STOP_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT = "STOP_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT"
     DISABLE_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT = "DISABLE_SYSTEMD_UNIT_AND_WAIT_IF_PRESENT"
@@ -27,9 +28,20 @@ class RollbackAction:
     action_type: RollbackActionType
     target: str = ""
     source_of_truth: str = ""
+    mode: str = ""
+    owner: str = ""
+    group: str = ""
 
 
 TOMBSTONE_SOURCE = "deploy/cybercore-exec/rollback-wrapper-tombstone.conf"
+INSTALL_TOMBSTONE_PARENT = (
+    "/etc/systemd/system/"
+    "cybercore-vikunja-backup-install.service.d"
+)
+RUN_TOMBSTONE_PARENT = (
+    "/etc/systemd/system/"
+    "cybercore-vikunja-backup-run.service.d"
+)
 INSTALL_TOMBSTONE = (
     "/etc/systemd/system/"
     "cybercore-vikunja-backup-install.service.d/"
@@ -68,28 +80,58 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "deploy/cybercore-exec/cybercore-vikunja-backup-run.service",
         ),
         RollbackAction(
+            "ensure-vikunja-backup-install-tombstone-parent-trusted",
+            RollbackActionType.ENSURE_SYSTEMD_TOMBSTONE_PARENT_TRUSTED,
+            INSTALL_TOMBSTONE_PARENT,
+            "",
+            "0755",
+            "root",
+            "root",
+        ),
+        RollbackAction(
             "install-vikunja-backup-install-tombstone",
-            RollbackActionType.INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_IF_ABSENT_OR_EXACT,
+            RollbackActionType.INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_TRUSTED_IF_ABSENT_OR_EXACT,
             INSTALL_TOMBSTONE,
             TOMBSTONE_SOURCE,
+            "0644",
+            "root",
+            "root",
         ),
         RollbackAction(
             "verify-vikunja-backup-install-tombstone",
-            RollbackActionType.VERIFY_SYSTEMD_TOMBSTONE_DROPIN_EXACT,
+            RollbackActionType.VERIFY_SYSTEMD_TOMBSTONE_TRUSTED_EXACT,
             INSTALL_TOMBSTONE,
             TOMBSTONE_SOURCE,
+            "0644",
+            "root",
+            "root",
+        ),
+        RollbackAction(
+            "ensure-vikunja-backup-run-tombstone-parent-trusted",
+            RollbackActionType.ENSURE_SYSTEMD_TOMBSTONE_PARENT_TRUSTED,
+            RUN_TOMBSTONE_PARENT,
+            "",
+            "0755",
+            "root",
+            "root",
         ),
         RollbackAction(
             "install-vikunja-backup-run-tombstone",
-            RollbackActionType.INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_IF_ABSENT_OR_EXACT,
+            RollbackActionType.INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_TRUSTED_IF_ABSENT_OR_EXACT,
             RUN_TOMBSTONE,
             TOMBSTONE_SOURCE,
+            "0644",
+            "root",
+            "root",
         ),
         RollbackAction(
             "verify-vikunja-backup-run-tombstone",
-            RollbackActionType.VERIFY_SYSTEMD_TOMBSTONE_DROPIN_EXACT,
+            RollbackActionType.VERIFY_SYSTEMD_TOMBSTONE_TRUSTED_EXACT,
             RUN_TOMBSTONE,
             TOMBSTONE_SOURCE,
+            "0644",
+            "root",
+            "root",
         ),
         RollbackAction(
             "systemd-reload-after-tombstone-barrier",
