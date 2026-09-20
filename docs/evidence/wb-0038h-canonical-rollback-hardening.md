@@ -1,6 +1,6 @@
 # WB-0038H — Canonical Rollback Hardening Evidence
 
-Status: IMPLEMENTED_IN_BRANCH / IMPLEMENTATION_GATES_PASSED / FINAL_EXACT_HEAD_REVIEW_PENDING
+Status: IMPLEMENTED_IN_BRANCH / REVIEW_P2_REPAIRED / FINAL_EXACT_HEAD_REVERIFY_PENDING
 
 ## Provenance
 
@@ -47,14 +47,17 @@ For each governed wrapper name rollback now requires:
 3. canonical tombstone drop-in published at:
    - /etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf
    - /etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf
-4. publication contract:
-   - accept only destination absence or an exact canonical tombstone;
-   - write a same-directory temporary file;
+4. trusted publication contract:
+   - require a real, non-symlink parent directory owned by root:root with mode 0755;
+   - accept only destination absence or a trusted exact canonical tombstone;
+   - never follow a destination symlink;
+   - accepted existing tombstones must be regular files owned by root:root with mode 0644 and exact canonical bytes;
+   - write a same-directory temporary regular file as root:root mode 0644;
    - make file bytes durable;
    - atomically rename into the final destination;
    - make the containing directory durable;
-   - fail closed on a conflicting or partially written destination;
-5. exact tombstone bytes verified;
+   - fail closed on a symlink, non-regular file, ownership/mode drift, conflicting bytes, or partially written destination;
+5. trusted exact tombstone metadata and bytes verified;
 6. systemd daemon-reloaded;
 7. tombstone effectiveness verified for the wrapper name;
 8. only after that barrier may rollback stop or quiesce the wrapper.
@@ -75,7 +78,7 @@ Rollback cleanup uses exact-or-absent semantics for managed files, allowing a pr
 
 The tombstone itself is intentionally not removed by rollback.
 
-Future bootstrap now contains explicit VERIFY_SYSTEMD_TOMBSTONE_ABSENT gates before either wrapper name is claimed. Bootstrap must not remove a tombstone implicitly. Reactivation therefore requires a separate reviewed administrative action.
+Future bootstrap now begins with explicit VERIFY_SYSTEMD_TOMBSTONE_ABSENT gates before the first mutating bootstrap action, including helper/template installation and privilege-policy changes. A tombstoned host therefore fails before bootstrap writes anything. Bootstrap must not remove a tombstone implicitly. Reactivation requires a separate reviewed administrative action.
 
 ## Preserved WB-0038G invariants
 
@@ -95,9 +98,11 @@ WB-0038H does not weaken:
 
 tests/test_bootstrap_manifest.py now asserts:
 
-- future install refuses to claim wrapper names while rollback tombstones exist;
-- tombstone publication is atomic/durable by action contract;
-- exact tombstones are verified before daemon-reload;
+- future install checks both tombstones before its first mutating action;
+- tombstone parents must be trusted real root-owned directories;
+- tombstone publication is atomic/durable and no-follow by action contract;
+- accepted tombstones must be regular root:root mode-0644 files with exact bytes;
+- trusted exact tombstones are verified before daemon-reload;
 - effective tombstone verification precedes wrapper stop;
 - runtime and persistent mask action types are absent from rollback;
 - wrapper removal occurs only after generated-service quiescence;
@@ -117,7 +122,7 @@ Implementation head bee4b87d3f6c64aa55e001349cd53819da0a7ef7:
 - Python 3.14: PASS
 - CodeQL #981: PASS
 
-This implementation head is followed by source-of-truth/evidence changes. Final readiness requires fresh CI, CodeQL, and correctness/security review on the final exact head.
+A later final-head review found two P2 issues: existing exact-byte tombstones lacked an explicit trusted ownership/type/no-follow contract, and bootstrap checked tombstone absence only after earlier file mutations. Both are repaired on the current branch. Final readiness requires fresh CI, CodeQL, and correctness/security review on the post-repair exact head.
 
 ## Scope boundary
 
