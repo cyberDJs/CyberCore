@@ -118,8 +118,14 @@ class SafetyIntentGuard:
         if copula_index is None:
             return False
         before_copula = tail[:copula_index]
-        if set(before_copula) & (cls._CANCEL_CONDITION_WORDS | cls._CANCEL_RELATIVE_PRONOUNS):
+        if set(before_copula) & cls._CANCEL_CONDITION_WORDS:
             return False
+        if set(before_copula) & cls._CANCEL_RELATIVE_PRONOUNS:
+            later_copula = any(
+                token in cls._CANCEL_DESCRIPTION_COPULAS
+                for token in tail[copula_index + 1 :]
+            )
+            return later_copula
         return True
 
     @classmethod
