@@ -76,6 +76,8 @@ def test_execute_is_deterministic(text: str) -> None:
         "Could you please not stop",
         "Stop this is what the button says",
         "Cancel the deployment is an option",
+        "Don't, please, stop",
+        "Do not, under any circumstances, stop",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
