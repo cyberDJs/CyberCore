@@ -26,7 +26,7 @@ current:
   milestone: WB-0038H post-merge source-of-truth closeout
   active_artifact: WB-0038H-POST-MERGE-SOT-CLOSEOUT
   branch: wb-0038h-post-merge-sot-closeout
-  pull_request: null
+  pull_request: 104
   last_verified_main: 336ee555faabec76bd9114844954260b47b09570
 
 status:
