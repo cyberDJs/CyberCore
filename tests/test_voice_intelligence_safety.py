@@ -33,6 +33,8 @@ def utterance(text: str) -> Utterance:
         "Please don't wait, stop now",
         "If you're still speaking, stop now",
         "When you are done, stop",
+        "Stop the process that is running",
+        "Stop the process which is running",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
