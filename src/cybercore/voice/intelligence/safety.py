@@ -122,8 +122,7 @@ class SafetyIntentGuard:
             return False
         if set(before_copula) & cls._CANCEL_RELATIVE_PRONOUNS:
             later_copula = any(
-                token in cls._CANCEL_DESCRIPTION_COPULAS
-                for token in tail[copula_index + 1 :]
+                token in cls._CANCEL_DESCRIPTION_COPULAS for token in tail[copula_index + 1 :]
             )
             return later_copula
         return True
