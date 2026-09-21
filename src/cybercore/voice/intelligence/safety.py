@@ -97,9 +97,7 @@ class SafetyIntentGuard:
             return False
         remainder = _normalize(cls._CANCEL_NEGATION.sub(" ", segment)).split()
         allowed = (
-            cls._CANCEL_NEGATION_SCOPE_AUXILIARIES
-            | cls._CANCEL_MODIFIERS
-            | cls._CANCEL_DISCOURSE
+            cls._CANCEL_NEGATION_SCOPE_AUXILIARIES | cls._CANCEL_MODIFIERS | cls._CANCEL_DISCOURSE
         )
         return all(token in allowed for token in remainder)
 
