@@ -80,6 +80,8 @@ def test_execute_is_deterministic(text: str) -> None:
         "Cancel the deployment is an option",
         "Don't, please, stop",
         "Do not, under any circumstances, stop",
+        "Stop which is printed on the button is a label",
+        "Cancel that is shown in the menu is a label",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
