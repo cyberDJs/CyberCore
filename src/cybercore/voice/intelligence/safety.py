@@ -35,6 +35,7 @@ class SafetyIntentGuard:
         {"is", "are", "was", "were", "means", "mean", "refers", "represents", "equals"}
     )
     _CANCEL_CONDITION_WORDS = frozenset({"if", "when", "unless"})
+    _CANCEL_RELATIVE_PRONOUNS = frozenset({"that", "which", "who"})
     _CANCEL_NEGATION_SCOPE_AUXILIARIES = frozenset(
         {"i", "you", "we", "do", "does", "did", "should", "must", "can", "could", "would", "will"}
     )
@@ -117,7 +118,7 @@ class SafetyIntentGuard:
         if copula_index is None:
             return False
         before_copula = tail[:copula_index]
-        if set(before_copula) & cls._CANCEL_CONDITION_WORDS:
+        if set(before_copula) & (cls._CANCEL_CONDITION_WORDS | cls._CANCEL_RELATIVE_PRONOUNS):
             return False
         return True
 
