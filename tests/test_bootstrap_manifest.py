@@ -71,10 +71,25 @@ def test_bootstrap_installs_static_wrappers_before_privilege_policy() -> None:
     by_id = {action.action_id: action for action in manifest}
 
     assert index["revoke-existing-privilege-policy"] < index["verify-privilege-policy-revoked"]
-    assert (
-        index["verify-privilege-policy-revoked"] < index["verify-vikunja-backup-install-unit-safe"]
-    )
-    assert index["verify-privilege-policy-revoked"] < index["verify-vikunja-backup-run-unit-safe"]
+
+    for action_id, wrapper_safe_id, target in (
+        (
+            "verify-vikunja-backup-install-tombstone-absent",
+            "verify-vikunja-backup-install-unit-safe",
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf",
+        ),
+        (
+            "verify-vikunja-backup-run-tombstone-absent",
+            "verify-vikunja-backup-run-unit-safe",
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf",
+        ),
+    ):
+        action = by_id[action_id]
+        assert action.action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_ABSENT"
+        assert action.destination == target
+        assert index[action_id] < index["server-authorization"]
+        assert index[action_id] < index["revoke-existing-privilege-policy"]
+        assert index[action_id] < index[wrapper_safe_id]
 
     backup_root = by_id["backup-root-directory"]
     assert backup_root.action_type.value == "ENSURE_DIRECTORY"
@@ -168,6 +183,8 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert "/etc/systemd/system/cybercore-vikunja-backup-install.service" in targets
     assert "/etc/systemd/system/cybercore-vikunja-backup-run.service" in targets
     assert "/usr/local/libexec/cybercore-exec/vikunja-backup-install" in targets
+    assert "/usr/local/libexec/cybercore-exec/vikunja-backup.service.template" in targets
+    assert "/usr/local/libexec/cybercore-exec/vikunja-backup.timer.template" in targets
     assert "/usr/local/libexec/cybercore-exec/authorization.py" in targets
 
     index = {action.action_id: position for position, action in enumerate(manifest)}
@@ -175,8 +192,10 @@ def test_rollback_revokes_policy_and_static_wrappers_symmetrically() -> None:
     assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-install-unit"]
     assert index["verify-privilege-policy-revoked"] < index["remove-vikunja-backup-run-unit"]
     assert index["remove-privilege-policy"] < index["remove-vikunja-backup-install-unit"]
-    assert index["remove-vikunja-backup-install-unit"] < index["systemd-reload"]
-    assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload"]
+    assert (
+        index["remove-vikunja-backup-install-unit"] < index["systemd-reload-after-wrapper-removal"]
+    )
+    assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload-after-wrapper-removal"]
 
 
 def test_governed_backup_run_owns_process_and_preserves_docker_ordering() -> None:
@@ -255,49 +274,87 @@ def test_backup_installer_quiesces_entry_paths_before_replacing_script() -> None
     assert quiesce < write_script < unmask < enable_timer
 
 
-def test_rollback_blocks_new_wrapper_starts_before_quiescence() -> None:
+def test_rollback_publishes_effective_tombstones_before_quiescence() -> None:
     module = load_deploy_module("rollback")
     manifest = module.build_rollback_manifest()
     by_id = {action.action_id: action for action in manifest}
     index = {action.action_id: position for position, action in enumerate(manifest)}
 
-    assert by_id["runtime-mask-vikunja-backup-install-wrapper"].action_type.value == (
-        "MASK_SYSTEMD_UNIT_RUNTIME"
+    pairs = (
+        (
+            "verify-vikunja-backup-install-wrapper-managed-or-absent",
+            "ensure-vikunja-backup-install-tombstone-parent-trusted",
+            "install-vikunja-backup-install-tombstone",
+            "verify-vikunja-backup-install-tombstone",
+            "verify-vikunja-backup-install-tombstone-effective",
+            "stop-vikunja-backup-install-wrapper",
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d",
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf",
+            "cybercore-vikunja-backup-install.service",
+        ),
+        (
+            "verify-vikunja-backup-run-wrapper-managed-or-absent",
+            "ensure-vikunja-backup-run-tombstone-parent-trusted",
+            "install-vikunja-backup-run-tombstone",
+            "verify-vikunja-backup-run-tombstone",
+            "verify-vikunja-backup-run-tombstone-effective",
+            "stop-vikunja-backup-run-wrapper",
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d",
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf",
+            "cybercore-vikunja-backup-run.service",
+        ),
     )
-    assert by_id["runtime-mask-vikunja-backup-run-wrapper"].action_type.value == (
-        "MASK_SYSTEMD_UNIT_RUNTIME"
-    )
-    assert by_id["verify-vikunja-backup-install-wrapper-runtime-masked"].action_type.value == (
-        "VERIFY_SYSTEMD_UNIT_MASKED_RUNTIME"
-    )
-    assert by_id["verify-vikunja-backup-run-wrapper-runtime-masked"].action_type.value == (
-        "VERIFY_SYSTEMD_UNIT_MASKED_RUNTIME"
-    )
+    for (
+        wrapper_verify_id,
+        parent_id,
+        install_id,
+        verify_id,
+        effective_id,
+        stop_id,
+        parent,
+        target,
+        unit,
+    ) in pairs:
+        assert by_id[parent_id].action_type.value == "ENSURE_SYSTEMD_TOMBSTONE_PARENT_TRUSTED"
+        assert by_id[parent_id].target == parent
+        assert by_id[parent_id].mode == "0755"
+        assert by_id[parent_id].owner == "root"
+        assert by_id[parent_id].group == "root"
 
-    assert (
-        index["verify-privilege-policy-revoked"]
-        < index["verify-vikunja-backup-install-wrapper-managed"]
-    )
-    assert (
-        index["verify-vikunja-backup-install-wrapper-managed"]
-        < index["runtime-mask-vikunja-backup-install-wrapper"]
-    )
-    assert (
-        index["runtime-mask-vikunja-backup-install-wrapper"]
-        < index["verify-vikunja-backup-install-wrapper-runtime-masked"]
-    )
-    assert (
-        index["verify-vikunja-backup-install-wrapper-runtime-masked"]
-        < index["stop-vikunja-backup-install-wrapper"]
-    )
-    assert (
-        index["runtime-mask-vikunja-backup-run-wrapper"]
-        < index["verify-vikunja-backup-run-wrapper-runtime-masked"]
-    )
-    assert (
-        index["verify-vikunja-backup-run-wrapper-runtime-masked"]
-        < index["stop-vikunja-backup-run-wrapper"]
-    )
+        assert by_id[install_id].action_type.value == (
+            "INSTALL_SYSTEMD_TOMBSTONE_DROPIN_ATOMIC_DURABLE_TRUSTED_IF_ABSENT_OR_EXACT"
+        )
+        assert by_id[install_id].target == target
+        assert by_id[install_id].source_of_truth == (
+            "deploy/cybercore-exec/rollback-wrapper-tombstone.conf"
+        )
+        assert by_id[install_id].mode == "0644"
+        assert by_id[install_id].owner == "root"
+        assert by_id[install_id].group == "root"
+
+        assert by_id[verify_id].action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_TRUSTED_EXACT"
+        assert by_id[verify_id].target == target
+        assert by_id[verify_id].mode == "0644"
+        assert by_id[verify_id].owner == "root"
+        assert by_id[verify_id].group == "root"
+
+        assert by_id[effective_id].action_type.value == "VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE"
+        assert by_id[effective_id].target == unit
+        assert index["verify-privilege-policy-revoked"] < index[wrapper_verify_id]
+        assert index[wrapper_verify_id] < index[parent_id]
+        assert index[parent_id] < index[install_id]
+        assert index[install_id] < index[verify_id]
+        assert index[verify_id] < index["systemd-reload-after-tombstone-barrier"]
+        assert index["systemd-reload-after-tombstone-barrier"] < index[effective_id]
+        assert index[effective_id] < index[stop_id]
+
+    action_types = {action.action_type.value for action in manifest}
+    assert "MASK_SYSTEMD_UNIT_RUNTIME" not in action_types
+    assert "MASK_SYSTEMD_UNIT_PERSISTENT" not in action_types
+
+    tombstone = (DEPLOY / "rollback-wrapper-tombstone.conf").read_text()
+    assert "ConditionPathExists=/dev/null/cybercore-exec-wrapper-reactivation" in tombstone
+    assert "RefuseManualStart=yes" in tombstone
 
 
 def test_rollback_stops_installer_before_rechecking_schedule_and_service() -> None:
@@ -345,49 +402,61 @@ def test_rollback_stops_installer_before_rechecking_schedule_and_service() -> No
     assert index["stop-vikunja-backup-service"] < index["remove-vikunja-backup-run-unit"]
 
 
-def test_rollback_persistently_masks_wrapper_names_before_reboot_boundary() -> None:
+def test_rollback_keeps_tombstones_and_removes_all_managed_templates() -> None:
     module = load_deploy_module("rollback")
     manifest = module.build_rollback_manifest()
     by_id = {action.action_id: action for action in manifest}
     index = {action.action_id: position for position, action in enumerate(manifest)}
 
-    assert by_id["persistent-mask-vikunja-backup-install-wrapper"].action_type.value == (
-        "MASK_SYSTEMD_UNIT_PERSISTENT"
-    )
-    assert by_id["persistent-mask-vikunja-backup-run-wrapper"].action_type.value == (
-        "MASK_SYSTEMD_UNIT_PERSISTENT"
-    )
-    assert by_id["verify-vikunja-backup-install-wrapper-persistent-masked"].action_type.value == (
-        "VERIFY_SYSTEMD_UNIT_MASKED_PERSISTENT"
-    )
-    assert by_id["verify-vikunja-backup-run-wrapper-persistent-masked"].action_type.value == (
-        "VERIFY_SYSTEMD_UNIT_MASKED_PERSISTENT"
-    )
+    for action_id, target, source in (
+        (
+            "remove-vikunja-backup-service-template",
+            "/usr/local/libexec/cybercore-exec/vikunja-backup.service.template",
+            "deploy/cybercore-exec/vikunja-backup.service",
+        ),
+        (
+            "remove-vikunja-backup-timer-template",
+            "/usr/local/libexec/cybercore-exec/vikunja-backup.timer.template",
+            "deploy/cybercore-exec/vikunja-backup.timer",
+        ),
+    ):
+        action = by_id[action_id]
+        assert action.action_type.value == "REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT"
+        assert action.target == target
+        assert action.source_of_truth == source
+        assert index["stop-vikunja-backup-service"] < index[action_id]
 
     assert (
-        index["remove-vikunja-backup-install-unit"]
-        < index["persistent-mask-vikunja-backup-install-wrapper"]
+        index["remove-vikunja-backup-install-unit"] < index["systemd-reload-after-wrapper-removal"]
+    )
+    assert index["remove-vikunja-backup-run-unit"] < index["systemd-reload-after-wrapper-removal"]
+    assert (
+        index["systemd-reload-after-wrapper-removal"]
+        < index["verify-vikunja-backup-install-tombstone-effective-after-removal"]
     )
     assert (
-        index["remove-vikunja-backup-run-unit"]
-        < index["persistent-mask-vikunja-backup-run-wrapper"]
+        index["systemd-reload-after-wrapper-removal"]
+        < index["verify-vikunja-backup-run-tombstone-effective-after-removal"]
     )
     assert (
-        index["persistent-mask-vikunja-backup-install-wrapper"]
-        < index["systemd-reload-after-persistent-mask"]
+        by_id["verify-vikunja-backup-install-tombstone-effective-after-removal"].action_type.value
+        == "VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE"
     )
     assert (
-        index["persistent-mask-vikunja-backup-run-wrapper"]
-        < index["systemd-reload-after-persistent-mask"]
+        by_id["verify-vikunja-backup-run-tombstone-effective-after-removal"].action_type.value
+        == "VERIFY_SYSTEMD_TOMBSTONE_EFFECTIVE"
     )
-    assert (
-        index["systemd-reload-after-persistent-mask"]
-        < index["verify-vikunja-backup-install-wrapper-persistent-masked"]
-    )
-    assert (
-        index["systemd-reload-after-persistent-mask"]
-        < index["verify-vikunja-backup-run-wrapper-persistent-masked"]
-    )
+
+    tombstone_targets = {
+        by_id["install-vikunja-backup-install-tombstone"].target,
+        by_id["install-vikunja-backup-run-tombstone"].target,
+    }
+    removed_targets = {
+        action.target
+        for action in manifest
+        if action.action_type.value.startswith("REMOVE_MANAGED_FILE")
+    }
+    assert tombstone_targets.isdisjoint(removed_targets)
 
 
 def test_bootstrap_scripts_are_declarative_only() -> None:
