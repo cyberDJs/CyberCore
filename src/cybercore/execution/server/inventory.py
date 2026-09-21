@@ -51,13 +51,10 @@ def _safe_json_lines(
     *,
     limit: int,
 ) -> tuple[list[Mapping[str, Any]], bool]:
+    raw_lines = [line for line in value.splitlines() if line.strip()]
     rows: list[Mapping[str, Any]] = []
-    complete = True
-    for line in value.splitlines():
-        if len(rows) >= limit:
-            break
-        if not line.strip():
-            continue
+    complete = len(raw_lines) <= limit
+    for line in raw_lines[:limit]:
         try:
             parsed = json.loads(line)
         except json.JSONDecodeError:
@@ -68,6 +65,19 @@ def _safe_json_lines(
             continue
         rows.append(parsed)
     return rows, complete
+
+
+def _required_text_fields(
+    row: Mapping[str, Any],
+    fields: tuple[tuple[str, str, int], ...],
+) -> dict[str, str] | None:
+    normalized: dict[str, str] = {}
+    for source, destination, max_length in fields:
+        value = row.get(source)
+        if not isinstance(value, str) or len(value) > max_length:
+            return None
+        normalized[destination] = value
+    return normalized
 
 
 def _docker_inventory(
@@ -124,15 +134,20 @@ def _docker_inventory(
         if listed.returncode == 0:
             rows, parsed_ok = _safe_json_lines(listed.stdout, limit=MAX_CONTAINERS)
             for row in rows:
-                containers.append(
-                    {
-                        "name": str(row.get("Names", ""))[:256],
-                        "image": str(row.get("Image", ""))[:512],
-                        "status": str(row.get("Status", ""))[:256],
-                        "ports": str(row.get("Ports", ""))[:1024],
-                        "size": str(row.get("Size", ""))[:128],
-                    }
+                normalized = _required_text_fields(
+                    row,
+                    (
+                        ("Names", "name", 256),
+                        ("Image", "image", 512),
+                        ("Status", "status", 256),
+                        ("Ports", "ports", 1024),
+                        ("Size", "size", 128),
+                    ),
                 )
+                if normalized is None:
+                    access_status = "partial_failure"
+                    continue
+                containers.append(normalized)
             if not parsed_ok:
                 access_status = "partial_failure"
         else:
@@ -146,15 +161,20 @@ def _docker_inventory(
         if usage.returncode == 0:
             rows, parsed_ok = _safe_json_lines(usage.stdout, limit=MAX_STORAGE_ROWS)
             for row in rows:
-                storage.append(
-                    {
-                        "type": str(row.get("Type", ""))[:128],
-                        "total_count": str(row.get("TotalCount", ""))[:64],
-                        "active": str(row.get("Active", ""))[:64],
-                        "size": str(row.get("Size", ""))[:128],
-                        "reclaimable": str(row.get("Reclaimable", ""))[:128],
-                    }
+                normalized = _required_text_fields(
+                    row,
+                    (
+                        ("Type", "type", 128),
+                        ("TotalCount", "total_count", 64),
+                        ("Active", "active", 64),
+                        ("Size", "size", 128),
+                        ("Reclaimable", "reclaimable", 128),
+                    ),
                 )
+                if normalized is None:
+                    access_status = "partial_failure"
+                    continue
+                storage.append(normalized)
             if not parsed_ok:
                 access_status = "partial_failure"
         else:
@@ -243,7 +263,8 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
         keys={"schema_version", "host", "memory", "root_filesystem", "docker"},
         label="inventory",
     )
-    if root["schema_version"] != INVENTORY_SCHEMA_VERSION:
+    schema_version = _require_int(root["schema_version"], "schema_version")
+    if schema_version != INVENTORY_SCHEMA_VERSION:
         raise ValueError("unsupported inventory schema version")
 
     host = _require_exact_dict(
@@ -333,7 +354,7 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
         )
 
     return {
-        "schema_version": INVENTORY_SCHEMA_VERSION,
+        "schema_version": schema_version,
         "host": normalized_host,
         "memory": normalized_memory,
         "root_filesystem": normalized_filesystem,

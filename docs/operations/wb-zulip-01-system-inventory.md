@@ -67,3 +67,8 @@ Bootstrap installs the inventory helper, operations map, protocol, and authoriza
 ## Numeric validation
 
 Load-average values are accepted only when they are finite real numbers. `NaN`, positive/negative infinity, and values that overflow Python float conversion fail closed as validation errors and are never promoted into capacity evidence.
+
+
+## Strict schema validation
+
+The inventory schema version must be an actual integer equal to `1`; booleans, floats, and strings are rejected even when Python equality would otherwise compare them equal to `1`. Docker container and storage rows must contain every required field with string values inside the configured bounds. Missing fields, non-string values, malformed JSON, and truncated row sets degrade the Docker evidence to `partial_failure` instead of fabricating or stringifying values.

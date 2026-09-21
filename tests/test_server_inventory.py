@@ -249,3 +249,75 @@ def test_validator_translates_load_overflow_to_value_error() -> None:
     }
     with pytest.raises(ValueError, match="outside the supported numeric range"):
         validate_inventory_payload(payload)
+
+
+@pytest.mark.parametrize("bad_version", [True, 1.0, "1"])
+def test_validator_rejects_non_integer_schema_versions(bad_version: object) -> None:
+    payload = {
+        "schema_version": bad_version,
+        "host": {
+            "hostname": "test",
+            "cpu_logical": 2,
+            "load_1m": 0.1,
+            "load_5m": 0.1,
+            "load_15m": 0.1,
+        },
+        "memory": {
+            "total_bytes": 1,
+            "available_bytes": 1,
+            "swap_total_bytes": 0,
+            "swap_free_bytes": 0,
+        },
+        "root_filesystem": {"total_bytes": 1, "used_bytes": 0, "free_bytes": 1},
+        "docker": {
+            "cli_present": False,
+            "access_status": "not_installed",
+            "server_version": None,
+            "containers": [],
+            "storage": [],
+        },
+    }
+    with pytest.raises(ValueError):
+        validate_inventory_payload(payload)
+
+
+def test_missing_container_field_is_partial_failure_not_fabricated_data() -> None:
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if argv[1:3] == ["version", "--format"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="27.5.1\n", stderr="")
+        if argv[1:3] == ["ps", "--size"]:
+            row = {"Names": "vikunja", "Status": "Up", "Ports": "", "Size": "12MB"}
+            return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(row) + "\n", stderr="")
+        if argv[1:3] == ["system", "df"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        raise AssertionError(argv)
+
+    payload = collect_inventory(run=fake_run, which=lambda _: "/usr/bin/docker")
+    docker = payload["docker"]
+    assert isinstance(docker, dict)
+    assert docker["access_status"] == "partial_failure"
+    assert docker["containers"] == []
+
+
+def test_non_string_storage_field_is_partial_failure_not_stringified() -> None:
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if argv[1:3] == ["version", "--format"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="27.5.1\n", stderr="")
+        if argv[1:3] == ["ps", "--size"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        if argv[1:3] == ["system", "df"]:
+            row = {
+                "Type": "Images",
+                "TotalCount": "2",
+                "Active": 1,
+                "Size": "1GB",
+                "Reclaimable": "100MB (10%)",
+            }
+            return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(row) + "\n", stderr="")
+        raise AssertionError(argv)
+
+    payload = collect_inventory(run=fake_run, which=lambda _: "/usr/bin/docker")
+    docker = payload["docker"]
+    assert isinstance(docker, dict)
+    assert docker["access_status"] == "partial_failure"
+    assert docker["storage"] == []
