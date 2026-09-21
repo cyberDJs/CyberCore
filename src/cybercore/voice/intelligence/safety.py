@@ -54,8 +54,7 @@ class SafetyIntentGuard:
 
         remaining = list(tokens)
         while remaining and (
-            remaining[0] in cls._CANCEL_DISCOURSE
-            or remaining[0] in cls._CANCEL_MODIFIERS
+            remaining[0] in cls._CANCEL_DISCOURSE or remaining[0] in cls._CANCEL_MODIFIERS
         ):
             remaining.pop(0)
         if not remaining:
