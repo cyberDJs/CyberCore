@@ -35,6 +35,9 @@ class SafetyIntentGuard:
         {"is", "are", "was", "were", "means", "mean", "refers", "represents", "equals"}
     )
     _CANCEL_CONDITION_WORDS = frozenset({"if", "when", "unless"})
+    _CANCEL_NEGATION_SCOPE_AUXILIARIES = frozenset(
+        {"i", "you", "we", "do", "does", "did", "should", "must", "can", "could", "would", "will"}
+    )
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
         r"vysvetli|definuj|znamena|slovo|vyraz)\b"
@@ -88,6 +91,19 @@ class SafetyIntentGuard:
         return False
 
     @classmethod
+    def _opens_negation_scope(cls, tokens: list[str]) -> bool:
+        segment = " ".join(tokens)
+        if not cls._CANCEL_NEGATION.search(segment):
+            return False
+        remainder = _normalize(cls._CANCEL_NEGATION.sub(" ", segment)).split()
+        allowed = (
+            cls._CANCEL_NEGATION_SCOPE_AUXILIARIES
+            | cls._CANCEL_MODIFIERS
+            | cls._CANCEL_DISCOURSE
+        )
+        return all(token in allowed for token in remainder)
+
+    @classmethod
     def _marker_leads_description(cls, tokens: list[str], index: int) -> bool:
         if index != 0 or len(tokens) < 2:
             return False
@@ -110,16 +126,29 @@ class SafetyIntentGuard:
     @classmethod
     def _is_cancel_command(cls, raw_text: str) -> bool:
         for raw_clause in _unquoted_clauses(raw_text):
+            pending_negation = False
             for raw_segment in raw_clause.split(","):
                 segment = _normalize(raw_segment)
                 tokens = segment.split()
-                if not tokens or cls._CANCEL_MENTION.search(segment):
+                if not tokens:
                     continue
-                for index, token in enumerate(tokens):
-                    if token not in cls._CANCEL_MARKERS:
-                        continue
+
+                markers = [
+                    index for index, token in enumerate(tokens) if token in cls._CANCEL_MARKERS
+                ]
+                if not markers:
+                    if cls._opens_negation_scope(tokens):
+                        pending_negation = True
+                    continue
+                if cls._CANCEL_MENTION.search(segment):
+                    continue
+
+                for index in markers:
                     local_prefix_tokens = tokens[max(0, index - 8) : index]
                     local_prefix = " ".join(local_prefix_tokens)
+                    if pending_negation:
+                        pending_negation = False
+                        continue
                     if cls._CANCEL_NEGATION.search(local_prefix):
                         continue
                     if cls._marker_leads_description(tokens, index):
