@@ -35,6 +35,7 @@ def utterance(text: str) -> Utterance:
         "When you are done, stop",
         "Stop the process that is running",
         "Stop the process which is running",
+        "Stop the process that is running and is noisy",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -82,6 +83,7 @@ def test_execute_is_deterministic(text: str) -> None:
         "Do not, under any circumstances, stop",
         "Stop which is printed on the button is a label",
         "Cancel that is shown in the menu is a label",
+        "Stop which is printed on the button",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
