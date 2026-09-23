@@ -1,0 +1,3 @@
+tasks.cyberdjs.org {
+    reverse_proxy vikunja:3456
+}
