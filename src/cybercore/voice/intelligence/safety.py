@@ -120,11 +120,13 @@ class SafetyIntentGuard:
         before_copula = tail[:copula_index]
         if set(before_copula) & cls._CANCEL_CONDITION_WORDS:
             return False
-        if set(before_copula) & cls._CANCEL_RELATIVE_PRONOUNS:
-            later_copula = any(
-                token in cls._CANCEL_DESCRIPTION_COPULAS for token in tail[copula_index + 1 :]
-            )
-            return later_copula
+        relative_positions = [
+            position
+            for position, token in enumerate(before_copula)
+            if token in cls._CANCEL_RELATIVE_PRONOUNS
+        ]
+        if relative_positions:
+            return relative_positions[0] == 0
         return True
 
     @classmethod
