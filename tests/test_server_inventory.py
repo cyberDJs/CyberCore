@@ -332,9 +332,7 @@ def test_meminfo_read_failure_fails_closed(tmp_path) -> None:
 def test_meminfo_missing_required_field_fails_closed(tmp_path) -> None:
     path = tmp_path / "meminfo"
     path.write_text(
-        "MemTotal: 1024 kB\n"
-        "MemAvailable: 512 kB\n"
-        "SwapTotal: 0 kB\n",
+        "MemTotal: 1024 kB\nMemAvailable: 512 kB\nSwapTotal: 0 kB\n",
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="missing required fields"):
@@ -344,10 +342,7 @@ def test_meminfo_missing_required_field_fails_closed(tmp_path) -> None:
 def test_meminfo_malformed_required_field_fails_closed(tmp_path) -> None:
     path = tmp_path / "meminfo"
     path.write_text(
-        "MemTotal: not-a-number kB\n"
-        "MemAvailable: 512 kB\n"
-        "SwapTotal: 0 kB\n"
-        "SwapFree: 0 kB\n",
+        "MemTotal: not-a-number kB\nMemAvailable: 512 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n",
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="MemTotal is malformed"):
