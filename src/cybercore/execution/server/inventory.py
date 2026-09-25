@@ -24,25 +24,35 @@ def _read_meminfo(path: Path = Path("/proc/meminfo")) -> dict[str, int]:
     values: dict[str, int] = {}
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        lines = []
+    except OSError as exc:
+        raise ValueError("memory inventory is unavailable") from exc
+
     for line in lines:
         key, separator, remainder = line.partition(":")
-        if not separator or key not in wanted:
+        if key not in wanted:
             continue
+        if not separator or key in values:
+            raise ValueError(f"memory inventory field {key} is malformed")
         parts = remainder.strip().split()
-        if not parts:
-            continue
+        if len(parts) != 2 or parts[1] != "kB":
+            raise ValueError(f"memory inventory field {key} is malformed")
         try:
             kib = int(parts[0])
-        except ValueError:
-            continue
+        except ValueError as exc:
+            raise ValueError(f"memory inventory field {key} is malformed") from exc
+        if kib < 0:
+            raise ValueError(f"memory inventory field {key} is malformed")
         values[key] = kib * 1024
+
+    missing = wanted.difference(values)
+    if missing:
+        raise ValueError("memory inventory is missing required fields")
+
     return {
-        "total_bytes": values.get("MemTotal", 0),
-        "available_bytes": values.get("MemAvailable", 0),
-        "swap_total_bytes": values.get("SwapTotal", 0),
-        "swap_free_bytes": values.get("SwapFree", 0),
+        "total_bytes": values["MemTotal"],
+        "available_bytes": values["MemAvailable"],
+        "swap_total_bytes": values["SwapTotal"],
+        "swap_free_bytes": values["SwapFree"],
     }
 
 

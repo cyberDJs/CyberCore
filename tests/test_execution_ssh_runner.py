@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 
@@ -71,7 +72,9 @@ def _server_inventory_receipt(action: GovernedAction) -> bytes:
         "target_id": action.target_id,
         "plan_id": action.plan_id,
         "plan_revision": action.plan_revision,
-        "authorization_reference_sha256": "0" * 64,
+        "authorization_reference_sha256": hashlib.sha256(
+            action.authorization_reference.encode("utf-8")
+        ).hexdigest(),
         "started_at": "2026-09-19T00:00:00Z",
         "completed_at": "2026-09-19T00:00:01Z",
         "exit_code": 0,
@@ -139,6 +142,25 @@ def test_system_inventory_fails_closed_on_unbound_server_result() -> None:
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         payload = json.loads(_server_inventory_receipt(action))
         payload["target_id"] = "wrong.example"
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=json.dumps(payload).encode(),
+            stderr=b"",
+        )
+
+    receipt = execute_action(action, VIKUNJA_TARGET, run=fake_run)
+    assert receipt.status is ExecutionStatus.FAILED
+    assert receipt.exit_code == 65
+    assert receipt.result is None
+
+
+def test_system_inventory_rejects_mismatched_authorization_hash() -> None:
+    action = _action("system.inventory")
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        payload = json.loads(_server_inventory_receipt(action))
+        payload["authorization_reference_sha256"] = "0" * 64
         return subprocess.CompletedProcess(
             argv,
             0,

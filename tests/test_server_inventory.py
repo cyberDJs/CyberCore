@@ -8,6 +8,7 @@ import pytest
 
 from cybercore.execution.server.inventory import (
     MAX_CONTAINERS,
+    _read_meminfo,
     collect_inventory,
     validate_inventory_payload,
 )
@@ -321,3 +322,33 @@ def test_non_string_storage_field_is_partial_failure_not_stringified() -> None:
     assert isinstance(docker, dict)
     assert docker["access_status"] == "partial_failure"
     assert docker["storage"] == []
+
+
+def test_meminfo_read_failure_fails_closed(tmp_path) -> None:
+    with pytest.raises(ValueError, match="memory inventory is unavailable"):
+        _read_meminfo(tmp_path / "missing-meminfo")
+
+
+def test_meminfo_missing_required_field_fails_closed(tmp_path) -> None:
+    path = tmp_path / "meminfo"
+    path.write_text(
+        "MemTotal: 1024 kB\n"
+        "MemAvailable: 512 kB\n"
+        "SwapTotal: 0 kB\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="missing required fields"):
+        _read_meminfo(path)
+
+
+def test_meminfo_malformed_required_field_fails_closed(tmp_path) -> None:
+    path = tmp_path / "meminfo"
+    path.write_text(
+        "MemTotal: not-a-number kB\n"
+        "MemAvailable: 512 kB\n"
+        "SwapTotal: 0 kB\n"
+        "SwapFree: 0 kB\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="MemTotal is malformed"):
+        _read_meminfo(path)

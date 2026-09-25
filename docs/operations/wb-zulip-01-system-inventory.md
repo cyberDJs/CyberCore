@@ -72,3 +72,10 @@ Load-average values are accepted only when they are finite real numbers. `NaN`, 
 ## Strict schema validation
 
 The inventory schema version must be an actual integer equal to `1`; booleans, floats, and strings are rejected even when Python equality would otherwise compare them equal to `1`. Docker container and storage rows must contain every required field with string values inside the configured bounds. Missing fields, non-string values, malformed JSON, and truncated row sets degrade the Docker evidence to `partial_failure` instead of fabricating or stringifying values.
+
+
+## Authorization binding and memory failure semantics
+
+A structured inventory response is accepted only when its `authorization_reference_sha256` matches the SHA-256 digest of the authorization reference in the current governed action. Matching operation and plan identifiers alone are not sufficient.
+
+Memory capacity evidence is fail-closed. If `/proc/meminfo` is unreadable, missing any required field, duplicated, malformed, negative, or not expressed in `kB`, the inventory helper fails instead of substituting zero-valued RAM or swap measurements.

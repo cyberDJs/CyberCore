@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from typing import Callable
@@ -78,6 +79,9 @@ def _inventory_result_from_server_response(
         "target_id": action.target_id,
         "plan_id": action.plan_id,
         "plan_revision": action.plan_revision,
+        "authorization_reference_sha256": hashlib.sha256(
+            action.authorization_reference.encode("utf-8")
+        ).hexdigest(),
         "status": "EXECUTED",
         "mutation_possible": False,
         "secret_values_recorded": False,
