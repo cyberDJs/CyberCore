@@ -91,6 +91,7 @@ def test_execute_is_deterministic(text: str) -> None:
         "Stop, which is printed on the button, is a label",
         "Please stop is what the button says",
         "Hey stop is printed on the button",
+        "Stop, which means cancel, is a label",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
