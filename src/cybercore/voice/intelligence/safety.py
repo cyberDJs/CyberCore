@@ -135,8 +135,39 @@ class SafetyIntentGuard:
         return True
 
     @classmethod
+    def _clause_is_nonrestrictive_description(cls, raw_clause: str) -> bool:
+        raw_segments = [segment for segment in raw_clause.split(",") if _normalize(segment)]
+        if len(raw_segments) < 3:
+            return False
+
+        first_tokens = _normalize(raw_segments[0]).split()
+        relative_tokens = _normalize(raw_segments[1]).split()
+        tail_tokens = _normalize(" ".join(raw_segments[2:])).split()
+        if not first_tokens or not relative_tokens or not tail_tokens:
+            return False
+
+        marker_indexes = [
+            index for index, token in enumerate(first_tokens) if token in cls._CANCEL_MARKERS
+        ]
+        if len(marker_indexes) != 1:
+            return False
+        marker_index = marker_indexes[0]
+        if marker_index != len(first_tokens) - 1:
+            return False
+        if not cls._is_command_prefix(first_tokens[:marker_index]):
+            return False
+        if relative_tokens[0] not in cls._CANCEL_RELATIVE_PRONOUNS:
+            return False
+        if not any(token in cls._CANCEL_DESCRIPTION_COPULAS for token in relative_tokens):
+            return False
+        return tail_tokens[0] in cls._CANCEL_DESCRIPTION_COPULAS
+
+    @classmethod
     def _is_cancel_command(cls, raw_text: str) -> bool:
         for raw_clause in _unquoted_clauses(raw_text):
+            if cls._clause_is_nonrestrictive_description(raw_clause):
+                continue
+
             clause_tokens = _normalize(raw_clause).split()
             clause_markers = [
                 index for index, token in enumerate(clause_tokens) if token in cls._CANCEL_MARKERS
