@@ -143,9 +143,9 @@ class SafetyIntentGuard:
                 for index, token in enumerate(clause_tokens)
                 if token in cls._CANCEL_MARKERS
             ]
-            if any(
-                cls._marker_leads_description(clause_tokens, index)
-                for index in clause_markers
+            if (
+                len(clause_markers) == 1
+                and cls._marker_leads_description(clause_tokens, clause_markers[0])
             ):
                 continue
 
