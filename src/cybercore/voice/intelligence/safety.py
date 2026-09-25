@@ -139,13 +139,10 @@ class SafetyIntentGuard:
         for raw_clause in _unquoted_clauses(raw_text):
             clause_tokens = _normalize(raw_clause).split()
             clause_markers = [
-                index
-                for index, token in enumerate(clause_tokens)
-                if token in cls._CANCEL_MARKERS
+                index for index, token in enumerate(clause_tokens) if token in cls._CANCEL_MARKERS
             ]
-            if (
-                len(clause_markers) == 1
-                and cls._marker_leads_description(clause_tokens, clause_markers[0])
+            if len(clause_markers) == 1 and cls._marker_leads_description(
+                clause_tokens, clause_markers[0]
             ):
                 continue
 
