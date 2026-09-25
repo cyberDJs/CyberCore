@@ -40,6 +40,9 @@ def utterance(text: str) -> Utterance:
         "Stop whoever is speaking",
         "Stop whatever task is running",
         "Stop is a verb, stop now",
+        "Stop, which is printed on the button, is a label, stop now",
+        "If you're still speaking stop now",
+        "When you are done stop",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -92,6 +95,7 @@ def test_execute_is_deterministic(text: str) -> None:
         "Please stop is what the button says",
         "Hey stop is printed on the button",
         "Stop, which means cancel, is a label",
+        "If you are saying stop",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
