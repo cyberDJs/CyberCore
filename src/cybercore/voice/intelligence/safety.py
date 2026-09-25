@@ -36,6 +36,7 @@ class SafetyIntentGuard:
     )
     _CANCEL_CONDITION_WORDS = frozenset({"if", "when", "unless"})
     _CANCEL_RELATIVE_PRONOUNS = frozenset({"that", "which", "who"})
+    _CANCEL_FREE_RELATIVES = frozenset({"whatever", "whichever", "whoever"})
     _CANCEL_NEGATION_SCOPE_AUXILIARIES = frozenset(
         {"i", "you", "we", "do", "does", "did", "should", "must", "can", "could", "would", "will"}
     )
@@ -104,9 +105,11 @@ class SafetyIntentGuard:
 
     @classmethod
     def _marker_leads_description(cls, tokens: list[str], index: int) -> bool:
-        if index != 0 or len(tokens) < 2:
+        if index < 0 or index >= len(tokens) or len(tokens[index:]) < 2:
             return False
-        tail = tokens[1:]
+        if index > 0 and not cls._is_command_prefix(tokens[:index]):
+            return False
+        tail = tokens[index + 1 :]
         copula_index = next(
             (
                 position
@@ -120,6 +123,8 @@ class SafetyIntentGuard:
         before_copula = tail[:copula_index]
         if set(before_copula) & cls._CANCEL_CONDITION_WORDS:
             return False
+        if set(before_copula) & cls._CANCEL_FREE_RELATIVES:
+            return False
         relative_positions = [
             position
             for position, token in enumerate(before_copula)
@@ -132,6 +137,18 @@ class SafetyIntentGuard:
     @classmethod
     def _is_cancel_command(cls, raw_text: str) -> bool:
         for raw_clause in _unquoted_clauses(raw_text):
+            clause_tokens = _normalize(raw_clause).split()
+            clause_markers = [
+                index
+                for index, token in enumerate(clause_tokens)
+                if token in cls._CANCEL_MARKERS
+            ]
+            if any(
+                cls._marker_leads_description(clause_tokens, index)
+                for index in clause_markers
+            ):
+                continue
+
             pending_negation = False
             for raw_segment in raw_clause.split(","):
                 segment = _normalize(raw_segment)
