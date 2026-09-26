@@ -208,8 +208,8 @@ def collect_inventory(
 ) -> dict[str, object]:
     try:
         load_1m, load_5m, load_15m = os.getloadavg()
-    except OSError:
-        load_1m = load_5m = load_15m = 0.0
+    except OSError as exc:
+        raise ValueError("load average inventory is unavailable") from exc
 
     disk = shutil.disk_usage("/")
     payload: dict[str, object] = {
@@ -258,6 +258,8 @@ def _require_number(value: object, label: str) -> float:
         raise ValueError(f"{label} is outside the supported numeric range") from exc
     if not math.isfinite(normalized):
         raise ValueError(f"{label} must be finite")
+    if normalized < 0:
+        raise ValueError(f"{label} must be non-negative")
     return normalized
 
 

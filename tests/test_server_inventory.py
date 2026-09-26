@@ -347,3 +347,48 @@ def test_meminfo_malformed_required_field_fails_closed(tmp_path) -> None:
     )
     with pytest.raises(ValueError, match="MemTotal is malformed"):
         _read_meminfo(path)
+
+
+def test_loadavg_unavailable_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    def unavailable() -> tuple[float, float, float]:
+        raise OSError("load average unavailable")
+
+    monkeypatch.setattr(
+        "cybercore.execution.server.inventory.os.getloadavg",
+        unavailable,
+    )
+    with pytest.raises(ValueError, match="load average inventory is unavailable"):
+        collect_inventory(which=lambda _: None)
+
+
+@pytest.mark.parametrize("field", ["load_1m", "load_5m", "load_15m"])
+def test_validator_rejects_negative_load_values(field: str) -> None:
+    payload = {
+        "schema_version": 1,
+        "host": {
+            "hostname": "test",
+            "cpu_logical": 2,
+            "load_1m": 0.1,
+            "load_5m": 0.1,
+            "load_15m": 0.1,
+        },
+        "memory": {
+            "total_bytes": 1,
+            "available_bytes": 1,
+            "swap_total_bytes": 0,
+            "swap_free_bytes": 0,
+        },
+        "root_filesystem": {"total_bytes": 1, "used_bytes": 0, "free_bytes": 1},
+        "docker": {
+            "cli_present": False,
+            "access_status": "not_installed",
+            "server_version": None,
+            "containers": [],
+            "storage": [],
+        },
+    }
+    host = payload["host"]
+    assert isinstance(host, dict)
+    host[field] = -0.1
+    with pytest.raises(ValueError, match=f"{field} must be non-negative"):
+        validate_inventory_payload(payload)

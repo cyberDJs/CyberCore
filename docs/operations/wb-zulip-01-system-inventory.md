@@ -66,7 +66,7 @@ Bootstrap installs the inventory helper, operations map, protocol, and authoriza
 
 ## Numeric validation
 
-Load-average values are accepted only when they are finite real numbers. `NaN`, positive/negative infinity, and values that overflow Python float conversion fail closed as validation errors and are never promoted into capacity evidence.
+Load-average values are accepted only when they are finite, non-negative real numbers. `NaN`, positive/negative infinity, negative values, and values that overflow Python float conversion fail closed as validation errors and are never promoted into capacity evidence. If `os.getloadavg()` itself is unavailable, inventory collection fails closed rather than substituting zero load.
 
 
 ## Strict schema validation
