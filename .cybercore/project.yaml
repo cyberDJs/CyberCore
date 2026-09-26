@@ -154,7 +154,7 @@ status:
   wb0038g_consolidated_rollback_repair: merged_verified_canonical
   pr102_wb0038g_merge_commit: b6c350ef40d21a3939fd0d3d6c0187a934303d31
   pr102_post_merge_gates: ci_975_codeql_976_passed
-  wb0038g_source_pr97: open_source_evidence_superseded_by_pr102_and_pr103
+  wb0038g_source_pr97: closed_historical_source_evidence_superseded_by_pr102_and_pr103
   wb0038g_source_pr98: open_source_evidence_superseded_by_pr102_and_pr103
   wb0038g_remote_deployment_authorized: false
   wb0038g_merge_authorized: consumed_exact_head_de3fe76
@@ -405,7 +405,7 @@ completed:
 
 next:
   - complete the WB0038H post-merge source-of-truth closeout and return the repository to an idle canonical state; do not create a successor artifact implicitly
-  - treat PR97, PR98 and PR100 as source-evidence drafts superseded by canonical PR103; do not merge them
+  - preserve closed PR97 as historical superseded source evidence; treat PR98 and PR100 as source-evidence drafts superseded by canonical PR103 and do not merge them
   - continue PR99 WB0039 forward-port repair independently after this closeout is canonical
   - extract the one unique request-validation response-sanitization hardening from closed PR94 into a separate minimal current-main change
   - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
