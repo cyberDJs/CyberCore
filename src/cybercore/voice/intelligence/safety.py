@@ -35,7 +35,28 @@ class SafetyIntentGuard:
         {"is", "are", "was", "were", "means", "mean", "refers", "represents", "equals"}
     )
     _CANCEL_CONDITION_WORDS = frozenset({"if", "when", "unless"})
-    _CANCEL_CONDITION_AUXILIARIES = frozenset({"am", "are", "is", "was", "were", "m", "re", "s"})
+    _CANCEL_CONDITION_AUXILIARIES = frozenset(
+        {"am", "are", "is", "was", "were", "m", "re", "s", "has", "have", "had"}
+    )
+    _CANCEL_CONDITION_TRAILING_BLOCKERS = frozenset(
+        {
+            "i",
+            "you",
+            "we",
+            "they",
+            "he",
+            "she",
+            "it",
+            "can",
+            "could",
+            "would",
+            "will",
+            "should",
+            "must",
+            "may",
+            "might",
+        }
+    )
     _CANCEL_REPORTING_VERBS = frozenset(
         {
             "say",
@@ -73,13 +94,11 @@ class SafetyIntentGuard:
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
         r"vysvetli|definuj|znamena|slovo|vyraz)\b"
     )
-    _APPROVE = re.compile(
-        r"^(?:(?:ano|jo|yes)\s+)?(?:approve|schvaluju|schvaluji|souhlasim)(?:\s+.*)?$"
-    )
+    _APPROVE_MARKERS = frozenset({"approve", "schvaluju", "schvaluji", "souhlasim"})
+    _APPROVE_PREFIXES = frozenset({"ano", "jo", "yes"})
     _APPROVE_PHRASES = frozenset({"jo udelej to", "ano proved to", "yes do it"})
-    _EXECUTE = re.compile(
-        r"^(?:(?:please|prosim)\s+)?(?:execute|apply|run|proved|spust|udelej)(?:\s+.*)?$"
-    )
+    _EXECUTE_MARKERS = frozenset({"execute", "apply", "run", "proved", "spust", "udelej"})
+    _EXECUTE_PREFIXES = frozenset({"please", "prosim"})
 
     @classmethod
     def _is_command_prefix(cls, tokens: list[str]) -> bool:
@@ -143,20 +162,8 @@ class SafetyIntentGuard:
             return False
         if predicate[-1] in cls._CANCEL_REPORTING_VERBS:
             return False
-        if predicate[-1] in {"i", "you", "we", "they", "he", "she", "it"}:
-            if len(predicate) == 1 or predicate[-2] not in {
-                "for",
-                "to",
-                "with",
-                "about",
-                "from",
-                "of",
-                "by",
-                "at",
-                "on",
-                "in",
-            }:
-                return False
+        if predicate[-1] in cls._CANCEL_CONDITION_TRAILING_BLOCKERS:
+            return False
         return True
 
     @classmethod
@@ -234,6 +241,38 @@ class SafetyIntentGuard:
         return 3
 
     @classmethod
+    def _authority_marker_leads_description(cls, tokens: list[str], index: int) -> bool:
+        tail = tokens[index + 1 :]
+        return bool(tail and tail[0] in cls._CANCEL_DESCRIPTION_COPULAS)
+
+    @classmethod
+    def _is_authority_command(
+        cls,
+        raw_text: str,
+        markers: frozenset[str],
+        prefixes: frozenset[str],
+    ) -> bool:
+        for raw_clause in _unquoted_clauses(raw_text):
+            tokens = _normalize(raw_clause).split()
+            if not tokens:
+                continue
+            if cls._CANCEL_MENTION.search(" ".join(tokens)):
+                continue
+
+            remaining = list(tokens)
+            while remaining and remaining[0] in prefixes:
+                remaining.pop(0)
+            marker_index = len(tokens) - len(remaining)
+            if not remaining or remaining[0] not in markers:
+                continue
+            if cls._CANCEL_NEGATION.search(" ".join(tokens[:marker_index])):
+                continue
+            if cls._authority_marker_leads_description(tokens, marker_index):
+                continue
+            return True
+        return False
+
+    @classmethod
     def _is_cancel_command(cls, raw_text: str) -> bool:
         for raw_clause in _unquoted_clauses(raw_text):
             raw_segments = [segment for segment in raw_clause.split(",") if _normalize(segment)]
@@ -271,7 +310,8 @@ class SafetyIntentGuard:
                     continue
 
                 for index in markers:
-                    local_prefix_tokens = tokens[max(0, index - 8) : index]
+                    prefix_tokens = tokens[:index]
+                    local_prefix_tokens = prefix_tokens[-8:]
                     local_prefix = " ".join(local_prefix_tokens)
                     if pending_negation:
                         pending_negation = False
@@ -282,7 +322,7 @@ class SafetyIntentGuard:
                         continue
                     if cls._is_command_prefix(
                         local_prefix_tokens
-                    ) or cls._is_condition_command_prefix(local_prefix_tokens):
+                    ) or cls._is_condition_command_prefix(prefix_tokens):
                         return True
         return False
 
@@ -291,9 +331,17 @@ class SafetyIntentGuard:
         kind: IntentKind | None = None
         if self._is_cancel_command(utterance.text):
             kind = IntentKind.CANCEL
-        elif text in self._APPROVE_PHRASES or self._APPROVE.fullmatch(text):
+        elif text in self._APPROVE_PHRASES or self._is_authority_command(
+            utterance.text,
+            self._APPROVE_MARKERS,
+            self._APPROVE_PREFIXES,
+        ):
             kind = IntentKind.APPROVE
-        elif self._EXECUTE.fullmatch(text):
+        elif self._is_authority_command(
+            utterance.text,
+            self._EXECUTE_MARKERS,
+            self._EXECUTE_PREFIXES,
+        ):
             kind = IntentKind.EXECUTE
         if kind is None:
             return None
