@@ -141,8 +141,22 @@ class SafetyIntentGuard:
             return False
         if predicate[-1] == "to":
             return False
-        if set(predicate) & cls._CANCEL_REPORTING_VERBS:
+        if predicate[-1] in cls._CANCEL_REPORTING_VERBS:
             return False
+        if predicate[-1] in {"i", "you", "we", "they", "he", "she", "it"}:
+            if len(predicate) == 1 or predicate[-2] not in {
+                "for",
+                "to",
+                "with",
+                "about",
+                "from",
+                "of",
+                "by",
+                "at",
+                "on",
+                "in",
+            }:
+                return False
         return True
 
     @classmethod
