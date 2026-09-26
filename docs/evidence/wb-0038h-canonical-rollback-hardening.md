@@ -1,6 +1,6 @@
 # WB-0038H — Canonical Rollback Hardening Evidence
 
-Status: IMPLEMENTED_IN_BRANCH / REVIEW_P2_REPAIRED / FINAL_EXACT_HEAD_REVERIFY_PENDING
+Status: MERGED / EXACT_HEAD_VERIFIED / POST_MERGE_VERIFIED
 
 ## Provenance
 
@@ -111,18 +111,26 @@ tests/test_bootstrap_manifest.py now asserts:
 
 ## Hosted verification
 
-Implementation head bee4b87d3f6c64aa55e001349cd53819da0a7ef7:
+Final exact implementation head `2dfed5dd98a7a60dfa69fc8d41a58bf1c0d9296b`:
 
-- CI #980: PASS
-- quality: PASS
-- package: PASS
-- Python 3.11: PASS
-- Python 3.12: PASS
-- Python 3.13: PASS
-- Python 3.14: PASS
-- CodeQL #981: PASS
+- CI #989: PASS
+- CodeQL #990: PASS
+- fresh exact-head Codex correctness/security review: clean
+- unresolved review threads: 0
 
-A later final-head review found two P2 issues: existing exact-byte tombstones lacked an explicit trusted ownership/type/no-follow contract, and bootstrap checked tombstone absence only after earlier file mutations. Both are repaired on the current branch. Final readiness requires fresh CI, CodeQL, and correctness/security review on the post-repair exact head.
+Merge commit on canonical main:
+
+- `336ee555faabec76bd9114844954260b47b09570`
+
+Post-merge verification on that exact main:
+
+- CI #990: PASS
+- CodeQL #991: PASS
+
+The two late P2 findings were repaired before merge:
+- tombstone publication requires trusted real root-owned parent directories plus atomic/durable no-follow root:root mode-0644 exact files;
+- bootstrap tombstone-absence checks are the first actions, before any mutating bootstrap artifact or privilege-policy change.
+
 
 ## Scope boundary
 
