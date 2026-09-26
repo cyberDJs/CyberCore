@@ -43,6 +43,8 @@ def utterance(text: str) -> Utterance:
         "Stop, which is printed on the button, is a label, stop now",
         "If you're still speaking stop now",
         "When you are done stop",
+        "When the process is complete stop",
+        "If the session is still active stop now",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -96,6 +98,10 @@ def test_execute_is_deterministic(text: str) -> None:
         "Hey stop is printed on the button",
         "Stop, which means cancel, is a label",
         "If you are saying stop",
+        "If you are spelling stop",
+        "If you are discussing stop",
+        "If you are ready to stop?",
+        "If you are mentioning stop",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
