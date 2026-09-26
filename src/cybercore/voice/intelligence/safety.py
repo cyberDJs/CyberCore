@@ -35,9 +35,35 @@ class SafetyIntentGuard:
         {"is", "are", "was", "were", "means", "mean", "refers", "represents", "equals"}
     )
     _CANCEL_CONDITION_WORDS = frozenset({"if", "when", "unless"})
-    _CANCEL_CONDITION_SUBJECTS = frozenset({"i", "you", "we", "they", "he", "she", "it"})
     _CANCEL_CONDITION_AUXILIARIES = frozenset({"am", "are", "is", "was", "were", "m", "re", "s"})
-    _CANCEL_REPORTING_VERBS = frozenset({"say", "says", "saying", "mean", "means", "meaning"})
+    _CANCEL_REPORTING_VERBS = frozenset(
+        {
+            "say",
+            "says",
+            "saying",
+            "mean",
+            "means",
+            "meaning",
+            "spell",
+            "spells",
+            "spelling",
+            "discuss",
+            "discusses",
+            "discussing",
+            "mention",
+            "mentions",
+            "mentioning",
+            "quote",
+            "quotes",
+            "quoting",
+            "define",
+            "defines",
+            "defining",
+            "explain",
+            "explains",
+            "explaining",
+        }
+    )
     _CANCEL_RELATIVE_PRONOUNS = frozenset({"that", "which", "who"})
     _CANCEL_FREE_RELATIVES = frozenset({"whatever", "whichever", "whoever"})
     _CANCEL_NEGATION_SCOPE_AUXILIARIES = frozenset(
@@ -99,8 +125,6 @@ class SafetyIntentGuard:
     def _is_condition_command_prefix(cls, tokens: list[str]) -> bool:
         if len(tokens) < 4 or tokens[0] not in cls._CANCEL_CONDITION_WORDS:
             return False
-        if tokens[1] not in cls._CANCEL_CONDITION_SUBJECTS:
-            return False
         auxiliary_index = next(
             (
                 index
@@ -111,7 +135,12 @@ class SafetyIntentGuard:
         )
         if auxiliary_index is None or auxiliary_index >= len(tokens) - 1:
             return False
+        subject = tokens[1:auxiliary_index]
         predicate = tokens[auxiliary_index + 1 :]
+        if not subject or not predicate:
+            return False
+        if predicate[-1] == "to":
+            return False
         if set(predicate) & cls._CANCEL_REPORTING_VERBS:
             return False
         return True
