@@ -22,6 +22,7 @@ if __package__ in {None, ""}:
             DenyAllExecutionAuthorizationVerifier,
             ExecutionAuthorizationVerifier,
         )
+    from inventory import validate_inventory_payload  # type: ignore[import-not-found]
     from operations import resolve_operation  # type: ignore[import-not-found]
     from protocol import (  # type: ignore[import-not-found]
         MAX_REQUEST_BYTES,
@@ -34,6 +35,7 @@ else:
         DenyAllExecutionAuthorizationVerifier,
         ExecutionAuthorizationVerifier,
     )
+    from cybercore.execution.server.inventory import validate_inventory_payload
     from cybercore.execution.server.operations import resolve_operation
     from cybercore.execution.server.protocol import (
         MAX_REQUEST_BYTES,
@@ -60,6 +62,18 @@ def _timeout_bytes(value: str | bytes | None) -> bytes:
     if isinstance(value, bytes):
         return value
     return value.encode("utf-8", errors="replace")
+
+
+def _structured_result(result_kind: str | None, stdout: bytes) -> dict[str, object] | None:
+    if result_kind is None:
+        return None
+    if result_kind != "system_inventory":
+        raise RequestValidationError("operation result kind is not supported")
+    try:
+        raw = json.loads(stdout.decode("utf-8"))
+        return validate_inventory_payload(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError) as exc:
+        raise RequestValidationError("system inventory output failed validation") from exc
 
 
 def execute_request(
@@ -102,6 +116,8 @@ def execute_request(
         stderr = _timeout_bytes(exc.stderr) + b"\ncybercore-exec operation timed out"
         exit_code = 124
 
+    result = _structured_result(spec.result_kind, stdout) if exit_code == 0 else None
+
     return ServerReceipt(
         operation_id=request.operation_id,
         operation=request.operation,
@@ -116,6 +132,7 @@ def execute_request(
         stderr_sha256=_digest(stderr),
         status="EXECUTED" if exit_code == 0 else "FAILED",
         mutation_possible=spec.mutating,
+        result=result,
     )
 
 

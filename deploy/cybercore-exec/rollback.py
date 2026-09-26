@@ -252,6 +252,12 @@ def build_rollback_manifest() -> tuple[RollbackAction, ...]:
             "src/cybercore/execution/server/dispatcher.py",
         ),
         RollbackAction(
+            "remove-inventory",
+            RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT,
+            "/usr/local/libexec/cybercore-exec/inventory.py",
+            "src/cybercore/execution/server/inventory.py",
+        ),
+        RollbackAction(
             "remove-operations",
             RollbackActionType.REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT,
             "/usr/local/libexec/cybercore-exec/operations.py",

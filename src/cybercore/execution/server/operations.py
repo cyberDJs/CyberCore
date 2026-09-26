@@ -15,9 +15,20 @@ class OperationSpec:
     argv: tuple[str, ...]
     mutating: bool
     timeout_seconds: int
+    result_kind: str | None = None
 
 
 _OPERATION_SPECS: Mapping[str, OperationSpec] = {
+    "system.inventory": OperationSpec(
+        name="system.inventory",
+        argv=(
+            "/usr/bin/python3",
+            "/usr/local/libexec/cybercore-exec/inventory.py",
+        ),
+        mutating=False,
+        timeout_seconds=20,
+        result_kind="system_inventory",
+    ),
     "vikunja.backup.install": OperationSpec(
         name="vikunja.backup.install",
         argv=(
