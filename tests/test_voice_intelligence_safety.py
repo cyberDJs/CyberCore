@@ -47,6 +47,8 @@ def utterance(text: str) -> Utterance:
         "If the session is still active stop now",
         "If you are discussing the incident stop now",
         "If you are explaining the issue stop now",
+        "If the service has recovered stop now",
+        "If the very long running background process is finally complete stop now",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -106,6 +108,11 @@ def test_execute_is_deterministic(text: str) -> None:
         "If you are mentioning stop",
         "If the session is active can I stop?",
         "If the process is complete we stop automatically",
+        "Approve is a verb",
+        "Approve means yes",
+        "Run is an English verb",
+        "Execute is printed on the button",
+        "When the show is over applause will stop",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
