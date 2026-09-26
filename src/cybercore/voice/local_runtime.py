@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 import importlib
 import json
@@ -297,6 +298,46 @@ class LocalSpeechRuntime:
                     return utterance
         return None
 
+    def process_with_live_input(self, operation: Callable[[], Any]) -> Any:
+        self.open()
+        done = threading.Event()
+        results: list[Any] = []
+        errors: list[Exception] = []
+        block_ms = int(getattr(getattr(self.config, "audio", None), "block_ms", 80))
+        idle_sleep = max(0.005, min(0.05, block_ms / 4000))
+
+        def run_operation() -> None:
+            try:
+                results.append(operation())
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                done.set()
+
+        thread = threading.Thread(
+            target=run_operation,
+            name="cybercore-voice-processing-worker",
+            daemon=True,
+        )
+        thread.start()
+        try:
+            while not done.is_set():
+                incoming = self.audio_input.read_frame_if_available()
+                if incoming is None:
+                    done.wait(idle_sleep)
+                    continue
+                self.realtime.receive_input(incoming)
+        except Exception:
+            if self.realtime.state is not RealtimeState.CANCELLED:
+                self.realtime.cancel("microphone input failed during intelligence processing")
+            raise
+        finally:
+            thread.join()
+
+        if errors:
+            raise errors[0]
+        return results[0]
+
     def _begin_speaking_with_live_input(self, text: str) -> None:
         stop = threading.Event()
         errors: list[Exception] = []
@@ -381,11 +422,20 @@ def run_local_voice_session(
     *,
     actor_id: str = "local-operator",
     once: bool = False,
+    intelligence_config_path: Path | str | None = None,
 ) -> int:
     from cybercore.voice.router import VoiceRouter
 
     local = LocalSpeechRuntime.from_config(config)
     router = VoiceRouter()
+    controller = None
+    if intelligence_config_path is not None:
+        from cybercore.voice.intelligence.config import load_intelligence_config
+        from cybercore.voice.intelligence.controller import build_intelligent_voice_controller
+
+        intelligence_config = load_intelligence_config(intelligence_config_path)
+        if intelligence_config.enabled:
+            controller = build_intelligent_voice_controller(intelligence_config, router=router)
     context = VoiceContext()
     turn = 0
     try:
@@ -399,22 +449,40 @@ def run_local_voice_session(
             )
             if utterance is None:
                 continue
-            print(f"YOU: {utterance.text}")
-            response = router.handle(
-                utterance,
-                context,
-                session=local.session,
-            )
-            print(f"CYBER VOICE [{response.status.value}]: {response.message}")
+            current_utterance: Utterance = utterance
+            print(f"YOU: {current_utterance.text}")
+            if controller is None:
+                response = router.handle(
+                    current_utterance,
+                    context,
+                    session=local.session,
+                )
+                status = response.status.value
+                message = response.message
+                cancelled = response.status is ResponseStatus.CANCELLED
+            else:
+                controlled = local.process_with_live_input(
+                    lambda: controller.handle(
+                        current_utterance,
+                        context,
+                        session=local.session,
+                    )
+                )
+                status = controlled.status
+                message = controlled.message
+                cancelled = controlled.cancelled
+            print(f"CYBER VOICE [{status}]: {message}")
 
-            if response.status is ResponseStatus.CANCELLED:
+            if cancelled:
                 local.cancel("voice cancellation intent")
                 return 0
 
-            interrupted = False
-            if local.realtime.state is RealtimeState.PROCESSING and response.message.strip():
+            interrupted = local.realtime.state is RealtimeState.INTERRUPTED
+            if interrupted:
+                print("CYBER VOICE: INTERRUPTED")
+            elif local.realtime.state is RealtimeState.PROCESSING and message.strip():
                 print("CYBER VOICE: SPEAKING")
-                interrupted = local.speak(response.message)
+                interrupted = local.speak(message)
                 if interrupted:
                     print("CYBER VOICE: INTERRUPTED")
             if once and not interrupted:
@@ -443,6 +511,7 @@ def _voice_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--config", type=Path)
     local = voice_sub.add_parser("local", help="Run the local microphone/speaker Voice loop")
     local.add_argument("--config", type=Path)
+    local.add_argument("--intelligence-config", type=Path)
     local.add_argument("--actor", default="local-operator")
     local.add_argument("--once", action="store_true")
     return parser
@@ -492,4 +561,5 @@ def run_voice_cli(arguments: list[str]) -> int:
         config,
         actor_id=args.actor,
         once=args.once,
+        intelligence_config_path=args.intelligence_config,
     )

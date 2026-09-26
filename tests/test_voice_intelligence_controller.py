@@ -1,0 +1,126 @@
+import json
+
+import pytest
+
+from cybercore.voice.intelligence.compiler import ModelIntentCompiler
+from cybercore.voice.intelligence.composer import ModelResponseComposer
+from cybercore.voice.intelligence.controller import IntelligentVoiceController
+from cybercore.voice.models import IntentKind, Utterance, VoiceContext
+from cybercore.voice.session import SessionStatus, VoiceSession
+
+
+class SequenceClient:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = 0
+
+    def complete(self, **kwargs):
+        self.calls += 1
+        return self.responses.pop(0)
+
+
+def intent(kind="question", needs_live_data=False, language="cs"):
+    return json.dumps(
+        {
+            "kind": kind,
+            "operation": "project_status" if kind == "inspect" else "explain",
+            "target": "CyberCore" if kind == "inspect" else None,
+            "language": language,
+            "confidence": 0.98,
+            "needs_live_data": needs_live_data,
+        }
+    )
+
+
+def utterance(text):
+    return Utterance(id="u1", session_id="s1", actor_id="johnny", text=text)
+
+
+def controller(client):
+    return IntelligentVoiceController(
+        compiler=ModelIntentCompiler(client),
+        composer=ModelResponseComposer(client),
+    )
+
+
+def test_general_question_gets_model_answer() -> None:
+    client = SequenceClient([intent(), "A container is an isolated application package."])
+    response = controller(client).handle(utterance("Co znamená container?"), VoiceContext())
+    assert response.status == "answered"
+    assert response.message.startswith("A container")
+    assert client.calls == 2
+
+
+def test_live_question_is_not_answered_from_model_memory() -> None:
+    client = SequenceClient([intent(kind="inspect", needs_live_data=True)])
+    response = controller(client).handle(
+        utterance("Jak je na tom CyberCore?"), VoiceContext(project="CyberCore")
+    )
+    assert response.status == "needs_live_data"
+    assert "nic si nebudu domýšlet" in response.message
+    assert client.calls == 1
+
+
+def test_live_data_gate_does_not_trust_model_false_flag() -> None:
+    client = SequenceClient([intent(kind="question", needs_live_data=False)])
+    response = controller(client).handle(
+        utterance("Is production healthy right now?"), VoiceContext(project="CyberCore")
+    )
+    assert response.status == "needs_live_data"
+    assert client.calls == 1
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Will it rain tomorrow?",
+        "Who is the president of France?",
+    ],
+)
+def test_non_stable_questions_fail_closed_even_if_model_flag_is_false(text: str) -> None:
+    client = SequenceClient([intent(kind="question", needs_live_data=False)])
+    response = controller(client).handle(utterance(text), VoiceContext())
+    assert response.status == "needs_live_data"
+    assert client.calls == 1
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "What is the time in London?",
+        "What is the population of France?",
+        "What is on CNN?",
+        "What is Docker?",
+        "How does Kubernetes work?",
+    ],
+)
+def test_non_lexical_questions_fail_closed(text: str) -> None:
+    client = SequenceClient([intent(kind="question", needs_live_data=False)])
+    response = controller(client).handle(utterance(text), VoiceContext())
+    assert response.status == "needs_live_data"
+    assert client.calls == 1
+
+
+def test_inspect_intent_requires_live_data_even_if_model_flag_is_false() -> None:
+    client = SequenceClient([intent(kind="inspect", needs_live_data=False)])
+    response = controller(client).handle(
+        utterance("Inspect CyberCore"), VoiceContext(project="CyberCore")
+    )
+    assert response.status == "needs_live_data"
+    assert client.calls == 1
+
+
+def test_cancel_uses_existing_router_and_cancels_session() -> None:
+    client = SequenceClient([])
+    session = VoiceSession("s1")
+    response = controller(client).handle(utterance("stop"), VoiceContext(), session=session)
+    assert response.cancelled is True
+    assert session.status is SessionStatus.CANCELLED
+    assert client.calls == 0
+
+
+def test_non_question_model_intent_remains_bounded_by_router() -> None:
+    client = SequenceClient([intent(kind="plan", needs_live_data=False)])
+    response = controller(client).handle(utterance("Naplánuj kontrolu"), VoiceContext())
+    assert response.intent.kind is IntentKind.PLAN
+    assert response.status == "needs_context"

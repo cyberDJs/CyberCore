@@ -14,7 +14,9 @@ from cybercore.voice.local_config import (
 from cybercore.voice.local_runtime import (
     LocalSpeechRuntime,
     run_local_voice_doctor,
+    run_local_voice_session,
 )
+from cybercore.voice.models import Utterance
 from cybercore.voice.realtime import RealtimeState
 from cybercore.voice.session import SessionStatus, VoiceSession
 
@@ -292,6 +294,110 @@ def test_capture_replays_bounded_preroll_before_speech_onset() -> None:
     assert stt.sequences == [3, 4, 5, 6, 7, 8]
     assert runtime.provider.vad.reset_count == 2
     assert runtime.realtime.state is RealtimeState.PROCESSING
+
+
+def test_processing_pumps_live_input_and_preserves_barge_in() -> None:
+    runtime, session, stt, _, source, _ = make_runtime(nonblocking=[frame(2)])
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    def slow_processing() -> str:
+        time.sleep(0.05)
+        return "done"
+
+    result = runtime.process_with_live_input(slow_processing)
+
+    assert result == "done"
+    assert source.nonblocking_reads > 0
+    assert stt.sequences == [2]
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
+def test_once_mode_continues_after_processing_barge_in(monkeypatch) -> None:
+    class FakeLoopRuntime:
+        def __init__(self) -> None:
+            self.session = SimpleNamespace(
+                status=SessionStatus.ACTIVE,
+                session_id="session-loop",
+            )
+            self.realtime = SimpleNamespace(state=RealtimeState.PROCESSING)
+            self.capture_calls = 0
+            self.process_calls = 0
+            self.closed = False
+
+        def open(self) -> None:
+            pass
+
+        def capture_utterance(self, *, actor_id: str, utterance_id: str):
+            self.capture_calls += 1
+            text = "first question" if self.capture_calls == 1 else "stop"
+            return Utterance(
+                id=utterance_id,
+                session_id=self.session.session_id,
+                actor_id=actor_id,
+                text=text,
+            )
+
+        def process_with_live_input(self, operation):
+            self.process_calls += 1
+            result = operation()
+            self.realtime.state = (
+                RealtimeState.INTERRUPTED if self.process_calls == 1 else RealtimeState.PROCESSING
+            )
+            return result
+
+        def speak(self, text: str) -> bool:
+            raise AssertionError("processing-state interruption must suppress stale speech")
+
+        def cancel(self, reason: str) -> None:
+            self.session.status = SessionStatus.CANCELLED
+            self.realtime.state = RealtimeState.CANCELLED
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FakeController:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def handle(self, utterance, context, *, session=None):
+            self.calls += 1
+            if self.calls == 1:
+                return SimpleNamespace(status="answered", message="stale answer", cancelled=False)
+            return SimpleNamespace(status="cancelled", message="cancelled", cancelled=True)
+
+    runtime = FakeLoopRuntime()
+    controller = FakeController()
+
+    import cybercore.voice.intelligence.config as intelligence_config_module
+    import cybercore.voice.intelligence.controller as intelligence_controller_module
+
+    monkeypatch.setattr(
+        LocalSpeechRuntime,
+        "from_config",
+        classmethod(lambda cls, config: runtime),
+    )
+    monkeypatch.setattr(
+        intelligence_config_module,
+        "load_intelligence_config",
+        lambda _path: SimpleNamespace(enabled=True),
+    )
+    monkeypatch.setattr(
+        intelligence_controller_module,
+        "build_intelligent_voice_controller",
+        lambda _config, router: controller,
+    )
+
+    result = run_local_voice_session(
+        SimpleNamespace(),
+        once=True,
+        intelligence_config_path="/tmp/intelligence.json",
+    )
+
+    assert result == 0
+    assert runtime.capture_calls == 2
+    assert controller.calls == 2
+    assert runtime.closed is True
 
 
 def test_speak_sends_audio_and_returns_to_idle() -> None:
