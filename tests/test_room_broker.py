@@ -101,7 +101,7 @@ def test_broker_refuses_to_unlink_non_socket_path(tmp_path: Path):
     path = tmp_path / "johnny.sock"
     path.write_text("do not delete")
     broker = RoomBroker(
-        {"chatgpt:johnny": FakeBackend("chatgpt:johnny-work")},
+        {"chatgpt:johnny-work": FakeBackend("chatgpt:johnny-work")},
         {"chatgpt:johnny-work": path},
     )
     try:
