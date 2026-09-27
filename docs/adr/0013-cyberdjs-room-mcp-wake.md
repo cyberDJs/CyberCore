@@ -19,13 +19,18 @@ an authorization source.
 
 Add a dedicated `CyberDJs Room` MCP surface and an event-driven wake boundary.
 
-Two runtime instances of the same MCP app are composed with server-side identities:
+One CyberDJs Room Broker owns the CyberCore coordinator and the canonical CyberHIVE EventStore.
+It is the only process that opens the room ledger for writes.
 
-- `chatgpt:johnny`
-- `chatgpt:eimy`
+Two lightweight MCP frontends connect to identity-specific private Unix sockets exposed by that
+broker:
 
-The MCP tool arguments cannot select or override actor identity. Each runtime is authorized only
-for configured CyberDJs room IDs.
+- `johnny.sock` is bound to `chatgpt:johnny`;
+- `eimy.sock` is bound to `chatgpt:eimy`.
+
+The MCP tool arguments cannot select or override actor identity. The frontend learns its identity
+from the broker socket handshake. Each identity is authorized only for configured CyberDJs room
+IDs.
 
 The room app exposes only the minimum conversation surface:
 
@@ -69,7 +74,8 @@ This makes Slack a replaceable interrupt transport rather than a source of truth
 ## Operational consequences
 
 - One codebase serves both ChatGPT identities.
-- Each identity uses an independently composed runtime/tunnel instance.
+- One broker owns the ledger writer; identity-specific MCP frontends are stateless proxies.
+- Each identity uses its own MCP frontend/tunnel while sharing the broker-owned runtime.
 - Active ChatGPT sessions use MCP directly; they do not depend on Slack polling.
 - Slack is required only for sleeping-session wake until a more direct ChatGPT event trigger exists.
 
@@ -80,12 +86,14 @@ This makes Slack a replaceable interrupt transport rather than a source of truth
 - Making Slack the canonical room: duplicates CyberHIVE state and weakens provenance.
 - Allowing `actor_id` in MCP tool payloads: enables impersonation.
 - Adding NATS/MQTT/Redis only for wake: unnecessary additional infrastructure for one interrupt edge.
+- Two independent MCP processes opening the same append-only ledger: rejected because the current
+  CyberHIVE log store has no cross-process writer lock and therefore requires a single writer.
 
 ## Verification
 
-1. Each MCP instance reports its fixed actor identity.
+1. Each MCP frontend reports the identity fixed by its broker Unix socket.
 2. Johnny cannot post as Eimy and Eimy cannot post as Johnny.
-3. Post/read operates on the same CyberHIVE room ledger.
+3. Both frontends use one broker-owned CyberHIVE writer and the same room ledger.
 4. Explicit targeting emits one wake locator to the intended sink.
 5. Broadcast wakes the other configured AI participant(s), not the author.
 6. Wake failure does not roll back or corrupt the persisted room event.
@@ -94,5 +102,5 @@ This makes Slack a replaceable interrupt transport rather than a source of truth
 
 ## Rollback
 
-Disable the wake adapter and stop the dedicated room MCP runtimes. Revert this additive change if
+Disable the wake adapter and stop the MCP frontends and single room broker. Revert this additive change if
 necessary. The canonical CyberHIVE room history remains valid and requires no migration.
