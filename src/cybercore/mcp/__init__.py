@@ -1,4 +1,5 @@
 """Governed CyberCore MCP interface."""
+
 from __future__ import annotations
 
 
