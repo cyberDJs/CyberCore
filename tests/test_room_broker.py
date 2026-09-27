@@ -9,8 +9,15 @@ from cybercore.mcp.room_broker import RoomBroker
 from cybercore.mcp.room_broker_client import BrokerRoomBackend
 
 
+class ConcurrencyTracker:
+    def __init__(self):
+        self.active = 0
+        self.max_active = 0
+        self.lock = threading.Lock()
+
+
 class FakeBackend:
-    def __init__(self, actor_id: str):
+    def __init__(self, actor_id: str, tracker: ConcurrencyTracker | None = None):
         self.actor = TrustedActor(
             actor_id,
             "agent",
@@ -18,14 +25,13 @@ class FakeBackend:
             ("cyberdjs-main",),
         )
         self.posts = []
-        self.active_posts = 0
-        self.max_active_posts = 0
-        self._guard = threading.Lock()
+        self.tracker = tracker
 
     def post_event(self, **kwargs):
-        with self._guard:
-            self.active_posts += 1
-            self.max_active_posts = max(self.max_active_posts, self.active_posts)
+        if self.tracker is not None:
+            with self.tracker.lock:
+                self.tracker.active += 1
+                self.tracker.max_active = max(self.tracker.max_active, self.tracker.active)
         try:
             time.sleep(0.01)
             self.posts.append(kwargs)
@@ -36,8 +42,9 @@ class FakeBackend:
                 **kwargs,
             }
         finally:
-            with self._guard:
-                self.active_posts -= 1
+            if self.tracker is not None:
+                with self.tracker.lock:
+                    self.tracker.active -= 1
 
     def read_events(self, **kwargs):
         return []
@@ -107,8 +114,9 @@ def test_broker_refuses_to_unlink_non_socket_path(tmp_path: Path):
 
 
 def test_broker_serializes_concurrent_posts_across_identity_sockets(tmp_path: Path):
-    shared = FakeBackend("chatgpt:johnny")
-    other = FakeBackend("chatgpt:eimy")
+    tracker = ConcurrencyTracker()
+    shared = FakeBackend("chatgpt:johnny", tracker)
+    other = FakeBackend("chatgpt:eimy", tracker)
     sockets = {
         "chatgpt:johnny": tmp_path / "johnny.sock",
         "chatgpt:eimy": tmp_path / "eimy.sock",
@@ -149,7 +157,6 @@ def test_broker_serializes_concurrent_posts_across_identity_sockets(tmp_path: Pa
             thread.join()
 
         assert errors == []
-        assert shared.max_active_posts <= 1
-        assert other.max_active_posts <= 1
+        assert tracker.max_active == 1
     finally:
         broker.stop()
