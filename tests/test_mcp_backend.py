@@ -33,10 +33,7 @@ class Gateway:
         return event
 
     def read(self, room_id, session_id, *, actor, after_sequence=0, limit=100):
-        return tuple(
-            event for event in self.events
-            if event.sequence > after_sequence
-        )[:limit]
+        return tuple(event for event in self.events if event.sequence > after_sequence)[:limit]
 
 
 def backend():
@@ -44,19 +41,13 @@ def backend():
     agents = AgentRegistry()
     agents.register(AgentDescriptor("agent-a", "Agent A", Echo()))
     coordinator = RoomCoordinator(gateway=gateway, agents=agents)
-    actor = TrustedActor(
-        "human-1", "human", "Human", ("room-1",), ("session-1",)
-    )
+    actor = TrustedActor("human-1", "human", "Human", ("room-1",), ("session-1",))
     return RoomCommunicationBackend(
         coordinator=coordinator,
         actor=actor,
-        presence_getter=lambda room_id, session_id: [
-            {"actor_id": "human-1"}
-        ],
+        presence_getter=lambda room_id, session_id: [{"actor_id": "human-1"}],
         runtime_status=lambda: {"state": "ready"},
-        tool_handlers={
-            "safe.echo": lambda args: {"echo": args}
-        },
+        tool_handlers={"safe.echo": lambda args: {"echo": args}},
     )
 
 
@@ -75,16 +66,10 @@ def test_backend_binds_identity_and_invokes_agent():
 def test_backend_tool_allowlist_is_explicit():
     value = backend()
     assert value.allowed_tools == frozenset({"safe.echo"})
-    assert value.invoke_tool(
-        tool_name="safe.echo", arguments={"x": 1}
-    ) == {"echo": {"x": 1}}
+    assert value.invoke_tool(tool_name="safe.echo", arguments={"x": 1}) == {"echo": {"x": 1}}
     try:
-        value.invoke_tool(
-            tool_name="unsafe.shell", arguments={}
-        )
+        value.invoke_tool(tool_name="unsafe.shell", arguments={})
     except PermissionError:
         pass
     else:
-        raise AssertionError(
-            "unallowlisted tool did not fail closed"
-        )
+        raise AssertionError("unallowlisted tool did not fail closed")
