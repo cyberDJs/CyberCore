@@ -56,7 +56,6 @@ class BrokerRoomBackend:
         target: str,
         event_type: str,
         payload: Mapping[str, Any],
-        event_id: str | None = None,
     ) -> dict[str, Any]:
         result = self._call(
             "post_event",
@@ -66,7 +65,6 @@ class BrokerRoomBackend:
                 "target": target,
                 "event_type": event_type,
                 "payload": dict(payload),
-                "event_id": event_id,
             },
         )
         if not isinstance(result, dict):
