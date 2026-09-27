@@ -38,6 +38,30 @@ class SafetyIntentGuard:
     _CANCEL_CONDITION_AUXILIARIES = frozenset(
         {"am", "are", "is", "was", "were", "m", "re", "s", "has", "have", "had"}
     )
+    _CANCEL_SIMPLE_PRESENT_PREDICATE = re.compile(r"^[a-z][a-z0-9_]*(?:s|es|ies)$")
+    _CANCEL_MATRIX_TAIL_BLOCKERS = frozenset(
+        {
+            "am",
+            "are",
+            "is",
+            "was",
+            "were",
+            "has",
+            "have",
+            "had",
+            "do",
+            "does",
+            "did",
+            "can",
+            "could",
+            "would",
+            "will",
+            "should",
+            "must",
+            "may",
+            "might",
+        }
+    )
     _CANCEL_CONDITION_TRAILING_BLOCKERS = frozenset(
         {
             "i",
@@ -152,7 +176,15 @@ class SafetyIntentGuard:
             ),
             None,
         )
-        if auxiliary_index is None or auxiliary_index >= len(tokens) - 1:
+        if auxiliary_index is None:
+            subject = tokens[1:-1]
+            predicate = tokens[-1]
+            if not subject:
+                return False
+            if predicate in cls._CANCEL_REPORTING_VERBS:
+                return False
+            return bool(cls._CANCEL_SIMPLE_PRESENT_PREDICATE.fullmatch(predicate))
+        if auxiliary_index >= len(tokens) - 1:
             return False
         subject = tokens[1:auxiliary_index]
         predicate = tokens[auxiliary_index + 1 :]
@@ -243,7 +275,31 @@ class SafetyIntentGuard:
     @classmethod
     def _authority_marker_leads_description(cls, tokens: list[str], index: int) -> bool:
         tail = tokens[index + 1 :]
-        return bool(tail and tail[0] in cls._CANCEL_DESCRIPTION_COPULAS)
+        copula_index = next(
+            (
+                position
+                for position, token in enumerate(tail)
+                if token in cls._CANCEL_DESCRIPTION_COPULAS
+            ),
+            None,
+        )
+        if copula_index is None:
+            return False
+        before_copula = tail[:copula_index]
+        if set(before_copula) & cls._CANCEL_CONDITION_WORDS:
+            return False
+        if set(before_copula) & cls._CANCEL_RELATIVE_PRONOUNS:
+            return False
+        if set(before_copula) & cls._CANCEL_FREE_RELATIVES:
+            return False
+        return True
+
+    @classmethod
+    def _cancel_marker_has_imperative_tail(cls, tokens: list[str], index: int) -> bool:
+        tail = tokens[index + 1 :]
+        if not tail:
+            return True
+        return tail[0] not in cls._CANCEL_MATRIX_TAIL_BLOCKERS
 
     @classmethod
     def _is_authority_command(
@@ -319,6 +375,8 @@ class SafetyIntentGuard:
                     if cls._CANCEL_NEGATION.search(local_prefix):
                         continue
                     if cls._marker_leads_description(tokens, index):
+                        continue
+                    if not cls._cancel_marker_has_imperative_tail(tokens, index):
                         continue
                     if cls._is_command_prefix(
                         local_prefix_tokens
