@@ -134,7 +134,7 @@ def _docker_inventory(
     server_version = version.stdout.strip()[:128] or None
     containers: list[dict[str, str]] = []
     storage: list[dict[str, str]] = []
-    access_status = "ok"
+    access_status = "ok" if server_version is not None else "partial_failure"
 
     try:
         listed = run(
@@ -211,12 +211,16 @@ def collect_inventory(
     except OSError as exc:
         raise ValueError("load average inventory is unavailable") from exc
 
+    cpu_logical = os.cpu_count()
+    if cpu_logical is None or cpu_logical <= 0:
+        raise ValueError("logical CPU inventory is unavailable")
+
     disk = shutil.disk_usage("/")
     payload: dict[str, object] = {
         "schema_version": INVENTORY_SCHEMA_VERSION,
         "host": {
             "hostname": socket.gethostname()[:255],
-            "cpu_logical": int(os.cpu_count() or 0),
+            "cpu_logical": cpu_logical,
             "load_1m": float(load_1m),
             "load_5m": float(load_5m),
             "load_15m": float(load_15m),
@@ -247,6 +251,13 @@ def _require_int(value: object, label: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(f"{label} must be a non-negative integer")
     return value
+
+
+def _require_positive_int(value: object, label: str) -> int:
+    normalized = _require_int(value, label)
+    if normalized == 0:
+        raise ValueError(f"{label} must be a positive integer")
+    return normalized
 
 
 def _require_number(value: object, label: str) -> float:
@@ -302,7 +313,7 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
 
     normalized_host = {
         "hostname": _require_text(host["hostname"], "hostname", 255),
-        "cpu_logical": _require_int(host["cpu_logical"], "cpu_logical"),
+        "cpu_logical": _require_positive_int(host["cpu_logical"], "cpu_logical"),
         "load_1m": _require_number(host["load_1m"], "load_1m"),
         "load_5m": _require_number(host["load_5m"], "load_5m"),
         "load_15m": _require_number(host["load_15m"], "load_15m"),
@@ -316,6 +327,11 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
         for key in ("total_bytes", "used_bytes", "free_bytes")
     }
 
+    if normalized_memory["available_bytes"] > normalized_memory["total_bytes"]:
+        raise ValueError("available_bytes cannot exceed total_bytes")
+    if normalized_memory["swap_free_bytes"] > normalized_memory["swap_total_bytes"]:
+        raise ValueError("swap_free_bytes cannot exceed swap_total_bytes")
+
     if not isinstance(docker["cli_present"], bool):
         raise ValueError("docker cli_present must be boolean")
     access_status = _require_text(docker["access_status"], "docker access_status", 64)
@@ -324,6 +340,8 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
     version = docker["server_version"]
     if version is not None:
         version = _require_text(version, "docker server_version", 128)
+        if not version:
+            raise ValueError("docker server_version must not be empty")
 
     raw_containers = docker["containers"]
     if not isinstance(raw_containers, list) or len(raw_containers) > MAX_CONTAINERS:
@@ -364,6 +382,20 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
                 "reclaimable": _require_text(row["reclaimable"], "storage reclaimable", 128),
             }
         )
+
+    cli_present = docker["cli_present"]
+    if access_status == "not_installed":
+        if cli_present or version is not None or containers or storage:
+            raise ValueError("docker not_installed state is inconsistent")
+    elif access_status == "denied_or_unreachable":
+        if not cli_present or version is not None or containers or storage:
+            raise ValueError("docker denied_or_unreachable state is inconsistent")
+    elif access_status == "ok":
+        if not cli_present or version is None:
+            raise ValueError("docker ok state is inconsistent")
+    elif access_status == "partial_failure":
+        if not cli_present:
+            raise ValueError("docker partial_failure state is inconsistent")
 
     return {
         "schema_version": schema_version,

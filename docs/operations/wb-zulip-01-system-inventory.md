@@ -79,3 +79,12 @@ The inventory schema version must be an actual integer equal to `1`; booleans, f
 A structured inventory response is accepted only when its `authorization_reference_sha256` matches the SHA-256 digest of the authorization reference in the current governed action. Matching operation and plan identifiers alone are not sufficient.
 
 Memory capacity evidence is fail-closed. If `/proc/meminfo` is unreadable, missing any required field, duplicated, malformed, negative, or not expressed in `kB`, the inventory helper fails instead of substituting zero-valued RAM or swap measurements.
+
+
+## Capacity relationship and Docker state invariants
+
+Logical CPU capacity is fail-closed: collection fails if the runtime cannot report a positive logical CPU count, and validation rejects zero or negative counts.
+
+Memory evidence must be internally consistent: `available_bytes <= total_bytes` and `swap_free_bytes <= swap_total_bytes`. Contradictory capacity values are rejected.
+
+Docker availability is state-dependent. `not_installed` requires no CLI, no server version, and no rows; `denied_or_unreachable` requires a present CLI but no server version or rows; `ok` requires a present CLI and server version; `partial_failure` requires a present CLI and may contain partial bounded evidence. Contradictory state combinations fail closed.

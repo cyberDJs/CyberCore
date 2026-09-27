@@ -14,6 +14,34 @@ from cybercore.execution.server.inventory import (
 )
 
 
+
+def _valid_inventory_payload() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "host": {
+            "hostname": "test",
+            "cpu_logical": 2,
+            "load_1m": 0.1,
+            "load_5m": 0.1,
+            "load_15m": 0.1,
+        },
+        "memory": {
+            "total_bytes": 1024,
+            "available_bytes": 512,
+            "swap_total_bytes": 256,
+            "swap_free_bytes": 128,
+        },
+        "root_filesystem": {"total_bytes": 2048, "used_bytes": 1024, "free_bytes": 1024},
+        "docker": {
+            "cli_present": False,
+            "access_status": "not_installed",
+            "server_version": None,
+            "containers": [],
+            "storage": [],
+        },
+    }
+
+
 def test_collect_inventory_is_bounded_and_structured() -> None:
     def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if argv[1:3] == ["version", "--format"]:
@@ -391,4 +419,95 @@ def test_validator_rejects_negative_load_values(field: str) -> None:
     assert isinstance(host, dict)
     host[field] = -0.1
     with pytest.raises(ValueError, match=f"{field} must be non-negative"):
+        validate_inventory_payload(payload)
+
+
+
+def test_cpu_count_unavailable_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("cybercore.execution.server.inventory.os.cpu_count", lambda: None)
+    with pytest.raises(ValueError, match="logical CPU inventory is unavailable"):
+        collect_inventory(which=lambda _: None)
+
+
+@pytest.mark.parametrize("cpu_logical", [0, -1])
+def test_validator_rejects_non_positive_cpu_count(cpu_logical: int) -> None:
+    payload = _valid_inventory_payload()
+    host = payload["host"]
+    assert isinstance(host, dict)
+    host["cpu_logical"] = cpu_logical
+    with pytest.raises(ValueError, match="cpu_logical"):
+        validate_inventory_payload(payload)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("available_bytes", 1025, "available_bytes cannot exceed total_bytes"),
+        ("swap_free_bytes", 257, "swap_free_bytes cannot exceed swap_total_bytes"),
+    ],
+)
+def test_validator_rejects_impossible_memory_relationships(
+    field: str,
+    value: int,
+    message: str,
+) -> None:
+    payload = _valid_inventory_payload()
+    memory = payload["memory"]
+    assert isinstance(memory, dict)
+    memory[field] = value
+    with pytest.raises(ValueError, match=message):
+        validate_inventory_payload(payload)
+
+
+@pytest.mark.parametrize(
+    "docker",
+    [
+        {
+            "cli_present": False,
+            "access_status": "ok",
+            "server_version": "27.5.1",
+            "containers": [],
+            "storage": [],
+        },
+        {
+            "cli_present": True,
+            "access_status": "not_installed",
+            "server_version": None,
+            "containers": [],
+            "storage": [],
+        },
+        {
+            "cli_present": False,
+            "access_status": "not_installed",
+            "server_version": "27.5.1",
+            "containers": [],
+            "storage": [],
+        },
+        {
+            "cli_present": True,
+            "access_status": "denied_or_unreachable",
+            "server_version": "27.5.1",
+            "containers": [],
+            "storage": [],
+        },
+        {
+            "cli_present": True,
+            "access_status": "ok",
+            "server_version": None,
+            "containers": [],
+            "storage": [],
+        },
+        {
+            "cli_present": False,
+            "access_status": "partial_failure",
+            "server_version": None,
+            "containers": [],
+            "storage": [],
+        },
+    ],
+)
+def test_validator_rejects_inconsistent_docker_states(docker: dict[str, object]) -> None:
+    payload = _valid_inventory_payload()
+    payload["docker"] = docker
+    with pytest.raises(ValueError, match="docker .* state is inconsistent"):
         validate_inventory_payload(payload)
