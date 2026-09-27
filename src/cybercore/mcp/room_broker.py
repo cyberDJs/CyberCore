@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import fcntl
 import json
 import os
 from pathlib import Path
+import socket
 import socketserver
 import stat
 import time
@@ -28,6 +30,21 @@ DEFAULT_SOCKET_NAMES = {
     "chatgpt:eimy": "eimy.sock",
 }
 _MAX_REQUEST_BYTES = 64 * 1024
+
+
+def _socket_has_live_listener(path: Path) -> bool:
+    probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    probe.settimeout(0.2)
+    try:
+        probe.connect(str(path))
+    except (ConnectionRefusedError, FileNotFoundError):
+        return False
+    except OSError:
+        raise
+    else:
+        return True
+    finally:
+        probe.close()
 
 
 class RoomBackend(Protocol):
@@ -155,6 +172,12 @@ class RoomBroker:
             raise ValueError("broker backends and socket paths must have identical identities")
         self.backends = dict(backends)
         self.socket_paths = {key: Path(value) for key, value in socket_paths.items()}
+        parents = {path.parent.resolve() for path in self.socket_paths.values()}
+        if len(parents) != 1:
+            raise ValueError("all broker sockets must share one directory")
+        self._socket_dir = parents.pop()
+        self._process_lock_path = self._socket_dir / ".broker.lock"
+        self._process_lock_handle: Any | None = None
         self._servers: list[_IdentityUnixServer] = []
         self._threads: list[Thread] = []
         self._ledger_lock = RLock()
@@ -162,28 +185,44 @@ class RoomBroker:
     def start(self) -> None:
         if self._servers:
             return
-        for identity in sorted(self.backends):
-            path = self.socket_paths[identity]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            if path.exists():
-                mode = path.stat().st_mode
-                if not stat.S_ISSOCK(mode):
-                    raise RuntimeError(f"broker path exists and is not a socket: {path}")
-                path.unlink()
-            server = _IdentityUnixServer(
-                str(path),
-                self.backends[identity],
-                self._ledger_lock,
-            )
-            os.chmod(path, 0o600)
-            thread = Thread(
-                target=server.serve_forever,
-                name=f"cyberdjs-room-{identity}",
-                daemon=True,
-            )
-            thread.start()
-            self._servers.append(server)
-            self._threads.append(thread)
+
+        self._socket_dir.mkdir(parents=True, exist_ok=True)
+        lock_handle = self._process_lock_path.open("a+b")
+        os.chmod(self._process_lock_path, 0o600)
+        try:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            lock_handle.close()
+            raise RuntimeError("another CyberDJs Room broker is already active") from exc
+        self._process_lock_handle = lock_handle
+
+        try:
+            for identity in sorted(self.backends):
+                path = self.socket_paths[identity]
+                if path.exists():
+                    mode = path.stat().st_mode
+                    if not stat.S_ISSOCK(mode):
+                        raise RuntimeError(f"broker path exists and is not a socket: {path}")
+                    if _socket_has_live_listener(path):
+                        raise RuntimeError(f"broker socket already has a live listener: {path}")
+                    path.unlink()
+                server = _IdentityUnixServer(
+                    str(path),
+                    self.backends[identity],
+                    self._ledger_lock,
+                )
+                os.chmod(path, 0o600)
+                thread = Thread(
+                    target=server.serve_forever,
+                    name=f"cyberdjs-room-{identity}",
+                    daemon=True,
+                )
+                thread.start()
+                self._servers.append(server)
+                self._threads.append(thread)
+        except Exception:
+            self.stop()
+            raise
 
     def stop(self) -> None:
         for server in self._servers:
@@ -197,6 +236,10 @@ class RoomBroker:
         for path in self.socket_paths.values():
             if path.exists() and stat.S_ISSOCK(path.stat().st_mode):
                 path.unlink()
+        if self._process_lock_handle is not None:
+            fcntl.flock(self._process_lock_handle.fileno(), fcntl.LOCK_UN)
+            self._process_lock_handle.close()
+            self._process_lock_handle = None
 
 
 @dataclass(slots=True)
