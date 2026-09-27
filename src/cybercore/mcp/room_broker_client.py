@@ -29,10 +29,13 @@ class BrokerRoomBackend:
         )
 
     def _call(self, method: str, args: Mapping[str, Any]) -> object:
-        request = json.dumps(
-            {"method": method, "args": dict(args)},
-            separators=(",", ":"),
-        ).encode("utf-8") + b"\n"
+        request = (
+            json.dumps(
+                {"method": method, "args": dict(args)},
+                separators=(",", ":"),
+            ).encode("utf-8")
+            + b"\n"
+        )
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(self.timeout_seconds)
             client.connect(str(self.socket_path))
