@@ -45,24 +45,11 @@ class FakeBackend:
 
 
 async def exercise(repo):
-    async with Client(
-        build_server(
-            repo, communication=FakeBackend()
-        )
-    ) as client:
+    async with Client(build_server(repo, communication=FakeBackend())) as client:
         listed = await client.list_tools()
-        assert {
-            tool.name for tool in listed.tools
-        } == set(AVAILABLE_TOOLS)
-        caps = await client.call_tool(
-            "cybercore.capabilities", {}
-        )
-        assert (
-            caps.structured_content[
-                "communication_backend_configured"
-            ]
-            is True
-        )
+        assert {tool.name for tool in listed.tools} == set(AVAILABLE_TOOLS)
+        caps = await client.call_tool("cybercore.capabilities", {})
+        assert caps.structured_content["communication_backend_configured"] is True
         post = await client.call_tool(
             "cybercore.events.post",
             {
@@ -88,10 +75,7 @@ async def exercise(repo):
             },
         )
         assert denied.structured_content["ok"] is False
-        assert (
-            denied.structured_content["error"]["code"]
-            == "forbidden"
-        )
+        assert denied.structured_content["error"]["code"] == "forbidden"
 
 
 def test_mcp_protocol_tools_and_governed_backend():
@@ -104,11 +88,5 @@ def test_manifest_declares_both_transports_and_no_external_mutation():
         "stdio",
         "streamable-http",
     ]
-    assert (
-        manifest["mutation"]["external_effects"]
-        is False
-    )
-    assert (
-        manifest["mutation"]["approval_bypass"]
-        is False
-    )
+    assert manifest["mutation"]["external_effects"] is False
+    assert manifest["mutation"]["approval_bypass"] is False
