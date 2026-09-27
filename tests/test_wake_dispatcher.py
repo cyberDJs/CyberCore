@@ -61,9 +61,7 @@ def test_broadcast_wakes_all_other_ai_participants():
 
     johnny.requests.clear()
     eimy.requests.clear()
-    accepted = dispatcher.submit(
-        event(actor_id="chatgpt:johnny", actor_type="agent", target="*")
-    )
+    accepted = dispatcher.submit(event(actor_id="chatgpt:johnny", actor_type="agent", target="*"))
     assert [item.target for item in accepted] == ["chatgpt:eimy"]
     assert dispatcher.drain()
     dispatcher.stop()
