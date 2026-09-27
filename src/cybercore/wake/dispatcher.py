@@ -78,7 +78,7 @@ class WakeDispatcher:
         return ()
 
     def submit(self, event: RoomEvent) -> tuple[WakeRequest, ...]:
-        requests = tuple(WakeRequest.from_event(event, target=target) for target in self._targets_for(event))
+        requests = tuple(\n            WakeRequest.from_event(event, target=target) for target in self._targets_for(event)\n        )
         accepted: list[WakeRequest] = []
         for request in requests:
             try:
