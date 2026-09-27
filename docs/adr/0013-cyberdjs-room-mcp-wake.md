@@ -75,6 +75,9 @@ This makes Slack a replaceable interrupt transport rather than a source of truth
 
 - One codebase serves both ChatGPT identities.
 - One broker owns the ledger writer; identity-specific MCP frontends are stateless proxies.
+- The broker is launched only in an explicitly composed CyberCore + CyberHIVE source runtime;
+  it is not exposed as a standalone CyberCore wheel entrypoint.
+- The installable MCP frontend has no direct `cyberhive_core` runtime dependency.
 - Each identity uses its own MCP frontend/tunnel while sharing the broker-owned runtime.
 - Active ChatGPT sessions use MCP directly; they do not depend on Slack polling.
 - Slack is required only for sleeping-session wake until a more direct ChatGPT event trigger exists.
