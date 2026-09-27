@@ -70,9 +70,7 @@ def build_http_server(
     port: int = 8765,
 ) -> ThreadingHTTPServer:
     if host not in LOOPBACK_HOSTS:
-        raise ValueError(
-            "non-loopback room HTTP exposure requires separate deployment approval"
-        )
+        raise ValueError("non-loopback room HTTP exposure requires separate deployment approval")
 
     class RoomHandler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
