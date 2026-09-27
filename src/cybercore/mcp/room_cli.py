@@ -4,7 +4,6 @@ import argparse
 import os
 from pathlib import Path
 
-from cybercore.mcp.room_app import build_room_app_server
 from cybercore.mcp.room_broker_client import BrokerRoomBackend
 
 
@@ -29,6 +28,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if not args.socket_path:
         raise SystemExit("--socket-path or CYBERDJS_ROOM_BROKER_SOCKET is required")
+
+    from cybercore.mcp.room_app import build_room_app_server
 
     communication = BrokerRoomBackend(Path(args.socket_path))
     runtime_status = communication.get_runtime_status()
