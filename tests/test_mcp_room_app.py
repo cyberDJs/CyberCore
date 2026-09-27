@@ -9,9 +9,9 @@ from cybercore.mcp.room_app import ROOM_TOOLS, build_room_app_server
 class FakeRoomBackend:
     def __init__(self):
         self.actor = TrustedActor(
-            "chatgpt:johnny",
+            "chatgpt:johnny-work",
             "agent",
-            "Johnny AI",
+            "Johnny Work AI",
             ("cyberdjs-main",),
         )
 
@@ -34,7 +34,11 @@ class FakeRoomBackend:
         return []
 
     def get_runtime_status(self):
-        return {"state": "ready", "ledger_integrity": True}
+        return {
+            "state": "ready",
+            "ledger_integrity": True,
+            "participant_role": "participant",
+        }
 
 
 async def exercise_room_app():
@@ -44,7 +48,8 @@ async def exercise_room_app():
         assert {tool.name for tool in listed.tools} == set(ROOM_TOOLS)
 
         identity = await client.call_tool("cyberdjs.room.identity", {})
-        assert identity.structured_content["identity"]["actor_id"] == "chatgpt:johnny"
+        assert identity.structured_content["identity"]["actor_id"] == "chatgpt:johnny-work"
+        assert identity.structured_content["identity"]["participant_role"] == "participant"
 
         post = await client.call_tool(
             "cyberdjs.room.post",
@@ -55,7 +60,7 @@ async def exercise_room_app():
                 "text": "hello",
             },
         )
-        assert post.structured_content["event"]["actor_id"] == "chatgpt:johnny"
+        assert post.structured_content["event"]["actor_id"] == "chatgpt:johnny-work"
         assert post.structured_content["event"]["target"] == "chatgpt:eimy"
 
         caps = await client.call_tool("cyberdjs.room.capabilities", {})

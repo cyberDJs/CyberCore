@@ -18,14 +18,23 @@ from cybercore.wake.dispatcher import WakeDispatcher
 from cybercore.wake.gateway import WakeAwareEventGateway
 from cybercore.wake.slack import SlackIncomingWebhookWakeSink
 
-ALLOWED_CHATGPT_IDENTITIES = frozenset({"chatgpt:johnny", "chatgpt:eimy"})
+ALLOWED_CHATGPT_IDENTITIES = frozenset(
+    {"chatgpt:johnny-work", "chatgpt:johnny-mod", "chatgpt:eimy"}
+)
 DEFAULT_DISPLAY_NAMES = {
-    "chatgpt:johnny": "Johnny AI",
+    "chatgpt:johnny-work": "Johnny Work AI",
+    "chatgpt:johnny-mod": "Johnny Moderator",
     "chatgpt:eimy": "Eimy AI",
 }
 DEFAULT_SOCKET_NAMES = {
-    "chatgpt:johnny": "johnny.sock",
+    "chatgpt:johnny-work": "johnny-work.sock",
+    "chatgpt:johnny-mod": "johnny-mod.sock",
     "chatgpt:eimy": "eimy.sock",
+}
+PARTICIPANT_ROLES = {
+    "chatgpt:johnny-work": "participant",
+    "chatgpt:johnny-mod": "moderator",
+    "chatgpt:eimy": "participant",
 }
 _MAX_REQUEST_BYTES = 64 * 1024
 
@@ -257,6 +266,7 @@ def build_cyberdjs_room_broker_runtime(
                 "ledger_integrity": base.event_store.verify_integrity(),
                 "wake_enabled": bool(sinks),
                 "writer_model": "single-broker",
+                "participant_role": PARTICIPANT_ROLES[actor.actor_id],
             }
 
         backends[identity] = RoomCommunicationBackend(

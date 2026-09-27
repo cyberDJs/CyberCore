@@ -61,25 +61,25 @@ class FakeBackend:
 
 
 def test_broker_socket_fixes_identity_and_keeps_one_runtime_owner(tmp_path: Path):
-    johnny = FakeBackend("chatgpt:johnny")
+    johnny = FakeBackend("chatgpt:johnny-work")
     eimy = FakeBackend("chatgpt:eimy")
     sockets = {
-        "chatgpt:johnny": tmp_path / "johnny.sock",
+        "chatgpt:johnny-work": tmp_path / "johnny-work.sock",
         "chatgpt:eimy": tmp_path / "eimy.sock",
     }
     broker = RoomBroker(
         {
-            "chatgpt:johnny": johnny,
+            "chatgpt:johnny-work": johnny,
             "chatgpt:eimy": eimy,
         },
         sockets,
     )
     broker.start()
     try:
-        johnny_client = BrokerRoomBackend(sockets["chatgpt:johnny"])
+        johnny_client = BrokerRoomBackend(sockets["chatgpt:johnny-work"])
         eimy_client = BrokerRoomBackend(sockets["chatgpt:eimy"])
 
-        assert johnny_client.actor.actor_id == "chatgpt:johnny"
+        assert johnny_client.actor.actor_id == "chatgpt:johnny-work"
         assert eimy_client.actor.actor_id == "chatgpt:eimy"
 
         posted = johnny_client.post_event(
@@ -89,7 +89,7 @@ def test_broker_socket_fixes_identity_and_keeps_one_runtime_owner(tmp_path: Path
             event_type="message.text",
             payload={"text": "hello"},
         )
-        assert posted["actor_id"] == "chatgpt:johnny"
+        assert posted["actor_id"] == "chatgpt:johnny-work"
         assert len(johnny.posts) == 1
         assert len(eimy.posts) == 0
         assert johnny_client.get_runtime_status()["writer_model"] == "single-broker"
@@ -101,8 +101,8 @@ def test_broker_refuses_to_unlink_non_socket_path(tmp_path: Path):
     path = tmp_path / "johnny.sock"
     path.write_text("do not delete")
     broker = RoomBroker(
-        {"chatgpt:johnny": FakeBackend("chatgpt:johnny")},
-        {"chatgpt:johnny": path},
+        {"chatgpt:johnny-work": FakeBackend("chatgpt:johnny-work")},
+        {"chatgpt:johnny-work": path},
     )
     try:
         broker.start()
@@ -115,22 +115,22 @@ def test_broker_refuses_to_unlink_non_socket_path(tmp_path: Path):
 
 def test_broker_serializes_concurrent_posts_across_identity_sockets(tmp_path: Path):
     tracker = ConcurrencyTracker()
-    shared = FakeBackend("chatgpt:johnny", tracker)
+    shared = FakeBackend("chatgpt:johnny-work", tracker)
     other = FakeBackend("chatgpt:eimy", tracker)
     sockets = {
-        "chatgpt:johnny": tmp_path / "johnny.sock",
+        "chatgpt:johnny-work": tmp_path / "johnny-work.sock",
         "chatgpt:eimy": tmp_path / "eimy.sock",
     }
     broker = RoomBroker(
         {
-            "chatgpt:johnny": shared,
+            "chatgpt:johnny-work": shared,
             "chatgpt:eimy": other,
         },
         sockets,
     )
     broker.start()
     try:
-        johnny_client = BrokerRoomBackend(sockets["chatgpt:johnny"])
+        johnny_client = BrokerRoomBackend(sockets["chatgpt:johnny-work"])
         eimy_client = BrokerRoomBackend(sockets["chatgpt:eimy"])
 
         errors = []
@@ -149,7 +149,7 @@ def test_broker_serializes_concurrent_posts_across_identity_sockets(tmp_path: Pa
 
         threads = [
             threading.Thread(target=post, args=(johnny_client, "chatgpt:eimy")),
-            threading.Thread(target=post, args=(eimy_client, "chatgpt:johnny")),
+            threading.Thread(target=post, args=(eimy_client, "chatgpt:johnny-work")),
         ]
         for thread in threads:
             thread.start()
@@ -158,5 +158,31 @@ def test_broker_serializes_concurrent_posts_across_identity_sockets(tmp_path: Pa
 
         assert errors == []
         assert tracker.max_active == 1
+    finally:
+        broker.stop()
+
+
+def test_broker_exposes_three_distinct_identity_bound_sockets(tmp_path: Path):
+    backends = {
+        "chatgpt:johnny-work": FakeBackend("chatgpt:johnny-work"),
+        "chatgpt:johnny-mod": FakeBackend("chatgpt:johnny-mod"),
+        "chatgpt:eimy": FakeBackend("chatgpt:eimy"),
+    }
+    sockets = {
+        "chatgpt:johnny-work": tmp_path / "johnny-work.sock",
+        "chatgpt:johnny-mod": tmp_path / "johnny-mod.sock",
+        "chatgpt:eimy": tmp_path / "eimy.sock",
+    }
+    broker = RoomBroker(backends, sockets)
+    broker.start()
+    try:
+        assert (
+            BrokerRoomBackend(sockets["chatgpt:johnny-work"]).actor.actor_id
+            == "chatgpt:johnny-work"
+        )
+        assert (
+            BrokerRoomBackend(sockets["chatgpt:johnny-mod"]).actor.actor_id == "chatgpt:johnny-mod"
+        )
+        assert BrokerRoomBackend(sockets["chatgpt:eimy"]).actor.actor_id == "chatgpt:eimy"
     finally:
         broker.stop()

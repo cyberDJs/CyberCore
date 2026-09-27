@@ -2,39 +2,46 @@
 
 ## Purpose
 
-Connect Johnny's ChatGPT and Eimy's ChatGPT to one canonical CyberHIVE-backed room without turning
-Slack into a conversation store and without creating substitute local agents.
+Connect Johnny's work ChatGPT, Johnny's personal moderator ChatGPT, and Eimy's ChatGPT to one
+canonical CyberHIVE-backed room without turning Slack into a conversation store and without
+creating substitute local agents.
 
 ## Runtime topology
 
 ```text
-Johnny ChatGPT                 Eimy ChatGPT
-      |                              |
-Secure MCP Tunnel              Secure MCP Tunnel
-      |                              |
-Room MCP                       Room MCP
-      |                              |
-johnny.sock                    eimy.sock
-      \                              /
-       +--- CyberDJs Room Broker ---+
-                    |
-          one CyberCore coordinator
-                    |
-           one CyberHIVE EventStore
-                    |
-              Wake Dispatcher
-                    |
-            Slack adapter [TEMP]
+Johnny Work ChatGPT     Johnny Moderator       Eimy ChatGPT
+       |                      |                     |
+Secure MCP Tunnel       Secure MCP Tunnel      Secure MCP Tunnel
+       |                      |                     |
+Room MCP                Room MCP               Room MCP
+       |                      |                     |
+johnny-work.sock        johnny-mod.sock         eimy.sock
+       \_____________________|_____________________/
+                             |
+                   CyberDJs Room Broker
+                             |
+                   one CyberCore coordinator
+                             |
+                    one CyberHIVE EventStore
+                             |
+                       Wake Dispatcher
+                             |
+                     Slack adapter [TEMP]
 ```
 
-The broker is the single writer for the canonical CyberHIVE ledger. The two MCP frontends never
+The broker is the single writer for the canonical CyberHIVE ledger. The three MCP frontends never
 open or append the runtime log directly. Each frontend connects to a different private Unix socket,
 and the broker binds that socket to exactly one server-side identity:
 
-- `johnny.sock` -> `chatgpt:johnny`
-- `eimy.sock` -> `chatgpt:eimy`
+- `johnny-work.sock` -> `chatgpt:johnny-work` -> role `participant`
+- `johnny-mod.sock` -> `chatgpt:johnny-mod` -> role `moderator`
+- `eimy.sock` -> `chatgpt:eimy` -> role `participant`
 
-Tool inputs never contain an actor override.
+The moderator role is semantic orchestration metadata. It does not grant additional room,
+filesystem, network, or tool authorization. Tool inputs never contain an actor override.
+
+The legacy `chatgpt:johnny` identity may remain in historical ledger events, but it is not an
+allowed identity for new MCP sessions after the three-participant migration.
 
 ## MCP tools
 
@@ -44,6 +51,8 @@ Tool inputs never contain an actor override.
 - `cyberdjs.room.read`
 - `cyberdjs.room.wait`
 - `cyberdjs.room.status`
+
+`cyberdjs.room.identity` also reports `participant_role`.
 
 `room.wait` is a bounded long-poll helper for an already-active ChatGPT turn. It is not the sleeping
 AI wake mechanism.
@@ -65,7 +74,7 @@ Optional:
 
 ```text
 CYBERDJS_ROOM_ID=cyberdjs-main
-CYBERDJS_ROOM_SOCKET_DIR=/run/cyberhive/private/cyberdjs-room
+CYBERDJS_ROOM_SOCKET_DIR=/run/cyberdjs-room
 CYBERDJS_SLACK_WAKE_WEBHOOK_URL=https://hooks.slack.com/...
 ```
 
@@ -76,28 +85,46 @@ PYTHONPATH=/path/to/CyberCore/src:/path/to/CyberHIVE/src \
   python -m cybercore.mcp.room_broker_cli
 ```
 
-Start exactly one broker for a ledger. It owns the CyberCore/CyberHIVE runtime and creates both
-identity sockets with mode `0600`.
+Start exactly one broker for a ledger. It owns the CyberCore/CyberHIVE runtime and creates all
+three identity sockets with mode `0600`.
 
 The installable `cyberdjs-room-mcp` frontend does **not** import or require `cyberhive_core`;
 it only connects to its identity-bound broker socket.
 
 ## MCP frontend configuration
 
-Johnny frontend:
+Johnny work frontend:
 
 ```text
-CYBERDJS_ROOM_BROKER_SOCKET=/run/cyberhive/private/cyberdjs-room/johnny.sock
+CYBERDJS_ROOM_BROKER_SOCKET=/run/cyberdjs-room/johnny-work.sock
+```
+
+Johnny moderator frontend:
+
+```text
+CYBERDJS_ROOM_BROKER_SOCKET=/run/cyberdjs-room/johnny-mod.sock
 ```
 
 Eimy frontend:
 
 ```text
-CYBERDJS_ROOM_BROKER_SOCKET=/run/cyberhive/private/cyberdjs-room/eimy.sock
+CYBERDJS_ROOM_BROKER_SOCKET=/run/cyberdjs-room/eimy.sock
 ```
 
 The frontend obtains its actor identity from the broker handshake. There is no actor ID environment
 variable on the MCP frontend.
+
+## Suggested loopback ports
+
+The identity boundary is the Unix socket, not the TCP port. A practical local mapping is:
+
+```text
+chatgpt:johnny-work -> 127.0.0.1:8767/mcp
+chatgpt:johnny-mod  -> 127.0.0.1:8768/mcp
+chatgpt:eimy        -> 127.0.0.1:8769/mcp
+```
+
+Each endpoint then gets its own Secure MCP Tunnel and tunnel ID.
 
 ## Slack wake contract
 
@@ -119,10 +146,12 @@ type=message.text
 The receiving ChatGPT Work trigger must ignore messages for another target. For its own target it
 must use the CyberDJs Room MCP app to read the referenced canonical event before acting.
 
+Broadcast wake targets all configured AI participants except the event author.
+
 ## Failure model
 
 - Slack unavailable: event remains committed; wake is lost/deferred, active MCP still works.
-- One MCP frontend unavailable: the broker and the other identity continue.
+- One MCP frontend unavailable: the broker and the other two identities continue.
 - Broker unavailable: no writer is available, so frontends fail closed; the existing ledger remains
   authoritative.
 - Duplicate wake signal: receiver re-reads event by canonical sequence/event ID and must behave

@@ -38,34 +38,58 @@ def event(
 
 
 def test_explicit_target_wakes_only_requested_identity():
-    johnny = RecordingSink()
+    work = RecordingSink()
+    moderator = RecordingSink()
     eimy = RecordingSink()
-    dispatcher = WakeDispatcher({"chatgpt:johnny": johnny, "chatgpt:eimy": eimy})
+    dispatcher = WakeDispatcher(
+        {
+            "chatgpt:johnny-work": work,
+            "chatgpt:johnny-mod": moderator,
+            "chatgpt:eimy": eimy,
+        }
+    )
     dispatcher.start()
     accepted = dispatcher.submit(event())
     assert [item.target for item in accepted] == ["chatgpt:eimy"]
     assert dispatcher.drain()
     dispatcher.stop()
-    assert len(johnny.requests) == 0
+    assert len(work.requests) == 0
+    assert len(moderator.requests) == 0
     assert len(eimy.requests) == 1
 
 
 def test_broadcast_wakes_all_other_ai_participants():
-    johnny = RecordingSink()
+    work = RecordingSink()
+    moderator = RecordingSink()
     eimy = RecordingSink()
-    dispatcher = WakeDispatcher({"chatgpt:johnny": johnny, "chatgpt:eimy": eimy})
+    dispatcher = WakeDispatcher(
+        {
+            "chatgpt:johnny-work": work,
+            "chatgpt:johnny-mod": moderator,
+            "chatgpt:eimy": eimy,
+        }
+    )
     dispatcher.start()
+
     accepted = dispatcher.submit(event(target="*"))
-    assert {item.target for item in accepted} == {"chatgpt:johnny", "chatgpt:eimy"}
+    assert {item.target for item in accepted} == {
+        "chatgpt:johnny-work",
+        "chatgpt:johnny-mod",
+        "chatgpt:eimy",
+    }
     assert dispatcher.drain()
 
-    johnny.requests.clear()
+    work.requests.clear()
+    moderator.requests.clear()
     eimy.requests.clear()
-    accepted = dispatcher.submit(event(actor_id="chatgpt:johnny", actor_type="agent", target="*"))
-    assert [item.target for item in accepted] == ["chatgpt:eimy"]
+    accepted = dispatcher.submit(
+        event(actor_id="chatgpt:johnny-work", actor_type="agent", target="*")
+    )
+    assert {item.target for item in accepted} == {"chatgpt:johnny-mod", "chatgpt:eimy"}
     assert dispatcher.drain()
     dispatcher.stop()
-    assert len(johnny.requests) == 0
+    assert len(work.requests) == 0
+    assert len(moderator.requests) == 1
     assert len(eimy.requests) == 1
 
 
