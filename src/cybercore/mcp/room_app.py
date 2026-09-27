@@ -95,6 +95,7 @@ def build_room_app_server(
     @server.tool(name="cyberdjs.room.identity", annotations=READ_ONLY_ANNOTATIONS)
     async def identity() -> dict[str, object]:
         actor = communication.actor
+        runtime = dict(communication.get_runtime_status())
         return await _invoke(
             "cyberdjs.room.identity",
             lambda rid: {
@@ -105,6 +106,7 @@ def build_room_app_server(
                     "actor_type": actor.actor_type,
                     "display_name": actor.display_name,
                     "authorized_rooms": list(actor.room_ids),
+                    "participant_role": runtime.get("participant_role", "participant"),
                 },
             },
         )
