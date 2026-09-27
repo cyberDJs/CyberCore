@@ -160,3 +160,53 @@ def test_broker_serializes_concurrent_posts_across_identity_sockets(tmp_path: Pa
         assert tracker.max_active == 1
     finally:
         broker.stop()
+
+
+def test_broker_rejects_second_live_broker_without_replacing_socket(tmp_path: Path):
+    path = tmp_path / "johnny.sock"
+    first = RoomBroker(
+        {"chatgpt:johnny": FakeBackend("chatgpt:johnny")},
+        {"chatgpt:johnny": path},
+    )
+    second = RoomBroker(
+        {"chatgpt:johnny": FakeBackend("chatgpt:johnny")},
+        {"chatgpt:johnny": path},
+    )
+    first.start()
+    try:
+        original = BrokerRoomBackend(path)
+        assert original.actor.actor_id == "chatgpt:johnny"
+        try:
+            second.start()
+        except RuntimeError as exc:
+            assert "already active" in str(exc)
+        else:
+            raise AssertionError("second live broker must be rejected")
+
+        still_original = BrokerRoomBackend(path)
+        assert still_original.actor.actor_id == "chatgpt:johnny"
+    finally:
+        second.stop()
+        first.stop()
+
+
+def test_long_poll_has_transport_timeout_headroom(tmp_path: Path):
+    path = tmp_path / "johnny.sock"
+    broker = RoomBroker(
+        {"chatgpt:johnny": FakeBackend("chatgpt:johnny")},
+        {"chatgpt:johnny": path},
+    )
+    broker.start()
+    try:
+        client = BrokerRoomBackend(path, timeout_seconds=0.05)
+        started = time.monotonic()
+        events = client.subscribe_events(
+            room_id="cyberdjs-main",
+            session_id="session-1",
+            wait_seconds=0.2,
+        )
+        elapsed = time.monotonic() - started
+        assert events == []
+        assert elapsed >= 0.18
+    finally:
+        broker.stop()
