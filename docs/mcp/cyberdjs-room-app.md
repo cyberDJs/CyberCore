@@ -50,9 +50,14 @@ AI wake mechanism.
 
 ## Broker configuration
 
+The broker is a **composed CyberCore + CyberHIVE runtime component**, not a standalone CyberCore
+wheel command. CyberHIVE currently has no independent Python package metadata, so the broker must
+be launched only where both source trees are deliberately present.
+
 Required:
 
 ```text
+PYTHONPATH=/path/to/CyberCore/src:/path/to/CyberHIVE/src
 CYBERDJS_ROOM_LOG_PATH=/path/to/canonical/runtime.jsonl
 ```
 
@@ -64,8 +69,18 @@ CYBERDJS_ROOM_SOCKET_DIR=/run/cyberhive/private/cyberdjs-room
 CYBERDJS_SLACK_WAKE_WEBHOOK_URL=https://hooks.slack.com/...
 ```
 
+Example composed launch:
+
+```sh
+PYTHONPATH=/path/to/CyberCore/src:/path/to/CyberHIVE/src \
+  python -m cybercore.mcp.room_broker_cli
+```
+
 Start exactly one broker for a ledger. It owns the CyberCore/CyberHIVE runtime and creates both
 identity sockets with mode `0600`.
+
+The installable `cyberdjs-room-mcp` frontend does **not** import or require `cyberhive_core`;
+it only connects to its identity-bound broker socket.
 
 ## MCP frontend configuration
 
