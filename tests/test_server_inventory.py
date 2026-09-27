@@ -14,7 +14,6 @@ from cybercore.execution.server.inventory import (
 )
 
 
-
 def _valid_inventory_payload() -> dict[str, object]:
     return {
         "schema_version": 1,
@@ -420,7 +419,6 @@ def test_validator_rejects_negative_load_values(field: str) -> None:
     host[field] = -0.1
     with pytest.raises(ValueError, match=f"{field} must be non-negative"):
         validate_inventory_payload(payload)
-
 
 
 def test_cpu_count_unavailable_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
