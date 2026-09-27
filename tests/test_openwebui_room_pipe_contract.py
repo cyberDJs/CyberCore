@@ -7,6 +7,8 @@ def test_pipe_is_async_identity_bound_and_avoids_embedded_secrets():
     assert "__chat_id__" in source
     assert "__session_id__" in source
     assert "__user__" in source
+    assert "X-CyberDJS-User-ID" in source
+    assert '"actor_id":' not in source
     assert "API_KEY" not in source
     assert "password" not in source.lower()
     assert "/v1/rooms/message" in source
