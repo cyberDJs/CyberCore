@@ -180,6 +180,7 @@ class RoomBroker:
         self._process_lock_handle: Any | None = None
         self._servers: list[_IdentityUnixServer] = []
         self._threads: list[Thread] = []
+        self._owned_socket_paths: set[Path] = set()
         self._ledger_lock = RLock()
 
     def start(self) -> None:
@@ -220,6 +221,7 @@ class RoomBroker:
                 thread.start()
                 self._servers.append(server)
                 self._threads.append(thread)
+                self._owned_socket_paths.add(path)
         except Exception:
             self.stop()
             raise
@@ -233,9 +235,10 @@ class RoomBroker:
             thread.join(timeout=2.0)
         self._servers.clear()
         self._threads.clear()
-        for path in self.socket_paths.values():
+        for path in tuple(self._owned_socket_paths):
             if path.exists() and stat.S_ISSOCK(path.stat().st_mode):
                 path.unlink()
+        self._owned_socket_paths.clear()
         if self._process_lock_handle is not None:
             fcntl.flock(self._process_lock_handle.fileno(), fcntl.LOCK_UN)
             self._process_lock_handle.close()
