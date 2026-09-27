@@ -33,11 +33,34 @@ _MAX_REQUEST_BYTES = 64 * 1024
 class RoomBackend(Protocol):
     actor: TrustedActor
 
-    def post_event(self, **kwargs: Any) -> Mapping[str, Any]: ...
+    def post_event(
+        self,
+        *,
+        room_id: str,
+        session_id: str,
+        target: str,
+        event_type: str,
+        payload: Mapping[str, Any],
+    ) -> dict[str, Any]: ...
 
-    def read_events(self, **kwargs: Any) -> list[Mapping[str, Any]]: ...
+    def read_events(
+        self,
+        *,
+        room_id: str,
+        session_id: str,
+        after_sequence: int,
+        limit: int,
+    ) -> list[dict[str, Any]]: ...
 
-    def subscribe_events(self, **kwargs: Any) -> list[Mapping[str, Any]]: ...
+    def subscribe_events(
+        self,
+        *,
+        room_id: str,
+        session_id: str,
+        after_sequence: int,
+        limit: int,
+        wait_seconds: float,
+    ) -> list[dict[str, Any]]: ...
 
     def get_runtime_status(self) -> Mapping[str, Any]: ...
 
