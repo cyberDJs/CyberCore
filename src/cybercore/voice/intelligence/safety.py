@@ -38,7 +38,30 @@ class SafetyIntentGuard:
     _CANCEL_CONDITION_AUXILIARIES = frozenset(
         {"am", "are", "is", "was", "were", "m", "re", "s", "has", "have", "had"}
     )
-    _CANCEL_SIMPLE_PRESENT_PREDICATE = re.compile(r"^[a-z][a-z0-9_]*(?:s|es|ies)$")
+    _CANCEL_SIMPLE_PRESENT_PREDICATES = frozenset(
+        {
+            "recover",
+            "recovers",
+            "finish",
+            "finishes",
+            "complete",
+            "completes",
+            "end",
+            "ends",
+            "fail",
+            "fails",
+            "begin",
+            "begins",
+            "resume",
+            "resumes",
+            "return",
+            "returns",
+            "reconnect",
+            "reconnects",
+            "disconnect",
+            "disconnects",
+        }
+    )
     _CANCEL_MATRIX_TAIL_BLOCKERS = frozenset(
         {
             "am",
@@ -183,7 +206,7 @@ class SafetyIntentGuard:
                 return False
             if predicate in cls._CANCEL_REPORTING_VERBS:
                 return False
-            return bool(cls._CANCEL_SIMPLE_PRESENT_PREDICATE.fullmatch(predicate))
+            return predicate in cls._CANCEL_SIMPLE_PRESENT_PREDICATES
         if auxiliary_index >= len(tokens) - 1:
             return False
         subject = tokens[1:auxiliary_index]
@@ -288,8 +311,16 @@ class SafetyIntentGuard:
         before_copula = tail[:copula_index]
         if set(before_copula) & cls._CANCEL_CONDITION_WORDS:
             return False
-        if set(before_copula) & cls._CANCEL_RELATIVE_PRONOUNS:
-            return False
+        relative_positions = [
+            position
+            for position, token in enumerate(before_copula)
+            if token in cls._CANCEL_RELATIVE_PRONOUNS
+        ]
+        if relative_positions:
+            return any(
+                token in cls._CANCEL_DESCRIPTION_COPULAS
+                for token in tail[copula_index + 1 :]
+            )
         if set(before_copula) & cls._CANCEL_FREE_RELATIVES:
             return False
         return True
