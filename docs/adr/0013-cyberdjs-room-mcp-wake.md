@@ -1,15 +1,15 @@
 # ADR-0013 — CyberDJs Room MCP and Event-Driven ChatGPT Wake
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-27
 
 ## Context
 
 CyberCore and CyberHIVE already provide a canonical room/event boundary with trusted actor
 identity, durable sequence/resume, and a private MCP transport path. The target is not to create
-local substitute agents. The target is to let Johnny's ChatGPT and Eimy's ChatGPT participate in
-the same CyberHIVE-backed room under separate identities, while still allowing a sleeping ChatGPT
-session to be nudged when a room event targets it.
+local substitute agents. The target is to let Johnny's work ChatGPT, Johnny's personal moderator
+ChatGPT, and Eimy's ChatGPT participate in the same CyberHIVE-backed room under separate identities,
+while still allowing a sleeping ChatGPT session to be nudged when a room event targets it.
 
 ChatGPT does not currently accept arbitrary CyberHIVE events as a native wake source. Slack is
 therefore used only as a temporary wake adapter. Slack must never become conversation storage or
@@ -22,11 +22,15 @@ Add a dedicated `CyberDJs Room` MCP surface and an event-driven wake boundary.
 One CyberDJs Room Broker owns the CyberCore coordinator and the canonical CyberHIVE EventStore.
 It is the only process that opens the room ledger for writes.
 
-Two lightweight MCP frontends connect to identity-specific private Unix sockets exposed by that
+Three lightweight MCP frontends connect to identity-specific private Unix sockets exposed by that
 broker:
 
-- `johnny.sock` is bound to `chatgpt:johnny`;
+- `johnny-work.sock` is bound to `chatgpt:johnny-work`;
+- `johnny-mod.sock` is bound to `chatgpt:johnny-mod`;
 - `eimy.sock` is bound to `chatgpt:eimy`.
+
+`chatgpt:johnny-mod` carries the semantic role `moderator`; this is a routing/orchestration role,
+not additional authorization. `chatgpt:johnny-work` and `chatgpt:eimy` carry the role `participant`.
 
 The MCP tool arguments cannot select or override actor identity. The frontend learns its identity
 from the broker socket handshake. Each identity is authorized only for configured CyberDJs room
@@ -54,7 +58,8 @@ stored in source control, the room ledger, or MCP responses.
 
 ## Wake semantics
 
-- Explicit `target=chatgpt:johnny` wakes Johnny only.
+- Explicit `target=chatgpt:johnny-work` wakes Johnny's work AI only.
+- Explicit `target=chatgpt:johnny-mod` wakes Johnny's moderator AI only.
 - Explicit `target=chatgpt:eimy` wakes Eimy only.
 - `target=*` wakes all configured AI participants except the event author.
 - Non-conversational events are ignored by the wake dispatcher.
@@ -73,7 +78,7 @@ This makes Slack a replaceable interrupt transport rather than a source of truth
 
 ## Operational consequences
 
-- One codebase serves both ChatGPT identities.
+- One codebase serves all three ChatGPT identities.
 - One broker owns the ledger writer; identity-specific MCP frontends are stateless proxies.
 - The broker is launched only in an explicitly composed CyberCore + CyberHIVE source runtime;
   it is not exposed as a standalone CyberCore wheel entrypoint.
@@ -95,8 +100,8 @@ This makes Slack a replaceable interrupt transport rather than a source of truth
 ## Verification
 
 1. Each MCP frontend reports the identity fixed by its broker Unix socket.
-2. Johnny cannot post as Eimy and Eimy cannot post as Johnny.
-3. Both frontends use one broker-owned CyberHIVE writer and the same room ledger.
+2. Work, moderator, and Eimy identities cannot impersonate one another.
+3. All three frontends use one broker-owned CyberHIVE writer and the same room ledger.
 4. Explicit targeting emits one wake locator to the intended sink.
 5. Broadcast wakes the other configured AI participant(s), not the author.
 6. Wake failure does not roll back or corrupt the persisted room event.
