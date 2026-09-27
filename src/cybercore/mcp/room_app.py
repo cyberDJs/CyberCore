@@ -1,12 +1,26 @@
 from __future__ import annotations
 
+from typing import Any, Mapping, Protocol
+
 from mcp.server import MCPServer
 
-from cybercore.mcp.backend import RoomCommunicationBackend
+from cybercore.communication.contracts import TrustedActor
 from cybercore.mcp.server import READ_ONLY_ANNOTATIONS, _bounded_text, _invoke
 
 ROOM_SERVER_NAME = "CyberDJs Room"
 ROOM_SERVER_VERSION = "0.1.0"
+class RoomAppBackend(Protocol):
+    actor: TrustedActor
+
+    def post_event(self, **kwargs: Any) -> Mapping[str, Any]: ...
+
+    def read_events(self, **kwargs: Any) -> list[Mapping[str, Any]]: ...
+
+    def subscribe_events(self, **kwargs: Any) -> list[Mapping[str, Any]]: ...
+
+    def get_runtime_status(self) -> Mapping[str, Any]: ...
+
+
 ROOM_TOOLS = (
     "cyberdjs.room.capabilities",
     "cyberdjs.room.identity",
@@ -33,7 +47,7 @@ def room_capability_manifest(*, actor_id: str, wake_enabled: bool) -> dict[str, 
 
 
 def build_room_app_server(
-    communication: RoomCommunicationBackend,
+    communication: RoomAppBackend,
     *,
     wake_enabled: bool = False,
 ) -> MCPServer:
