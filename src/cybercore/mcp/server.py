@@ -49,9 +49,7 @@ AVAILABLE_TOOLS = (
     "cybercore.agent.invoke",
     "cybercore.tool.invoke",
 )
-READ_ONLY_ANNOTATIONS = ToolAnnotations(
-    read_only_hint=True, open_world_hint=False
-)
+READ_ONLY_ANNOTATIONS = ToolAnnotations(read_only_hint=True, open_world_hint=False)
 _SECRET_OUTPUT_KEYS = frozenset(
     {
         "token",
@@ -116,9 +114,7 @@ def _bounded_text(value: str, *, name: str) -> str:
 
 def _is_secret_output_key(key: object) -> bool:
     normalized = str(key).strip().lower().replace("-", "_")
-    return normalized in _SECRET_OUTPUT_KEYS or normalized.endswith(
-        _SECRET_OUTPUT_SUFFIXES
-    )
+    return normalized in _SECRET_OUTPUT_KEYS or normalized.endswith(_SECRET_OUTPUT_SUFFIXES)
 
 
 def _sanitize_output(value: object) -> object:
@@ -128,11 +124,7 @@ def _sanitize_output(value: object) -> object:
         return value
     if isinstance(value, Mapping):
         return {
-            str(key): (
-                "[REDACTED]"
-                if _is_secret_output_key(key)
-                else _sanitize_output(item)
-            )
+            str(key): ("[REDACTED]" if _is_secret_output_key(key) else _sanitize_output(item))
             for key, item in value.items()
         }
     if isinstance(value, (list, tuple)):
@@ -144,9 +136,7 @@ def _safe_result(payload: dict[str, object]) -> dict[str, object]:
     sanitized = _sanitize_output(payload)
     if not isinstance(sanitized, dict):
         raise TypeError("MCP result must be a JSON object")
-    encoded = json.dumps(
-        sanitized, separators=(",", ":"), ensure_ascii=False
-    ).encode("utf-8")
+    encoded = json.dumps(sanitized, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     if len(encoded) > MAX_RESPONSE_BYTES:
         raise ValueError("MCP response exceeds configured size limit")
     return sanitized
@@ -183,9 +173,7 @@ async def _invoke(tool: str, fn: ToolCallback) -> dict[str, object]:
             timeout=TOOL_TIMEOUT_SECONDS,
         )
         status = "completed"
-        result_label = (
-            "success" if result.get("ok") is not False else "negative"
-        )
+        result_label = "success" if result.get("ok") is not False else "negative"
         return _safe_result(result)
     except Exception as exc:
         return _safe_result(
@@ -217,9 +205,7 @@ def _json_object(raw: str, *, name: str) -> dict[str, Any]:
     return value
 
 
-def capability_manifest(
-    *, backend_configured: bool = False
-) -> dict[str, object]:
+def capability_manifest(*, backend_configured: bool = False) -> dict[str, object]:
     return {
         "server": SERVER_NAME,
         "version": SERVER_VERSION,
@@ -263,9 +249,7 @@ def build_server(
             lambda rid: {
                 "ok": True,
                 "request_id": rid,
-                **capability_manifest(
-                    backend_configured=communication is not None
-                ),
+                **capability_manifest(backend_configured=communication is not None),
             },
         )
 
@@ -279,10 +263,7 @@ def build_server(
             lambda rid: {
                 "ok": True,
                 "request_id": rid,
-                "status": [
-                    sanitize_disclosure_text(line)
-                    for line in status_lines(paths)
-                ],
+                "status": [sanitize_disclosure_text(line) for line in status_lines(paths)],
             },
         )
 
@@ -317,9 +298,7 @@ def build_server(
             return {
                 "ok": result.compliant,
                 "request_id": rid,
-                "verification": disclosed_repository_identity_policy_payload(
-                    result
-                ),
+                "verification": disclosed_repository_identity_policy_payload(result),
             }
 
         return await _invoke("cybercore.verify.repository", run)
@@ -339,10 +318,7 @@ def build_server(
                 for item in run_doctor(paths)
             ]
             return {
-                "ok": all(
-                    item["state"].lower().endswith("ok")
-                    for item in checks
-                ),
+                "ok": all(item["state"].lower().endswith("ok") for item in checks),
                 "request_id": rid,
                 "checks": checks,
             }
@@ -355,9 +331,7 @@ def build_server(
     )
     async def ccl_validate(record_json: str) -> dict[str, object]:
         def run(rid: str) -> dict[str, object]:
-            record = _json_object(
-                record_json, name="record_json"
-            )
+            record = _json_object(record_json, name="record_json")
             result = CCLValidator.from_repo(paths.repo).validate(record)
             return {
                 "ok": result.valid,
@@ -373,9 +347,7 @@ def build_server(
     )
     async def plan_change(goal: str) -> dict[str, object]:
         def run(rid: str) -> dict[str, object]:
-            bounded = sanitize_disclosure_text(
-                _bounded_text(goal, name="goal")
-            )
+            bounded = sanitize_disclosure_text(_bounded_text(goal, name="goal"))
             return {
                 "ok": True,
                 "request_id": rid,
@@ -407,9 +379,7 @@ def build_server(
                         session_id=session_id,
                         target=target,
                         event_type=event_type,
-                        payload=_json_object(
-                            payload_json, name="payload_json"
-                        ),
+                        payload=_json_object(payload_json, name="payload_json"),
                     )
                 ),
             },
@@ -470,17 +440,13 @@ def build_server(
         name="cybercore.presence.get",
         annotations=READ_ONLY_ANNOTATIONS,
     )
-    async def presence_get(
-        room_id: str, session_id: str
-    ) -> dict[str, object]:
+    async def presence_get(room_id: str, session_id: str) -> dict[str, object]:
         return await _invoke(
             "cybercore.presence.get",
             lambda rid: {
                 "ok": True,
                 "request_id": rid,
-                "presence": require_backend().get_presence(
-                    room_id=room_id, session_id=session_id
-                ),
+                "presence": require_backend().get_presence(room_id=room_id, session_id=session_id),
             },
         )
 
@@ -494,9 +460,7 @@ def build_server(
             lambda rid: {
                 "ok": True,
                 "request_id": rid,
-                "runtime": dict(
-                    require_backend().get_runtime_status()
-                ),
+                "runtime": dict(require_backend().get_runtime_status()),
             },
         )
 
@@ -516,9 +480,7 @@ def build_server(
                     room_id=room_id,
                     session_id=session_id,
                     target_agent=target_agent,
-                    message=_bounded_text(
-                        message, name="message"
-                    ),
+                    message=_bounded_text(message, name="message"),
                 ),
             },
         )
