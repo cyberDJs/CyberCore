@@ -22,9 +22,7 @@ class RoomCommunicationBackend:
         actor: TrustedActor,
         presence_getter: Callable[[str, str], list[dict[str, Any]]] | None = None,
         runtime_status: Callable[[], Mapping[str, Any]] | None = None,
-        tool_handlers: Mapping[
-            str, Callable[[Mapping[str, Any]], Mapping[str, Any]]
-        ] | None = None,
+        tool_handlers: Mapping[str, Callable[[Mapping[str, Any]], Mapping[str, Any]]] | None = None,
     ) -> None:
         self.coordinator = coordinator
         self.actor = actor
@@ -58,10 +56,7 @@ class RoomCommunicationBackend:
             ),
             actor=self.actor,
         )
-        return {
-            name: getattr(event, name)
-            for name in event.__dataclass_fields__
-        }
+        return {name: getattr(event, name) for name in event.__dataclass_fields__}
 
     def read_events(
         self,
@@ -79,8 +74,7 @@ class RoomCommunicationBackend:
             limit=limit,
         )
         return [
-            {name: getattr(event, name) for name in event.__dataclass_fields__}
-            for event in events
+            {name: getattr(event, name) for name in event.__dataclass_fields__} for event in events
         ]
 
     def subscribe_events(
@@ -104,9 +98,7 @@ class RoomCommunicationBackend:
                 return events
             time.sleep(0.1)
 
-    def get_presence(
-        self, *, room_id: str, session_id: str
-    ) -> list[dict[str, Any]]:
+    def get_presence(self, *, room_id: str, session_id: str) -> list[dict[str, Any]]:
         if self.presence_getter is None:
             raise RuntimeError("presence backend is not configured")
         return self.presence_getter(room_id, session_id)
@@ -136,9 +128,7 @@ class RoomCommunicationBackend:
             for event in events
         ]
 
-    def invoke_tool(
-        self, *, tool_name: str, arguments: Mapping[str, Any]
-    ) -> Mapping[str, Any]:
+    def invoke_tool(self, *, tool_name: str, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
         handler = self.tool_handlers.get(tool_name)
         if handler is None:
             raise PermissionError("tool is not allowlisted")
