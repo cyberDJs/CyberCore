@@ -9,7 +9,7 @@ import urllib.request
 
 from cybercore.communication.contracts import TrustedActor
 from cybercore.communication.http_runtime import build_http_server, handle_room_message
-from cybercore.integrations.cyberhive_runtime import build_local_runtime
+from cybercore.cyberhive_runtime import build_local_runtime
 
 
 def main() -> int:
