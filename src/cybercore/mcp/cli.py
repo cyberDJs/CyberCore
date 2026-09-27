@@ -7,20 +7,14 @@ from cybercore.mcp.server import build_server, capability_manifest
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="cybercore-mcp", description="CyberCore governed MCP"
-    )
+    parser = argparse.ArgumentParser(prog="cybercore-mcp", description="CyberCore governed MCP")
     parser.add_argument("--repo", help="CyberCore repository path")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("serve", help="Serve MCP over stdio")
-    http = sub.add_parser(
-        "serve-http", help="Serve local-only Streamable HTTP MCP"
-    )
+    http = sub.add_parser("serve-http", help="Serve local-only Streamable HTTP MCP")
     http.add_argument("--host", default="127.0.0.1")
     http.add_argument("--port", type=int, default=8766)
-    sub.add_parser(
-        "capabilities", help="Print machine-readable MCP capabilities"
-    )
+    sub.add_parser("capabilities", help="Print machine-readable MCP capabilities")
     return parser
 
 
