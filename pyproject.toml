@@ -38,6 +38,7 @@ dev = [
 [project.scripts]
 cybercore = "cybercore.voice_entrypoint:main"
 cybercore-mcp = "cybercore.mcp.cli:main"
+cyberdjs-room-mcp = "cybercore.mcp.room_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cybercore"]
