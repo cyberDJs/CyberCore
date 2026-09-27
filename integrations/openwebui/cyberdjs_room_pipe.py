@@ -35,24 +35,28 @@ class Pipe:
             raise ValueError("CyberDJs Room requires non-empty text")
         if not __chat_id__ or not __session_id__:
             raise ValueError("CyberDJs Room requires Open WebUI chat/session identity")
+
         user_id = str((__user__ or {}).get("id") or "").strip()
         if not user_id:
             raise ValueError("CyberDJs Room requires authenticated user identity")
+
         payload: dict[str, Any] = {
             "room_id": __chat_id__,
             "session_id": __session_id__,
-            "actor_id": f"openwebui:{user_id}",
             "text": text,
             "target": "*",
         }
+        headers = {"X-CyberDJS-User-ID": user_id}
         url = self.valves.CORE_URL.rstrip("/") + "/v1/rooms/message"
         async with httpx.AsyncClient(timeout=self.valves.TIMEOUT_SECONDS) as client:
-            response = await client.post(url, json=payload)
+            response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
             result = response.json()
+
         replies = result.get("replies") or []
         if not isinstance(replies, list):
             raise RuntimeError("CyberCore returned malformed replies")
+
         rendered = []
         for reply in replies:
             name = str(reply.get("display_name") or reply.get("actor_id") or "agent")
