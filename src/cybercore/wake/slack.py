@@ -20,7 +20,10 @@ class SlackIncomingWebhookWakeSink:
         if not webhook_url:
             raise ValueError("Slack webhook URL is required")
         parsed = urlparse(webhook_url)
-        if parsed.scheme != "https" or parsed.hostname not in {\n            "hooks.slack.com",\n            "hooks.slack-gov.com",\n        }:
+        if parsed.scheme != "https" or parsed.hostname not in {
+            "hooks.slack.com",
+            "hooks.slack-gov.com",
+        }:
             raise ValueError("Slack webhook URL must use an approved Slack HTTPS host")
         if timeout_seconds <= 0 or timeout_seconds > 15:
             raise ValueError("timeout_seconds must be between 0 and 15")
