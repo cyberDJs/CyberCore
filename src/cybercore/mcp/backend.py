@@ -124,8 +124,7 @@ class RoomCommunicationBackend:
             target=target_agent,
         )
         return [
-            {name: getattr(event, name) for name in event.__dataclass_fields__}
-            for event in events
+            {name: getattr(event, name) for name in event.__dataclass_fields__} for event in events
         ]
 
     def invoke_tool(self, *, tool_name: str, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
