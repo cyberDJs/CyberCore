@@ -28,7 +28,13 @@ class BrokerRoomBackend:
             room_ids=tuple(str(item) for item in identity.get("authorized_rooms") or ()),
         )
 
-    def _call(self, method: str, args: Mapping[str, Any]) -> object:
+    def _call(
+        self,
+        method: str,
+        args: Mapping[str, Any],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> object:
         request = (
             json.dumps(
                 {"method": method, "args": dict(args)},
@@ -36,8 +42,9 @@ class BrokerRoomBackend:
             ).encode("utf-8")
             + b"\n"
         )
+        transport_timeout = self.timeout_seconds if timeout_seconds is None else timeout_seconds
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-            client.settimeout(self.timeout_seconds)
+            client.settimeout(transport_timeout)
             client.connect(str(self.socket_path))
             client.sendall(request)
             with client.makefile("rb") as stream:
@@ -104,6 +111,7 @@ class BrokerRoomBackend:
         limit: int = 100,
         wait_seconds: float = 1.0,
     ) -> list[dict[str, Any]]:
+        bounded_wait = max(0.0, min(float(wait_seconds), 5.0))
         result = self._call(
             "subscribe_events",
             {
@@ -111,8 +119,9 @@ class BrokerRoomBackend:
                 "session_id": session_id,
                 "after_sequence": after_sequence,
                 "limit": limit,
-                "wait_seconds": wait_seconds,
+                "wait_seconds": bounded_wait,
             },
+            timeout_seconds=max(self.timeout_seconds, bounded_wait + 1.0),
         )
         if not isinstance(result, list):
             raise RuntimeError("broker returned malformed subscription result")
