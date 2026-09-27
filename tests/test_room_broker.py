@@ -123,7 +123,7 @@ def test_broker_serializes_concurrent_posts_across_identity_sockets(tmp_path: Pa
     }
     broker = RoomBroker(
         {
-            "chatgpt:johnny": shared,
+            "chatgpt:johnny-work": shared,
             "chatgpt:eimy": other,
         },
         sockets,
