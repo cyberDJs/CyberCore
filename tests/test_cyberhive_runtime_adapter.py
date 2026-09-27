@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from cybercore.communication.contracts import RoomEventDraft, TrustedActor
-from cybercore.integrations.cyberhive_runtime import CyberHIVEEventGateway
+from cybercore.cyberhive_runtime import CyberHIVEEventGateway
 
 
 @dataclass
