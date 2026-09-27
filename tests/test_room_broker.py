@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
+import time
 
 from cybercore.communication.contracts import TrustedActor
 from cybercore.mcp.room_broker import RoomBroker
@@ -16,15 +18,26 @@ class FakeBackend:
             ("cyberdjs-main",),
         )
         self.posts = []
+        self.active_posts = 0
+        self.max_active_posts = 0
+        self._guard = threading.Lock()
 
     def post_event(self, **kwargs):
-        self.posts.append(kwargs)
-        return {
-            "event_id": "evt-1",
-            "sequence": 1,
-            "actor_id": self.actor.actor_id,
-            **kwargs,
-        }
+        with self._guard:
+            self.active_posts += 1
+            self.max_active_posts = max(self.max_active_posts, self.active_posts)
+        try:
+            time.sleep(0.01)
+            self.posts.append(kwargs)
+            return {
+                "event_id": f"evt-{len(self.posts)}",
+                "sequence": len(self.posts),
+                "actor_id": self.actor.actor_id,
+                **kwargs,
+            }
+        finally:
+            with self._guard:
+                self.active_posts -= 1
 
     def read_events(self, **kwargs):
         return []
@@ -91,3 +104,52 @@ def test_broker_refuses_to_unlink_non_socket_path(tmp_path: Path):
     else:
         raise AssertionError("broker should reject a non-socket path")
     assert path.read_text() == "do not delete"
+
+
+def test_broker_serializes_concurrent_posts_across_identity_sockets(tmp_path: Path):
+    shared = FakeBackend("chatgpt:johnny")
+    other = FakeBackend("chatgpt:eimy")
+    sockets = {
+        "chatgpt:johnny": tmp_path / "johnny.sock",
+        "chatgpt:eimy": tmp_path / "eimy.sock",
+    }
+    broker = RoomBroker(
+        {
+            "chatgpt:johnny": shared,
+            "chatgpt:eimy": other,
+        },
+        sockets,
+    )
+    broker.start()
+    try:
+        johnny_client = BrokerRoomBackend(sockets["chatgpt:johnny"])
+        eimy_client = BrokerRoomBackend(sockets["chatgpt:eimy"])
+
+        errors = []
+
+        def post(client, target):
+            try:
+                client.post_event(
+                    room_id="cyberdjs-main",
+                    session_id="session-1",
+                    target=target,
+                    event_type="message.text",
+                    payload={"text": "concurrent"},
+                )
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=post, args=(johnny_client, "chatgpt:eimy")),
+            threading.Thread(target=post, args=(eimy_client, "chatgpt:johnny")),
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        assert errors == []
+        assert shared.max_active_posts <= 1
+        assert other.max_active_posts <= 1
+    finally:
+        broker.stop()
