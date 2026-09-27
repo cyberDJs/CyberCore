@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 import socketserver
 import stat
-from threading import Thread
+import time
+from threading import RLock, Thread
 from typing import Any, Mapping, Protocol, cast
 
 from cybercore.communication.contracts import TrustedActor
@@ -44,8 +45,9 @@ class RoomBackend(Protocol):
 class _IdentityUnixServer(socketserver.ThreadingUnixStreamServer):
     daemon_threads = True
 
-    def __init__(self, socket_path: str, backend: RoomBackend) -> None:
+    def __init__(self, socket_path: str, backend: RoomBackend, ledger_lock: RLock) -> None:
         self.backend = backend
+        self.ledger_lock = ledger_lock
         super().__init__(socket_path, _RoomRequestHandler)
 
 
@@ -63,7 +65,7 @@ class _RoomRequestHandler(socketserver.StreamRequestHandler):
             args = request.get("args") or {}
             if not isinstance(method, str) or not isinstance(args, dict):
                 raise ValueError("invalid broker request")
-            result = _dispatch(server.backend, method, args)
+            result = _dispatch(server.backend, method, args, server.ledger_lock)
             response = {"ok": True, "result": result}
         except Exception as exc:
             response = {
@@ -75,7 +77,12 @@ class _RoomRequestHandler(socketserver.StreamRequestHandler):
         self.wfile.write(json.dumps(response, separators=(",", ":")).encode("utf-8") + b"\n")
 
 
-def _dispatch(backend: RoomBackend, method: str, args: dict[str, Any]) -> object:
+def _dispatch(
+    backend: RoomBackend,
+    method: str,
+    args: dict[str, Any],
+    ledger_lock: RLock,
+) -> object:
     if method == "identity":
         actor = backend.actor
         return {
@@ -85,13 +92,31 @@ def _dispatch(backend: RoomBackend, method: str, args: dict[str, Any]) -> object
             "authorized_rooms": list(actor.room_ids),
         }
     if method == "post_event":
-        return backend.post_event(**args)
+        with ledger_lock:
+            return backend.post_event(**args)
     if method == "read_events":
-        return backend.read_events(**args)
+        with ledger_lock:
+            return backend.read_events(**args)
     if method == "subscribe_events":
-        return backend.subscribe_events(**args)
+        deadline = time.monotonic() + max(
+            0.0,
+            min(float(args.get("wait_seconds", 1.0)), 5.0),
+        )
+        read_args = {
+            "room_id": args["room_id"],
+            "session_id": args["session_id"],
+            "after_sequence": args.get("after_sequence", 0),
+            "limit": args.get("limit", 100),
+        }
+        while True:
+            with ledger_lock:
+                events = backend.read_events(**read_args)
+            if events or time.monotonic() >= deadline:
+                return events
+            time.sleep(0.1)
     if method == "runtime_status":
-        return dict(backend.get_runtime_status())
+        with ledger_lock:
+            return dict(backend.get_runtime_status())
     raise ValueError("unsupported broker method")
 
 
@@ -109,6 +134,7 @@ class RoomBroker:
         self.socket_paths = {key: Path(value) for key, value in socket_paths.items()}
         self._servers: list[_IdentityUnixServer] = []
         self._threads: list[Thread] = []
+        self._ledger_lock = RLock()
 
     def start(self) -> None:
         if self._servers:
@@ -121,7 +147,11 @@ class RoomBroker:
                 if not stat.S_ISSOCK(mode):
                     raise RuntimeError(f"broker path exists and is not a socket: {path}")
                 path.unlink()
-            server = _IdentityUnixServer(str(path), self.backends[identity])
+            server = _IdentityUnixServer(
+                str(path),
+                self.backends[identity],
+                self._ledger_lock,
+            )
             os.chmod(path, 0o600)
             thread = Thread(
                 target=server.serve_forever,
