@@ -57,9 +57,7 @@ class MemoryGateway:
 
 
 def human():
-    return TrustedActor(
-        "human-1", "human", "Human", ("room-1",), ("session-1",)
-    )
+    return TrustedActor("human-1", "human", "Human", ("room-1",), ("session-1",))
 
 
 def test_broadcast_reaches_two_agents_in_deterministic_floor_order():
@@ -83,9 +81,7 @@ def test_broadcast_reaches_two_agents_in_deterministic_floor_order():
 def test_offline_agent_is_skipped_and_failure_becomes_system_error():
     gateway = MemoryGateway()
     agents = AgentRegistry()
-    agents.register(
-        AgentDescriptor("agent-off", "Offline", EchoAgent("OFF"), online=False)
-    )
+    agents.register(AgentDescriptor("agent-off", "Offline", EchoAgent("OFF"), online=False))
     agents.register(AgentDescriptor("agent-fail", "Fail", FailingAgent()))
     coordinator = RoomCoordinator(gateway=gateway, agents=agents)
     events = coordinator.submit_text(
