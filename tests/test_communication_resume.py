@@ -12,7 +12,8 @@ class ResumeGateway:
 
     def read(self, room_id, session_id, *, actor, after_sequence=0, limit=100):
         return tuple(
-            event for event in self.events
+            event
+            for event in self.events
             if event.room_id == room_id
             and event.session_id == session_id
             and event.sequence > after_sequence
@@ -35,12 +36,8 @@ def test_coordinator_resume_does_not_replay_old_events():
         )
         for index in (1, 2, 3)
     ]
-    coordinator = RoomCoordinator(
-        gateway=ResumeGateway(events), agents=AgentRegistry()
-    )
-    actor = TrustedActor(
-        "human-1", "human", "Human", ("room-1",), ("session-1",)
-    )
+    coordinator = RoomCoordinator(gateway=ResumeGateway(events), agents=AgentRegistry())
+    actor = TrustedActor("human-1", "human", "Human", ("room-1",), ("session-1",))
     resumed = coordinator.resume(
         room_id="room-1", session_id="session-1", actor=actor, after_sequence=2
     )
