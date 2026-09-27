@@ -176,8 +176,13 @@ def test_broker_exposes_three_distinct_identity_bound_sockets(tmp_path: Path):
     broker = RoomBroker(backends, sockets)
     broker.start()
     try:
-        assert BrokerRoomBackend(sockets["chatgpt:johnny-work"]).actor.actor_id == "chatgpt:johnny-work"
-        assert BrokerRoomBackend(sockets["chatgpt:johnny-mod"]).actor.actor_id == "chatgpt:johnny-mod"
+        assert (
+            BrokerRoomBackend(sockets["chatgpt:johnny-work"]).actor.actor_id
+            == "chatgpt:johnny-work"
+        )
+        assert (
+            BrokerRoomBackend(sockets["chatgpt:johnny-mod"]).actor.actor_id == "chatgpt:johnny-mod"
+        )
         assert BrokerRoomBackend(sockets["chatgpt:eimy"]).actor.actor_id == "chatgpt:eimy"
     finally:
         broker.stop()
