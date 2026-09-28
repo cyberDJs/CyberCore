@@ -189,7 +189,7 @@ class SafetyIntentGuard:
 
     @classmethod
     def _is_condition_command_prefix(cls, tokens: list[str]) -> bool:
-        if len(tokens) < 4 or tokens[0] not in cls._CANCEL_CONDITION_WORDS:
+        if len(tokens) < 3 or tokens[0] not in cls._CANCEL_CONDITION_WORDS:
             return False
         auxiliary_index = next(
             (
@@ -318,8 +318,7 @@ class SafetyIntentGuard:
         ]
         if relative_positions:
             return any(
-                token in cls._CANCEL_DESCRIPTION_COPULAS
-                for token in tail[copula_index + 1 :]
+                token in cls._CANCEL_DESCRIPTION_COPULAS for token in tail[copula_index + 1:]
             )
         if set(before_copula) & cls._CANCEL_FREE_RELATIVES:
             return False
