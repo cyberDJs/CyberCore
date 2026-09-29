@@ -128,6 +128,13 @@ def test_execute_is_deterministic(text: str) -> None:
         "When the show is over emergency stop glows",
         "Run diagnostics will be printed on the button",
         "Approve the request will be printed on the button",
+        "Run diagnostics has been printed on the button",
+        "Approve the request has been printed on the button",
+        "When the show is over stop button illuminates",
+        "Stop button illuminates",
+        "Cancel button glows",
+        "If the button is labeled stop",
+        "When the operation is named cancel",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
