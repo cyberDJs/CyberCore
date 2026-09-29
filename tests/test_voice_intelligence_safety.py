@@ -178,6 +178,10 @@ def test_execute_is_deterministic(text: str) -> None:
         "Approve the request, which has already been reviewed, is a label",
         "Stop command now executes automatically",
         "If the display is presenting stop to users",
+        "Run diagnostics, which will be printed on the button, is a label",
+        "Approve the request, which will be reviewed, is a label",
+        "The buttons say stop, cancel, or abort",
+        "The labels are stop, cancel, and abort",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
