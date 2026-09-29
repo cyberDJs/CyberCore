@@ -38,7 +38,7 @@ Docker discovery is best-effort. If the existing service identity cannot access 
 
 The existing execution bridge stores raw stdout only transiently and records hashes in normal receipts. `system.inventory` is the only operation in this work block permitted to promote command output into a returned `result`, and only after exact schema validation on both the server and client side.
 
-Malformed, extra-field, unbound, or non-JSON inventory output fails closed and is not promoted as inventory evidence.
+Malformed, extra-field, unbound, or non-JSON inventory output fails closed and is not promoted as inventory evidence. The client also validates the complete successful `ServerReceipt` envelope: exact field set, zero exit code, ordered timezone-aware timestamps, SHA-256 digest syntax, immutable operation bindings, read-only mutation state, and secret-recording state.
 
 ## Deployment boundary
 

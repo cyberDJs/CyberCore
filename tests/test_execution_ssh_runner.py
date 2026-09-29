@@ -174,6 +174,51 @@ def test_system_inventory_rejects_mismatched_authorization_hash() -> None:
     assert receipt.result is None
 
 
+@pytest.mark.parametrize(
+    "case",
+    [
+        "missing_field",
+        "extra_field",
+        "nonzero_exit",
+        "bad_digest",
+        "bad_timestamp",
+        "reversed_timestamps",
+    ],
+)
+def test_system_inventory_rejects_malformed_server_receipt_envelope(case: str) -> None:
+    action = _action("system.inventory")
+    payload = json.loads(_server_inventory_receipt(action))
+
+    if case == "missing_field":
+        payload.pop("exit_code")
+    elif case == "extra_field":
+        payload["unexpected"] = "nope"
+    elif case == "nonzero_exit":
+        payload["exit_code"] = 1
+    elif case == "bad_digest":
+        payload["stdout_sha256"] = "not-a-digest"
+    elif case == "bad_timestamp":
+        payload["started_at"] = "not-a-timestamp"
+    elif case == "reversed_timestamps":
+        payload["started_at"] = "2026-09-19T00:00:02Z"
+        payload["completed_at"] = "2026-09-19T00:00:01Z"
+    else:
+        raise AssertionError(case)
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=(json.dumps(payload) + "\n").encode(),
+            stderr=b"",
+        )
+
+    receipt = execute_action(action, VIKUNJA_TARGET, run=fake_run)
+    assert receipt.status is ExecutionStatus.FAILED
+    assert receipt.exit_code == 65
+    assert receipt.result is None
+
+
 def test_transport_timeout_exceeds_connection_plus_server_operation_budget() -> None:
     assert TRANSPORT_TIMEOUT_SECONDS > MAX_SERVER_OPERATION_TIMEOUT_SECONDS + 15
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import hashlib
 import json
 import subprocess
@@ -22,6 +23,26 @@ class ExecutionBlockedError(RuntimeError):
 
 RunCallable = Callable[..., subprocess.CompletedProcess[bytes]]
 TRANSPORT_TIMEOUT_SECONDS = 180
+_INVENTORY_RECEIPT_KEYS = frozenset(
+    {
+        "operation_id",
+        "operation",
+        "target_id",
+        "plan_id",
+        "plan_revision",
+        "authorization_reference_sha256",
+        "started_at",
+        "completed_at",
+        "exit_code",
+        "stdout_sha256",
+        "stderr_sha256",
+        "status",
+        "mutation_possible",
+        "result",
+        "secret_values_recorded",
+    }
+)
+_SHA256_HEX_DIGITS = frozenset("0123456789abcdef")
 
 
 def build_transport_argv(target: ExecutionTarget) -> tuple[str, ...]:
@@ -63,6 +84,28 @@ def _timeout_bytes(value: str | bytes | None) -> bytes:
     return b""
 
 
+def _require_server_receipt_sha256(value: object, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in _SHA256_HEX_DIGITS for character in value)
+    ):
+        raise ValueError(f"server response {label} is not a SHA-256 digest")
+    return value
+
+
+def _require_server_receipt_timestamp(value: object, label: str) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError(f"server response {label} is not a timestamp")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"server response {label} is not a timestamp") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"server response {label} must be timezone-aware")
+    return parsed
+
+
 def _inventory_result_from_server_response(
     action: GovernedAction,
     stdout: bytes,
@@ -73,6 +116,21 @@ def _inventory_result_from_server_response(
         raise ValueError("server response is not valid inventory JSON") from exc
     if not isinstance(payload, dict):
         raise ValueError("server response is not an object")
+    if frozenset(payload) != _INVENTORY_RECEIPT_KEYS:
+        raise ValueError("server response fields do not match the exact receipt schema")
+
+    exit_code = payload["exit_code"]
+    if isinstance(exit_code, bool) or not isinstance(exit_code, int) or exit_code != 0:
+        raise ValueError("server response exit_code is inconsistent with successful inventory")
+
+    started_at = _require_server_receipt_timestamp(payload["started_at"], "started_at")
+    completed_at = _require_server_receipt_timestamp(payload["completed_at"], "completed_at")
+    if completed_at < started_at:
+        raise ValueError("server response completed_at precedes started_at")
+
+    _require_server_receipt_sha256(payload["stdout_sha256"], "stdout_sha256")
+    _require_server_receipt_sha256(payload["stderr_sha256"], "stderr_sha256")
+
     expected = {
         "operation_id": action.operation_id,
         "operation": action.operation,
