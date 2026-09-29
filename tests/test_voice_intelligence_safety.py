@@ -62,14 +62,32 @@ def test_cancel_is_deterministic(text: str) -> None:
     assert result is not None and result.kind is IntentKind.CANCEL
 
 
-@pytest.mark.parametrize("text", ["schvaluju", "ano schvaluji plán", "jo udělej to", "yes do it"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "schvaluju",
+        "ano schvaluji plán",
+        "jo udělej to",
+        "yes do it",
+        "Please approve this plan",
+        "Prosím schvaluji plán",
+        "Approve the request that has already been reviewed",
+    ],
+)
 def test_approval_is_deterministic(text: str) -> None:
     result = SafetyIntentGuard().compile(utterance(text), VoiceContext())
     assert result is not None and result.kind is IntentKind.APPROVE
 
 
 @pytest.mark.parametrize(
-    "text", ["execute deploy", "spusť kontrolu", "proveď změnu", "run diagnostics"]
+    "text",
+    [
+        "execute deploy",
+        "spusť kontrolu",
+        "proveď změnu",
+        "run diagnostics",
+        "Run the job that has already been approved",
+    ]
 )
 def test_execute_is_deterministic(text: str) -> None:
     result = SafetyIntentGuard().compile(utterance(text), VoiceContext())
@@ -137,6 +155,14 @@ def test_execute_is_deterministic(text: str) -> None:
         "Cancel button glows",
         "If the button is labeled stop",
         "When the operation is named cancel",
+        "If the display is showing stop",
+        "When the screen is displaying cancel",
+        "If the display is showing stop to users",
+        "Run diagnostics has already been printed on the button",
+        "Approve the request has not been printed on the button",
+        "Stop button now illuminates",
+        "Cancel message now appears",
+        "Don't, please, stop, cancel, or abort",
         "Run diagnostics has already been printed on the button",
         "Approve the request has not been printed on the button",
         "Stop command executes automatically",

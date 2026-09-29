@@ -86,6 +86,9 @@ class SafetyIntentGuard:
         }
     )
     _CANCEL_NOUN_MODIFIERS = frozenset({"emergency"})
+    _CANCEL_NOUN_HEADS = frozenset(
+        {"button", "icon", "indicator", "key", "label", "light", "message", "sign"}
+    )
     _CANCEL_IMPERATIVE_OBJECT_STARTERS = frozenset(
         {
             "her",
@@ -108,7 +111,17 @@ class SafetyIntentGuard:
     )
     _AUTHORITY_DESCRIPTION_PERFECT_AUXILIARIES = frozenset({"had", "has", "have"})
     _CANCEL_CONDITION_DESCRIPTIVE_PREDICATES = frozenset(
-        {"called", "captioned", "labeled", "labelled", "marked", "named", "titled"}
+        {
+            "called",
+            "captioned",
+            "displaying",
+            "labeled",
+            "labelled",
+            "marked",
+            "named",
+            "showing",
+            "titled",
+        }
     )
     _CANCEL_CONDITION_TRAILING_BLOCKERS = frozenset(
         {
@@ -167,7 +180,7 @@ class SafetyIntentGuard:
         r"vysvetli|definuj|znamena|slovo|vyraz)\b"
     )
     _APPROVE_MARKERS = frozenset({"approve", "schvaluju", "schvaluji", "souhlasim"})
-    _APPROVE_PREFIXES = frozenset({"ano", "jo", "yes"})
+    _APPROVE_PREFIXES = frozenset({"ano", "jo", "yes", "please", "prosim"})
     _APPROVE_PHRASES = frozenset({"jo udelej to", "ano proved to", "yes do it"})
     _EXECUTE_MARKERS = frozenset({"execute", "apply", "run", "proved", "spust", "udelej"})
     _EXECUTE_PREFIXES = frozenset({"please", "prosim"})
@@ -330,12 +343,19 @@ class SafetyIntentGuard:
             for position, token in enumerate(tail)
         ):
             return True
-        if any(
-            token in cls._AUTHORITY_DESCRIPTION_PERFECT_AUXILIARIES
-            and "been" in tail[position + 1 :]
+        relative_positions = [
+            position
             for position, token in enumerate(tail)
-        ):
-            return True
+            if token in cls._CANCEL_RELATIVE_PRONOUNS
+        ]
+        first_relative = relative_positions[0] if relative_positions else None
+        for position, token in enumerate(tail):
+            if token not in cls._AUTHORITY_DESCRIPTION_PERFECT_AUXILIARIES:
+                continue
+            if first_relative is not None and first_relative < position:
+                continue
+            if "been" in tail[position + 1 :]:
+                return True
 
         copula_index = next(
             (
@@ -399,6 +419,8 @@ class SafetyIntentGuard:
         if not tail:
             return True
         if tail[0] in cls._CANCEL_MATRIX_TAIL_BLOCKERS:
+            return False
+        if tail[0] in cls._CANCEL_NOUN_HEADS:
             return False
         if tail[0] in cls._CANCEL_MODIFIERS:
             return True
@@ -479,7 +501,6 @@ class SafetyIntentGuard:
                     local_prefix_tokens = prefix_tokens[-8:]
                     local_prefix = " ".join(local_prefix_tokens)
                     if pending_negation:
-                        pending_negation = False
                         continue
                     if cls._CANCEL_NEGATION.search(local_prefix):
                         continue
