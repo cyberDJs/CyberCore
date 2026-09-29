@@ -350,8 +350,7 @@ class SafetyIntentGuard:
         matrix_tail = tail[:first_relative]
 
         if any(
-            token in cls._AUTHORITY_DESCRIPTION_MODALS
-            and "be" in matrix_tail[position + 1 :]
+            token in cls._AUTHORITY_DESCRIPTION_MODALS and "be" in matrix_tail[position + 1 :]
             for position, token in enumerate(matrix_tail)
         ):
             return True
