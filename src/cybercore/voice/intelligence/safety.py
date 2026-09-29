@@ -86,8 +86,13 @@ class SafetyIntentGuard:
         }
     )
     _CANCEL_NOUN_MODIFIERS = frozenset({"emergency"})
+    _CANCEL_NOUN_HEADS = frozenset({"button", "icon", "indicator", "key", "label", "light", "sign"})
     _AUTHORITY_DESCRIPTION_MODALS = frozenset(
         {"can", "could", "may", "might", "must", "should", "will", "would"}
+    )
+    _AUTHORITY_DESCRIPTION_PERFECT_AUXILIARIES = frozenset({"had", "has", "have"})
+    _CANCEL_CONDITION_DESCRIPTIVE_PREDICATES = frozenset(
+        {"called", "captioned", "labeled", "labelled", "marked", "named", "titled"}
     )
     _CANCEL_CONDITION_TRAILING_BLOCKERS = frozenset(
         {
@@ -221,6 +226,8 @@ class SafetyIntentGuard:
             return False
         if predicate[-1] in cls._CANCEL_REPORTING_VERBS:
             return False
+        if predicate[-1] in cls._CANCEL_CONDITION_DESCRIPTIVE_PREDICATES:
+            return False
         if predicate[-1] in cls._CANCEL_CONDITION_TRAILING_BLOCKERS:
             return False
         return True
@@ -309,6 +316,13 @@ class SafetyIntentGuard:
             for position, token in enumerate(tail)
         ):
             return True
+        if any(
+            token in cls._AUTHORITY_DESCRIPTION_PERFECT_AUXILIARIES
+            and position + 1 < len(tail)
+            and tail[position + 1] == "been"
+            for position, token in enumerate(tail)
+        ):
+            return True
 
         copula_index = next(
             (
@@ -343,6 +357,8 @@ class SafetyIntentGuard:
         tail = tokens[index + 1 :]
         if not tail:
             return True
+        if tail[0] in cls._CANCEL_NOUN_HEADS:
+            return False
         return tail[0] not in cls._CANCEL_MATRIX_TAIL_BLOCKERS
 
     @classmethod
