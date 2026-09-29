@@ -124,6 +124,10 @@ def test_execute_is_deterministic(text: str) -> None:
         "Unless the display shows stop",
         "Run diagnostics, which is printed on the button, is a label",
         "Approve the request, which is printed on the button, is a label",
+        "When the show is over emergency stop illuminates",
+        "When the show is over emergency stop glows",
+        "Run diagnostics will be printed on the button",
+        "Approve the request will be printed on the button",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
