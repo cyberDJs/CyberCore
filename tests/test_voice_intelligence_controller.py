@@ -124,3 +124,15 @@ def test_non_question_model_intent_remains_bounded_by_router() -> None:
     response = controller(client).handle(utterance("Naplánuj kontrolu"), VoiceContext())
     assert response.intent.kind is IntentKind.PLAN
     assert response.status == "needs_context"
+
+
+def test_interrupted_model_turn_stops_before_routing() -> None:
+    client = SequenceClient([intent(kind="plan", needs_live_data=False)])
+    response = controller(client).handle(
+        utterance("Naplánuj kontrolu"),
+        VoiceContext(),
+        should_abort=lambda: True,
+    )
+    assert response.intent.kind is IntentKind.PLAN
+    assert response.status == "interrupted"
+    assert response.routed_response is None
