@@ -521,10 +521,7 @@ def test_bounded_command_rejects_output_over_hard_limit() -> None:
             [
                 sys.executable,
                 "-c",
-                (
-                    "import sys; "
-                    f"sys.stdout.write('x' * {MAX_DOCKER_COMMAND_OUTPUT_BYTES + 1024})"
-                ),
+                (f"import sys; sys.stdout.write('x' * {MAX_DOCKER_COMMAND_OUTPUT_BYTES + 1024})"),
             ],
             timeout=5,
         )
