@@ -91,6 +91,9 @@ class SafetyIntentGuard:
     )
     _CANCEL_IMPERATIVE_OBJECT_STARTERS = frozenset(
         {
+            "all",
+            "current",
+            "every",
             "her",
             "him",
             "it",
@@ -338,24 +341,26 @@ class SafetyIntentGuard:
     @classmethod
     def _authority_marker_leads_description(cls, tokens: list[str], index: int) -> bool:
         tail = tokens[index + 1 :]
-        if any(
-            token in cls._AUTHORITY_DESCRIPTION_MODALS and "be" in tail[position + 1 :]
-            for position, token in enumerate(tail)
-        ):
-            return True
         relative_positions = [
             position
             for position, token in enumerate(tail)
             if token in cls._CANCEL_RELATIVE_PRONOUNS
         ]
-        first_relative = relative_positions[0] if relative_positions else None
-        for position, token in enumerate(tail):
-            if token not in cls._AUTHORITY_DESCRIPTION_PERFECT_AUXILIARIES:
-                continue
-            if first_relative is not None and first_relative < position:
-                continue
-            if "been" in tail[position + 1 :]:
-                return True
+        first_relative = relative_positions[0] if relative_positions else len(tail)
+        matrix_tail = tail[:first_relative]
+
+        if any(
+            token in cls._AUTHORITY_DESCRIPTION_MODALS
+            and "be" in matrix_tail[position + 1 :]
+            for position, token in enumerate(matrix_tail)
+        ):
+            return True
+        if any(
+            token in cls._AUTHORITY_DESCRIPTION_PERFECT_AUXILIARIES
+            and "been" in matrix_tail[position + 1 :]
+            for position, token in enumerate(matrix_tail)
+        ):
+            return True
 
         copula_index = next(
             (
@@ -376,6 +381,13 @@ class SafetyIntentGuard:
             if token in cls._CANCEL_RELATIVE_PRONOUNS
         ]
         if relative_positions:
+            relative_tail = before_copula[relative_positions[0] + 1 :]
+            if any(
+                token in cls._AUTHORITY_DESCRIPTION_PERFECT_AUXILIARIES
+                and "been" in relative_tail[position + 1 :]
+                for position, token in enumerate(relative_tail)
+            ):
+                return True
             return any(
                 token in cls._CANCEL_DESCRIPTION_COPULAS for token in tail[copula_index + 1 :]
             )
@@ -405,11 +417,13 @@ class SafetyIntentGuard:
         tail = tokens[index + 1 :]
         if not tail:
             return False
+        if tail[0] == "to":
+            return False
         if tail[0] in cls._CANCEL_MODIFIERS:
             return True
         if tail[0] in cls._CANCEL_IMPERATIVE_OBJECT_STARTERS:
             return True
-        return len(tail) > 1 and tail[1] in cls._CANCEL_MODIFIERS
+        return len(tail) == 2 and tail[1] in cls._CANCEL_MODIFIERS
 
     @classmethod
     def _cancel_marker_has_imperative_tail(cls, tokens: list[str], index: int) -> bool:
@@ -428,7 +442,7 @@ class SafetyIntentGuard:
             return True
         if len(tail) == 1:
             return True
-        if tail[1] in cls._CANCEL_MODIFIERS:
+        if len(tail) == 2 and tail[1] in cls._CANCEL_MODIFIERS:
             return True
         return any(token in cls._CANCEL_CONDITION_WORDS for token in tail[1:])
 
