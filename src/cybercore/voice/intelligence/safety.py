@@ -330,8 +330,7 @@ class SafetyIntentGuard:
         ]
         if relative_positions:
             return any(
-                token in cls._CANCEL_DESCRIPTION_COPULAS
-                for token in tail[copula_index + 1 :]
+                token in cls._CANCEL_DESCRIPTION_COPULAS for token in tail[copula_index + 1 :]
             )
         if set(before_copula) & cls._CANCEL_FREE_RELATIVES:
             return False
