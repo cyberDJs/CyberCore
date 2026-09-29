@@ -595,7 +595,6 @@ def test_validator_rejects_zero_total_memory() -> None:
         validate_inventory_payload(payload)
 
 
-
 @pytest.mark.parametrize(
     ("section", "field"),
     [
