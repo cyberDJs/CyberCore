@@ -398,8 +398,10 @@ class SafetyIntentGuard:
         if relative_positions:
             relative_tail = before_copula[relative_positions[0] + 1 :]
             if any(
-                token in cls._AUTHORITY_DESCRIPTION_MODALS
-                and "be" in relative_tail[position + 1 :]
+                (
+                    token in cls._AUTHORITY_DESCRIPTION_MODALS
+                    and "be" in relative_tail[position + 1 :]
+                )
                 for position, token in enumerate(relative_tail)
             ):
                 return True
