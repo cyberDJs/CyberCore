@@ -27,7 +27,7 @@ current:
   active_artifact: WB-0038H-POST-MERGE-SOT-CLOSEOUT
   branch: wb-0038h-post-merge-sot-closeout
   pull_request: 104
-  last_verified_main: 336ee555faabec76bd9114844954260b47b09570
+  last_verified_main: 90e6ad9fc713497803e78187958574a3ad2181d0
 
 status:
   ccl_specification: complete_draft
@@ -168,6 +168,7 @@ status:
   wb0038h_remote_deployment_authorized: false
   wb0038h_merge_authorized: consumed_exact_head_2dfed5d
   source_of_truth_reconciliation_needed_after_pr103: in_progress
+  pr104_reconciled_current_main: 90e6ad9fc713497803e78187958574a3ad2181d0
   wb0035_identifier: conflict_needs_review
   wb0036_identifier: conflict_needs_review
   wb0037_identifier: conflict_needs_review
