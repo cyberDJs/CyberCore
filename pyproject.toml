@@ -20,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 orchestration = ["langgraph>=1.2,<2"]
+mcp = ["mcp>=2,<3"]
 voice-local = [
     "sherpa-onnx>=1.13.6,<2",
     "sounddevice>=0.5.6,<0.6",
@@ -27,6 +28,7 @@ voice-local = [
 dev = [
     "build>=1.2,<2",
     "langgraph>=1.2,<2",
+    "mcp>=2,<3",
     "pyright>=1.1.400,<2",
     "pytest>=8.0,<10",
     "PyYAML>=6.0.2,<7",
@@ -35,6 +37,8 @@ dev = [
 
 [project.scripts]
 cybercore = "cybercore.voice_entrypoint:main"
+cybercore-mcp = "cybercore.mcp.cli:main"
+cyberdjs-room-mcp = "cybercore.mcp.room_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cybercore"]
