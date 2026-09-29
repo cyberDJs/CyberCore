@@ -30,6 +30,7 @@ class SafetyIntentGuard:
         {"please", "prosim", "just", "quickly", "kindly", "simply", "maybe", "now", "immediately"}
     )
     _CANCEL_DISCOURSE = frozenset({"hey", "cyber", "ok", "okay"})
+    _CANCEL_COORDINATORS = frozenset({"and", "or"})
     _CANCEL_MODAL_REQUESTS = frozenset({"can", "could", "would", "will"})
     _CANCEL_DESCRIPTION_COPULAS = frozenset(
         {"is", "are", "was", "were", "means", "mean", "refers", "represents", "equals"}
@@ -310,6 +311,21 @@ class SafetyIntentGuard:
         return True
 
     @classmethod
+    def _coordinated_markers_are_description(
+        cls, tokens: list[str], marker_indexes: list[int]
+    ) -> bool:
+        if len(marker_indexes) < 2:
+            return False
+        first_marker = marker_indexes[0]
+        prefix = tokens[:first_marker]
+        if not prefix:
+            return False
+        if prefix[-1] not in (cls._CANCEL_REPORTING_VERBS | cls._CANCEL_DESCRIPTION_COPULAS):
+            return False
+        allowed_tail = cls._CANCEL_MARKERS | cls._CANCEL_COORDINATORS
+        return all(token in allowed_tail for token in tokens[first_marker:])
+
+    @classmethod
     def _nonrestrictive_description_prefix_length(cls, raw_segments: list[str]) -> int:
         if len(raw_segments) < 3:
             return 0
@@ -381,6 +397,12 @@ class SafetyIntentGuard:
         ]
         if relative_positions:
             relative_tail = before_copula[relative_positions[0] + 1 :]
+            if any(
+                token in cls._AUTHORITY_DESCRIPTION_MODALS
+                and "be" in relative_tail[position + 1 :]
+                for position, token in enumerate(relative_tail)
+            ):
+                return True
             if any(
                 token in cls._AUTHORITY_DESCRIPTION_PERFECT_AUXILIARIES
                 and "been" in relative_tail[position + 1 :]
@@ -487,6 +509,8 @@ class SafetyIntentGuard:
             clause_markers = [
                 index for index, token in enumerate(clause_tokens) if token in cls._CANCEL_MARKERS
             ]
+            if cls._coordinated_markers_are_description(clause_tokens, clause_markers):
+                continue
             if len(clause_markers) == 1 and cls._marker_leads_description(
                 clause_tokens, clause_markers[0]
             ):
