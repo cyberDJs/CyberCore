@@ -514,7 +514,6 @@ def test_validator_rejects_inconsistent_docker_states(docker: dict[str, object])
         validate_inventory_payload(payload)
 
 
-
 def test_bounded_command_rejects_output_over_hard_limit() -> None:
     with pytest.raises(RuntimeError, match="command output exceeded"):
         _run_bounded_command(
