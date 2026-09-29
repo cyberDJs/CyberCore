@@ -359,9 +359,11 @@ def test_once_mode_continues_after_processing_barge_in(monkeypatch) -> None:
     class FakeController:
         def __init__(self) -> None:
             self.calls = 0
+            self.abort_checks = []
 
-        def handle(self, utterance, context, *, session=None):
+        def handle(self, utterance, context, *, session=None, should_abort=None):
             self.calls += 1
+            self.abort_checks.append(should_abort)
             if self.calls == 1:
                 return SimpleNamespace(status="answered", message="stale answer", cancelled=False)
             return SimpleNamespace(status="cancelled", message="cancelled", cancelled=True)
@@ -397,6 +399,7 @@ def test_once_mode_continues_after_processing_barge_in(monkeypatch) -> None:
     assert result == 0
     assert runtime.capture_calls == 2
     assert controller.calls == 2
+    assert all(callable(check) for check in controller.abort_checks)
     assert runtime.closed is True
 
 
