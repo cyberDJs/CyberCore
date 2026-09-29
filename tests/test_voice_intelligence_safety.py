@@ -55,6 +55,9 @@ def utterance(text: str) -> Utterance:
         "When we finish stop",
         "Cancel deployment",
         "Stop service now",
+        "Stop all services",
+        "Abort current deployment",
+        "Cancel every job",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -72,6 +75,7 @@ def test_cancel_is_deterministic(text: str) -> None:
         "Please approve this plan",
         "Prosím schvaluji plán",
         "Approve the request that has already been reviewed",
+        "Approve the request that will be reviewed",
     ],
 )
 def test_approval_is_deterministic(text: str) -> None:
@@ -87,6 +91,7 @@ def test_approval_is_deterministic(text: str) -> None:
         "proveď změnu",
         "run diagnostics",
         "Run the job that has already been approved",
+        "Run the job that will be approved",
     ],
 )
 def test_execute_is_deterministic(text: str) -> None:
@@ -169,6 +174,10 @@ def test_execute_is_deterministic(text: str) -> None:
         "Cancel message appears",
         "If the display is showing stop",
         "When the screen is displaying cancel",
+        "Run diagnostics, which has already been printed on the button, is a label",
+        "Approve the request, which has already been reviewed, is a label",
+        "Stop command now executes automatically",
+        "If the display is presenting stop to users",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:
