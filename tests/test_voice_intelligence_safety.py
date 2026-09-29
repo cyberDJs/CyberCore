@@ -87,7 +87,7 @@ def test_approval_is_deterministic(text: str) -> None:
         "proveď změnu",
         "run diagnostics",
         "Run the job that has already been approved",
-    ]
+    ],
 )
 def test_execute_is_deterministic(text: str) -> None:
     result = SafetyIntentGuard().compile(utterance(text), VoiceContext())
