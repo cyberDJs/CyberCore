@@ -85,6 +85,10 @@ class SafetyIntentGuard:
             "might",
         }
     )
+    _CANCEL_NOUN_MODIFIERS = frozenset({"emergency"})
+    _AUTHORITY_DESCRIPTION_MODALS = frozenset(
+        {"can", "could", "may", "might", "must", "should", "will", "would"}
+    )
     _CANCEL_CONDITION_TRAILING_BLOCKERS = frozenset(
         {
             "i",
@@ -298,6 +302,14 @@ class SafetyIntentGuard:
     @classmethod
     def _authority_marker_leads_description(cls, tokens: list[str], index: int) -> bool:
         tail = tokens[index + 1 :]
+        if any(
+            token in cls._AUTHORITY_DESCRIPTION_MODALS
+            and position + 1 < len(tail)
+            and tail[position + 1] == "be"
+            for position, token in enumerate(tail)
+        ):
+            return True
+
         copula_index = next(
             (
                 position
@@ -318,7 +330,8 @@ class SafetyIntentGuard:
         ]
         if relative_positions:
             return any(
-                token in cls._CANCEL_DESCRIPTION_COPULAS for token in tail[copula_index + 1:]
+                token in cls._CANCEL_DESCRIPTION_COPULAS
+                for token in tail[copula_index + 1 :]
             )
         if set(before_copula) & cls._CANCEL_FREE_RELATIVES:
             return False
@@ -326,6 +339,8 @@ class SafetyIntentGuard:
 
     @classmethod
     def _cancel_marker_has_imperative_tail(cls, tokens: list[str], index: int) -> bool:
+        if index > 0 and tokens[index - 1] in cls._CANCEL_NOUN_MODIFIERS:
+            return False
         tail = tokens[index + 1 :]
         if not tail:
             return True
