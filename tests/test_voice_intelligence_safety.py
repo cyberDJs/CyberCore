@@ -53,6 +53,8 @@ def utterance(text: str) -> Utterance:
         "Unless the process finishes stop now",
         "If the services recover stop now",
         "When we finish stop",
+        "Cancel deployment",
+        "Stop service now",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -135,6 +137,12 @@ def test_execute_is_deterministic(text: str) -> None:
         "Cancel button glows",
         "If the button is labeled stop",
         "When the operation is named cancel",
+        "Run diagnostics has already been printed on the button",
+        "Approve the request has not been printed on the button",
+        "Stop command executes automatically",
+        "Cancel message appears",
+        "If the display is showing stop",
+        "When the screen is displaying cancel",
     ],
 )
 def test_mentions_are_not_authority(text: str) -> None:

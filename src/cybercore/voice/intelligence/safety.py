@@ -86,7 +86,23 @@ class SafetyIntentGuard:
         }
     )
     _CANCEL_NOUN_MODIFIERS = frozenset({"emergency"})
-    _CANCEL_NOUN_HEADS = frozenset({"button", "icon", "indicator", "key", "label", "light", "sign"})
+    _CANCEL_IMPERATIVE_OBJECT_STARTERS = frozenset(
+        {
+            "her",
+            "him",
+            "it",
+            "me",
+            "that",
+            "the",
+            "them",
+            "this",
+            "to",
+            "us",
+            "whatever",
+            "whichever",
+            "whoever",
+        }
+    )
     _AUTHORITY_DESCRIPTION_MODALS = frozenset(
         {"can", "could", "may", "might", "must", "should", "will", "would"}
     )
@@ -310,16 +326,13 @@ class SafetyIntentGuard:
     def _authority_marker_leads_description(cls, tokens: list[str], index: int) -> bool:
         tail = tokens[index + 1 :]
         if any(
-            token in cls._AUTHORITY_DESCRIPTION_MODALS
-            and position + 1 < len(tail)
-            and tail[position + 1] == "be"
+            token in cls._AUTHORITY_DESCRIPTION_MODALS and "be" in tail[position + 1 :]
             for position, token in enumerate(tail)
         ):
             return True
         if any(
             token in cls._AUTHORITY_DESCRIPTION_PERFECT_AUXILIARIES
-            and position + 1 < len(tail)
-            and tail[position + 1] == "been"
+            and "been" in tail[position + 1 :]
             for position, token in enumerate(tail)
         ):
             return True
@@ -351,15 +364,51 @@ class SafetyIntentGuard:
         return True
 
     @classmethod
+    def _condition_prefix_may_govern_marker(cls, tokens: list[str]) -> bool:
+        if len(tokens) < 3 or tokens[0] not in cls._CANCEL_CONDITION_WORDS:
+            return False
+        auxiliary_index = next(
+            (
+                index
+                for index, token in enumerate(tokens[2:], start=2)
+                if token in cls._CANCEL_CONDITION_AUXILIARIES
+            ),
+            None,
+        )
+        if auxiliary_index is None:
+            return False
+        predicate = tokens[auxiliary_index + 1 :]
+        return any(token.endswith("ing") for token in predicate)
+
+    @classmethod
+    def _cancel_marker_has_explicit_imperative_tail(cls, tokens: list[str], index: int) -> bool:
+        tail = tokens[index + 1 :]
+        if not tail:
+            return False
+        if tail[0] in cls._CANCEL_MODIFIERS:
+            return True
+        if tail[0] in cls._CANCEL_IMPERATIVE_OBJECT_STARTERS:
+            return True
+        return len(tail) > 1 and tail[1] in cls._CANCEL_MODIFIERS
+
+    @classmethod
     def _cancel_marker_has_imperative_tail(cls, tokens: list[str], index: int) -> bool:
         if index > 0 and tokens[index - 1] in cls._CANCEL_NOUN_MODIFIERS:
             return False
         tail = tokens[index + 1 :]
         if not tail:
             return True
-        if tail[0] in cls._CANCEL_NOUN_HEADS:
+        if tail[0] in cls._CANCEL_MATRIX_TAIL_BLOCKERS:
             return False
-        return tail[0] not in cls._CANCEL_MATRIX_TAIL_BLOCKERS
+        if tail[0] in cls._CANCEL_MODIFIERS:
+            return True
+        if tail[0] in cls._CANCEL_IMPERATIVE_OBJECT_STARTERS:
+            return True
+        if len(tail) == 1:
+            return True
+        if tail[1] in cls._CANCEL_MODIFIERS:
+            return True
+        return any(token in cls._CANCEL_CONDITION_WORDS for token in tail[1:])
 
     @classmethod
     def _is_authority_command(
@@ -438,9 +487,15 @@ class SafetyIntentGuard:
                         continue
                     if not cls._cancel_marker_has_imperative_tail(tokens, index):
                         continue
-                    if cls._is_command_prefix(
-                        local_prefix_tokens
-                    ) or cls._is_condition_command_prefix(prefix_tokens):
+                    command_prefix = cls._is_command_prefix(local_prefix_tokens)
+                    condition_prefix = cls._is_condition_command_prefix(prefix_tokens)
+                    if (
+                        condition_prefix
+                        and cls._condition_prefix_may_govern_marker(prefix_tokens)
+                        and not cls._cancel_marker_has_explicit_imperative_tail(tokens, index)
+                    ):
+                        continue
+                    if command_prefix or condition_prefix:
                         return True
         return False
 
