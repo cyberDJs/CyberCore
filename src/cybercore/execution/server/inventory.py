@@ -160,11 +160,17 @@ def _safe_json_lines(
 def _required_text_fields(
     row: Mapping[str, Any],
     fields: tuple[tuple[str, str, int], ...],
+    *,
+    allow_empty_destinations: frozenset[str] = frozenset(),
 ) -> dict[str, str] | None:
     normalized: dict[str, str] = {}
     for source, destination, max_length in fields:
         value = row.get(source)
-        if not isinstance(value, str) or len(value) > max_length:
+        if (
+            not isinstance(value, str)
+            or len(value) > max_length
+            or (not value and destination not in allow_empty_destinations)
+        ):
             return None
         normalized[destination] = value
     return normalized
@@ -233,6 +239,7 @@ def _docker_inventory(
                         ("Ports", "ports", 1024),
                         ("Size", "size", 128),
                     ),
+                    allow_empty_destinations=frozenset({"ports"}),
                 )
                 if normalized is None:
                     access_status = "partial_failure"
@@ -360,6 +367,13 @@ def _require_text(value: object, label: str, max_length: int) -> str:
     return value
 
 
+def _require_non_empty_text(value: object, label: str, max_length: int) -> str:
+    normalized = _require_text(value, label, max_length)
+    if not normalized:
+        raise ValueError(f"{label} must not be empty")
+    return normalized
+
+
 def validate_inventory_payload(value: object) -> dict[str, object]:
     root = _require_exact_dict(
         value,
@@ -449,11 +463,11 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
         )
         containers.append(
             {
-                "name": _require_text(row["name"], "container name", 256),
-                "image": _require_text(row["image"], "container image", 512),
-                "status": _require_text(row["status"], "container status", 256),
+                "name": _require_non_empty_text(row["name"], "container name", 256),
+                "image": _require_non_empty_text(row["image"], "container image", 512),
+                "status": _require_non_empty_text(row["status"], "container status", 256),
                 "ports": _require_text(row["ports"], "container ports", 1024),
-                "size": _require_text(row["size"], "container size", 128),
+                "size": _require_non_empty_text(row["size"], "container size", 128),
             }
         )
 
@@ -469,11 +483,15 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
         )
         storage.append(
             {
-                "type": _require_text(row["type"], "storage type", 128),
-                "total_count": _require_text(row["total_count"], "storage total_count", 64),
-                "active": _require_text(row["active"], "storage active", 64),
-                "size": _require_text(row["size"], "storage size", 128),
-                "reclaimable": _require_text(row["reclaimable"], "storage reclaimable", 128),
+                "type": _require_non_empty_text(row["type"], "storage type", 128),
+                "total_count": _require_non_empty_text(
+                    row["total_count"], "storage total_count", 64
+                ),
+                "active": _require_non_empty_text(row["active"], "storage active", 64),
+                "size": _require_non_empty_text(row["size"], "storage size", 128),
+                "reclaimable": _require_non_empty_text(
+                    row["reclaimable"], "storage reclaimable", 128
+                ),
             }
         )
 

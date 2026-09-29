@@ -330,6 +330,35 @@ def test_missing_container_field_is_partial_failure_not_fabricated_data() -> Non
     assert docker["containers"] == []
 
 
+def test_empty_required_container_field_is_partial_failure() -> None:
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if argv[1:3] == ["version", "--format"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="27.5.1\n", stderr="")
+        if argv[1:3] == ["ps", "--size"]:
+            row = {
+                "Names": "",
+                "Image": "vikunja/vikunja:latest",
+                "Status": "Up",
+                "Ports": "",
+                "Size": "12MB",
+            }
+            return subprocess.CompletedProcess(
+                argv,
+                0,
+                stdout=json.dumps(row) + "\n",
+                stderr="",
+            )
+        if argv[1:3] == ["system", "df"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        raise AssertionError(argv)
+
+    payload = collect_inventory(run=fake_run, which=lambda _: "/usr/bin/docker")
+    docker = payload["docker"]
+    assert isinstance(docker, dict)
+    assert docker["access_status"] == "partial_failure"
+    assert docker["containers"] == []
+
+
 def test_non_string_storage_field_is_partial_failure_not_stringified() -> None:
     def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         if argv[1:3] == ["version", "--format"]:
@@ -563,4 +592,56 @@ def test_validator_rejects_zero_total_memory() -> None:
     memory["total_bytes"] = 0
     memory["available_bytes"] = 0
     with pytest.raises(ValueError, match="memory total_bytes must be positive"):
+        validate_inventory_payload(payload)
+
+
+
+@pytest.mark.parametrize(
+    ("section", "field"),
+    [
+        ("container", "name"),
+        ("container", "image"),
+        ("container", "status"),
+        ("container", "size"),
+        ("storage", "type"),
+        ("storage", "total_count"),
+        ("storage", "active"),
+        ("storage", "size"),
+        ("storage", "reclaimable"),
+    ],
+)
+def test_validator_rejects_empty_required_docker_values(section: str, field: str) -> None:
+    payload = _valid_inventory_payload()
+    payload["docker"] = {
+        "cli_present": True,
+        "access_status": "ok",
+        "server_version": "27.5.1",
+        "containers": [
+            {
+                "name": "vikunja",
+                "image": "vikunja/vikunja:latest",
+                "status": "Up",
+                "ports": "",
+                "size": "12MB",
+            }
+        ],
+        "storage": [
+            {
+                "type": "Images",
+                "total_count": "2",
+                "active": "1",
+                "size": "1GB",
+                "reclaimable": "100MB (10%)",
+            }
+        ],
+    }
+    docker = payload["docker"]
+    assert isinstance(docker, dict)
+    rows = docker["containers"] if section == "container" else docker["storage"]
+    assert isinstance(rows, list)
+    row = rows[0]
+    assert isinstance(row, dict)
+    row[field] = ""
+
+    with pytest.raises(ValueError, match="must not be empty"):
         validate_inventory_payload(payload)
