@@ -556,7 +556,6 @@ def test_validator_rejects_filesystem_sum_over_total() -> None:
         validate_inventory_payload(payload)
 
 
-
 def test_validator_rejects_zero_total_memory() -> None:
     payload = _valid_inventory_payload()
     memory = payload["memory"]
