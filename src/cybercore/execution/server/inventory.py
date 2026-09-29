@@ -419,6 +419,8 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
     if filesystem_used + filesystem_free > filesystem_total:
         raise ValueError("filesystem used_bytes + free_bytes cannot exceed total_bytes")
 
+    if normalized_memory["total_bytes"] == 0:
+        raise ValueError("memory total_bytes must be positive")
     if normalized_memory["available_bytes"] > normalized_memory["total_bytes"]:
         raise ValueError("available_bytes cannot exceed total_bytes")
     if normalized_memory["swap_free_bytes"] > normalized_memory["swap_total_bytes"]:

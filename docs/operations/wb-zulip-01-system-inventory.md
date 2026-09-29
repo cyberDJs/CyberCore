@@ -85,7 +85,7 @@ Memory capacity evidence is fail-closed. If `/proc/meminfo` is unreadable, missi
 
 Logical CPU capacity is fail-closed: collection fails if the runtime cannot report a positive logical CPU count, and validation rejects zero or negative counts.
 
-Memory evidence must be internally consistent: `available_bytes <= total_bytes` and `swap_free_bytes <= swap_total_bytes`. Contradictory capacity values are rejected.
+Memory evidence must be internally consistent: `available_bytes <= total_bytes` and `swap_free_bytes <= swap_total_bytes`. Physical memory total must also be positive. Contradictory capacity values are rejected.
 
 Docker availability is state-dependent. `not_installed` requires no CLI, no server version, and no rows; `denied_or_unreachable` requires a present CLI but no server version or rows; `ok` requires a present CLI and server version; `partial_failure` requires a present CLI and may contain partial bounded evidence. Contradictory state combinations fail closed.
 

@@ -554,3 +554,14 @@ def test_validator_rejects_filesystem_sum_over_total() -> None:
     filesystem["free_bytes"] = 1000
     with pytest.raises(ValueError, match=r"used_bytes \+ free_bytes"):
         validate_inventory_payload(payload)
+
+
+
+def test_validator_rejects_zero_total_memory() -> None:
+    payload = _valid_inventory_payload()
+    memory = payload["memory"]
+    assert isinstance(memory, dict)
+    memory["total_bytes"] = 0
+    memory["available_bytes"] = 0
+    with pytest.raises(ValueError, match="memory total_bytes must be positive"):
+        validate_inventory_payload(payload)
