@@ -1,13 +1,13 @@
 # CyberCore Project State
 
-_Last updated: 2026-09-25_
+_Last updated: 2026-09-29_
 
 ## Source of truth
 
 - Repository: `cyberDJs/CyberCore`
 - Canonical product state: GitHub `main`
 - Canonical main ref: GitHub `main` (resolve live)
-- Last verified canonical checkpoint: `336ee555faabec76bd9114844954260b47b09570`
+- Last verified canonical checkpoint: `90e6ad9fc713497803e78187958574a3ad2181d0`
 - Evidence/archive/collaboration layer: Google Drive `CyberCore/CASER-E`
 - Current coordination artifact: PR #104 — WB-0038H post-merge source-of-truth closeout
 - Current coordination branch: `wb-0038h-post-merge-sot-closeout`
@@ -79,7 +79,7 @@ PR #79 remains immutable canonical history with four unresolved historical revie
 
 ## Current milestone
 
-PR #104 performs the repository-only post-merge source-of-truth closeout for canonical PR #103 / WB-0038H, merged as `336ee555faabec76bd9114844954260b47b09570`.
+PR #104 performs the repository-only post-merge source-of-truth closeout for canonical PR #103 / WB-0038H, merged as `336ee555faabec76bd9114844954260b47b09570`. The closeout branch has now been reconciled non-destructively onto current `main@90e6ad9fc713497803e78187958574a3ad2181d0`, which includes later unrelated canonical work through PR #108.
 
 ## Active objective
 
@@ -101,7 +101,8 @@ Scope:
 - Work block: active WB-0038H post-merge source-of-truth closeout
 - Branch: `wb-0038h-post-merge-sot-closeout`
 - Pull request: #104
-- Canonical base / last verified main: `336ee555faabec76bd9114844954260b47b09570`
+- Original PR #104 base: `336ee555faabec76bd9114844954260b47b09570`
+- Reconciled current main checkpoint: `90e6ad9fc713497803e78187958574a3ad2181d0`
 - PR #103 / WB-0038H: merged canonical; exact-head CI #989 PASS, CodeQL #990 PASS, fresh Codex review clean, unresolved review threads 0
 - PR #103 post-merge main: CI #990 PASS, CodeQL #991 PASS
 - Runtime implementation: unchanged by PR #104; repository metadata/evidence only
@@ -139,7 +140,8 @@ Most relevant recent merged state:
 - PR #95 — WB-0038E execution-boundary repair — merged as `3884f6b605a1fb3b0003b142044485cb9ba6ecce`;
 - PR #96 — PR #95 post-merge source-of-truth closeout — merged as `1a22865747d0d8ea2bf97d3b455534b610a66a90`;
 - PR #102 — WB-0038G consolidated rollback repair — merged as `b6c350ef40d21a3939fd0d3d6c0187a934303d31`; post-merge CI #975 PASS and CodeQL #976 PASS;
-- PR #103 — WB-0038H canonical rollback hardening — merged as current verified checkpoint `336ee555faabec76bd9114844954260b47b09570`; exact-head CI #989 PASS, CodeQL #990 PASS, fresh Codex review clean, unresolved review threads 0; post-merge CI #990 PASS and CodeQL #991 PASS.
+- PR #103 — WB-0038H canonical rollback hardening — merged as `336ee555faabec76bd9114844954260b47b09570`; exact-head CI #989 PASS, CodeQL #990 PASS, fresh Codex review clean, unresolved review threads 0; post-merge CI #990 PASS and CodeQL #991 PASS.
+- Current verified main checkpoint: `90e6ad9fc713497803e78187958574a3ad2181d0` (merge PR #108); later unrelated canonical work does not change the historical PR #103 merge identity or broaden WB-0038H authority.
 
 These records do not retroactively broaden authority granted to any merged work block. A merged artifact can remain canonical while also carrying explicitly recorded defects that require a follow-up repair.
 
@@ -358,7 +360,7 @@ Run exact-head CI, CodeQL and fresh correctness/security review for PR #104 afte
 - Coordination PR: #104
 - Coordination branch: `wb-0038h-post-merge-sot-closeout`
 - Canonical main ref: GitHub `main` / resolve live
-- Last observed canonical checkpoint: `336ee555faabec76bd9114844954260b47b09570`
+- Last observed canonical checkpoint: `90e6ad9fc713497803e78187958574a3ad2181d0`
 - PR #69 SOT reconciliation: merged as `cb3d705f82d53a1302f9f2ca80615325b1509468`
 - PR #76 LongRun Independent Evaluation Acceptance: merged as `41a0994b3cef083f15b8280724dd788cd31a880e`
 - PR #77 post-merge SOT closeout: merged and gated as `36a16e805390c8c5214eeb4646b6ecf6c8efc4aa`
@@ -368,6 +370,7 @@ Run exact-head CI, CodeQL and fresh correctness/security review for PR #104 afte
 - PR #95 WB-0038E execution-boundary repair: merged as `3884f6b605a1fb3b0003b142044485cb9ba6ecce`; CI #857 PASS; CodeQL #858 PASS; post-merge CI #858 PASS; CodeQL #859 PASS
 - PR #102 WB-0038G consolidated rollback repair: merged as `b6c350ef40d21a3939fd0d3d6c0187a934303d31`; post-merge CI #975 PASS; CodeQL #976 PASS
 - PR #103 WB-0038H canonical rollback hardening: merged as `336ee555faabec76bd9114844954260b47b09570`; CI #989 PASS; CodeQL #990 PASS; fresh exact-head review clean; post-merge CI #990 PASS; CodeQL #991 PASS
+- Current main after later unrelated merges: `90e6ad9fc713497803e78187958574a3ad2181d0` (merge PR #108); PR #104 has been reconciled onto this checkpoint
 - PR #104 WB-0038H post-merge SOT closeout: active draft coordination PR; metadata/evidence only; merge authority not granted
 - PR #94 earlier execution repair: closed unmerged; unique response sanitizer pending extraction
 - PR #74 Cyber Voice Intelligence Bridge: historical draft superseded by forward-port PR #99 unless later evidence requires otherwise
