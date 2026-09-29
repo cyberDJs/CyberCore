@@ -183,6 +183,8 @@ def test_system_inventory_rejects_mismatched_authorization_hash() -> None:
         "bad_digest",
         "bad_timestamp",
         "reversed_timestamps",
+        "numeric_mutation_flag",
+        "numeric_secret_flag",
     ],
 )
 def test_system_inventory_rejects_malformed_server_receipt_envelope(case: str) -> None:
@@ -202,6 +204,10 @@ def test_system_inventory_rejects_malformed_server_receipt_envelope(case: str) -
     elif case == "reversed_timestamps":
         payload["started_at"] = "2026-09-19T00:00:02Z"
         payload["completed_at"] = "2026-09-19T00:00:01Z"
+    elif case == "numeric_mutation_flag":
+        payload["mutation_possible"] = 0
+    elif case == "numeric_secret_flag":
+        payload["secret_values_recorded"] = 0
     else:
         raise AssertionError(case)
 

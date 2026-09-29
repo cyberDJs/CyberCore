@@ -131,6 +131,11 @@ def _inventory_result_from_server_response(
     _require_server_receipt_sha256(payload["stdout_sha256"], "stdout_sha256")
     _require_server_receipt_sha256(payload["stderr_sha256"], "stderr_sha256")
 
+    if not isinstance(payload["mutation_possible"], bool):
+        raise ValueError("server response mutation_possible must be boolean")
+    if not isinstance(payload["secret_values_recorded"], bool):
+        raise ValueError("server response secret_values_recorded must be boolean")
+
     expected = {
         "operation_id": action.operation_id,
         "operation": action.operation,
