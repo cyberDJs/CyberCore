@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import re
 import unicodedata
@@ -89,9 +90,12 @@ class IntelligentVoiceController:
         context: VoiceContext,
         *,
         session: VoiceSession | None = None,
+        should_abort: Callable[[], bool] | None = None,
     ) -> ControllerResponse:
         compiled = self.compiler.compile_result(utterance, context)
         intent = compiled.intent
+        if should_abort is not None and should_abort():
+            return ControllerResponse(status="interrupted", message="", intent=intent)
         requires_live_data = compiled.needs_live_data or _requires_live_data(utterance, intent)
 
         if (
@@ -131,7 +135,12 @@ class IntelligentVoiceController:
             oathdo=self.router.oathdo,
             approval_verifier=self.router.approval_verifier,
             event_sink=self.router.event_sink,
-        ).handle(utterance, context, session=session)
+        ).handle(
+            utterance,
+            context,
+            session=session,
+            should_abort=should_abort,
+        )
         return ControllerResponse(
             status=routed.status.value,
             message=routed.message,
