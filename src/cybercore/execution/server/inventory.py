@@ -7,16 +7,96 @@ from pathlib import Path
 import shutil
 import socket
 import subprocess
+import threading
 from typing import Any, Callable, Mapping
 
 
 INVENTORY_SCHEMA_VERSION = 1
 DOCKER_TIMEOUT_SECONDS = 5
+MAX_DOCKER_COMMAND_OUTPUT_BYTES = 256 * 1024
+_DOCKER_READ_CHUNK_BYTES = 8192
 MAX_CONTAINERS = 100
 MAX_STORAGE_ROWS = 16
 
 RunCallable = Callable[..., subprocess.CompletedProcess[str]]
 WhichCallable = Callable[[str], str | None]
+
+
+class _OutputLimitExceeded(RuntimeError):
+    pass
+
+
+def _run_bounded_command(
+    argv: list[str],
+    **kwargs: object,
+) -> subprocess.CompletedProcess[str]:
+    timeout = kwargs.get("timeout", DOCKER_TIMEOUT_SECONDS)
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or timeout <= 0:
+        raise ValueError("bounded command timeout must be positive")
+
+    process = subprocess.Popen(
+        argv,
+        shell=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if process.stdout is None or process.stderr is None:
+        process.kill()
+        process.wait()
+        raise RuntimeError("bounded command pipes are unavailable")
+
+    stdout_buffer = bytearray()
+    stderr_buffer = bytearray()
+    exceeded = threading.Event()
+
+    def drain(stream: Any, target: bytearray) -> None:
+        try:
+            while True:
+                chunk = stream.read(_DOCKER_READ_CHUNK_BYTES)
+                if not chunk:
+                    return
+                remaining = MAX_DOCKER_COMMAND_OUTPUT_BYTES + 1 - len(target)
+                if remaining > 0:
+                    target.extend(chunk[:remaining])
+                if len(target) > MAX_DOCKER_COMMAND_OUTPUT_BYTES:
+                    exceeded.set()
+                    try:
+                        process.kill()
+                    except OSError:
+                        pass
+        except OSError:
+            return
+
+    readers = (
+        threading.Thread(target=drain, args=(process.stdout, stdout_buffer), daemon=True),
+        threading.Thread(target=drain, args=(process.stderr, stderr_buffer), daemon=True),
+    )
+    for reader in readers:
+        reader.start()
+
+    try:
+        process.wait(timeout=float(timeout))
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        for reader in readers:
+            reader.join()
+        raise
+
+    for reader in readers:
+        reader.join()
+
+    if exceeded.is_set():
+        raise _OutputLimitExceeded(
+            f"command output exceeded {MAX_DOCKER_COMMAND_OUTPUT_BYTES} bytes"
+        )
+
+    return subprocess.CompletedProcess(
+        argv,
+        process.returncode,
+        stdout=stdout_buffer.decode("utf-8", errors="replace"),
+        stderr=stderr_buffer.decode("utf-8", errors="replace"),
+    )
 
 
 def _read_meminfo(path: Path = Path("/proc/meminfo")) -> dict[str, int]:
@@ -91,7 +171,7 @@ def _required_text_fields(
 
 
 def _docker_inventory(
-    run: RunCallable = subprocess.run,
+    run: RunCallable = _run_bounded_command,
     which: WhichCallable = shutil.which,
 ) -> dict[str, object]:
     docker = which("docker")
@@ -113,7 +193,7 @@ def _docker_inventory(
     }
     try:
         version = run([docker, "version", "--format", "{{.Server.Version}}"], **common)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired, _OutputLimitExceeded):
         return {
             "cli_present": True,
             "access_status": "denied_or_unreachable",
@@ -162,7 +242,7 @@ def _docker_inventory(
                 access_status = "partial_failure"
         else:
             access_status = "partial_failure"
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired, _OutputLimitExceeded):
         access_status = "partial_failure"
         containers = []
 
@@ -189,7 +269,7 @@ def _docker_inventory(
                 access_status = "partial_failure"
         else:
             access_status = "partial_failure"
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired, _OutputLimitExceeded):
         access_status = "partial_failure"
         storage = []
 
@@ -203,7 +283,7 @@ def _docker_inventory(
 
 
 def collect_inventory(
-    run: RunCallable = subprocess.run,
+    run: RunCallable = _run_bounded_command,
     which: WhichCallable = shutil.which,
 ) -> dict[str, object]:
     try:
@@ -326,6 +406,18 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
         key: _require_int(filesystem[key], key)
         for key in ("total_bytes", "used_bytes", "free_bytes")
     }
+
+    filesystem_total = normalized_filesystem["total_bytes"]
+    filesystem_used = normalized_filesystem["used_bytes"]
+    filesystem_free = normalized_filesystem["free_bytes"]
+    if filesystem_total == 0:
+        raise ValueError("filesystem total_bytes must be positive")
+    if filesystem_used > filesystem_total:
+        raise ValueError("filesystem used_bytes cannot exceed total_bytes")
+    if filesystem_free > filesystem_total:
+        raise ValueError("filesystem free_bytes cannot exceed total_bytes")
+    if filesystem_used + filesystem_free > filesystem_total:
+        raise ValueError("filesystem used_bytes + free_bytes cannot exceed total_bytes")
 
     if normalized_memory["available_bytes"] > normalized_memory["total_bytes"]:
         raise ValueError("available_bytes cannot exceed total_bytes")

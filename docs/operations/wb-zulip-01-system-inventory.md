@@ -88,3 +88,10 @@ Logical CPU capacity is fail-closed: collection fails if the runtime cannot repo
 Memory evidence must be internally consistent: `available_bytes <= total_bytes` and `swap_free_bytes <= swap_total_bytes`. Contradictory capacity values are rejected.
 
 Docker availability is state-dependent. `not_installed` requires no CLI, no server version, and no rows; `denied_or_unreachable` requires a present CLI but no server version or rows; `ok` requires a present CLI and server version; `partial_failure` requires a present CLI and may contain partial bounded evidence. Contradictory state combinations fail closed.
+
+
+## Bounded Docker command output
+
+Docker subprocess output is bounded while it is being consumed, not only after command completion. The production runner drains stdout and stderr incrementally, stores at most 256 KiB per stream, and terminates the command when the hard byte cap is exceeded. Timeouts remain capped at five seconds per Docker command. Oversized Docker output degrades inventory evidence instead of allowing unbounded in-memory buffering.
+
+Filesystem evidence is also relationally validated: the root filesystem total must be positive, neither used nor free bytes may exceed total bytes, and used plus free bytes may not exceed the reported total.

@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from typing import Any
 
 import pytest
 
 from cybercore.execution.server.inventory import (
     MAX_CONTAINERS,
+    MAX_DOCKER_COMMAND_OUTPUT_BYTES,
     _read_meminfo,
+    _run_bounded_command,
     collect_inventory,
     validate_inventory_payload,
 )
@@ -508,4 +511,50 @@ def test_validator_rejects_inconsistent_docker_states(docker: dict[str, object])
     payload = _valid_inventory_payload()
     payload["docker"] = docker
     with pytest.raises(ValueError, match="docker .* state is inconsistent"):
+        validate_inventory_payload(payload)
+
+
+
+def test_bounded_command_rejects_output_over_hard_limit() -> None:
+    with pytest.raises(RuntimeError, match="command output exceeded"):
+        _run_bounded_command(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys; "
+                    f"sys.stdout.write('x' * {MAX_DOCKER_COMMAND_OUTPUT_BYTES + 1024})"
+                ),
+            ],
+            timeout=5,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("used_bytes", 2049, "filesystem used_bytes cannot exceed total_bytes"),
+        ("free_bytes", 2049, "filesystem free_bytes cannot exceed total_bytes"),
+    ],
+)
+def test_validator_rejects_filesystem_component_over_total(
+    field: str,
+    value: int,
+    message: str,
+) -> None:
+    payload = _valid_inventory_payload()
+    filesystem = payload["root_filesystem"]
+    assert isinstance(filesystem, dict)
+    filesystem[field] = value
+    with pytest.raises(ValueError, match=message):
+        validate_inventory_payload(payload)
+
+
+def test_validator_rejects_filesystem_sum_over_total() -> None:
+    payload = _valid_inventory_payload()
+    filesystem = payload["root_filesystem"]
+    assert isinstance(filesystem, dict)
+    filesystem["used_bytes"] = 1500
+    filesystem["free_bytes"] = 1000
+    with pytest.raises(ValueError, match=r"used_bytes \+ free_bytes"):
         validate_inventory_payload(payload)
