@@ -466,11 +466,13 @@ def run_local_voice_session(
                         current_utterance,
                         context,
                         session=local.session,
-                        should_abort=lambda: local.realtime.state
-                        in {
-                            RealtimeState.INTERRUPTED,
-                            RealtimeState.CANCELLED,
-                        },
+                        should_abort=lambda: (
+                            local.realtime.state
+                            in {
+                                RealtimeState.INTERRUPTED,
+                                RealtimeState.CANCELLED,
+                            }
+                        ),
                     )
                 )
                 status = controlled.status
