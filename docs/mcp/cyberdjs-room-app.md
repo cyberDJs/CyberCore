@@ -126,6 +126,48 @@ chatgpt:eimy        -> 127.0.0.1:8769/mcp
 
 Each endpoint then gets its own Secure MCP Tunnel and tunnel ID.
 
+## Slack ingress transport for Plus clients
+
+Slack may be used as a transport for ChatGPT clients that cannot attach the private Room MCP app
+directly. Slack is not authoritative storage: every accepted Slack message is re-emitted through
+the identity-bound Room broker socket and persisted in the same canonical CyberHIVE ledger.
+
+The ingress bridge is intentionally fail-closed:
+
+- only one configured Slack channel is polled;
+- Slack user IDs must be explicitly mapped to an allowed Room identity;
+- the mapped identity is selected by the server-side Unix socket, never by message content;
+- bot/system messages and unmapped users are ignored;
+- the canonical room event includes the Slack channel ID, message timestamp, and user ID as
+  transport metadata;
+- a Slack channel/message timestamp already present in the canonical session is not appended again.
+
+Runtime configuration:
+
+```text
+CYBERDJS_SLACK_ROOM_CHANNEL_ID=C...
+CYBERDJS_SLACK_USER_MAP={"U...":"chatgpt:eimy","U...":"chatgpt:johnny-mod"}
+CYBERDJS_SLACK_BOT_TOKEN=<runtime secret>
+CYBERDJS_ROOM_SOCKET_DIR=/run/cyberdjs-room
+```
+
+The bot token is a runtime secret and must never be committed. The Slack app must be a member of the
+private transport channel and have permission to read its history. The bridge writes through the
+existing `eimy.sock` or `johnny-mod.sock`; it does not open the CyberHIVE ledger directly.
+
+One-shot test with Slack API polling:
+
+```sh
+cyberdjs-room-slack-ingress --once
+```
+
+For fixture/replay testing without Slack credentials, newline-delimited Slack message objects can be
+fed to:
+
+```sh
+cyberdjs-room-slack-ingress --stdin-json
+```
+
 ## Slack wake contract
 
 The Slack webhook is a runtime secret. Never commit it, print it into logs, or add it to the room
