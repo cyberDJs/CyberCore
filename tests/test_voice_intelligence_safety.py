@@ -121,6 +121,9 @@ def test_ly_verbs_preserve_following_cancellation(verb: str) -> None:
         "Stop immediately nothing has changed",
         "Stop now no services are responding",
         "Cancel immediately no workers have replied",
+        "Stop the service because it is failing",
+        "Cancel this because it is wrong",
+        "Stop the service since it is failing",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -227,6 +230,10 @@ def test_execute_is_deterministic(text: str) -> None:
         "Yes, do it?",
         "Jo, udělej to?",
         '"yes do it"',
+        "'stop'",
+        "‘cancel this’",
+        "'approve this plan'",
+        "‘run diagnostics’",
         "Cancel neither",
         "Cancel nobody",
         "Cancel none",

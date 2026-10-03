@@ -15,6 +15,7 @@ def _normalize(text: str) -> str:
 
 def _unquoted_clauses_with_delimiters(text: str) -> tuple[tuple[str, str], ...]:
     unquoted = re.sub(r'["„“”][^"„“”\n]*["„“”]', " ", text)
+    unquoted = re.sub(r"'[^'\n]*'|‘[^’\n]*’", " ", unquoted)
     return tuple(
         (match.group(1), match.group(2))
         for match in re.finditer(r"([^;.!?\n]+)([;.!?\n]+|$)", unquoted)
@@ -53,6 +54,7 @@ class SafetyIntentGuard:
         {"is", "are", "was", "were", "means", "mean", "refers", "represents", "equals"}
     )
     _CANCEL_CONDITION_WORDS = frozenset({"if", "when", "unless"})
+    _CANCEL_REASON_CLAUSE_WORDS = frozenset({"because", "since"})
     _CANCEL_CONDITION_AUXILIARIES = frozenset(
         {"am", "are", "is", "was", "were", "m", "re", "s", "has", "have", "had"}
     )
@@ -431,6 +433,8 @@ class SafetyIntentGuard:
         if negative_subject_after_delimiter:
             return False
         if set(before_copula) & cls._CANCEL_CONDITION_WORDS:
+            return False
+        if set(before_copula) & cls._CANCEL_REASON_CLAUSE_WORDS:
             return False
         if set(before_copula) & cls._CANCEL_FREE_RELATIVES:
             return False
