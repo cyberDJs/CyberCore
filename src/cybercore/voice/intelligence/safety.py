@@ -179,9 +179,7 @@ class SafetyIntentGuard:
     _CANCEL_NEGATION_SCOPE_AUXILIARIES = frozenset(
         {"i", "you", "we", "do", "does", "did", "should", "must", "can", "could", "would", "will"}
     )
-    _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset(
-        {"accidentally", "again", "ever", "unexpectedly"}
-    )
+    _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset({"accidentally", "again", "ever", "unexpectedly"})
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
         r"vysvetli|definuj|znamena|slovo|vyraz)\b"
