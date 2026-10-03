@@ -501,7 +501,10 @@ class SafetyIntentGuard:
         semantic_tail = tail
         while semantic_tail and semantic_tail[0] in cls._CANCEL_MODIFIERS:
             semantic_tail = semantic_tail[1:]
-        if any(token in cls._AUTHORITY_INTERROGATIVE_TAILS for token in semantic_tail):
+        if semantic_tail and (
+            semantic_tail[0] in cls._AUTHORITY_INTERROGATIVE_TAILS
+            or semantic_tail[-1] in cls._AUTHORITY_INTERROGATIVE_TAILS
+        ):
             return False
         subject_auxiliary_index = next(
             (
@@ -545,8 +548,14 @@ class SafetyIntentGuard:
             semantic_tail = semantic_tail[1:]
         if not semantic_tail:
             return True
-        blocked = cls._CANCEL_NEGATIVE_OBJECT_STARTERS | cls._AUTHORITY_INTERROGATIVE_TAILS
-        return not any(token in blocked for token in semantic_tail)
+        has_negative_object = any(
+            token in cls._CANCEL_NEGATIVE_OBJECT_STARTERS for token in semantic_tail
+        )
+        has_interrogative_boundary = (
+            semantic_tail[0] in cls._AUTHORITY_INTERROGATIVE_TAILS
+            or semantic_tail[-1] in cls._AUTHORITY_INTERROGATIVE_TAILS
+        )
+        return not has_negative_object and not has_interrogative_boundary
 
     @classmethod
     def _is_bare_authority_question(
