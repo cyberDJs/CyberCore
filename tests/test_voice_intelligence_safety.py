@@ -184,6 +184,7 @@ def test_execute_is_deterministic(text: str) -> None:
         "Cancel nothing",
         "Cancel nowhere",
         "Cancel just nothing",
+        "Cancel just nothing has changed",
         "Cancel simply nobody",
         "Stop maybe nowhere",
         "Stop button is red",
