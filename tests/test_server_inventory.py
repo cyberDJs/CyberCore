@@ -675,7 +675,6 @@ def test_validator_rejects_empty_required_docker_values(section: str, field: str
         validate_inventory_payload(payload)
 
 
-
 @pytest.mark.parametrize(
     ("section", "field"),
     [
