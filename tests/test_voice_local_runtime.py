@@ -313,7 +313,7 @@ def test_processing_pumps_live_input_and_preserves_barge_in() -> None:
     assert session.status is SessionStatus.INTERRUPTED
 
 
-def test_processing_stops_input_at_barge_in_endpoint() -> None:
+def test_processing_drains_input_after_barge_in_endpoint() -> None:
     runtime, session, stt, _, source, _ = make_runtime(
         nonblocking=[frame(sequence) for sequence in range(2, 202)]
     )
@@ -327,7 +327,8 @@ def test_processing_stops_input_at_barge_in_endpoint() -> None:
 
     assert result == "done"
     assert stt.sequences == [2]
-    assert len(source.nonblocking) == 199
+    assert source.nonblocking_reads > 1
+    assert len(source.nonblocking) < 199
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
 
