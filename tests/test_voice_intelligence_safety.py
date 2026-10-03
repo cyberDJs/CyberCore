@@ -58,6 +58,8 @@ def utterance(text: str) -> Utterance:
         "Stop all services",
         "Abort current deployment",
         "Cancel every job",
+        "Don't reply, stop now",
+        "Don't apply, stop now",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -170,6 +172,8 @@ def test_execute_is_deterministic(text: str) -> None:
         "Don't, please, stop, cancel, or abort",
         "Don't ever, stop, cancel, or abort",
         "Don't ever again, stop",
+        "Don't ever accidentally, stop",
+        "Don't unexpectedly, stop",
         "Run diagnostics has already been printed on the button",
         "Approve the request has not been printed on the button",
         "Stop command executes automatically",
