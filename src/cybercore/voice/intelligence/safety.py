@@ -599,7 +599,13 @@ class SafetyIntentGuard:
         return len(tail) == 2 and tail[1] in cls._CANCEL_MODIFIERS
 
     @classmethod
-    def _cancel_marker_has_imperative_tail(cls, tokens: list[str], index: int) -> bool:
+    def _cancel_marker_has_imperative_tail(
+        cls,
+        tokens: list[str],
+        index: int,
+        *,
+        question_scope: bool = False,
+    ) -> bool:
         if index > 0 and tokens[index - 1] in cls._CANCEL_NOUN_MODIFIERS:
             return False
         tail = tokens[index + 1 :]
@@ -608,7 +614,9 @@ class SafetyIntentGuard:
         semantic_tail = tail
         while semantic_tail and semantic_tail[0] in cls._CANCEL_MODIFIERS:
             semantic_tail = semantic_tail[1:]
-        if any(token in cls._AUTHORITY_INTERROGATIVE_TAILS for token in semantic_tail):
+        if question_scope and any(
+            token in cls._AUTHORITY_INTERROGATIVE_TAILS for token in semantic_tail
+        ):
             return False
         subject_auxiliary_index = next(
             (
@@ -794,7 +802,11 @@ class SafetyIntentGuard:
                         continue
                     if cls._marker_leads_description(tokens, index):
                         continue
-                    if not cls._cancel_marker_has_imperative_tail(tokens, index):
+                    if not cls._cancel_marker_has_imperative_tail(
+                        tokens,
+                        index,
+                        question_scope="?" in delimiter,
+                    ):
                         continue
                     command_prefix = cls._is_command_prefix(local_prefix_tokens)
                     condition_prefix = cls._is_condition_command_prefix(prefix_tokens)
