@@ -313,6 +313,25 @@ def test_processing_pumps_live_input_and_preserves_barge_in() -> None:
     assert session.status is SessionStatus.INTERRUPTED
 
 
+def test_processing_stops_input_at_barge_in_endpoint() -> None:
+    runtime, session, stt, _, source, _ = make_runtime(
+        nonblocking=[frame(sequence) for sequence in range(2, 202)]
+    )
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    def slow_processing() -> str:
+        time.sleep(0.05)
+        return "done"
+
+    result = runtime.process_with_live_input(slow_processing)
+
+    assert result == "done"
+    assert stt.sequences == [2]
+    assert len(source.nonblocking) == 199
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
 def test_once_mode_continues_after_processing_barge_in(monkeypatch) -> None:
     class FakeLoopRuntime:
         def __init__(self) -> None:

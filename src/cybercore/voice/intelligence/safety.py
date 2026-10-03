@@ -667,10 +667,12 @@ class SafetyIntentGuard:
 
     @classmethod
     def _is_fixed_approval_phrase(cls, raw_text: str) -> bool:
-        if "?" in raw_text:
-            return False
-        unquoted = re.sub(r'["„“”][^"„“”\n]*["„“”]', " ", raw_text)
-        return _normalize(unquoted) in cls._APPROVE_PHRASES
+        for raw_clause, delimiter in _unquoted_clauses_with_delimiters(raw_text):
+            if "?" in delimiter:
+                continue
+            if _normalize(raw_clause) in cls._APPROVE_PHRASES:
+                return True
+        return False
 
     @classmethod
     def _is_authority_command(

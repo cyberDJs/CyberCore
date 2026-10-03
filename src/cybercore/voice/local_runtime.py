@@ -327,6 +327,11 @@ class LocalSpeechRuntime:
                     done.wait(idle_sleep)
                     continue
                 self.realtime.receive_input(incoming)
+                if (
+                    self.realtime.state is RealtimeState.INTERRUPTED
+                    and bool(getattr(self.provider.stt, "endpoint_detected", False))
+                ):
+                    break
         except Exception:
             if self.realtime.state is not RealtimeState.CANCELLED:
                 self.realtime.cancel("microphone input failed during intelligence processing")

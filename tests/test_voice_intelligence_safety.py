@@ -135,6 +135,8 @@ def test_cancel_is_deterministic(text: str) -> None:
         "ano schvaluji plán",
         "jo udělej to",
         "yes do it",
+        "Are you ready? Yes, do it.",
+        "Připraven? Jo, udělej to.",
         "Please approve this plan",
         "Prosím schvaluji plán",
         "Approve the request that has already been reviewed",
