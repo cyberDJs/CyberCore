@@ -486,7 +486,10 @@ class SafetyIntentGuard:
         tail = tokens[index + 1 :]
         if not tail:
             return True
-        if tail[0] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS:
+        semantic_tail = tail
+        while semantic_tail and semantic_tail[0] in cls._CANCEL_MODIFIERS:
+            semantic_tail = semantic_tail[1:]
+        if semantic_tail and semantic_tail[0] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS:
             return False
         if tail[0] in cls._CANCEL_MATRIX_TAIL_BLOCKERS:
             return False
