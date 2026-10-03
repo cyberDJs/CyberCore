@@ -31,7 +31,20 @@ class SafetyIntentGuard:
         r"wouldn t|won t|nezrus|nezastav|nezastavuj)\b"
     )
     _CANCEL_MODIFIERS = frozenset(
-        {"please", "prosim", "just", "quickly", "kindly", "simply", "maybe", "now", "immediately"}
+        {
+            "please",
+            "prosim",
+            "just",
+            "quickly",
+            "kindly",
+            "simply",
+            "maybe",
+            "now",
+            "immediately",
+            "hned",
+            "nyni",
+            "ted",
+        }
     )
     _CANCEL_DISCOURSE = frozenset({"hey", "cyber", "ok", "okay"})
     _CANCEL_COORDINATORS = frozenset({"and", "or"})
@@ -125,13 +138,26 @@ class SafetyIntentGuard:
             "nothing",
             "nowhere",
             "nic",
+            "niceho",
+            "nicemu",
+            "nicim",
             "nikde",
             "nikdo",
+            "nikoho",
+            "nikomu",
+            "nikym",
             "zadna",
             "zadne",
+            "zadneho",
+            "zadnem",
+            "zadnemu",
+            "zadni",
+            "zadnim",
             "zadnou",
             "zadny",
             "zadnych",
+            "zadnym",
+            "zadnymi",
         }
     )
     _AUTHORITY_INTERROGATIVE_TAILS = frozenset(
@@ -146,23 +172,43 @@ class SafetyIntentGuard:
             "whose",
             "why",
             "ci",
+            "ciho",
             "co",
+            "ceho",
+            "cemu",
+            "cim",
             "jak",
             "jaka",
             "jake",
+            "jakeho",
+            "jakemu",
             "jaky",
+            "jakym",
+            "jakymi",
             "kde",
             "kdo",
             "kdy",
             "koho",
+            "kolik",
+            "kolika",
             "komu",
             "ktera",
             "ktere",
+            "ktereho",
+            "kteremu",
+            "kteri",
+            "kterou",
             "ktery",
+            "kterych",
+            "kterym",
+            "kterymi",
+            "kym",
             "proc",
         }
     )
-    _CANCEL_SUBJECT_CLAUSE_DELIMITERS = frozenset({"immediately", "now"})
+    _CANCEL_SUBJECT_CLAUSE_DELIMITERS = frozenset(
+        {"hned", "immediately", "now", "nyni", "ted"}
+    )
     _AUTHORITY_DESCRIPTION_MODALS = frozenset(
         {"can", "could", "may", "might", "must", "should", "will", "would"}
     )
@@ -622,6 +668,13 @@ class SafetyIntentGuard:
         return len(tokens) == 1 and tokens[0] in markers
 
     @classmethod
+    def _is_fixed_approval_phrase(cls, raw_text: str) -> bool:
+        if "?" in raw_text:
+            return False
+        unquoted = re.sub(r'["„“”][^"„“”\n]*["„“”]', " ", raw_text)
+        return _normalize(unquoted) in cls._APPROVE_PHRASES
+
+    @classmethod
     def _is_authority_command(
         cls,
         raw_text: str,
@@ -739,11 +792,10 @@ class SafetyIntentGuard:
         return False
 
     def compile(self, utterance: Utterance, context: VoiceContext) -> VoiceIntent | None:
-        text = _normalize(utterance.text)
         kind: IntentKind | None = None
         if self._is_cancel_command(utterance.text):
             kind = IntentKind.CANCEL
-        elif text in self._APPROVE_PHRASES or self._is_authority_command(
+        elif self._is_fixed_approval_phrase(utterance.text) or self._is_authority_command(
             utterance.text,
             self._APPROVE_MARKERS,
             self._APPROVE_PREFIXES,
