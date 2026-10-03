@@ -180,6 +180,9 @@ class SafetyIntentGuard:
         {"i", "you", "we", "do", "does", "did", "should", "must", "can", "could", "would", "will"}
     )
     _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset({"accidentally", "again", "ever", "unexpectedly"})
+    _CANCEL_NEGATION_SCOPE_PREPOSITIONS = frozenset(
+        {"after", "at", "before", "by", "during", "for", "in", "under", "until", "without"}
+    )
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
         r"vysvetli|definuj|znamena|slovo|vyraz)\b"
@@ -267,18 +270,24 @@ class SafetyIntentGuard:
         return True
 
     @classmethod
-    def _opens_negation_scope(cls, tokens: list[str]) -> bool:
-        segment = " ".join(tokens)
-        if not cls._CANCEL_NEGATION.search(segment):
-            return False
-        remainder = _normalize(cls._CANCEL_NEGATION.sub(" ", segment)).split()
+    def _continues_negation_scope(cls, tokens: list[str]) -> bool:
         allowed = (
             cls._CANCEL_NEGATION_SCOPE_AUXILIARIES
             | cls._CANCEL_NEGATION_SCOPE_ADVERBS
             | cls._CANCEL_MODIFIERS
             | cls._CANCEL_DISCOURSE
         )
-        return all(token in allowed for token in remainder)
+        if all(token in allowed for token in tokens):
+            return True
+        return len(tokens) > 1 and tokens[0] in cls._CANCEL_NEGATION_SCOPE_PREPOSITIONS
+
+    @classmethod
+    def _opens_negation_scope(cls, tokens: list[str]) -> bool:
+        segment = " ".join(tokens)
+        if not cls._CANCEL_NEGATION.search(segment):
+            return False
+        remainder = _normalize(cls._CANCEL_NEGATION.sub(" ", segment)).split()
+        return cls._continues_negation_scope(remainder)
 
     @classmethod
     def _marker_leads_description(cls, tokens: list[str], index: int) -> bool:
@@ -535,6 +544,8 @@ class SafetyIntentGuard:
                 if not markers:
                     if cls._opens_negation_scope(tokens):
                         pending_negation = True
+                    elif pending_negation and not cls._continues_negation_scope(tokens):
+                        pending_negation = False
                     continue
                 if cls._CANCEL_MENTION.search(segment):
                     continue

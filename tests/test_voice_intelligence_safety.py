@@ -75,6 +75,8 @@ def test_ly_verbs_preserve_following_cancellation(verb: str) -> None:
         "Stop the process if it is running",
         "Please, Cyber, stop now",
         "Please don't wait, stop now",
+        "Don't, reapply, stop now",
+        "Don't, resupply, stop now",
         "If you're still speaking, stop now",
         "When you are done, stop",
         "Stop the process that is running",
