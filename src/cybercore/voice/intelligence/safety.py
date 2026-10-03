@@ -15,7 +15,7 @@ def _normalize(text: str) -> str:
 
 def _unquoted_clauses_with_delimiters(text: str) -> tuple[tuple[str, str], ...]:
     unquoted = re.sub(r'["„“”][^"„“”\n]*["„“”]', " ", text)
-    unquoted = re.sub(r"'[^'\n]*'|‘[^’\n]*’", " ", unquoted)
+    unquoted = re.sub(r"(?<!\\w)'[^'\\n]*'(?!\\w)|‘[^’\\n]*’", " ", unquoted)
     return tuple(
         (match.group(1), match.group(2))
         for match in re.finditer(r"([^;.!?\n]+)([;.!?\n]+|$)", unquoted)

@@ -175,6 +175,7 @@ def test_execute_is_deterministic(text: str) -> None:
         "Je run anglicky běžet?",
         "Please do not stop",
         "Don't cancel this",
+        "Don't stop; don't cancel",
         'Is "stop" a verb?',
         "Je „stop“ anglické sloveso?",
         "Is stop a verb?",
