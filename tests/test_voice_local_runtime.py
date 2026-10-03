@@ -329,6 +329,7 @@ def test_processing_drains_input_after_barge_in_endpoint() -> None:
     assert stt.sequences == [2]
     assert source.nonblocking_reads > 1
     assert len(source.nonblocking) < 199
+    assert source.discard_pending_calls == 1
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
 
