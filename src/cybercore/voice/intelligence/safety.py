@@ -115,10 +115,52 @@ class SafetyIntentGuard:
         }
     )
     _CANCEL_NEGATIVE_OBJECT_STARTERS = frozenset(
-        {"neither", "never", "no", "nobody", "none", "not", "nothing", "nowhere"}
+        {
+            "neither",
+            "never",
+            "no",
+            "nobody",
+            "none",
+            "not",
+            "nothing",
+            "nowhere",
+            "nic",
+            "nikde",
+            "nikdo",
+            "zadna",
+            "zadne",
+            "zadnou",
+            "zadny",
+            "zadnych",
+        }
     )
     _AUTHORITY_INTERROGATIVE_TAILS = frozenset(
-        {"how", "what", "when", "where", "which", "who", "whom", "whose", "why"}
+        {
+            "how",
+            "what",
+            "when",
+            "where",
+            "which",
+            "who",
+            "whom",
+            "whose",
+            "why",
+            "ci",
+            "co",
+            "jak",
+            "jaka",
+            "jake",
+            "jaky",
+            "kde",
+            "kdo",
+            "kdy",
+            "koho",
+            "komu",
+            "ktera",
+            "ktere",
+            "ktery",
+            "proc",
+        }
     )
     _CANCEL_SUBJECT_CLAUSE_DELIMITERS = frozenset({"immediately", "now"})
     _AUTHORITY_DESCRIPTION_MODALS = frozenset(
@@ -621,6 +663,20 @@ class SafetyIntentGuard:
             ):
                 continue
             raw_segments = [segment for segment in raw_clause.split(",") if _normalize(segment)]
+            if (
+                "?" in delimiter
+                and raw_segments
+                and cls._is_bare_authority_question(
+                    raw_segments[-1],
+                    delimiter,
+                    cls._CANCEL_MARKERS,
+                    cls._CANCEL_MODIFIERS | cls._CANCEL_DISCOURSE,
+                )
+            ):
+                raw_segments = raw_segments[:-1]
+                if not raw_segments:
+                    continue
+                raw_clause = ",".join(raw_segments)
             description_prefix_length = cls._nonrestrictive_description_prefix_length(raw_segments)
             if description_prefix_length:
                 raw_segments = raw_segments[description_prefix_length:]
