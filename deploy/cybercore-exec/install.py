@@ -15,6 +15,7 @@ class BootstrapActionType(str, Enum):
     INSTALL_PRIVILEGE_POLICY = "INSTALL_PRIVILEGE_POLICY"
     REVOKE_EXISTING_PRIVILEGE_POLICY = "REVOKE_EXISTING_PRIVILEGE_POLICY"
     VERIFY_PRIVILEGE_POLICY_REVOKED = "VERIFY_PRIVILEGE_POLICY_REVOKED"
+    VERIFY_SYSTEMD_TOMBSTONE_ABSENT = "VERIFY_SYSTEMD_TOMBSTONE_ABSENT"
     VERIFY_SYSTEMD_UNIT_NAME_SAFE = "VERIFY_SYSTEMD_UNIT_NAME_SAFE"
     ENSURE_DIRECTORY = "ENSURE_DIRECTORY"
     ENSURE_SERVICE_IDENTITY = "ENSURE_SERVICE_IDENTITY"
@@ -38,6 +39,18 @@ class BootstrapAction:
 def build_install_manifest() -> tuple[BootstrapAction, ...]:
     actions = [
         BootstrapAction(
+            "verify-vikunja-backup-install-tombstone-absent",
+            BootstrapActionType.VERIFY_SYSTEMD_TOMBSTONE_ABSENT,
+            "",
+            "/etc/systemd/system/cybercore-vikunja-backup-install.service.d/90-cybercore-rollback-tombstone.conf",
+        ),
+        BootstrapAction(
+            "verify-vikunja-backup-run-tombstone-absent",
+            BootstrapActionType.VERIFY_SYSTEMD_TOMBSTONE_ABSENT,
+            "",
+            "/etc/systemd/system/cybercore-vikunja-backup-run.service.d/90-cybercore-rollback-tombstone.conf",
+        ),
+        BootstrapAction(
             "server-authorization",
             BootstrapActionType.INSTALL_SERVER_FILE,
             "src/cybercore/execution/authorization.py",
@@ -47,11 +60,11 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "root",
         ),
         BootstrapAction(
-            "server-dispatcher",
+            "server-inventory",
             BootstrapActionType.INSTALL_SERVER_FILE,
-            "src/cybercore/execution/server/dispatcher.py",
-            "/usr/local/libexec/cybercore-exec/dispatcher.py",
-            "0755",
+            "src/cybercore/execution/server/inventory.py",
+            "/usr/local/libexec/cybercore-exec/inventory.py",
+            "0644",
             "root",
             "root",
         ),
@@ -70,6 +83,33 @@ def build_install_manifest() -> tuple[BootstrapAction, ...]:
             "src/cybercore/execution/server/protocol.py",
             "/usr/local/libexec/cybercore-exec/protocol.py",
             "0644",
+            "root",
+            "root",
+        ),
+        BootstrapAction(
+            "server-dispatcher",
+            BootstrapActionType.INSTALL_SERVER_FILE,
+            "src/cybercore/execution/server/dispatcher.py",
+            "/usr/local/libexec/cybercore-exec/dispatcher.py",
+            "0755",
+            "root",
+            "root",
+        ),
+        BootstrapAction(
+            "vikunja-backup-service-template",
+            BootstrapActionType.INSTALL_SERVER_FILE,
+            "deploy/cybercore-exec/vikunja-backup.service",
+            "/usr/local/libexec/cybercore-exec/vikunja-backup.service.template",
+            "0600",
+            "root",
+            "root",
+        ),
+        BootstrapAction(
+            "vikunja-backup-timer-template",
+            BootstrapActionType.INSTALL_SERVER_FILE,
+            "deploy/cybercore-exec/vikunja-backup.timer",
+            "/usr/local/libexec/cybercore-exec/vikunja-backup.timer.template",
+            "0600",
             "root",
             "root",
         ),

@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily CyberCore governed Vikunja backup
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=15m
+Unit=vikunja-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 
@@ -32,6 +33,61 @@ def _action(operation: str = "vikunja.health.verify") -> GovernedAction:
     )
 
 
+def _inventory_result() -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "host": {
+            "hostname": "tasks",
+            "cpu_logical": 2,
+            "load_1m": 0.1,
+            "load_5m": 0.2,
+            "load_15m": 0.3,
+        },
+        "memory": {
+            "total_bytes": 4_000_000_000,
+            "available_bytes": 2_000_000_000,
+            "swap_total_bytes": 2_000_000_000,
+            "swap_free_bytes": 2_000_000_000,
+        },
+        "root_filesystem": {
+            "total_bytes": 80_000_000_000,
+            "used_bytes": 10_000_000_000,
+            "free_bytes": 70_000_000_000,
+        },
+        "docker": {
+            "cli_present": True,
+            "access_status": "denied_or_unreachable",
+            "server_version": None,
+            "containers": [],
+            "storage": [],
+        },
+    }
+
+
+def _server_inventory_receipt(action: GovernedAction) -> bytes:
+    result = _inventory_result()
+    payload = {
+        "operation_id": action.operation_id,
+        "operation": action.operation,
+        "target_id": action.target_id,
+        "plan_id": action.plan_id,
+        "plan_revision": action.plan_revision,
+        "authorization_reference_sha256": hashlib.sha256(
+            action.authorization_reference.encode("utf-8")
+        ).hexdigest(),
+        "started_at": "2026-09-19T00:00:00Z",
+        "completed_at": "2026-09-19T00:00:01Z",
+        "exit_code": 0,
+        "stdout_sha256": "1" * 64,
+        "stderr_sha256": "2" * 64,
+        "status": "EXECUTED",
+        "mutation_possible": False,
+        "result": result,
+        "secret_values_recorded": False,
+    }
+    return (json.dumps(payload) + "\n").encode()
+
+
 def test_transport_uses_ssh_subsystem_not_remote_shell() -> None:
     argv = build_transport_argv(VIKUNJA_TARGET)
     assert argv[0] == "ssh"
@@ -59,6 +115,114 @@ def test_execute_uses_shell_false_and_server_compatible_structured_stdin() -> No
     assert observed["timeout"] == TRANSPORT_TIMEOUT_SECONDS
     assert receipt.exit_code == 0
     assert receipt.mutation_possible is False
+
+
+def test_system_inventory_promotes_only_validated_server_result() -> None:
+    action = _action("system.inventory")
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=_server_inventory_receipt(action),
+            stderr=b"",
+        )
+
+    receipt = execute_action(action, VIKUNJA_TARGET, run=fake_run)
+    assert receipt.status is ExecutionStatus.EXECUTED
+    assert receipt.mutation_possible is False
+    assert receipt.result is not None
+    assert receipt.result["schema_version"] == 1
+    assert receipt.result["host"]["cpu_logical"] == 2  # type: ignore[index]
+
+
+def test_system_inventory_fails_closed_on_unbound_server_result() -> None:
+    action = _action("system.inventory")
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        payload = json.loads(_server_inventory_receipt(action))
+        payload["target_id"] = "wrong.example"
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=json.dumps(payload).encode(),
+            stderr=b"",
+        )
+
+    receipt = execute_action(action, VIKUNJA_TARGET, run=fake_run)
+    assert receipt.status is ExecutionStatus.FAILED
+    assert receipt.exit_code == 65
+    assert receipt.result is None
+
+
+def test_system_inventory_rejects_mismatched_authorization_hash() -> None:
+    action = _action("system.inventory")
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        payload = json.loads(_server_inventory_receipt(action))
+        payload["authorization_reference_sha256"] = "0" * 64
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=json.dumps(payload).encode(),
+            stderr=b"",
+        )
+
+    receipt = execute_action(action, VIKUNJA_TARGET, run=fake_run)
+    assert receipt.status is ExecutionStatus.FAILED
+    assert receipt.exit_code == 65
+    assert receipt.result is None
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "missing_field",
+        "extra_field",
+        "nonzero_exit",
+        "bad_digest",
+        "bad_timestamp",
+        "reversed_timestamps",
+        "numeric_mutation_flag",
+        "numeric_secret_flag",
+    ],
+)
+def test_system_inventory_rejects_malformed_server_receipt_envelope(case: str) -> None:
+    action = _action("system.inventory")
+    payload = json.loads(_server_inventory_receipt(action))
+
+    if case == "missing_field":
+        payload.pop("exit_code")
+    elif case == "extra_field":
+        payload["unexpected"] = "nope"
+    elif case == "nonzero_exit":
+        payload["exit_code"] = 1
+    elif case == "bad_digest":
+        payload["stdout_sha256"] = "not-a-digest"
+    elif case == "bad_timestamp":
+        payload["started_at"] = "not-a-timestamp"
+    elif case == "reversed_timestamps":
+        payload["started_at"] = "2026-09-19T00:00:02Z"
+        payload["completed_at"] = "2026-09-19T00:00:01Z"
+    elif case == "numeric_mutation_flag":
+        payload["mutation_possible"] = 0
+    elif case == "numeric_secret_flag":
+        payload["secret_values_recorded"] = 0
+    else:
+        raise AssertionError(case)
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=(json.dumps(payload) + "\n").encode(),
+            stderr=b"",
+        )
+
+    receipt = execute_action(action, VIKUNJA_TARGET, run=fake_run)
+    assert receipt.status is ExecutionStatus.FAILED
+    assert receipt.exit_code == 65
+    assert receipt.result is None
 
 
 def test_transport_timeout_exceeds_connection_plus_server_operation_budget() -> None:

@@ -111,6 +111,7 @@ jobs:
           (
             cd "$outside"
             "$tmpdir/venv/bin/cybercore" --help
+            "$tmpdir/venv/bin/cyberdjs-room-mcp" --help
             "$tmpdir/venv/bin/python" -m cybercore --help
           )
       - name: Upload distributions

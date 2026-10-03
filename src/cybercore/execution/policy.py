@@ -13,6 +13,7 @@ VIKUNJA_TARGET = ExecutionTarget(
 
 SUPPORTED_OPERATIONS = frozenset(
     {
+        "system.inventory",
         "vikunja.backup.install",
         "vikunja.backup.run",
         "vikunja.backup.status",
@@ -22,6 +23,7 @@ SUPPORTED_OPERATIONS = frozenset(
 
 _MUTATING_OPERATIONS = frozenset({"vikunja.backup.install", "vikunja.backup.run"})
 _ALLOWED_ARGUMENTS: dict[str, frozenset[str]] = {
+    "system.inventory": frozenset(),
     "vikunja.backup.install": frozenset(),
     "vikunja.backup.run": frozenset(),
     "vikunja.backup.status": frozenset(),

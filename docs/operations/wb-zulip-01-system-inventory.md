@@ -1,0 +1,97 @@
+# WB-ZULIP-01 — bounded system inventory
+
+Status: repository candidate only; not deployed
+
+## Goal
+
+Add one read-only CyberCore execution operation, `system.inventory`, to collect the minimum host-capacity evidence required to size a future Zulip deployment on the existing `tasks.cyberdjs.org` VPS.
+
+## Boundary
+
+The operation:
+
+- is bound to the existing canonical target `tasks.cyberdjs.org`;
+- accepts no arguments;
+- does not open a shell;
+- does not accept caller-selected paths, commands, users, hosts, or Docker options;
+- runs as the existing `cybercore-exec` identity;
+- does not add that identity to the Docker group and does not add sudo or Polkit privilege;
+- exposes only a schema-validated structured result for this one operation;
+- leaves stdout for all other operations digest-only.
+
+The structured result contains only:
+
+- logical CPU count and 1/5/15 minute load;
+- total/available RAM and swap;
+- root-filesystem total/used/free bytes;
+- Docker CLI/server availability;
+- bounded container name/image/status/ports/size rows when Docker access is already available;
+- bounded Docker storage summary rows.
+
+No environment variables, file contents, process command lines, credentials, mounts, labels, container environment, Docker inspect output, account data, or secret values are collected.
+
+## Docker privilege rule
+
+Docker discovery is best-effort. If the existing service identity cannot access the Docker daemon, the result reports `denied_or_unreachable`. If the daemon is reachable but a later bounded Docker subcommand fails, times out, or emits malformed JSON rows, the result reports `partial_failure` rather than silently treating missing data as an empty successful result. This work block must not make Docker readable by adding `cybercore-exec` to the `docker` group because Docker daemon access is effectively root-equivalent on a normal host.
+
+## Result-disclosure rule
+
+The existing execution bridge stores raw stdout only transiently and records hashes in normal receipts. `system.inventory` is the only operation in this work block permitted to promote command output into a returned `result`, and only after exact schema validation on both the server and client side.
+
+Malformed, extra-field, unbound, or non-JSON inventory output fails closed and is not promoted as inventory evidence. The client also validates the complete successful `ServerReceipt` envelope: exact field set, zero exit code, ordered timezone-aware timestamps, SHA-256 digest syntax, immutable operation bindings, read-only mutation state, and secret-recording state.
+
+## Deployment boundary
+
+This repository change does not install the helper on the VPS, reload SSH, change privileges, resize the VPS, deploy Zulip, change DNS, or create secrets.
+
+A future deployment requires a target-bound deployment packet and separate explicit authorization.
+
+## Verification
+
+Required before merge readiness:
+
+1. unit/contract tests;
+2. exact-head CI;
+3. exact-head CodeQL;
+4. fresh independent review;
+5. no unresolved P1/P2 security or privilege-boundary finding.
+
+Runtime effect verification is impossible until a later authorized deployment installs the updated server artifact.
+
+
+## Upgrade ordering and timeout budget
+
+Bootstrap installs the inventory helper, operations map, protocol, and authorization dependency before replacing the dispatcher so an interrupted upgrade cannot leave the dispatcher importing a not-yet-installed module. The inventory operation receives a 20-second server budget, which exceeds the aggregate 15-second Docker probe budget plus Python and local collection overhead.
+
+
+## Numeric validation
+
+Load-average values are accepted only when they are finite, non-negative real numbers. `NaN`, positive/negative infinity, negative values, and values that overflow Python float conversion fail closed as validation errors and are never promoted into capacity evidence. If `os.getloadavg()` itself is unavailable, inventory collection fails closed rather than substituting zero load.
+
+
+## Strict schema validation
+
+The inventory schema version must be an actual integer equal to `1`; booleans, floats, and strings are rejected even when Python equality would otherwise compare them equal to `1`. Docker container and storage rows must contain every required field with string values inside the configured bounds. Semantically required Docker row values and the Docker server version must contain at least one non-whitespace character; only fields that can legitimately be empty, such as container `ports`, allow an empty string. Missing fields, non-string values, malformed JSON, and truncated row sets degrade the Docker evidence to `partial_failure` instead of fabricating or stringifying values.
+
+
+## Authorization binding and memory failure semantics
+
+A structured inventory response is accepted only when its `authorization_reference_sha256` matches the SHA-256 digest of the authorization reference in the current governed action. Matching operation and plan identifiers alone are not sufficient.
+
+Memory capacity evidence is fail-closed. If `/proc/meminfo` is unreadable, missing any required field, duplicated, malformed, negative, or not expressed in `kB`, the inventory helper fails instead of substituting zero-valued RAM or swap measurements.
+
+
+## Capacity relationship and Docker state invariants
+
+Logical CPU capacity is fail-closed: collection fails if the runtime cannot report a positive logical CPU count, and validation rejects zero or negative counts.
+
+Memory evidence must be internally consistent: `available_bytes <= total_bytes` and `swap_free_bytes <= swap_total_bytes`. Physical memory total must also be positive. Contradictory capacity values are rejected.
+
+Docker availability is state-dependent. `not_installed` requires no CLI, no server version, and no rows; `denied_or_unreachable` requires a present CLI but no server version or rows; `ok` requires a present CLI, server version, and at least one validated Docker storage summary row; `partial_failure` requires a present CLI and may contain partial bounded evidence. A successful `docker system df` command with no validated storage rows is treated as `partial_failure`. Contradictory state combinations fail closed.
+
+
+## Bounded Docker command output
+
+Docker subprocess output is bounded while it is being consumed, not only after command completion. The production runner drains stdout and stderr incrementally, stores at most 256 KiB per stream, and terminates the command when the hard byte cap is exceeded. Timeouts remain capped at five seconds per Docker command. Oversized Docker output degrades inventory evidence instead of allowing unbounded in-memory buffering.
+
+Filesystem evidence is also relationally validated: the root filesystem total must be positive, neither used nor free bytes may exceed total bytes, and used plus free bytes may not exceed the reported total.

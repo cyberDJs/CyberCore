@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import hashlib
+from typing import Mapping
 
 from cybercore.execution.models import ExecutionReceipt, ExecutionStatus, GovernedAction
 
@@ -24,6 +25,7 @@ def build_receipt(
     stdout: bytes,
     stderr: bytes,
     mutation_possible: bool,
+    result: Mapping[str, object] | None = None,
 ) -> ExecutionReceipt:
     status = ExecutionStatus.EXECUTED if exit_code == 0 else ExecutionStatus.FAILED
     return ExecutionReceipt(
@@ -41,5 +43,6 @@ def build_receipt(
         stderr_sha256=digest_bytes(stderr),
         status=status,
         mutation_possible=mutation_possible,
+        result=result,
         secret_values_recorded=False,
     )

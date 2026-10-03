@@ -50,4 +50,5 @@ class ExecutionReceipt:
     stderr_sha256: str
     status: ExecutionStatus
     mutation_possible: bool
+    result: Mapping[str, object] | None = None
     secret_values_recorded: bool = False
