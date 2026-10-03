@@ -77,6 +77,8 @@ def test_ly_verbs_preserve_following_cancellation(verb: str) -> None:
         "Please don't wait, stop now",
         "Don't, reapply, stop now",
         "Don't, reapply now, stop now",
+        "Don't reapply any patch, stop now",
+        "Don't, reapply any patch, stop now",
         "Don't, resupply, stop now",
         "Don't, resupply it, stop now",
         "Don't accidentally, stop now",
