@@ -182,7 +182,8 @@ class SafetyIntentGuard:
     _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset({"again", "ever"})
     # Base-form `-ly` verb lemmas checked against Open English WordNet 2025:
     # https://github.com/globalwordnet/english-wordnet/tree/2025-edition/src/yaml
-    # Hyphenated `dilly-dally` normalizes through the included `dally` token.
+    # Hyphenated `dilly-dally` normalizes through `dally`; `shilly-shally` needs
+    # its `shally` component because OEWN records the unhyphenated lemma.
     _CANCEL_NEGATION_SCOPE_LY_VERBS = frozenset(
         {
             "ally",
@@ -207,6 +208,7 @@ class SafetyIntentGuard:
             "rally",
             "rely",
             "reply",
+            "shally",
             "shillyshally",
             "sully",
             "supply",
