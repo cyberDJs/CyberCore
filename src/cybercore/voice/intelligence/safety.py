@@ -294,8 +294,7 @@ class SafetyIntentGuard:
             set(remainder) & cls._CANCEL_NEGATION_SCOPE_PRODUCTIVE_ADVERB_ANCHORS
         )
         return has_productive_adverb_anchor and all(
-            token.endswith("ly") or cls._continues_negation_scope([token])
-            for token in remainder
+            token.endswith("ly") or cls._continues_negation_scope([token]) for token in remainder
         )
 
     @classmethod
