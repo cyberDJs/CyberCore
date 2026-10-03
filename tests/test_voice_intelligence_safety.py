@@ -34,6 +34,7 @@ def utterance(text: str) -> Utterance:
         "rally",
         "rely",
         "reply",
+        "sally",
         "shilly-shally",
         "shillyshally",
         "sully",

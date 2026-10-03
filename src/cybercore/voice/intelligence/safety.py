@@ -208,6 +208,7 @@ class SafetyIntentGuard:
             "rally",
             "rely",
             "reply",
+            "sally",
             "shally",
             "shillyshally",
             "sully",
