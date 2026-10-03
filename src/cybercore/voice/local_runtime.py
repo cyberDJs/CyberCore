@@ -273,6 +273,16 @@ class LocalSpeechRuntime:
         if self.realtime.state is RealtimeState.CANCELLED:
             raise RuntimeError("local speech runtime is cancelled")
         self.open()
+        if bool(getattr(self.provider.stt, "endpoint_detected", False)) and self.realtime.state in {
+            RealtimeState.LISTENING,
+            RealtimeState.INTERRUPTED,
+        }:
+            utterance = self.realtime.finish_utterance(
+                actor_id=actor_id,
+                utterance_id=utterance_id,
+            )
+            self._reset_vad("pending input endpoint finalized before capture")
+            return utterance
         frames = 0
         preroll: deque[Any] = deque(maxlen=self._input_preroll_frame_limit())
         while max_frames is None or frames < max_frames:
