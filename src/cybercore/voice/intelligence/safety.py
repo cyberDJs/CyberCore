@@ -111,7 +111,10 @@ class SafetyIntentGuard:
         }
     )
     _CANCEL_NEGATIVE_OBJECT_STARTERS = frozenset(
-        {"neither", "nobody", "none", "nothing", "nowhere"}
+        {"neither", "never", "no", "nobody", "none", "not", "nothing", "nowhere"}
+    )
+    _AUTHORITY_INTERROGATIVE_TAILS = frozenset(
+        {"how", "what", "when", "where", "which", "who", "whom", "whose", "why"}
     )
     _CANCEL_SUBJECT_CLAUSE_DELIMITERS = frozenset({"immediately", "now"})
     _AUTHORITY_DESCRIPTION_MODALS = frozenset(
@@ -498,6 +501,8 @@ class SafetyIntentGuard:
         semantic_tail = tail
         while semantic_tail and semantic_tail[0] in cls._CANCEL_MODIFIERS:
             semantic_tail = semantic_tail[1:]
+        if semantic_tail and semantic_tail[0] in cls._AUTHORITY_INTERROGATIVE_TAILS:
+            return False
         negative_starts_following_clause = (
             len(tail) >= 4
             and tail[0] in cls._CANCEL_SUBJECT_CLAUSE_DELIMITERS
@@ -525,6 +530,17 @@ class SafetyIntentGuard:
         return any(token in cls._CANCEL_CONDITION_WORDS for token in tail[1:])
 
     @classmethod
+    def _authority_marker_has_safe_tail(cls, tokens: list[str], index: int) -> bool:
+        semantic_tail = tokens[index + 1 :]
+        while semantic_tail and semantic_tail[0] in cls._CANCEL_MODIFIERS:
+            semantic_tail = semantic_tail[1:]
+        if not semantic_tail:
+            return True
+        return semantic_tail[0] not in (
+            cls._CANCEL_NEGATIVE_OBJECT_STARTERS | cls._AUTHORITY_INTERROGATIVE_TAILS
+        )
+
+    @classmethod
     def _is_authority_command(
         cls,
         raw_text: str,
@@ -547,6 +563,8 @@ class SafetyIntentGuard:
             if cls._CANCEL_NEGATION.search(" ".join(tokens[:marker_index])):
                 continue
             if cls._authority_marker_leads_description(tokens, marker_index):
+                continue
+            if not cls._authority_marker_has_safe_tail(tokens, marker_index):
                 continue
             return True
         return False
