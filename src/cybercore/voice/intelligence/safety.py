@@ -13,9 +13,13 @@ def _normalize(text: str) -> str:
     return " ".join(words_only.strip().split())
 
 
-def _unquoted_clauses(text: str) -> tuple[str, ...]:
+def _unquoted_clauses_with_delimiters(text: str) -> tuple[tuple[str, str], ...]:
     unquoted = re.sub(r'["„“”][^"„“”\n]*["„“”]', " ", text)
-    return tuple(part for part in re.split(r"[;.!?\n]+", unquoted) if part.strip())
+    return tuple(
+        (match.group(1), match.group(2))
+        for match in re.finditer(r"([^;.!?\n]+)([;.!?\n]+|$)", unquoted)
+        if match.group(1).strip()
+    )
 
 
 class SafetyIntentGuard:
@@ -560,17 +564,19 @@ class SafetyIntentGuard:
     @classmethod
     def _is_bare_authority_question(
         cls,
-        raw_text: str,
+        raw_clause: str,
+        delimiter: str,
         markers: frozenset[str],
         prefixes: frozenset[str],
     ) -> bool:
-        text = raw_text.strip()
-        if not text.endswith("?") or re.search(r"[;.!?\n]", text[:-1]):
+        if "?" not in delimiter:
             return False
-        tokens = _normalize(text[:-1]).split()
-        allowed_prefixes = prefixes | cls._CANCEL_MODIFIERS | cls._CANCEL_DISCOURSE
-        while tokens and tokens[0] in allowed_prefixes:
+        tokens = _normalize(raw_clause).split()
+        allowed_modifiers = prefixes | cls._CANCEL_MODIFIERS | cls._CANCEL_DISCOURSE
+        while tokens and tokens[0] in allowed_modifiers:
             tokens = tokens[1:]
+        while tokens and tokens[-1] in allowed_modifiers:
+            tokens = tokens[:-1]
         return len(tokens) == 1 and tokens[0] in markers
 
     @classmethod
@@ -580,9 +586,9 @@ class SafetyIntentGuard:
         markers: frozenset[str],
         prefixes: frozenset[str],
     ) -> bool:
-        if cls._is_bare_authority_question(raw_text, markers, prefixes):
-            return False
-        for raw_clause in _unquoted_clauses(raw_text):
+        for raw_clause, delimiter in _unquoted_clauses_with_delimiters(raw_text):
+            if cls._is_bare_authority_question(raw_clause, delimiter, markers, prefixes):
+                continue
             tokens = _normalize(raw_clause).split()
             if not tokens:
                 continue
@@ -606,13 +612,14 @@ class SafetyIntentGuard:
 
     @classmethod
     def _is_cancel_command(cls, raw_text: str) -> bool:
-        if cls._is_bare_authority_question(
-            raw_text,
-            cls._CANCEL_MARKERS,
-            cls._CANCEL_MODIFIERS | cls._CANCEL_DISCOURSE,
-        ):
-            return False
-        for raw_clause in _unquoted_clauses(raw_text):
+        for raw_clause, delimiter in _unquoted_clauses_with_delimiters(raw_text):
+            if cls._is_bare_authority_question(
+                raw_clause,
+                delimiter,
+                cls._CANCEL_MARKERS,
+                cls._CANCEL_MODIFIERS | cls._CANCEL_DISCOURSE,
+            ):
+                continue
             raw_segments = [segment for segment in raw_clause.split(",") if _normalize(segment)]
             description_prefix_length = cls._nonrestrictive_description_prefix_length(raw_segments)
             if description_prefix_length:
