@@ -179,42 +179,8 @@ class SafetyIntentGuard:
     _CANCEL_NEGATION_SCOPE_AUXILIARIES = frozenset(
         {"i", "you", "we", "do", "does", "did", "should", "must", "can", "could", "would", "will"}
     )
-    _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset({"again", "ever"})
-    # Base-form `-ly` verb lemmas checked against Open English WordNet 2025:
-    # https://github.com/globalwordnet/english-wordnet/tree/2025-edition/src/yaml
-    # Hyphenated `dilly-dally` normalizes through `dally`; `shilly-shally` needs
-    # its `shally` component because OEWN records the unhyphenated lemma.
-    _CANCEL_NEGATION_SCOPE_LY_VERBS = frozenset(
-        {
-            "ally",
-            "apply",
-            "belly",
-            "bully",
-            "butterfly",
-            "colly",
-            "comply",
-            "dally",
-            "dillydally",
-            "fly",
-            "imply",
-            "jelly",
-            "jolly",
-            "misally",
-            "misapply",
-            "multiply",
-            "overfly",
-            "oversupply",
-            "ply",
-            "rally",
-            "rely",
-            "reply",
-            "sally",
-            "shally",
-            "shillyshally",
-            "sully",
-            "supply",
-            "tally",
-        }
+    _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset(
+        {"accidentally", "again", "ever", "unexpectedly"}
     )
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
@@ -314,11 +280,7 @@ class SafetyIntentGuard:
             | cls._CANCEL_MODIFIERS
             | cls._CANCEL_DISCOURSE
         )
-        return all(
-            token in allowed
-            or (token.endswith("ly") and token not in cls._CANCEL_NEGATION_SCOPE_LY_VERBS)
-            for token in remainder
-        )
+        return all(token in allowed for token in remainder)
 
     @classmethod
     def _marker_leads_description(cls, tokens: list[str], index: int) -> bool:
