@@ -179,6 +179,7 @@ class SafetyIntentGuard:
     _CANCEL_NEGATION_SCOPE_AUXILIARIES = frozenset(
         {"i", "you", "we", "do", "does", "did", "should", "must", "can", "could", "would", "will"}
     )
+    _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset({"again", "ever"})
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
         r"vysvetli|definuj|znamena|slovo|vyraz)\b"
@@ -272,7 +273,10 @@ class SafetyIntentGuard:
             return False
         remainder = _normalize(cls._CANCEL_NEGATION.sub(" ", segment)).split()
         allowed = (
-            cls._CANCEL_NEGATION_SCOPE_AUXILIARIES | cls._CANCEL_MODIFIERS | cls._CANCEL_DISCOURSE
+            cls._CANCEL_NEGATION_SCOPE_AUXILIARIES
+            | cls._CANCEL_NEGATION_SCOPE_ADVERBS
+            | cls._CANCEL_MODIFIERS
+            | cls._CANCEL_DISCOURSE
         )
         return all(token in allowed for token in remainder)
 

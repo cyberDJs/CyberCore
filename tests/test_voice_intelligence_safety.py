@@ -168,6 +168,8 @@ def test_execute_is_deterministic(text: str) -> None:
         "Stop button now illuminates",
         "Cancel message now appears",
         "Don't, please, stop, cancel, or abort",
+        "Don't ever, stop, cancel, or abort",
+        "Don't ever again, stop",
         "Run diagnostics has already been printed on the button",
         "Approve the request has not been printed on the button",
         "Stop command executes automatically",
