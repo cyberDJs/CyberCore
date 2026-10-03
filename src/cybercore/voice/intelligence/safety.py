@@ -283,10 +283,7 @@ class SafetyIntentGuard:
         )
         return all(
             token in allowed
-            or (
-                token.endswith("ly")
-                and token not in cls._CANCEL_NEGATION_SCOPE_LY_VERBS
-            )
+            or (token.endswith("ly") and token not in cls._CANCEL_NEGATION_SCOPE_LY_VERBS)
             for token in remainder
         )
 
