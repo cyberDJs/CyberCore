@@ -71,7 +71,7 @@ Load-average values are accepted only when they are finite, non-negative real nu
 
 ## Strict schema validation
 
-The inventory schema version must be an actual integer equal to `1`; booleans, floats, and strings are rejected even when Python equality would otherwise compare them equal to `1`. Docker container and storage rows must contain every required field with string values inside the configured bounds. Semantically required Docker row values must also be non-empty; only fields that can legitimately be empty, such as container `ports`, allow an empty string. Missing fields, non-string values, malformed JSON, and truncated row sets degrade the Docker evidence to `partial_failure` instead of fabricating or stringifying values.
+The inventory schema version must be an actual integer equal to `1`; booleans, floats, and strings are rejected even when Python equality would otherwise compare them equal to `1`. Docker container and storage rows must contain every required field with string values inside the configured bounds. Semantically required Docker row values and the Docker server version must contain at least one non-whitespace character; only fields that can legitimately be empty, such as container `ports`, allow an empty string. Missing fields, non-string values, malformed JSON, and truncated row sets degrade the Docker evidence to `partial_failure` instead of fabricating or stringifying values.
 
 
 ## Authorization binding and memory failure semantics

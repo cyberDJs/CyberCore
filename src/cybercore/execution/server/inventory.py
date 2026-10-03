@@ -169,7 +169,7 @@ def _required_text_fields(
         if (
             not isinstance(value, str)
             or len(value) > max_length
-            or (not value and destination not in allow_empty_destinations)
+            or (not value.strip() and destination not in allow_empty_destinations)
         ):
             return None
         normalized[destination] = value
@@ -369,7 +369,7 @@ def _require_text(value: object, label: str, max_length: int) -> str:
 
 def _require_non_empty_text(value: object, label: str, max_length: int) -> str:
     normalized = _require_text(value, label, max_length)
-    if not normalized:
+    if not normalized.strip():
         raise ValueError(f"{label} must not be empty")
     return normalized
 
@@ -447,9 +447,7 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
         raise ValueError("docker access_status is not allowed")
     version = docker["server_version"]
     if version is not None:
-        version = _require_text(version, "docker server_version", 128)
-        if not version:
-            raise ValueError("docker server_version must not be empty")
+        version = _require_non_empty_text(version, "docker server_version", 128)
 
     raw_containers = docker["containers"]
     if not isinstance(raw_containers, list) or len(raw_containers) > MAX_CONTAINERS:
