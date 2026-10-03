@@ -179,7 +179,8 @@ class SafetyIntentGuard:
     _CANCEL_NEGATION_SCOPE_AUXILIARIES = frozenset(
         {"i", "you", "we", "do", "does", "did", "should", "must", "can", "could", "would", "will"}
     )
-    _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset({"accidentally", "again", "ever", "unexpectedly"})
+    _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset({"again", "ever"})
+    _CANCEL_NEGATION_SCOPE_PRODUCTIVE_ADVERB_ANCHORS = frozenset({"ever"})
     _CANCEL_NEGATION_SCOPE_PREPOSITIONS = frozenset(
         {"after", "at", "before", "by", "during", "for", "in", "under", "until", "without"}
     )
@@ -287,7 +288,15 @@ class SafetyIntentGuard:
         if not cls._CANCEL_NEGATION.search(segment):
             return False
         remainder = _normalize(cls._CANCEL_NEGATION.sub(" ", segment)).split()
-        return cls._continues_negation_scope(remainder)
+        if cls._continues_negation_scope(remainder):
+            return True
+        has_productive_adverb_anchor = bool(
+            set(remainder) & cls._CANCEL_NEGATION_SCOPE_PRODUCTIVE_ADVERB_ANCHORS
+        )
+        return has_productive_adverb_anchor and all(
+            token.endswith("ly") or cls._continues_negation_scope([token])
+            for token in remainder
+        )
 
     @classmethod
     def _marker_leads_description(cls, tokens: list[str], index: int) -> bool:
