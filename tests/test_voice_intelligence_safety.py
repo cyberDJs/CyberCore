@@ -224,7 +224,7 @@ def test_execute_is_deterministic(text: str) -> None:
         "Počkej, zastav teď?",
         "Yes, do it?",
         "Jo, udělej to?",
-        "\"yes do it\"",
+        '"yes do it"',
         "Cancel neither",
         "Cancel nobody",
         "Cancel none",

@@ -206,9 +206,7 @@ class SafetyIntentGuard:
             "proc",
         }
     )
-    _CANCEL_SUBJECT_CLAUSE_DELIMITERS = frozenset(
-        {"hned", "immediately", "now", "nyni", "ted"}
-    )
+    _CANCEL_SUBJECT_CLAUSE_DELIMITERS = frozenset({"hned", "immediately", "now", "nyni", "ted"})
     _AUTHORITY_DESCRIPTION_MODALS = frozenset(
         {"can", "could", "may", "might", "must", "should", "will", "would"}
     )
