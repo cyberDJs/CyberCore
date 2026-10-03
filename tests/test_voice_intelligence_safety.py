@@ -119,6 +119,8 @@ def test_ly_verbs_preserve_following_cancellation(verb: str) -> None:
         "Stop now nothing is working",
         "Cancel now nobody is responding",
         "Stop immediately nothing has changed",
+        "Stop now no services are responding",
+        "Cancel immediately no workers have replied",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -188,6 +190,13 @@ def test_execute_is_deterministic(text: str) -> None:
         "Run nothing",
         "Run simply nowhere",
         "Apply no changes",
+        "Approve absolutely nothing",
+        "Run the job where?",
+        "Stop?",
+        "Abort?",
+        "Run?",
+        "Approve?",
+        "Please stop?",
         "Cancel neither",
         "Cancel nobody",
         "Cancel none",

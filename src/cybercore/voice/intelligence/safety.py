@@ -333,7 +333,7 @@ class SafetyIntentGuard:
             return False
         before_copula = tail[:copula_index]
         negative_subject_after_delimiter = (
-            len(before_copula) == 2
+            len(before_copula) >= 2
             and before_copula[0] in cls._CANCEL_SUBJECT_CLAUSE_DELIMITERS
             and before_copula[1] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS
             and bool(tail[copula_index + 1 :])
@@ -501,13 +501,22 @@ class SafetyIntentGuard:
         semantic_tail = tail
         while semantic_tail and semantic_tail[0] in cls._CANCEL_MODIFIERS:
             semantic_tail = semantic_tail[1:]
-        if semantic_tail and semantic_tail[0] in cls._AUTHORITY_INTERROGATIVE_TAILS:
+        if any(token in cls._AUTHORITY_INTERROGATIVE_TAILS for token in semantic_tail):
             return False
+        subject_auxiliary_index = next(
+            (
+                position
+                for position, token in enumerate(tail[2:], start=2)
+                if token in cls._CANCEL_CONDITION_AUXILIARIES
+            ),
+            None,
+        )
         negative_starts_following_clause = (
             len(tail) >= 4
             and tail[0] in cls._CANCEL_SUBJECT_CLAUSE_DELIMITERS
             and tail[1] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS
-            and tail[2] in cls._CANCEL_CONDITION_AUXILIARIES
+            and subject_auxiliary_index is not None
+            and bool(tail[subject_auxiliary_index + 1 :])
         )
         if (
             semantic_tail
@@ -536,9 +545,24 @@ class SafetyIntentGuard:
             semantic_tail = semantic_tail[1:]
         if not semantic_tail:
             return True
-        return semantic_tail[0] not in (
-            cls._CANCEL_NEGATIVE_OBJECT_STARTERS | cls._AUTHORITY_INTERROGATIVE_TAILS
-        )
+        blocked = cls._CANCEL_NEGATIVE_OBJECT_STARTERS | cls._AUTHORITY_INTERROGATIVE_TAILS
+        return not any(token in blocked for token in semantic_tail)
+
+    @classmethod
+    def _is_bare_authority_question(
+        cls,
+        raw_text: str,
+        markers: frozenset[str],
+        prefixes: frozenset[str],
+    ) -> bool:
+        text = raw_text.strip()
+        if not text.endswith("?") or re.search(r"[;.!?\n]", text[:-1]):
+            return False
+        tokens = _normalize(text[:-1]).split()
+        allowed_prefixes = prefixes | cls._CANCEL_MODIFIERS | cls._CANCEL_DISCOURSE
+        while tokens and tokens[0] in allowed_prefixes:
+            tokens = tokens[1:]
+        return len(tokens) == 1 and tokens[0] in markers
 
     @classmethod
     def _is_authority_command(
@@ -547,6 +571,8 @@ class SafetyIntentGuard:
         markers: frozenset[str],
         prefixes: frozenset[str],
     ) -> bool:
+        if cls._is_bare_authority_question(raw_text, markers, prefixes):
+            return False
         for raw_clause in _unquoted_clauses(raw_text):
             tokens = _normalize(raw_clause).split()
             if not tokens:
@@ -571,6 +597,12 @@ class SafetyIntentGuard:
 
     @classmethod
     def _is_cancel_command(cls, raw_text: str) -> bool:
+        if cls._is_bare_authority_question(
+            raw_text,
+            cls._CANCEL_MARKERS,
+            cls._CANCEL_MODIFIERS | cls._CANCEL_DISCOURSE,
+        ):
+            return False
         for raw_clause in _unquoted_clauses(raw_text):
             raw_segments = [segment for segment in raw_clause.split(",") if _normalize(segment)]
             description_prefix_length = cls._nonrestrictive_description_prefix_length(raw_segments)
