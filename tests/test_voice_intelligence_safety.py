@@ -9,6 +9,45 @@ def utterance(text: str) -> Utterance:
 
 
 @pytest.mark.parametrize(
+    "verb",
+    [
+        "ally",
+        "apply",
+        "belly",
+        "bully",
+        "butterfly",
+        "colly",
+        "comply",
+        "dally",
+        "dillydally",
+        "fly",
+        "imply",
+        "jelly",
+        "jolly",
+        "misally",
+        "misapply",
+        "multiply",
+        "overfly",
+        "oversupply",
+        "ply",
+        "rally",
+        "rely",
+        "reply",
+        "shillyshally",
+        "sully",
+        "supply",
+        "tally",
+    ],
+)
+def test_ly_verbs_preserve_following_cancellation(verb: str) -> None:
+    result = SafetyIntentGuard().compile(
+        utterance(f"Don't {verb}, stop now"),
+        VoiceContext(),
+    )
+    assert result is not None and result.kind is IntentKind.CANCEL
+
+
+@pytest.mark.parametrize(
     "text",
     [
         "stop",

@@ -180,8 +180,38 @@ class SafetyIntentGuard:
         {"i", "you", "we", "do", "does", "did", "should", "must", "can", "could", "would", "will"}
     )
     _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset({"again", "ever"})
+    # Base-form `-ly` verb lemmas checked against Open English WordNet 2025:
+    # https://github.com/globalwordnet/english-wordnet/tree/2025-edition/src/yaml
+    # Hyphenated `dilly-dally` normalizes through the included `dally` token.
     _CANCEL_NEGATION_SCOPE_LY_VERBS = frozenset(
-        {"apply", "comply", "fly", "imply", "multiply", "rely", "reply", "supply"}
+        {
+            "ally",
+            "apply",
+            "belly",
+            "bully",
+            "butterfly",
+            "colly",
+            "comply",
+            "dally",
+            "dillydally",
+            "fly",
+            "imply",
+            "jelly",
+            "jolly",
+            "misally",
+            "misapply",
+            "multiply",
+            "overfly",
+            "oversupply",
+            "ply",
+            "rally",
+            "rely",
+            "reply",
+            "shillyshally",
+            "sully",
+            "supply",
+            "tally",
+        }
     )
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
