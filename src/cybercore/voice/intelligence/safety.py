@@ -181,10 +181,97 @@ class SafetyIntentGuard:
     )
     _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset({"again", "ever"})
     _CANCEL_NEGATION_SCOPE_PRODUCTIVE_ADVERB_ANCHORS = frozenset({"ever"})
-    _CANCEL_NEGATION_SCOPE_QUANTIFIER_PREPOSITIONS = frozenset(
-        {"after", "at", "before", "by", "during", "for", "in", "on", "under", "until", "without"}
+    _CANCEL_NEGATION_SCOPE_ASIDE_PREFIXES = frozenset(
+        {
+            "aboard",
+            "about",
+            "above",
+            "according",
+            "across",
+            "after",
+            "against",
+            "along",
+            "amid",
+            "among",
+            "around",
+            "as",
+            "at",
+            "before",
+            "behind",
+            "below",
+            "beneath",
+            "beside",
+            "besides",
+            "between",
+            "beyond",
+            "by",
+            "concerning",
+            "considering",
+            "despite",
+            "down",
+            "due",
+            "during",
+            "except",
+            "excluding",
+            "following",
+            "for",
+            "from",
+            "in",
+            "inside",
+            "instead",
+            "into",
+            "like",
+            "minus",
+            "near",
+            "notwithstanding",
+            "of",
+            "off",
+            "on",
+            "onto",
+            "opposite",
+            "outside",
+            "over",
+            "owing",
+            "past",
+            "per",
+            "plus",
+            "regarding",
+            "regardless",
+            "round",
+            "save",
+            "since",
+            "than",
+            "through",
+            "throughout",
+            "till",
+            "to",
+            "toward",
+            "towards",
+            "under",
+            "underneath",
+            "unlike",
+            "until",
+            "up",
+            "upon",
+            "versus",
+            "via",
+            "with",
+            "within",
+            "without",
+            "behem",
+            "bez",
+            "krome",
+            "navzdory",
+            "pod",
+            "pres",
+            "pri",
+            "s",
+            "se",
+            "v",
+            "ve",
+            "za",
+        }
     )
-    _CANCEL_NEGATION_SCOPE_QUANTIFIERS = frozenset({"all", "any", "every", "no"})
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
         r"vysvetli|definuj|znamena|slovo|vyraz)\b"
@@ -281,11 +368,7 @@ class SafetyIntentGuard:
         )
         if all(token in allowed for token in tokens):
             return True
-        return (
-            len(tokens) > 1
-            and tokens[0] in cls._CANCEL_NEGATION_SCOPE_QUANTIFIER_PREPOSITIONS
-            and any(token in cls._CANCEL_NEGATION_SCOPE_QUANTIFIERS for token in tokens[1:])
-        )
+        return bool(tokens) and tokens[0] in cls._CANCEL_NEGATION_SCOPE_ASIDE_PREFIXES
 
     @classmethod
     def _opens_negation_scope(cls, tokens: list[str]) -> bool:
