@@ -181,9 +181,7 @@ class SafetyIntentGuard:
     )
     _CANCEL_NEGATION_SCOPE_ADVERBS = frozenset({"again", "ever"})
     _CANCEL_NEGATION_SCOPE_PRODUCTIVE_ADVERB_ANCHORS = frozenset({"ever"})
-    _CANCEL_NEGATION_SCOPE_PREPOSITIONS = frozenset(
-        {"after", "at", "before", "by", "during", "for", "in", "under", "until", "without"}
-    )
+    _CANCEL_NEGATION_SCOPE_QUANTIFIERS = frozenset({"all", "any", "every", "no"})
     _CANCEL_MENTION = re.compile(
         r"\b(?:explain|define|meaning|mean|means|word|term|phrase|mention|mentioned|"
         r"vysvetli|definuj|znamena|slovo|vyraz)\b"
@@ -280,7 +278,7 @@ class SafetyIntentGuard:
         )
         if all(token in allowed for token in tokens):
             return True
-        return len(tokens) > 1 and tokens[0] in cls._CANCEL_NEGATION_SCOPE_PREPOSITIONS
+        return any(token in cls._CANCEL_NEGATION_SCOPE_QUANTIFIERS for token in tokens)
 
     @classmethod
     def _opens_negation_scope(cls, tokens: list[str]) -> bool:
