@@ -116,6 +116,7 @@ def test_ly_verbs_preserve_following_cancellation(verb: str) -> None:
         "Cancel every job",
         "Don't reply, stop now",
         "Don't apply, stop now",
+        "Stop now nothing is working",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:

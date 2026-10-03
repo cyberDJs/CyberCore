@@ -489,7 +489,16 @@ class SafetyIntentGuard:
         semantic_tail = tail
         while semantic_tail and semantic_tail[0] in cls._CANCEL_MODIFIERS:
             semantic_tail = semantic_tail[1:]
-        if semantic_tail and semantic_tail[0] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS:
+        negative_starts_subject_clause = (
+            len(semantic_tail) >= 3
+            and semantic_tail[0] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS
+            and semantic_tail[1] in cls._CANCEL_CONDITION_AUXILIARIES
+        )
+        if (
+            semantic_tail
+            and semantic_tail[0] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS
+            and not negative_starts_subject_clause
+        ):
             return False
         if tail[0] in cls._CANCEL_MATRIX_TAIL_BLOCKERS:
             return False
