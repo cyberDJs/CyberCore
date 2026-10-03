@@ -328,6 +328,17 @@ class SafetyIntentGuard:
         if copula_index is None:
             return False
         before_copula = tail[:copula_index]
+        semantic_before_copula = before_copula
+        while (
+            semantic_before_copula
+            and semantic_before_copula[0] in cls._CANCEL_MODIFIERS
+        ):
+            semantic_before_copula = semantic_before_copula[1:]
+        if (
+            semantic_before_copula
+            and semantic_before_copula[0] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS
+        ):
+            return False
         if set(before_copula) & cls._CANCEL_CONDITION_WORDS:
             return False
         if set(before_copula) & cls._CANCEL_FREE_RELATIVES:
@@ -487,10 +498,13 @@ class SafetyIntentGuard:
         if not tail:
             return True
         semantic_tail = tail
+        modifier_count = 0
         while semantic_tail and semantic_tail[0] in cls._CANCEL_MODIFIERS:
             semantic_tail = semantic_tail[1:]
+            modifier_count += 1
         negative_starts_subject_clause = (
-            len(semantic_tail) >= 3
+            modifier_count > 0
+            and len(semantic_tail) >= 3
             and semantic_tail[0] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS
             and semantic_tail[1] in cls._CANCEL_CONDITION_AUXILIARIES
         )
