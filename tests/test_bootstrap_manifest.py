@@ -33,6 +33,7 @@ def test_dispatcher_loads_as_standalone_source_artifact() -> None:
 
 def test_operation_surface_is_exact() -> None:
     assert SUPPORTED_SERVER_OPERATIONS == {
+        "system.inventory",
         "vikunja.backup.install",
         "vikunja.backup.run",
         "vikunja.backup.status",
@@ -122,6 +123,9 @@ def test_bootstrap_installs_every_fixed_helper_source_with_private_mode() -> Non
     }
     assert server_files["/usr/local/libexec/cybercore-exec/authorization.py"].source == (
         "src/cybercore/execution/authorization.py"
+    )
+    assert server_files["/usr/local/libexec/cybercore-exec/inventory.py"].source == (
+        "src/cybercore/execution/server/inventory.py"
     )
     helper = server_files["/usr/local/libexec/cybercore-exec/vikunja-backup-install"]
     assert helper.source == "deploy/cybercore-exec/vikunja-backup-install"
@@ -466,3 +470,30 @@ def test_bootstrap_scripts_are_declarative_only() -> None:
         assert "shell=True" not in text
         assert "bash -c" not in text
         assert "sh -c" not in text
+
+
+def test_bootstrap_installs_dispatcher_dependencies_before_dispatcher() -> None:
+    module = load_deploy_module("install")
+    manifest = module.build_install_manifest()
+    index = {action.action_id: position for position, action in enumerate(manifest)}
+
+    for dependency in (
+        "server-authorization",
+        "server-inventory",
+        "server-operations",
+        "server-protocol",
+    ):
+        assert index[dependency] < index["server-dispatcher"]
+
+
+def test_rollback_removes_inventory_after_dispatcher() -> None:
+    module = load_deploy_module("rollback")
+    manifest = module.build_rollback_manifest()
+    by_id = {action.action_id: action for action in manifest}
+    index = {action.action_id: position for position, action in enumerate(manifest)}
+
+    action = by_id["remove-inventory"]
+    assert action.action_type.value == "REMOVE_MANAGED_FILE_IF_EXACT_OR_ABSENT"
+    assert action.target == "/usr/local/libexec/cybercore-exec/inventory.py"
+    assert action.source_of_truth == "src/cybercore/execution/server/inventory.py"
+    assert index["remove-dispatcher"] < index["remove-inventory"]

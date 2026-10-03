@@ -22,6 +22,12 @@ def test_accepts_exact_vikunja_operation() -> None:
     assert decision.mutating is True
 
 
+def test_accepts_system_inventory_as_read_only() -> None:
+    decision = evaluate_action(_action("system.inventory"), VIKUNJA_TARGET)
+    assert decision.allowed is True
+    assert decision.mutating is False
+
+
 def test_rejects_unknown_operation() -> None:
     decision = evaluate_action(_action("shell.run"), VIKUNJA_TARGET)
     assert decision.allowed is False
@@ -38,6 +44,13 @@ def test_rejects_wrong_host_even_with_same_target_id() -> None:
 
 def test_rejects_extra_arguments() -> None:
     assert evaluate_action(_action(arguments={"cmd": "id"}), VIKUNJA_TARGET).allowed is False
+    assert (
+        evaluate_action(
+            _action("system.inventory", arguments={"path": "/"}),
+            VIKUNJA_TARGET,
+        ).allowed
+        is False
+    )
 
 
 def test_rejects_missing_plan_binding() -> None:

@@ -88,10 +88,11 @@ class ServerReceipt:
     stderr_sha256: str
     status: str
     mutation_possible: bool
+    result: Mapping[str, object] | None = None
     secret_values_recorded: bool = False
 
     def as_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "operation_id": self.operation_id,
             "operation": self.operation,
             "target_id": self.target_id,
@@ -107,3 +108,6 @@ class ServerReceipt:
             "mutation_possible": self.mutation_possible,
             "secret_values_recorded": self.secret_values_recorded,
         }
+        if self.result is not None:
+            payload["result"] = dict(self.result)
+        return payload
