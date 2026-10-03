@@ -342,9 +342,7 @@ class LocalSpeechRuntime:
             thread.join()
 
         if barge_in_endpoint_detected:
-            self._discard_pending_microphone_audio(
-                "finalizing processing barge-in endpoint"
-            )
+            self._discard_pending_microphone_audio("finalizing processing barge-in endpoint")
 
         if errors:
             raise errors[0]
