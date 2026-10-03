@@ -117,12 +117,18 @@ def test_unknown_slack_user_fails_closed_without_room_write(tmp_path: Path):
 
 
 def test_system_and_bot_messages_are_ignored():
-    assert SlackIngressMessage.from_slack(
-        "CROOM", {"ts": "1", "user": "UEIMY", "text": "joined", "subtype": "channel_join"}
-    ) is None
-    assert SlackIngressMessage.from_slack(
-        "CROOM", {"ts": "2", "user": "UBOT", "text": "wake", "subtype": "bot_message"}
-    ) is None
+    assert (
+        SlackIngressMessage.from_slack(
+            "CROOM", {"ts": "1", "user": "UEIMY", "text": "joined", "subtype": "channel_join"}
+        )
+        is None
+    )
+    assert (
+        SlackIngressMessage.from_slack(
+            "CROOM", {"ts": "2", "user": "UBOT", "text": "wake", "subtype": "bot_message"}
+        )
+        is None
+    )
 
 
 def test_ingest_many_processes_oldest_first(tmp_path: Path):

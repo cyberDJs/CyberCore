@@ -32,7 +32,13 @@ class SlackIngressMessage:
     @classmethod
     def from_slack(cls, channel_id: str, raw: Mapping[str, Any]) -> "SlackIngressMessage | None":
         subtype = str(raw.get("subtype") or "")
-        if subtype in {"channel_join", "channel_leave", "message_changed", "message_deleted", "bot_message"}:
+        if subtype in {
+            "channel_join",
+            "channel_leave",
+            "message_changed",
+            "message_deleted",
+            "bot_message",
+        }:
             return None
         user_id = str(raw.get("user") or "").strip()
         message_ts = str(raw.get("ts") or "").strip()
@@ -48,7 +54,9 @@ class BrokerSocketClient:
         self.timeout_seconds = timeout_seconds
 
     def _request(self, method: str, **args: Any) -> Any:
-        request = json.dumps({"method": method, "args": args}, separators=(",", ":")).encode() + b"\n"
+        request = (
+            json.dumps({"method": method, "args": args}, separators=(",", ":")).encode() + b"\n"
+        )
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(self.timeout_seconds)
             client.connect(self.socket_path)
@@ -67,7 +75,9 @@ class BrokerSocketClient:
             raise RuntimeError(f"room broker request failed: {error.get('type', 'unknown')}")
         return decoded.get("result")
 
-    def post(self, *, room_id: str, session_id: str, target: str, payload: Mapping[str, Any]) -> dict[str, Any]:
+    def post(
+        self, *, room_id: str, session_id: str, target: str, payload: Mapping[str, Any]
+    ) -> dict[str, Any]:
         result = self._request(
             "post_event",
             room_id=room_id,
@@ -80,7 +90,9 @@ class BrokerSocketClient:
             raise RuntimeError("room broker returned invalid post result")
         return result
 
-    def read(self, *, room_id: str, session_id: str, after_sequence: int = 0, limit: int = 1000) -> list[dict[str, Any]]:
+    def read(
+        self, *, room_id: str, session_id: str, after_sequence: int = 0, limit: int = 1000
+    ) -> list[dict[str, Any]]:
         result = self._request(
             "read_events",
             room_id=room_id,
@@ -117,7 +129,9 @@ class SlackWebApi:
             with urlopen(request, timeout=self.timeout_seconds) as response:
                 payload = json.loads(response.read())
             if not payload.get("ok"):
-                raise RuntimeError(f"Slack conversations.history failed: {payload.get('error', 'unknown')}")
+                raise RuntimeError(
+                    f"Slack conversations.history failed: {payload.get('error', 'unknown')}"
+                )
             batch = payload.get("messages") or []
             messages.extend(item for item in batch if isinstance(item, dict))
             metadata = payload.get("response_metadata") or {}
@@ -231,9 +245,13 @@ def _write_state(path: Path, last_ts: str) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Bridge one Slack channel into the CyberDJS Room broker")
+    parser = argparse.ArgumentParser(
+        description="Bridge one Slack channel into the CyberDJS Room broker"
+    )
     parser.add_argument("--once", action="store_true", help="poll Slack once and exit")
-    parser.add_argument("--stdin-json", action="store_true", help="read one Slack API message JSON object per line")
+    parser.add_argument(
+        "--stdin-json", action="store_true", help="read one Slack API message JSON object per line"
+    )
     parser.add_argument("--interval", type=float, default=2.0)
     return parser
 
