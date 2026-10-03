@@ -124,6 +124,8 @@ def test_ly_verbs_preserve_following_cancellation(verb: str) -> None:
         "Stop the service because it is failing",
         "Cancel this because it is wrong",
         "Stop the service since it is failing",
+        "Stop processing immediately please",
+        "Cancel deployment right now",
     ],
 )
 def test_cancel_is_deterministic(text: str) -> None:
@@ -144,6 +146,7 @@ def test_cancel_is_deterministic(text: str) -> None:
         "Prosím schvaluji plán",
         "Approve the request that has already been reviewed",
         "Approve the request that will be reviewed",
+        "Approve this because it is safe",
     ],
 )
 def test_approval_is_deterministic(text: str) -> None:
@@ -160,6 +163,8 @@ def test_approval_is_deterministic(text: str) -> None:
         "run diagnostics",
         "Run the job that has already been approved",
         "Run the job that will be approved",
+        "Run diagnostics because the service is failing",
+        "Execute the plan since it is approved",
     ],
 )
 def test_execute_is_deterministic(text: str) -> None:
@@ -212,6 +217,8 @@ def test_execute_is_deterministic(text: str) -> None:
         "Approve now?",
         "Wait, stop?",
         "Wait, please stop?",
+        "Stop the service why exactly?",
+        "Cancel this why please?",
         "Zrušit co?",
         "Zastav proč?",
         "Spusť co?",

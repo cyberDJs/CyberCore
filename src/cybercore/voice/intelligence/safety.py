@@ -41,6 +41,7 @@ class SafetyIntentGuard:
             "simply",
             "maybe",
             "now",
+            "right",
             "immediately",
             "hned",
             "nyni",
@@ -494,6 +495,18 @@ class SafetyIntentGuard:
     @classmethod
     def _authority_marker_leads_description(cls, tokens: list[str], index: int) -> bool:
         tail = tokens[index + 1 :]
+        reason_index = next(
+            (
+                position
+                for position, token in enumerate(tail)
+                if token in cls._CANCEL_REASON_CLAUSE_WORDS
+            ),
+            None,
+        )
+        if reason_index is not None:
+            tail = tail[:reason_index]
+        if not tail:
+            return False
         relative_positions = [
             position
             for position, token in enumerate(tail)
@@ -595,10 +608,7 @@ class SafetyIntentGuard:
         semantic_tail = tail
         while semantic_tail and semantic_tail[0] in cls._CANCEL_MODIFIERS:
             semantic_tail = semantic_tail[1:]
-        if semantic_tail and (
-            semantic_tail[0] in cls._AUTHORITY_INTERROGATIVE_TAILS
-            or semantic_tail[-1] in cls._AUTHORITY_INTERROGATIVE_TAILS
-        ):
+        if any(token in cls._AUTHORITY_INTERROGATIVE_TAILS for token in semantic_tail):
             return False
         subject_auxiliary_index = next(
             (
@@ -629,9 +639,12 @@ class SafetyIntentGuard:
             return True
         if tail[0] in cls._CANCEL_IMPERATIVE_OBJECT_STARTERS:
             return True
-        if len(tail) == 1:
+        trailing_trimmed = list(tail)
+        while trailing_trimmed and trailing_trimmed[-1] in cls._CANCEL_MODIFIERS:
+            trailing_trimmed.pop()
+        if trailing_trimmed and len(trailing_trimmed) < len(tail):
             return True
-        if len(tail) == 2 and tail[1] in cls._CANCEL_MODIFIERS:
+        if len(tail) == 1:
             return True
         return any(token in cls._CANCEL_CONDITION_WORDS for token in tail[1:])
 
