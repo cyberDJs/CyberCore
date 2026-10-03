@@ -110,6 +110,9 @@ class SafetyIntentGuard:
             "whoever",
         }
     )
+    _CANCEL_NEGATIVE_OBJECT_STARTERS = frozenset(
+        {"neither", "nobody", "none", "nothing", "nowhere"}
+    )
     _AUTHORITY_DESCRIPTION_MODALS = frozenset(
         {"can", "could", "may", "might", "must", "should", "will", "would"}
     )
@@ -483,6 +486,8 @@ class SafetyIntentGuard:
         tail = tokens[index + 1 :]
         if not tail:
             return True
+        if tail[0] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS:
+            return False
         if tail[0] in cls._CANCEL_MATRIX_TAIL_BLOCKERS:
             return False
         if tail[0] in cls._CANCEL_NOUN_HEADS:
