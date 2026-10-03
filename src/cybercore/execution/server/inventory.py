@@ -272,7 +272,7 @@ def _docker_inventory(
                     access_status = "partial_failure"
                     continue
                 storage.append(normalized)
-            if not parsed_ok:
+            if not parsed_ok or not storage:
                 access_status = "partial_failure"
         else:
             access_status = "partial_failure"
@@ -501,7 +501,7 @@ def validate_inventory_payload(value: object) -> dict[str, object]:
         if not cli_present or version is not None or containers or storage:
             raise ValueError("docker denied_or_unreachable state is inconsistent")
     elif access_status == "ok":
-        if not cli_present or version is None:
+        if not cli_present or version is None or not storage:
             raise ValueError("docker ok state is inconsistent")
     elif access_status == "partial_failure":
         if not cli_present:

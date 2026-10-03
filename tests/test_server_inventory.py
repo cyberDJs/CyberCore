@@ -412,6 +412,38 @@ def test_non_string_storage_field_is_partial_failure_not_stringified() -> None:
     assert docker["storage"] == []
 
 
+def test_empty_storage_output_is_partial_failure() -> None:
+    def fake_run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if argv[1:3] == ["version", "--format"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="27.5.1\n", stderr="")
+        if argv[1:3] == ["ps", "--size"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        if argv[1:3] == ["system", "df"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
+        raise AssertionError(argv)
+
+    payload = collect_inventory(run=fake_run, which=lambda _: "/usr/bin/docker")
+    docker = payload["docker"]
+    assert isinstance(docker, dict)
+    assert docker["access_status"] == "partial_failure"
+    assert docker["containers"] == []
+    assert docker["storage"] == []
+
+
+def test_validator_rejects_ok_state_without_storage_evidence() -> None:
+    payload = _valid_inventory_payload()
+    payload["docker"] = {
+        "cli_present": True,
+        "access_status": "ok",
+        "server_version": "27.5.1",
+        "containers": [],
+        "storage": [],
+    }
+
+    with pytest.raises(ValueError, match="docker ok state is inconsistent"):
+        validate_inventory_payload(payload)
+
+
 def test_meminfo_read_failure_fails_closed(tmp_path) -> None:
     with pytest.raises(ValueError, match="memory inventory is unavailable"):
         _read_meminfo(tmp_path / "missing-meminfo")

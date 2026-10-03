@@ -87,7 +87,7 @@ Logical CPU capacity is fail-closed: collection fails if the runtime cannot repo
 
 Memory evidence must be internally consistent: `available_bytes <= total_bytes` and `swap_free_bytes <= swap_total_bytes`. Physical memory total must also be positive. Contradictory capacity values are rejected.
 
-Docker availability is state-dependent. `not_installed` requires no CLI, no server version, and no rows; `denied_or_unreachable` requires a present CLI but no server version or rows; `ok` requires a present CLI and server version; `partial_failure` requires a present CLI and may contain partial bounded evidence. Contradictory state combinations fail closed.
+Docker availability is state-dependent. `not_installed` requires no CLI, no server version, and no rows; `denied_or_unreachable` requires a present CLI but no server version or rows; `ok` requires a present CLI, server version, and at least one validated Docker storage summary row; `partial_failure` requires a present CLI and may contain partial bounded evidence. A successful `docker system df` command with no validated storage rows is treated as `partial_failure`. Contradictory state combinations fail closed.
 
 
 ## Bounded Docker command output
