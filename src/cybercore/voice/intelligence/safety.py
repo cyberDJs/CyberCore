@@ -666,11 +666,12 @@ class SafetyIntentGuard:
         has_negative_object = any(
             token in cls._CANCEL_NEGATIVE_OBJECT_STARTERS for token in semantic_tail
         )
+        has_verbal_negation = bool(cls._CANCEL_NEGATION.search(" ".join(semantic_tail)))
         has_interrogative_boundary = (
             semantic_tail[0] in cls._AUTHORITY_INTERROGATIVE_TAILS
             or semantic_tail[-1] in cls._AUTHORITY_INTERROGATIVE_TAILS
         )
-        return not has_negative_object and not has_interrogative_boundary
+        return not has_negative_object and not has_verbal_negation and not has_interrogative_boundary
 
     @classmethod
     def _is_bare_authority_question(
@@ -688,7 +689,7 @@ class SafetyIntentGuard:
             tokens = tokens[1:]
         while tokens and tokens[-1] in allowed_modifiers:
             tokens = tokens[:-1]
-        return len(tokens) == 1 and tokens[0] in markers
+        return bool(tokens) and tokens[0] in markers
 
     @classmethod
     def _is_fixed_approval_phrase(cls, raw_text: str) -> bool:
@@ -732,6 +733,7 @@ class SafetyIntentGuard:
 
     @classmethod
     def _is_cancel_command(cls, raw_text: str) -> bool:
+        cancel_detected = False
         for raw_clause, delimiter in _unquoted_clauses_with_delimiters(raw_text):
             if cls._is_bare_authority_question(
                 raw_clause,
@@ -797,8 +799,10 @@ class SafetyIntentGuard:
                     local_prefix_tokens = prefix_tokens[-8:]
                     local_prefix = " ".join(local_prefix_tokens)
                     if pending_negation:
+                        cancel_detected = False
                         continue
                     if cls._CANCEL_NEGATION.search(local_prefix):
+                        cancel_detected = False
                         continue
                     if cls._marker_leads_description(tokens, index):
                         continue
@@ -817,8 +821,8 @@ class SafetyIntentGuard:
                     ):
                         continue
                     if command_prefix or condition_prefix:
-                        return True
-        return False
+                        cancel_detected = True
+        return cancel_detected
 
     def compile(self, utterance: Utterance, context: VoiceContext) -> VoiceIntent | None:
         kind: IntentKind | None = None
