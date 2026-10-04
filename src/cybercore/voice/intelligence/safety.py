@@ -671,7 +671,11 @@ class SafetyIntentGuard:
             semantic_tail[0] in cls._AUTHORITY_INTERROGATIVE_TAILS
             or semantic_tail[-1] in cls._AUTHORITY_INTERROGATIVE_TAILS
         )
-        return not has_negative_object and not has_verbal_negation and not has_interrogative_boundary
+        return (
+            not has_negative_object
+            and not has_verbal_negation
+            and not has_interrogative_boundary
+        )
 
     @classmethod
     def _is_bare_authority_question(
