@@ -1,3 +1,4 @@
+from http import client as http_client
 import json
 from urllib import request
 
@@ -45,6 +46,21 @@ def test_ollama_transport_disables_environment_proxies_and_redirects(monkeypatch
     )
     assert proxy_handler.proxies == {}
     assert any(type(handler).__name__ == "_NoRedirectHandler" for handler in captured["handlers"])
+
+
+def test_ollama_protocol_error_is_normalized_as_transport_failure(monkeypatch) -> None:
+    class BrokenOpener:
+        def open(self, *_args, **_kwargs):
+            raise http_client.BadStatusLine("not-http")
+
+    monkeypatch.setattr(
+        "cybercore.voice.intelligence.ollama._build_local_only_opener",
+        lambda: BrokenOpener(),
+    )
+
+    client = OllamaModelClient(config())
+    with pytest.raises(ModelTransportError, match="ollama request failed"):
+        client.complete(system="s", user="u")
 
 
 def test_ollama_sends_nonstreaming_schema_request() -> None:

@@ -232,6 +232,17 @@ def test_sounddevice_input_reports_partial_capture_block_pending() -> None:
     assert source.read_frame_if_available() is None
     assert source.has_pending_audio() is True
     assert sd.input_stream.read_calls == []
+    assert source.pending_audio_completion_grace_s() == pytest.approx(0.16)
+
+
+def test_sounddevice_input_without_downsampler_uses_one_block_completion_grace() -> None:
+    sd = FakeSoundDevice()
+    source = SoundDeviceInput(
+        LocalAudioConfig(sample_rate_hz=48000),
+        sounddevice_module=sd,
+    )
+
+    assert source.pending_audio_completion_grace_s() == pytest.approx(0.08)
 
 
 def test_sounddevice_input_discards_partial_capture_block() -> None:

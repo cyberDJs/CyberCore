@@ -150,6 +150,34 @@ class CompletingPartialFakeInput(FakeInput):
         return self.partial_frame is not None
 
 
+class DelayedCompletingPartialFakeInput(FakeInput):
+    def __init__(self) -> None:
+        super().__init__([frame(1)])
+        self.partial_frame: AudioFrame | None = frame(2)
+        self.pending_since: float | None = None
+
+    def read_frame_if_available(self) -> AudioFrame | None:
+        self.nonblocking_reads += 1
+        if (
+            self.pending_since is not None
+            and self.partial_frame is not None
+            and time.monotonic() - self.pending_since >= 0.005
+        ):
+            completed, self.partial_frame = self.partial_frame, None
+            return completed
+        return None
+
+    def has_pending_audio(self) -> bool:
+        if self.partial_frame is None:
+            return False
+        if self.pending_since is None:
+            self.pending_since = time.monotonic()
+        return True
+
+    def pending_audio_completion_grace_s(self) -> float:
+        return 0.02
+
+
 class FakeTransport:
     def __init__(self) -> None:
         self.sent: list[int] = []
@@ -401,6 +429,20 @@ def test_processing_preserves_partial_audio_at_inference_boundary() -> None:
 
     assert result == "done"
     assert source.pending_checks >= 1
+    assert stt.sequences == [2]
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
+def test_processing_uses_device_completion_grace_for_partial_boundary_audio() -> None:
+    runtime, session, stt, _, _, _ = make_runtime(block_ms=1)
+    source = DelayedCompletingPartialFakeInput()
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    result = runtime.process_with_live_input(lambda: "done")
+
+    assert result == "done"
     assert stt.sequences == [2]
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED

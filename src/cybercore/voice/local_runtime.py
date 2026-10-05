@@ -357,7 +357,13 @@ class LocalSpeechRuntime:
                 and callable(pending_audio)
                 and pending_audio()
             ):
-                boundary_deadline = time.monotonic() + block_ms / 1000
+                completion_grace = getattr(
+                    self.audio_input, "pending_audio_completion_grace_s", None
+                )
+                boundary_grace_s = block_ms / 1000
+                if callable(completion_grace):
+                    boundary_grace_s = max(boundary_grace_s, float(completion_grace()))
+                boundary_deadline = time.monotonic() + boundary_grace_s
                 while self.realtime.state is RealtimeState.PROCESSING:
                     if pump_available_input_once():
                         continue

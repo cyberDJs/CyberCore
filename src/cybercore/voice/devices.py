@@ -491,6 +491,10 @@ class SoundDeviceInput:
             return True
         return int(getattr(stream, "read_available", 0)) > 0
 
+    def pending_audio_completion_grace_s(self) -> float:
+        block_count = 2 if self._downsampler is not None else 1
+        return block_count * self.config.block_ms / 1000
+
     def read_frame_if_available(self) -> AudioFrame | None:
         stream = self._ensure_stream()
         if self._downsampler is None:

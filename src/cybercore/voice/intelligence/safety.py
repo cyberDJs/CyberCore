@@ -223,6 +223,8 @@ class SafetyIntentGuard:
             "denied",
             "failed",
             "finished",
+            "froze",
+            "hung",
             "queued",
             "rejected",
             "started",

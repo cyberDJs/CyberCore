@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import json
 from typing import Mapping
+from http import client as http_client
 from urllib import error, parse, request
 
 from cybercore.voice.intelligence.config import IntelligenceConfig
@@ -35,7 +36,13 @@ def _default_transport(url: str, payload: bytes, timeout_s: float) -> bytes:
     try:
         with opener.open(req, timeout=timeout_s) as response:
             return response.read(1_048_577)
-    except (error.HTTPError, error.URLError, TimeoutError, OSError) as exc:
+    except (
+        error.HTTPError,
+        error.URLError,
+        http_client.HTTPException,
+        TimeoutError,
+        OSError,
+    ) as exc:
         raise ModelTransportError(f"ollama request failed: {exc}") from exc
 
 
