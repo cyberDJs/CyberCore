@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 
 from cybercore.voice.adapters import VadState
 from cybercore.voice.devices import (
@@ -362,7 +362,8 @@ class LocalSpeechRuntime:
                 )
                 boundary_grace_s = block_ms / 1000
                 if callable(completion_grace):
-                    boundary_grace_s = max(boundary_grace_s, float(completion_grace()))
+                    typed_completion_grace = cast(Callable[[], float], completion_grace)
+                    boundary_grace_s = max(boundary_grace_s, float(typed_completion_grace()))
                 boundary_deadline = time.monotonic() + boundary_grace_s
                 while self.realtime.state is RealtimeState.PROCESSING:
                     if pump_available_input_once():
