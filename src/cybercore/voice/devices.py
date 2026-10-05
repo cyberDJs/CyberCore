@@ -485,6 +485,12 @@ class SoundDeviceInput:
             self._feed_downsampler_block()
         return self._build_frame(self._downsampler.pop_payload(self._model_frames_per_block))
 
+    def has_pending_audio(self) -> bool:
+        stream = self._ensure_stream()
+        if self._downsampler is not None and self._downsampler.available_samples > 0:
+            return True
+        return int(getattr(stream, "read_available", 0)) > 0
+
     def read_frame_if_available(self) -> AudioFrame | None:
         stream = self._ensure_stream()
         if self._downsampler is None:

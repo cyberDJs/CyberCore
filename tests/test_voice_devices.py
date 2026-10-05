@@ -223,6 +223,17 @@ def test_sounddevice_input_preserves_downsampling_state_across_capture_blocks() 
     assert actual == reference[: len(actual)]
 
 
+def test_sounddevice_input_reports_partial_capture_block_pending() -> None:
+    sd = FakeSoundDevice()
+    sd.input_stream = PartialInputStream(100)
+    source = SoundDeviceInput(LocalAudioConfig(), sounddevice_module=sd)
+
+    assert source.has_pending_audio() is True
+    assert source.read_frame_if_available() is None
+    assert source.has_pending_audio() is True
+    assert sd.input_stream.read_calls == []
+
+
 def test_sounddevice_input_discards_partial_capture_block() -> None:
     sd = FakeSoundDevice()
     sd.input_stream = PartialInputStream(100)

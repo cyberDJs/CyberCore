@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import math
 import os
 from pathlib import Path
 from typing import Mapping
@@ -35,8 +36,8 @@ class IntelligenceConfig:
             raise IntelligenceConfigError("WB-0039 reference provider must be 'ollama'")
         if not self.model.strip():
             raise IntelligenceConfigError("intelligence model must not be empty")
-        if self.timeout_s <= 0:
-            raise IntelligenceConfigError("intelligence timeout_s must be positive")
+        if not math.isfinite(self.timeout_s) or self.timeout_s <= 0:
+            raise IntelligenceConfigError("intelligence timeout_s must be finite and positive")
         if not 0.0 <= self.min_confidence <= 1.0:
             raise IntelligenceConfigError("intelligence min_confidence must be between 0 and 1")
         if not 80 <= self.max_answer_chars <= 8000:

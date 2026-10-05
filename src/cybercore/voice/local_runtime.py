@@ -351,6 +351,22 @@ class LocalSpeechRuntime:
                     done.wait(idle_sleep)
             while pump_available_input_once():
                 pass
+            pending_audio = getattr(self.audio_input, "has_pending_audio", None)
+            if (
+                self.realtime.state is RealtimeState.PROCESSING
+                and callable(pending_audio)
+                and pending_audio()
+            ):
+                boundary_deadline = time.monotonic() + block_ms / 1000
+                while self.realtime.state is RealtimeState.PROCESSING:
+                    if pump_available_input_once():
+                        continue
+                    if not pending_audio():
+                        break
+                    remaining = boundary_deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    time.sleep(min(idle_sleep, remaining))
         except Exception:
             if self.realtime.state is not RealtimeState.CANCELLED:
                 self.realtime.cancel("microphone input failed during intelligence processing")

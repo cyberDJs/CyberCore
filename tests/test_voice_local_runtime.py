@@ -132,6 +132,24 @@ class FakeInput:
         self.closed = True
 
 
+class CompletingPartialFakeInput(FakeInput):
+    def __init__(self) -> None:
+        super().__init__([frame(1)])
+        self.partial_frame: AudioFrame | None = frame(2)
+        self.pending_checks = 0
+
+    def read_frame_if_available(self) -> AudioFrame | None:
+        self.nonblocking_reads += 1
+        if self.pending_checks and self.partial_frame is not None:
+            completed, self.partial_frame = self.partial_frame, None
+            return completed
+        return None
+
+    def has_pending_audio(self) -> bool:
+        self.pending_checks += 1
+        return self.partial_frame is not None
+
+
 class FakeTransport:
     def __init__(self) -> None:
         self.sent: list[int] = []
@@ -369,6 +387,21 @@ def test_processing_drains_all_final_available_input_after_operation_completes()
     assert source.nonblocking == []
     assert stt.sequences[-1] == 3
     assert source.discard_pending_calls == 1
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
+def test_processing_preserves_partial_audio_at_inference_boundary() -> None:
+    runtime, session, stt, _, _, _ = make_runtime()
+    source = CompletingPartialFakeInput()
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    result = runtime.process_with_live_input(lambda: "done")
+
+    assert result == "done"
+    assert source.pending_checks >= 1
+    assert stt.sequences == [2]
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
 

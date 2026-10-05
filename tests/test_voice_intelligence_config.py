@@ -25,6 +25,22 @@ def test_unknown_config_field_is_rejected(tmp_path) -> None:
         load_intelligence_config(path)
 
 
+@pytest.mark.parametrize(
+    "raw_config",
+    [
+        '{"timeout_s": 1e309}',
+        '{"timeout_s": "Infinity"}',
+        '{"timeout_s": "NaN"}',
+    ],
+)
+def test_non_finite_timeout_is_rejected(tmp_path, raw_config: str) -> None:
+    path = tmp_path / "voice-intelligence.json"
+    path.write_text(raw_config, encoding="utf-8")
+
+    with pytest.raises(IntelligenceConfigError, match="finite and positive"):
+        load_intelligence_config(path)
+
+
 def test_enabled_loopback_ollama_config_loads(tmp_path) -> None:
     path = tmp_path / "voice-intelligence.json"
     path.write_text(
