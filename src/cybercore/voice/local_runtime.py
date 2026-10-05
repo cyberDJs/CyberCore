@@ -331,19 +331,25 @@ class LocalSpeechRuntime:
         )
         thread.start()
         barge_in_endpoint_detected = False
-        try:
-            while not done.is_set():
-                incoming = self.audio_input.read_frame_if_available()
-                if incoming is None:
-                    done.wait(idle_sleep)
-                    continue
-                if barge_in_endpoint_detected:
-                    continue
+
+        def pump_available_input_once() -> bool:
+            nonlocal barge_in_endpoint_detected
+            incoming = self.audio_input.read_frame_if_available()
+            if incoming is None:
+                return False
+            if not barge_in_endpoint_detected:
                 self.realtime.receive_input(incoming)
                 if self.realtime.state is RealtimeState.INTERRUPTED and bool(
                     getattr(self.provider.stt, "endpoint_detected", False)
                 ):
                     barge_in_endpoint_detected = True
+            return True
+
+        try:
+            while not done.is_set():
+                if not pump_available_input_once():
+                    done.wait(idle_sleep)
+            pump_available_input_once()
         except Exception:
             if self.realtime.state is not RealtimeState.CANCELLED:
                 self.realtime.cancel("microphone input failed during intelligence processing")

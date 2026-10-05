@@ -334,6 +334,23 @@ def test_processing_drains_input_after_barge_in_endpoint() -> None:
     assert session.status is SessionStatus.INTERRUPTED
 
 
+def test_processing_checks_final_available_input_after_operation_completes() -> None:
+    runtime, session, stt, _, source, _ = make_runtime(nonblocking=[])
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    def complete_with_available_input() -> str:
+        source.nonblocking.append(frame(2))
+        return "done"
+
+    result = runtime.process_with_live_input(complete_with_available_input)
+
+    assert result == "done"
+    assert stt.sequences == [2]
+    assert source.discard_pending_calls == 1
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
 def test_capture_finalizes_pending_barge_in_endpoint_before_reading_next_block() -> None:
     runtime, session, _, _, source, _ = make_runtime(
         blocking=[frame(1), frame(3)],
