@@ -680,10 +680,7 @@ class SafetyIntentGuard:
             and subject_auxiliary_index is not None
             and bool(tail[subject_auxiliary_index + 1 :])
         )
-        if (
-            cls._tail_ends_status_report(semantic_tail)
-            and not negative_starts_following_clause
-        ):
+        if cls._tail_ends_status_report(semantic_tail) and not negative_starts_following_clause:
             return False
         if (
             semantic_tail
