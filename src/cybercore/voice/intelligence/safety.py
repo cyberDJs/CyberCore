@@ -228,6 +228,9 @@ class SafetyIntentGuard:
             "succeeded",
         }
     )
+    _AUTHORITY_STATUS_TRAILING_MODIFIERS = frozenset(
+        {"again", "already", "just", "recently", "still", "yet"}
+    )
     _AUTHORITY_DESCRIPTION_MODALS = frozenset(
         {"can", "could", "may", "might", "must", "should", "will", "would"}
     )
@@ -618,14 +621,33 @@ class SafetyIntentGuard:
 
     @classmethod
     def _tail_ends_status_report(cls, tail: list[str]) -> bool:
-        if not tail or tail[-1] not in cls._AUTHORITY_STATUS_PREDICATES:
+        if not tail:
             return False
         subordinate_boundaries = (
             cls._CANCEL_RELATIVE_PRONOUNS
             | cls._CANCEL_CONDITION_WORDS
             | cls._CANCEL_REASON_CLAUSE_WORDS
         )
-        return not bool(set(tail[:-1]) & subordinate_boundaries)
+        boundary_index = next(
+            (
+                position
+                for position, token in enumerate(tail)
+                if token in subordinate_boundaries
+            ),
+            len(tail),
+        )
+        matrix_tail = list(tail[:boundary_index])
+        while matrix_tail and (
+            matrix_tail[-1] in cls._AUTHORITY_STATUS_TRAILING_MODIFIERS
+            or matrix_tail[-1].endswith("ly")
+        ):
+            matrix_tail.pop()
+        if not matrix_tail:
+            return False
+        predicate = matrix_tail[-1]
+        return predicate in cls._AUTHORITY_STATUS_PREDICATES or (
+            len(predicate) > 4 and predicate.endswith("ed")
+        )
 
     @classmethod
     def _cancel_marker_has_imperative_tail(
@@ -726,12 +748,23 @@ class SafetyIntentGuard:
 
     @classmethod
     def _is_fixed_approval_phrase(cls, raw_text: str) -> bool:
+        approval_detected = False
         for raw_clause, delimiter in _unquoted_clauses_with_delimiters(raw_text):
+            normalized_clause = _normalize(raw_clause)
+            tokens = normalized_clause.split()
+            if (
+                approval_detected
+                and cls._CANCEL_NEGATION.search(normalized_clause)
+                and len(tokens) >= 2
+                and tokens[-2:] == ["do", "it"]
+            ):
+                approval_detected = False
+                continue
             if "?" in delimiter:
                 continue
-            if _normalize(raw_clause) in cls._APPROVE_PHRASES:
-                return True
-        return False
+            if normalized_clause in cls._APPROVE_PHRASES:
+                approval_detected = True
+        return approval_detected
 
     @classmethod
     def _is_authority_command(
