@@ -355,6 +355,7 @@ def test_processing_drains_all_final_available_input_after_operation_completes()
     runtime, session, stt, _, source, _ = make_runtime(
         nonblocking=[],
         vad=DelayedSpeechVad(speech_sequence=3),
+        blocking=[frame(3)],
     )
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
 
