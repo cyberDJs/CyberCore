@@ -629,11 +629,7 @@ class SafetyIntentGuard:
             | cls._CANCEL_REASON_CLAUSE_WORDS
         )
         boundary_index = next(
-            (
-                position
-                for position, token in enumerate(tail)
-                if token in subordinate_boundaries
-            ),
+            (position for position, token in enumerate(tail) if token in subordinate_boundaries),
             len(tail),
         )
         matrix_tail = list(tail[:boundary_index])
@@ -669,8 +665,6 @@ class SafetyIntentGuard:
             token in cls._AUTHORITY_INTERROGATIVE_TAILS for token in semantic_tail
         ):
             return False
-        if cls._tail_ends_status_report(semantic_tail):
-            return False
         subject_auxiliary_index = next(
             (
                 position
@@ -686,6 +680,11 @@ class SafetyIntentGuard:
             and subject_auxiliary_index is not None
             and bool(tail[subject_auxiliary_index + 1 :])
         )
+        if (
+            cls._tail_ends_status_report(semantic_tail)
+            and not negative_starts_following_clause
+        ):
+            return False
         if (
             semantic_tail
             and semantic_tail[0] in cls._CANCEL_NEGATIVE_OBJECT_STARTERS
