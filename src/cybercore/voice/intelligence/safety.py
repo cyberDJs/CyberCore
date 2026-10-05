@@ -215,9 +215,11 @@ class SafetyIntentGuard:
             "aborted",
             "approved",
             "blocked",
+            "broke",
             "canceled",
             "cancelled",
             "completed",
+            "crashed",
             "denied",
             "failed",
             "finished",
@@ -229,7 +231,7 @@ class SafetyIntentGuard:
         }
     )
     _AUTHORITY_STATUS_TRAILING_MODIFIERS = frozenset(
-        {"again", "already", "just", "recently", "still", "yet"}
+        {"again", "already", "hard", "just", "recently", "still", "yet"}
     )
     _AUTHORITY_DESCRIPTION_MODALS = frozenset(
         {"can", "could", "may", "might", "must", "should", "will", "would"}
@@ -748,14 +750,12 @@ class SafetyIntentGuard:
         for raw_clause, delimiter in _unquoted_clauses_with_delimiters(raw_text):
             normalized_clause = _normalize(raw_clause)
             tokens = normalized_clause.split()
-            if (
-                approval_detected
-                and cls._CANCEL_NEGATION.search(normalized_clause)
-                and len(tokens) >= 2
-                and tokens[-2:] == ["do", "it"]
-            ):
-                approval_detected = False
-                continue
+            if approval_detected and cls._CANCEL_NEGATION.search(normalized_clause):
+                retracts_fixed_phrase = len(tokens) >= 2 and tokens[-2:] == ["do", "it"]
+                retracts_approval_marker = any(token in cls._APPROVE_MARKERS for token in tokens)
+                if retracts_fixed_phrase or retracts_approval_marker:
+                    approval_detected = False
+                    continue
             if "?" in delimiter:
                 continue
             if normalized_clause in cls._APPROVE_PHRASES:
