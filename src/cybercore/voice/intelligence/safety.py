@@ -617,6 +617,17 @@ class SafetyIntentGuard:
         return len(tail) == 2 and tail[1] in cls._CANCEL_MODIFIERS
 
     @classmethod
+    def _tail_ends_status_report(cls, tail: list[str]) -> bool:
+        if not tail or tail[-1] not in cls._AUTHORITY_STATUS_PREDICATES:
+            return False
+        subordinate_boundaries = (
+            cls._CANCEL_RELATIVE_PRONOUNS
+            | cls._CANCEL_CONDITION_WORDS
+            | cls._CANCEL_REASON_CLAUSE_WORDS
+        )
+        return not bool(set(tail[:-1]) & subordinate_boundaries)
+
+    @classmethod
     def _cancel_marker_has_imperative_tail(
         cls,
         tokens: list[str],
@@ -636,7 +647,7 @@ class SafetyIntentGuard:
             token in cls._AUTHORITY_INTERROGATIVE_TAILS for token in semantic_tail
         ):
             return False
-        if semantic_tail and semantic_tail[-1] in cls._AUTHORITY_STATUS_PREDICATES:
+        if cls._tail_ends_status_report(semantic_tail):
             return False
         subject_auxiliary_index = next(
             (
@@ -690,7 +701,7 @@ class SafetyIntentGuard:
         has_interrogative = any(
             token in cls._AUTHORITY_INTERROGATIVE_TAILS for token in semantic_tail
         )
-        has_status_report = semantic_tail[-1] in cls._AUTHORITY_STATUS_PREDICATES
+        has_status_report = cls._tail_ends_status_report(semantic_tail)
         return not (
             has_negative_object or has_verbal_negation or has_interrogative or has_status_report
         )
