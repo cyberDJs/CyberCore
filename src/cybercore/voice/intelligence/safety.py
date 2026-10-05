@@ -210,6 +210,24 @@ class SafetyIntentGuard:
         }
     )
     _CANCEL_SUBJECT_CLAUSE_DELIMITERS = frozenset({"hned", "immediately", "now", "nyni", "ted"})
+    _AUTHORITY_STATUS_PREDICATES = frozenset(
+        {
+            "aborted",
+            "approved",
+            "blocked",
+            "canceled",
+            "cancelled",
+            "completed",
+            "denied",
+            "failed",
+            "finished",
+            "queued",
+            "rejected",
+            "started",
+            "stopped",
+            "succeeded",
+        }
+    )
     _AUTHORITY_DESCRIPTION_MODALS = frozenset(
         {"can", "could", "may", "might", "must", "should", "will", "would"}
     )
@@ -618,6 +636,8 @@ class SafetyIntentGuard:
             token in cls._AUTHORITY_INTERROGATIVE_TAILS for token in semantic_tail
         ):
             return False
+        if semantic_tail and semantic_tail[-1] in cls._AUTHORITY_STATUS_PREDICATES:
+            return False
         subject_auxiliary_index = next(
             (
                 position
@@ -667,12 +687,12 @@ class SafetyIntentGuard:
             token in cls._CANCEL_NEGATIVE_OBJECT_STARTERS for token in semantic_tail
         )
         has_verbal_negation = bool(cls._CANCEL_NEGATION.search(" ".join(semantic_tail)))
-        has_interrogative_boundary = (
-            semantic_tail[0] in cls._AUTHORITY_INTERROGATIVE_TAILS
-            or semantic_tail[-1] in cls._AUTHORITY_INTERROGATIVE_TAILS
+        has_interrogative = any(
+            token in cls._AUTHORITY_INTERROGATIVE_TAILS for token in semantic_tail
         )
-        return (
-            not has_negative_object and not has_verbal_negation and not has_interrogative_boundary
+        has_status_report = semantic_tail[-1] in cls._AUTHORITY_STATUS_PREDICATES
+        return not (
+            has_negative_object or has_verbal_negation or has_interrogative or has_status_report
         )
 
     @classmethod
@@ -709,13 +729,19 @@ class SafetyIntentGuard:
         markers: frozenset[str],
         prefixes: frozenset[str],
     ) -> bool:
+        authority_detected = False
         for raw_clause, delimiter in _unquoted_clauses_with_delimiters(raw_text):
-            if cls._is_bare_authority_question(raw_clause, delimiter, markers, prefixes):
-                continue
             tokens = _normalize(raw_clause).split()
             if not tokens:
                 continue
-            if cls._CANCEL_MENTION.search(" ".join(tokens)):
+            normalized_clause = " ".join(tokens)
+            has_marker = any(token in markers for token in tokens)
+            if authority_detected and has_marker and cls._CANCEL_NEGATION.search(normalized_clause):
+                authority_detected = False
+                continue
+            if cls._is_bare_authority_question(raw_clause, delimiter, markers, prefixes):
+                continue
+            if cls._CANCEL_MENTION.search(normalized_clause):
                 continue
 
             remaining = list(tokens)
@@ -725,13 +751,14 @@ class SafetyIntentGuard:
             if not remaining or remaining[0] not in markers:
                 continue
             if cls._CANCEL_NEGATION.search(" ".join(tokens[:marker_index])):
+                authority_detected = False
                 continue
             if cls._authority_marker_leads_description(tokens, marker_index):
                 continue
             if not cls._authority_marker_has_safe_tail(tokens, marker_index):
                 continue
-            return True
-        return False
+            authority_detected = True
+        return authority_detected
 
     @classmethod
     def _is_cancel_command(cls, raw_text: str) -> bool:
