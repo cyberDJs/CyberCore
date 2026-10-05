@@ -351,6 +351,27 @@ def test_processing_checks_final_available_input_after_operation_completes() -> 
     assert session.status is SessionStatus.INTERRUPTED
 
 
+def test_processing_drains_all_final_available_input_after_operation_completes() -> None:
+    runtime, session, stt, _, source, _ = make_runtime(
+        nonblocking=[],
+        vad=DelayedSpeechVad(speech_sequence=3),
+    )
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    def complete_with_queued_silence_then_speech() -> str:
+        source.nonblocking.extend([frame(2), frame(3)])
+        return "done"
+
+    result = runtime.process_with_live_input(complete_with_queued_silence_then_speech)
+
+    assert result == "done"
+    assert source.nonblocking == []
+    assert stt.sequences[-1] == 3
+    assert source.discard_pending_calls == 1
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
 def test_capture_finalizes_pending_barge_in_endpoint_before_reading_next_block() -> None:
     runtime, session, _, _, source, _ = make_runtime(
         blocking=[frame(1), frame(3)],

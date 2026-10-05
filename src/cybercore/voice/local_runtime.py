@@ -349,7 +349,8 @@ class LocalSpeechRuntime:
             while not done.is_set():
                 if not pump_available_input_once():
                     done.wait(idle_sleep)
-            pump_available_input_once()
+            while pump_available_input_once():
+                pass
         except Exception:
             if self.realtime.state is not RealtimeState.CANCELLED:
                 self.realtime.cancel("microphone input failed during intelligence processing")
