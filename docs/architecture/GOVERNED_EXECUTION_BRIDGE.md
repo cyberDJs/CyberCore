@@ -1,7 +1,7 @@
 # Governed Execution Bridge V1
 
 Status: repository repair under review; not deployed
-Work block: `WB-0037` with `WB-0038E` execution-boundary repair, `WB-0038G` rollback consolidation, and `WB-0038H` canonical rollback hardening
+Work block: `WB-0037` with `WB-0038E` execution-boundary repair and `WB-0038F-R2` rollback-quiesce reconciliation
 
 ## Purpose
 
@@ -131,39 +131,36 @@ to exist as an explicit writable sandbox path; a missing path is a hard failure,
 not an ignored exception.
 
 Rollback is also fail-closed. It first removes the managed privilege rule and
-must verify effective revocation. Before stopping either governed wrapper it
-verifies that the wrapper is the exact canonical unit or absent, then publishes
-an exact name-specific administrator tombstone drop-in under
-`/etc/systemd/system/<wrapper>.service.d/90-cybercore-rollback-tombstone.conf`.
+must verify effective revocation. It then runtime-masks both CyberCore wrapper
+names and verifies the masks before stopping either wrapper. Both wrappers,
+`vikunja-backup.timer`, and the downstream `vikunja-backup.service` must be
+stopped and proven inactive-or-absent before either managed wrapper file is
+removed.
 
-Tombstone publication is an atomic/durable trusted-file action contract. The
-drop-in parent must be a real non-symlink root:root directory with mode 0755.
-The destination is opened no-follow and is accepted only when absent or when it
-is a regular root:root mode-0644 file with exact canonical bytes. Publication
-uses a same-directory root-owned mode-0644 temporary regular file, makes its
-bytes durable, atomically renames it, and makes the directory entry durable.
-Symlink, file-type, ownership, mode, byte-content, or partial-publication drift
-fails closed.
+After the managed wrapper files are removed, rollback installs an exact
+name-specific tombstone drop-in under
+`/etc/systemd/system/<wrapper>.service.d/90-cybercore-rollback-tombstone.conf`
+for each wrapper. The drop-in adds an always-false start condition and
+`RefuseManualStart=yes`. systemd parses name-specific drop-ins after the main
+unit fragment, and administrator drop-ins apply to a unit even when its main
+fragment comes from a higher-priority path such as
+`/run/systemd/generator.early`. This closes the reviewed reboot gap without
+racing another generator for the main unit path.
 
-The tombstone adds an always-false `ConditionPathExists=` plus
-`RefuseManualStart=yes`. After the exact file is verified, rollback reloads
-systemd and verifies the tombstone is effective for the wrapper name before any
-wrapper quiescence occurs. The tombstone remains after managed wrapper removal
-and is verified again after the post-removal daemon reload. This name-specific
-drop-in remains applicable even if a future main unit fragment of the same name
-comes from another normal or generated unit source.
+Rollback replay is explicit: managed wrapper removal accepts either the exact
+managed source or absence, while tombstone installation accepts only absence or
+the exact canonical tombstone. A conflicting file fails closed. Thus a partial
+rollback can resume after one tombstone has already been written.
 
-Rollback then preserves the WB-0038G quiescence ordering: stop the installer
-wrapper, re-verify the generated timer/service identity, disable the timer,
-stop the manual run wrapper and generated service, and only then remove managed
-wrapper files. The two root-owned generated-unit templates installed under
-`/usr/local/libexec/cybercore-exec` are removed symmetrically as exact-or-absent
-managed files.
+The tombstone threat model protects against ordinary static, transient, and
+generated main unit fragments. It does not claim to resist a privileged local
+administrator or generator that deliberately installs a competing drop-in to
+remove the guard; local root can change the systemd policy boundary itself.
 
-A future bootstrap must verify both tombstone paths are absent before its first
-mutating action, including helper/template installation and privilege-policy
-changes. It must never remove a tombstone implicitly. Reactivation therefore
-requires a separate reviewed administrative action.
+A future installer must verify both tombstone paths are absent before claiming
+either wrapper name. It must not remove a tombstone automatically. Reactivating
+either wrapper name therefore requires a separate, explicitly reviewed
+administrative action.
 
 ## Execution receipts
 
@@ -195,7 +192,7 @@ verification must establish at minimum:
 
 ## Deployment boundary
 
-WB-0038E, WB-0038G and WB-0038H are repository-only. They do not create credentials, modify sshd or
+WB-0038E and WB-0038F-R2 are repository-only. It does not create credentials, modify sshd or
 Polkit on a target, deploy the subsystem, run A6 backups, mutate a VPS, or grant
 production authority. Any deployment requires a separate target-bound plan, a real server-side
 authorization verifier, fresh verification, and explicit authorization.
