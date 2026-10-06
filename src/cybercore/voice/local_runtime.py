@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import argparse
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 import importlib
 import json
 from pathlib import Path
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 
 from cybercore.voice.adapters import VadState
 from cybercore.voice.devices import (
@@ -272,6 +273,16 @@ class LocalSpeechRuntime:
         if self.realtime.state is RealtimeState.CANCELLED:
             raise RuntimeError("local speech runtime is cancelled")
         self.open()
+        if bool(getattr(self.provider.stt, "endpoint_detected", False)) and self.realtime.state in {
+            RealtimeState.LISTENING,
+            RealtimeState.INTERRUPTED,
+        }:
+            utterance = self.realtime.finish_utterance(
+                actor_id=actor_id,
+                utterance_id=utterance_id,
+            )
+            self._reset_vad("pending input endpoint finalized before capture")
+            return utterance
         frames = 0
         preroll: deque[Any] = deque(maxlen=self._input_preroll_frame_limit())
         while max_frames is None or frames < max_frames:
@@ -296,6 +307,86 @@ class LocalSpeechRuntime:
                     self._reset_vad("input turn finalized")
                     return utterance
         return None
+
+    def process_with_live_input(self, operation: Callable[[], Any]) -> Any:
+        self.open()
+        done = threading.Event()
+        results: list[Any] = []
+        errors: list[Exception] = []
+        block_ms = int(getattr(getattr(self.config, "audio", None), "block_ms", 80))
+        idle_sleep = max(0.005, min(0.05, block_ms / 4000))
+
+        def run_operation() -> None:
+            try:
+                results.append(operation())
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                done.set()
+
+        thread = threading.Thread(
+            target=run_operation,
+            name="cybercore-voice-processing-worker",
+            daemon=True,
+        )
+        thread.start()
+        barge_in_endpoint_detected = False
+
+        def pump_available_input_once() -> bool:
+            nonlocal barge_in_endpoint_detected
+            incoming = self.audio_input.read_frame_if_available()
+            if incoming is None:
+                return False
+            if not barge_in_endpoint_detected:
+                self.realtime.receive_input(incoming)
+                if self.realtime.state is RealtimeState.INTERRUPTED and bool(
+                    getattr(self.provider.stt, "endpoint_detected", False)
+                ):
+                    barge_in_endpoint_detected = True
+            return True
+
+        try:
+            while not done.is_set():
+                if not pump_available_input_once():
+                    done.wait(idle_sleep)
+            while pump_available_input_once():
+                pass
+            pending_audio = getattr(self.audio_input, "has_pending_audio", None)
+            if (
+                self.realtime.state is RealtimeState.PROCESSING
+                and callable(pending_audio)
+                and pending_audio()
+            ):
+                completion_grace = getattr(
+                    self.audio_input, "pending_audio_completion_grace_s", None
+                )
+                boundary_grace_s = block_ms / 1000
+                if callable(completion_grace):
+                    typed_completion_grace = cast(Callable[[], float], completion_grace)
+                    boundary_grace_s = max(boundary_grace_s, float(typed_completion_grace()))
+                boundary_deadline = time.monotonic() + boundary_grace_s
+                while self.realtime.state is RealtimeState.PROCESSING:
+                    if pump_available_input_once():
+                        continue
+                    if not pending_audio():
+                        break
+                    remaining = boundary_deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    time.sleep(min(idle_sleep, remaining))
+        except Exception:
+            if self.realtime.state is not RealtimeState.CANCELLED:
+                self.realtime.cancel("microphone input failed during intelligence processing")
+            raise
+        finally:
+            thread.join()
+
+        if barge_in_endpoint_detected:
+            self._discard_pending_microphone_audio("finalizing processing barge-in endpoint")
+
+        if errors:
+            raise errors[0]
+        return results[0]
 
     def _begin_speaking_with_live_input(self, text: str) -> None:
         stop = threading.Event()
@@ -381,11 +472,20 @@ def run_local_voice_session(
     *,
     actor_id: str = "local-operator",
     once: bool = False,
+    intelligence_config_path: Path | str | None = None,
 ) -> int:
     from cybercore.voice.router import VoiceRouter
 
     local = LocalSpeechRuntime.from_config(config)
     router = VoiceRouter()
+    controller = None
+    if intelligence_config_path is not None:
+        from cybercore.voice.intelligence.config import load_intelligence_config
+        from cybercore.voice.intelligence.controller import build_intelligent_voice_controller
+
+        intelligence_config = load_intelligence_config(intelligence_config_path)
+        if intelligence_config.enabled:
+            controller = build_intelligent_voice_controller(intelligence_config, router=router)
     context = VoiceContext()
     turn = 0
     try:
@@ -399,22 +499,47 @@ def run_local_voice_session(
             )
             if utterance is None:
                 continue
-            print(f"YOU: {utterance.text}")
-            response = router.handle(
-                utterance,
-                context,
-                session=local.session,
-            )
-            print(f"CYBER VOICE [{response.status.value}]: {response.message}")
+            current_utterance: Utterance = utterance
+            print(f"YOU: {current_utterance.text}")
+            if controller is None:
+                response = router.handle(
+                    current_utterance,
+                    context,
+                    session=local.session,
+                )
+                status = response.status.value
+                message = response.message
+                cancelled = response.status is ResponseStatus.CANCELLED
+            else:
+                controlled = local.process_with_live_input(
+                    lambda: controller.handle(
+                        current_utterance,
+                        context,
+                        session=local.session,
+                        should_abort=lambda: (
+                            local.realtime.state
+                            in {
+                                RealtimeState.INTERRUPTED,
+                                RealtimeState.CANCELLED,
+                            }
+                        ),
+                    )
+                )
+                status = controlled.status
+                message = controlled.message
+                cancelled = controlled.cancelled
+            print(f"CYBER VOICE [{status}]: {message}")
 
-            if response.status is ResponseStatus.CANCELLED:
+            if cancelled:
                 local.cancel("voice cancellation intent")
                 return 0
 
-            interrupted = False
-            if local.realtime.state is RealtimeState.PROCESSING and response.message.strip():
+            interrupted = local.realtime.state is RealtimeState.INTERRUPTED
+            if interrupted:
+                print("CYBER VOICE: INTERRUPTED")
+            elif local.realtime.state is RealtimeState.PROCESSING and message.strip():
                 print("CYBER VOICE: SPEAKING")
-                interrupted = local.speak(response.message)
+                interrupted = local.speak(message)
                 if interrupted:
                     print("CYBER VOICE: INTERRUPTED")
             if once and not interrupted:
@@ -443,6 +568,7 @@ def _voice_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--config", type=Path)
     local = voice_sub.add_parser("local", help="Run the local microphone/speaker Voice loop")
     local.add_argument("--config", type=Path)
+    local.add_argument("--intelligence-config", type=Path)
     local.add_argument("--actor", default="local-operator")
     local.add_argument("--once", action="store_true")
     return parser
@@ -492,4 +618,5 @@ def run_voice_cli(arguments: list[str]) -> int:
         config,
         actor_id=args.actor,
         once=args.once,
+        intelligence_config_path=args.intelligence_config,
     )

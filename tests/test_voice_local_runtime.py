@@ -14,7 +14,9 @@ from cybercore.voice.local_config import (
 from cybercore.voice.local_runtime import (
     LocalSpeechRuntime,
     run_local_voice_doctor,
+    run_local_voice_session,
 )
+from cybercore.voice.models import Utterance
 from cybercore.voice.realtime import RealtimeState
 from cybercore.voice.session import SessionStatus, VoiceSession
 
@@ -128,6 +130,52 @@ class FakeInput:
 
     def close(self) -> None:
         self.closed = True
+
+
+class CompletingPartialFakeInput(FakeInput):
+    def __init__(self) -> None:
+        super().__init__([frame(1)])
+        self.partial_frame: AudioFrame | None = frame(2)
+        self.pending_checks = 0
+
+    def read_frame_if_available(self) -> AudioFrame | None:
+        self.nonblocking_reads += 1
+        if self.pending_checks and self.partial_frame is not None:
+            completed, self.partial_frame = self.partial_frame, None
+            return completed
+        return None
+
+    def has_pending_audio(self) -> bool:
+        self.pending_checks += 1
+        return self.partial_frame is not None
+
+
+class DelayedCompletingPartialFakeInput(FakeInput):
+    def __init__(self) -> None:
+        super().__init__([frame(1)])
+        self.partial_frame: AudioFrame | None = frame(2)
+        self.pending_since: float | None = None
+
+    def read_frame_if_available(self) -> AudioFrame | None:
+        self.nonblocking_reads += 1
+        if (
+            self.pending_since is not None
+            and self.partial_frame is not None
+            and time.monotonic() - self.pending_since >= 0.005
+        ):
+            completed, self.partial_frame = self.partial_frame, None
+            return completed
+        return None
+
+    def has_pending_audio(self) -> bool:
+        if self.partial_frame is None:
+            return False
+        if self.pending_since is None:
+            self.pending_since = time.monotonic()
+        return True
+
+    def pending_audio_completion_grace_s(self) -> float:
+        return 0.02
 
 
 class FakeTransport:
@@ -292,6 +340,227 @@ def test_capture_replays_bounded_preroll_before_speech_onset() -> None:
     assert stt.sequences == [3, 4, 5, 6, 7, 8]
     assert runtime.provider.vad.reset_count == 2
     assert runtime.realtime.state is RealtimeState.PROCESSING
+
+
+def test_processing_pumps_live_input_and_preserves_barge_in() -> None:
+    runtime, session, stt, _, source, _ = make_runtime(nonblocking=[frame(2)])
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    def slow_processing() -> str:
+        time.sleep(0.05)
+        return "done"
+
+    result = runtime.process_with_live_input(slow_processing)
+
+    assert result == "done"
+    assert source.nonblocking_reads > 0
+    assert stt.sequences == [2]
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
+def test_processing_drains_input_after_barge_in_endpoint() -> None:
+    runtime, session, stt, _, source, _ = make_runtime(
+        nonblocking=[frame(sequence) for sequence in range(2, 202)]
+    )
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    def slow_processing() -> str:
+        time.sleep(0.05)
+        return "done"
+
+    result = runtime.process_with_live_input(slow_processing)
+
+    assert result == "done"
+    assert stt.sequences == [2]
+    assert source.nonblocking_reads > 1
+    assert len(source.nonblocking) < 199
+    assert source.discard_pending_calls == 1
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
+def test_processing_checks_final_available_input_after_operation_completes() -> None:
+    runtime, session, stt, _, source, _ = make_runtime(nonblocking=[])
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    def complete_with_available_input() -> str:
+        source.nonblocking.append(frame(2))
+        return "done"
+
+    result = runtime.process_with_live_input(complete_with_available_input)
+
+    assert result == "done"
+    assert stt.sequences == [2]
+    assert source.discard_pending_calls == 1
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
+def test_processing_drains_all_final_available_input_after_operation_completes() -> None:
+    runtime, session, stt, _, source, _ = make_runtime(
+        nonblocking=[],
+        vad=DelayedSpeechVad(speech_sequence=3),
+        blocking=[frame(3)],
+    )
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    def complete_with_queued_silence_then_speech() -> str:
+        source.nonblocking.extend([frame(2), frame(3)])
+        return "done"
+
+    result = runtime.process_with_live_input(complete_with_queued_silence_then_speech)
+
+    assert result == "done"
+    assert source.nonblocking == []
+    assert stt.sequences[-1] == 3
+    assert source.discard_pending_calls == 1
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
+def test_processing_preserves_partial_audio_at_inference_boundary() -> None:
+    runtime, session, stt, _, _, _ = make_runtime()
+    source = CompletingPartialFakeInput()
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    result = runtime.process_with_live_input(lambda: "done")
+
+    assert result == "done"
+    assert source.pending_checks >= 1
+    assert stt.sequences == [2]
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
+def test_processing_uses_device_completion_grace_for_partial_boundary_audio() -> None:
+    runtime, session, stt, _, _, _ = make_runtime(block_ms=1)
+    source = DelayedCompletingPartialFakeInput()
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    result = runtime.process_with_live_input(lambda: "done")
+
+    assert result == "done"
+    assert stt.sequences == [2]
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+
+
+def test_capture_finalizes_pending_barge_in_endpoint_before_reading_next_block() -> None:
+    runtime, session, _, _, source, _ = make_runtime(
+        blocking=[frame(1), frame(3)],
+        nonblocking=[frame(2)],
+    )
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    def slow_processing() -> str:
+        time.sleep(0.05)
+        return "done"
+
+    result = runtime.process_with_live_input(slow_processing)
+    assert result == "done"
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+    assert len(source.blocking) == 1
+
+    utterance = runtime.capture_utterance(actor_id="johnny", utterance_id="u-2")
+
+    assert utterance is not None
+    assert utterance.id == "u-2"
+    assert len(source.blocking) == 1
+    assert source.blocking[0].sequence == 3
+
+
+def test_once_mode_continues_after_processing_barge_in(monkeypatch) -> None:
+    class FakeLoopRuntime:
+        def __init__(self) -> None:
+            self.session = SimpleNamespace(
+                status=SessionStatus.ACTIVE,
+                session_id="session-loop",
+            )
+            self.realtime = SimpleNamespace(state=RealtimeState.PROCESSING)
+            self.capture_calls = 0
+            self.process_calls = 0
+            self.closed = False
+
+        def open(self) -> None:
+            pass
+
+        def capture_utterance(self, *, actor_id: str, utterance_id: str):
+            self.capture_calls += 1
+            text = "first question" if self.capture_calls == 1 else "stop"
+            return Utterance(
+                id=utterance_id,
+                session_id=self.session.session_id,
+                actor_id=actor_id,
+                text=text,
+            )
+
+        def process_with_live_input(self, operation):
+            self.process_calls += 1
+            result = operation()
+            self.realtime.state = (
+                RealtimeState.INTERRUPTED if self.process_calls == 1 else RealtimeState.PROCESSING
+            )
+            return result
+
+        def speak(self, text: str) -> bool:
+            raise AssertionError("processing-state interruption must suppress stale speech")
+
+        def cancel(self, reason: str) -> None:
+            self.session.status = SessionStatus.CANCELLED
+            self.realtime.state = RealtimeState.CANCELLED
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FakeController:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.abort_checks = []
+
+        def handle(self, utterance, context, *, session=None, should_abort=None):
+            self.calls += 1
+            self.abort_checks.append(should_abort)
+            if self.calls == 1:
+                return SimpleNamespace(status="answered", message="stale answer", cancelled=False)
+            return SimpleNamespace(status="cancelled", message="cancelled", cancelled=True)
+
+    runtime = FakeLoopRuntime()
+    controller = FakeController()
+
+    import cybercore.voice.intelligence.config as intelligence_config_module
+    import cybercore.voice.intelligence.controller as intelligence_controller_module
+
+    monkeypatch.setattr(
+        LocalSpeechRuntime,
+        "from_config",
+        classmethod(lambda cls, config: runtime),
+    )
+    monkeypatch.setattr(
+        intelligence_config_module,
+        "load_intelligence_config",
+        lambda _path: SimpleNamespace(enabled=True),
+    )
+    monkeypatch.setattr(
+        intelligence_controller_module,
+        "build_intelligent_voice_controller",
+        lambda _config, router: controller,
+    )
+
+    result = run_local_voice_session(
+        SimpleNamespace(),
+        once=True,
+        intelligence_config_path="/tmp/intelligence.json",
+    )
+
+    assert result == 0
+    assert runtime.capture_calls == 2
+    assert controller.calls == 2
+    assert all(callable(check) for check in controller.abort_checks)
+    assert runtime.closed is True
 
 
 def test_speak_sends_audio_and_returns_to_idle() -> None:

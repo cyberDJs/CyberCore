@@ -1,6 +1,7 @@
 from cybercore.integrations.howedo import ContinuityDecision, ContinuityResult
 from cybercore.integrations.oathdo import GovernanceDecision, GovernanceResult
 from cybercore.voice.approval import ApprovalCheck
+from cybercore.voice.events import VoiceEventType
 from cybercore.voice.models import (
     ActionRequest,
     ActionRisk,
@@ -152,3 +153,29 @@ def test_cancel_stops_session_without_planning() -> None:
 
     assert response.status is ResponseStatus.CANCELLED
     assert session.status is SessionStatus.CANCELLED
+
+
+def test_processing_interruption_blocks_action_ready_after_planning() -> None:
+    interrupted = {"value": False}
+    events = []
+
+    class InterruptingPlanner:
+        def plan(self, intent, context):
+            interrupted["value"] = True
+            return ActionRequest("i", "inspect", ActionRisk.READ_ONLY)
+
+    router = VoiceRouter(
+        planner=InterruptingPlanner(),
+        howedo=Howedo(ContinuityDecision.CONTINUE),
+        oathdo=Oathdo(GovernanceDecision.ALLOW),
+        event_sink=events.append,
+    )
+
+    response = router.handle(
+        make_utterance("inspect staging"),
+        VoiceContext(),
+        should_abort=lambda: interrupted["value"],
+    )
+
+    assert response.status is ResponseStatus.NEEDS_CONTEXT
+    assert all(event.type is not VoiceEventType.ACTION_READY for event in events)

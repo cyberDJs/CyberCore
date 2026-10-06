@@ -150,10 +150,22 @@ class VoiceRouter:
         context: VoiceContext,
         *,
         session: VoiceSession | None = None,
+        should_abort: Callable[[], bool] | None = None,
     ) -> VoiceResponse:
         self._emit(VoiceEventType.UTTERANCE_RECEIVED, utterance)
         intent = self.compiler.compile(utterance, context)
         self._emit(VoiceEventType.INTENT_CLASSIFIED, utterance, kind=intent.kind.value)
+
+        def interrupted_response() -> VoiceResponse:
+            return self._response(
+                utterance,
+                intent,
+                status=ResponseStatus.NEEDS_CONTEXT,
+                message="processing interrupted; stale voice turn was discarded",
+            )
+
+        if should_abort is not None and should_abort():
+            return interrupted_response()
 
         if session is not None:
             session.mark_intent(intent.id)
@@ -170,6 +182,8 @@ class VoiceRouter:
             )
 
         action = self.planner.plan(intent, context)
+        if should_abort is not None and should_abort():
+            return interrupted_response()
         if action is None:
             return self._response(
                 utterance,
@@ -222,6 +236,8 @@ class VoiceRouter:
             )
 
         if action.mutating and intent.kind is IntentKind.APPROVE:
+            if should_abort is not None and should_abort():
+                return interrupted_response()
             try:
                 approval_intent = capture_voice_approval_intent(utterance, action)
             except ValueError as exc:
@@ -290,6 +306,8 @@ class VoiceRouter:
         else:
             approval_id = None
 
+        if should_abort is not None and should_abort():
+            return interrupted_response()
         self._emit(VoiceEventType.ACTION_READY, utterance, operation=action.operation)
         return self._response(
             utterance,
