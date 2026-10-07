@@ -61,6 +61,7 @@ class RealtimeVoiceRuntime:
         self.event_sink = event_sink
         self.state = RealtimeState.IDLE
         self._synthesis_exhausted = False
+        self._processing_barge_in_candidate: AudioFrame | None = None
 
     def _emit(self, event_type: RealtimeEventType, **detail: str) -> None:
         if self.event_sink is not None:
@@ -93,6 +94,7 @@ class RealtimeVoiceRuntime:
             and self.session.status is SessionStatus.INTERRUPTED
         ):
             self.session.resume()
+        self._processing_barge_in_candidate = None
         self.stt.reset()
         self.input_buffer.flush()
         self._transition(RealtimeState.LISTENING, "input turn started")
@@ -107,6 +109,7 @@ class RealtimeVoiceRuntime:
         if self.transport is not None:
             self.transport.flush_output()
         self._synthesis_exhausted = False
+        self._processing_barge_in_candidate = None
         self.session.interrupt(reason)
         self._transition(RealtimeState.INTERRUPTED, reason)
         self._emit(
@@ -115,44 +118,7 @@ class RealtimeVoiceRuntime:
             output_frames=str(flushed_output),
         )
 
-    def receive_input(self, frame: AudioFrame) -> tuple[TranscriptDelta, ...]:
-        if self.state is RealtimeState.CANCELLED:
-            raise RuntimeError("cannot receive audio after cancellation")
-
-        vad = self.vad.evaluate(frame)
-        self._emit(
-            RealtimeEventType.VAD_EVALUATED,
-            frame_sequence=str(frame.sequence),
-            vad_state=vad.state.value,
-        )
-
-        if self.state in {RealtimeState.SPEAKING, RealtimeState.PROCESSING}:
-            if vad.state is not VadState.SPEECH:
-                self._emit(
-                    RealtimeEventType.INPUT_FRAME_IGNORED,
-                    frame_sequence=str(frame.sequence),
-                    reason=f"{self.state.value} input was not classified as speech",
-                )
-                return ()
-            reason = f"speech detected during {self.state.value}"
-            self._interrupt_active_turn(reason)
-            self._emit(
-                RealtimeEventType.BARGE_IN, frame_sequence=str(frame.sequence), reason=reason
-            )
-
-        if self.state is RealtimeState.IDLE:
-            if vad.state is not VadState.SPEECH:
-                self._emit(
-                    RealtimeEventType.INPUT_FRAME_IGNORED,
-                    frame_sequence=str(frame.sequence),
-                    reason="idle input was not classified as speech",
-                )
-                return ()
-            self.start_listening()
-
-        if self.state not in {RealtimeState.LISTENING, RealtimeState.INTERRUPTED}:
-            raise RuntimeError(f"cannot accept input while {self.state.value}")
-
+    def _accept_input_frame(self, frame: AudioFrame) -> tuple[TranscriptDelta, ...]:
         try:
             self.input_buffer.push(frame)
         except AudioBackpressureError:
@@ -168,6 +134,71 @@ class RealtimeVoiceRuntime:
                 characters=str(len(delta.text)),
             )
         return deltas
+
+    def receive_input(self, frame: AudioFrame) -> tuple[TranscriptDelta, ...]:
+        if self.state is RealtimeState.CANCELLED:
+            raise RuntimeError("cannot receive audio after cancellation")
+
+        vad = self.vad.evaluate(frame)
+        self._emit(
+            RealtimeEventType.VAD_EVALUATED,
+            frame_sequence=str(frame.sequence),
+            vad_state=vad.state.value,
+        )
+
+        if self.state is RealtimeState.SPEAKING:
+            if vad.state is not VadState.SPEECH:
+                self._emit(
+                    RealtimeEventType.INPUT_FRAME_IGNORED,
+                    frame_sequence=str(frame.sequence),
+                    reason="speaking input was not classified as speech",
+                )
+                return ()
+            reason = "speech detected during speaking"
+            self._interrupt_active_turn(reason)
+            self._emit(
+                RealtimeEventType.BARGE_IN, frame_sequence=str(frame.sequence), reason=reason
+            )
+
+        elif self.state is RealtimeState.PROCESSING:
+            if vad.state is not VadState.SPEECH:
+                self._processing_barge_in_candidate = None
+                self._emit(
+                    RealtimeEventType.INPUT_FRAME_IGNORED,
+                    frame_sequence=str(frame.sequence),
+                    reason="processing input was not classified as speech",
+                )
+                return ()
+
+            candidate = self._processing_barge_in_candidate
+            if candidate is None:
+                self._processing_barge_in_candidate = frame
+                return ()
+
+            self._processing_barge_in_candidate = None
+            reason = "speech detected during processing"
+            self._interrupt_active_turn(reason)
+            self._emit(
+                RealtimeEventType.BARGE_IN, frame_sequence=str(frame.sequence), reason=reason
+            )
+            deltas = list(self._accept_input_frame(candidate))
+            deltas.extend(self._accept_input_frame(frame))
+            return tuple(deltas)
+
+        if self.state is RealtimeState.IDLE:
+            if vad.state is not VadState.SPEECH:
+                self._emit(
+                    RealtimeEventType.INPUT_FRAME_IGNORED,
+                    frame_sequence=str(frame.sequence),
+                    reason="idle input was not classified as speech",
+                )
+                return ()
+            self.start_listening()
+
+        if self.state not in {RealtimeState.LISTENING, RealtimeState.INTERRUPTED}:
+            raise RuntimeError(f"cannot accept input while {self.state.value}")
+
+        return self._accept_input_frame(frame)
 
     def finish_utterance(self, *, actor_id: str, utterance_id: str) -> Utterance | None:
         if self.state not in {RealtimeState.LISTENING, RealtimeState.INTERRUPTED}:
@@ -197,6 +228,7 @@ class RealtimeVoiceRuntime:
             raise RuntimeError(f"cannot begin speaking from {self.state.value}")
         if not text.strip():
             raise ValueError("TTS text must not be empty")
+        self._processing_barge_in_candidate = None
         self.output_buffer.flush()
         self.tts.reset()
         self.tts.start(text)
@@ -271,6 +303,7 @@ class RealtimeVoiceRuntime:
         if self.transport is not None:
             self.transport.flush_output()
         self._synthesis_exhausted = False
+        self._processing_barge_in_candidate = None
         self.session.cancel()
         self._transition(RealtimeState.CANCELLED, reason)
         self._emit(
