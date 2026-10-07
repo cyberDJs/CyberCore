@@ -202,6 +202,55 @@ def test_silence_during_speaking_is_ignored_without_barge_in() -> None:
     assert any(event.type is RealtimeEventType.INPUT_FRAME_IGNORED for event in events)
 
 
+def test_single_speech_frame_during_processing_waits_for_confirmation() -> None:
+    runtime, session, _, stt, tts, transport, events = make_runtime()
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+
+    assert runtime.receive_input(frame(2)) == ()
+
+    assert runtime.state is RealtimeState.PROCESSING
+    assert session.status is SessionStatus.ACTIVE
+    assert stt.frames == [1]
+    assert tts.cancel_count == 0
+    assert transport.flush_count == 0
+    assert not any(event.type is RealtimeEventType.BARGE_IN for event in events)
+
+
+def test_consecutive_speech_frames_confirm_processing_barge_in_and_preserve_onset() -> None:
+    runtime, session, _, stt, tts, transport, events = make_runtime()
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+
+    assert runtime.receive_input(frame(2)) == ()
+    deltas = runtime.receive_input(frame(3))
+
+    assert runtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+    assert stt.frames == [2, 3]
+    assert [delta.text for delta in deltas] == ["delta-2", "delta-3"]
+    assert tts.cancel_count == 1
+    assert transport.flush_count == 1
+    assert any(event.type is RealtimeEventType.BARGE_IN for event in events)
+
+
+def test_processing_silence_resets_barge_in_confirmation() -> None:
+    runtime, session, vad, stt, _, _, events = make_runtime()
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+
+    assert runtime.receive_input(frame(2)) == ()
+    vad.state = VadState.SILENCE
+    assert runtime.receive_input(frame(3)) == ()
+    vad.state = VadState.SPEECH
+    assert runtime.receive_input(frame(4)) == ()
+
+    assert runtime.state is RealtimeState.PROCESSING
+    assert session.status is SessionStatus.ACTIVE
+    assert stt.frames == [1]
+    assert not any(event.type is RealtimeEventType.BARGE_IN for event in events)
+
+
 def test_input_backpressure_rejects_frame_before_stt() -> None:
     runtime, _, _, stt, _, _, events = make_runtime(input_max_frames=1)
     runtime.receive_input(frame(1))
