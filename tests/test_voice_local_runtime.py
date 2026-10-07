@@ -45,6 +45,20 @@ class DelayedSpeechVad(FakeVad):
         return VadResult(state)
 
 
+class SpeechSequencesVad(FakeVad):
+    def __init__(self, speech_sequences: set[int]) -> None:
+        super().__init__()
+        self.speech_sequences = speech_sequences
+
+    def evaluate(self, audio_frame: AudioFrame) -> VadResult:
+        state = (
+            VadState.SPEECH
+            if audio_frame.sequence in self.speech_sequences
+            else VadState.SILENCE
+        )
+        return VadResult(state)
+
+
 class FakeStt:
     def __init__(self) -> None:
         self.endpoint_detected = False
@@ -343,7 +357,9 @@ def test_capture_replays_bounded_preroll_before_speech_onset() -> None:
 
 
 def test_processing_pumps_live_input_and_preserves_barge_in() -> None:
-    runtime, session, stt, _, source, _ = make_runtime(nonblocking=[frame(2)])
+    runtime, session, stt, _, source, _ = make_runtime(
+        nonblocking=[frame(2), frame(3)]
+    )
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
 
     def slow_processing() -> str:
@@ -354,7 +370,7 @@ def test_processing_pumps_live_input_and_preserves_barge_in() -> None:
 
     assert result == "done"
     assert source.nonblocking_reads > 0
-    assert stt.sequences == [2]
+    assert stt.sequences == [2, 3]
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
 
@@ -372,9 +388,9 @@ def test_processing_drains_input_after_barge_in_endpoint() -> None:
     result = runtime.process_with_live_input(slow_processing)
 
     assert result == "done"
-    assert stt.sequences == [2]
+    assert stt.sequences == [2, 3]
     assert source.nonblocking_reads > 1
-    assert len(source.nonblocking) < 199
+    assert len(source.nonblocking) < 198
     assert source.discard_pending_calls == 1
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
@@ -385,13 +401,13 @@ def test_processing_checks_final_available_input_after_operation_completes() -> 
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
 
     def complete_with_available_input() -> str:
-        source.nonblocking.append(frame(2))
+        source.nonblocking.extend([frame(2), frame(3)])
         return "done"
 
     result = runtime.process_with_live_input(complete_with_available_input)
 
     assert result == "done"
-    assert stt.sequences == [2]
+    assert stt.sequences == [2, 3]
     assert source.discard_pending_calls == 1
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
@@ -400,26 +416,26 @@ def test_processing_checks_final_available_input_after_operation_completes() -> 
 def test_processing_drains_all_final_available_input_after_operation_completes() -> None:
     runtime, session, stt, _, source, _ = make_runtime(
         nonblocking=[],
-        vad=DelayedSpeechVad(speech_sequence=3),
+        vad=SpeechSequencesVad({3, 4}),
         blocking=[frame(3)],
     )
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
 
     def complete_with_queued_silence_then_speech() -> str:
-        source.nonblocking.extend([frame(2), frame(3)])
+        source.nonblocking.extend([frame(2), frame(3), frame(4)])
         return "done"
 
     result = runtime.process_with_live_input(complete_with_queued_silence_then_speech)
 
     assert result == "done"
     assert source.nonblocking == []
-    assert stt.sequences[-1] == 3
+    assert stt.sequences[-2:] == [3, 4]
     assert source.discard_pending_calls == 1
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
 
 
-def test_processing_preserves_partial_audio_at_inference_boundary() -> None:
+def test_processing_single_partial_speech_frame_does_not_false_barge_in() -> None:
     runtime, session, stt, _, _, _ = make_runtime()
     source = CompletingPartialFakeInput()
     runtime.audio_input = source
@@ -429,12 +445,12 @@ def test_processing_preserves_partial_audio_at_inference_boundary() -> None:
 
     assert result == "done"
     assert source.pending_checks >= 1
-    assert stt.sequences == [2]
-    assert runtime.realtime.state is RealtimeState.INTERRUPTED
-    assert session.status is SessionStatus.INTERRUPTED
+    assert stt.sequences == [1]
+    assert runtime.realtime.state is RealtimeState.PROCESSING
+    assert session.status is SessionStatus.ACTIVE
 
 
-def test_processing_uses_device_completion_grace_for_partial_boundary_audio() -> None:
+def test_processing_completion_grace_single_frame_does_not_false_barge_in() -> None:
     runtime, session, stt, _, _, _ = make_runtime(block_ms=1)
     source = DelayedCompletingPartialFakeInput()
     runtime.audio_input = source
@@ -443,15 +459,15 @@ def test_processing_uses_device_completion_grace_for_partial_boundary_audio() ->
     result = runtime.process_with_live_input(lambda: "done")
 
     assert result == "done"
-    assert stt.sequences == [2]
-    assert runtime.realtime.state is RealtimeState.INTERRUPTED
-    assert session.status is SessionStatus.INTERRUPTED
+    assert stt.sequences == [1]
+    assert runtime.realtime.state is RealtimeState.PROCESSING
+    assert session.status is SessionStatus.ACTIVE
 
 
 def test_capture_finalizes_pending_barge_in_endpoint_before_reading_next_block() -> None:
     runtime, session, _, _, source, _ = make_runtime(
-        blocking=[frame(1), frame(3)],
-        nonblocking=[frame(2)],
+        blocking=[frame(1), frame(4)],
+        nonblocking=[frame(2), frame(3)],
     )
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
 
@@ -470,7 +486,7 @@ def test_capture_finalizes_pending_barge_in_endpoint_before_reading_next_block()
     assert utterance is not None
     assert utterance.id == "u-2"
     assert len(source.blocking) == 1
-    assert source.blocking[0].sequence == 3
+    assert source.blocking[0].sequence == 4
 
 
 def test_once_mode_continues_after_processing_barge_in(monkeypatch) -> None:
