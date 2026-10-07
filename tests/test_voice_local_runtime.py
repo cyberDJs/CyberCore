@@ -52,9 +52,7 @@ class SpeechSequencesVad(FakeVad):
 
     def evaluate(self, audio_frame: AudioFrame) -> VadResult:
         state = (
-            VadState.SPEECH
-            if audio_frame.sequence in self.speech_sequences
-            else VadState.SILENCE
+            VadState.SPEECH if audio_frame.sequence in self.speech_sequences else VadState.SILENCE
         )
         return VadResult(state)
 
@@ -357,9 +355,7 @@ def test_capture_replays_bounded_preroll_before_speech_onset() -> None:
 
 
 def test_processing_pumps_live_input_and_preserves_barge_in() -> None:
-    runtime, session, stt, _, source, _ = make_runtime(
-        nonblocking=[frame(2), frame(3)]
-    )
+    runtime, session, stt, _, source, _ = make_runtime(nonblocking=[frame(2), frame(3)])
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
 
     def slow_processing() -> str:
