@@ -24,7 +24,7 @@ canonical_sources:
 
 current:
   milestone: idle
-  active_artifact: none
+  active_artifact: null
   branch: none
   pull_request: none
   last_verified_main: 6c4aa8507257cad1cd615915a3ae9613f55a8103
