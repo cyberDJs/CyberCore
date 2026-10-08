@@ -96,7 +96,7 @@ Exact current-main verification observed on 2026-10-08:
 - Python 3.11 / 3.12 / 3.13 / 3.14 test jobs: PASS;
 - quality: PASS;
 - package: PASS;
-- live open pull requests: 0.
+- pre-reconciliation live open pull requests: 0; while this candidate PR #111 is open, live count is 1; after merge/close the intended canonical idle count is 0.
 
 ## Active objective
 
@@ -303,7 +303,7 @@ Do not merge the two meanings or rewrite history; governance cleanup must assign
 
 ## Open pull-request inventory
 
-Live GitHub read on 2026-10-08 reports **0 open pull requests**.
+Immediately before this reconciliation branch/PR was created, live GitHub reported **0 open pull requests**. During review, PR #111 is the sole open pull request; after it is merged or closed, the intended canonical idle state returns to **0**.
 
 Historical candidates previously listed as open are now resolved as follows:
 
@@ -370,7 +370,9 @@ Remain IDLE until an explicit next work item is selected. This reconciliation do
 ## Manual repository checkpoint
 
 - Canonical main: `6c4aa8507257cad1cd615915a3ae9613f55a8103`
-- Live open pull requests: 0
+- Open pull requests before reconciliation: 0
+- Reconciliation candidate during review: PR #111 only
+- Intended canonical open pull requests after PR #111 closes: 0
 - Coordination artifact: none / IDLE
 - PR #104: merged canonical as `79bfd510ad9048bd168e3b1cb4ef0068de1e36d6`
 - PR #99: merged canonical as `25874ece2019fbdf77db783f6c97204a976b0675`
