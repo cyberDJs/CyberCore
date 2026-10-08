@@ -23,13 +23,16 @@ canonical_sources:
     - knowledge/ccl/CCL-0005-mutation-approval-verification-and-outcome.md
 
 current:
-  milestone: WB-0038H post-merge source-of-truth closeout
-  active_artifact: WB-0038H-POST-MERGE-SOT-CLOSEOUT
-  branch: wb-0038h-post-merge-sot-closeout
-  pull_request: 104
-  last_verified_main: 90e6ad9fc713497803e78187958574a3ad2181d0
+  milestone: idle
+  active_artifact: none
+  branch: none
+  pull_request: none
+  last_verified_main: 6c4aa8507257cad1cd615915a3ae9613f55a8103
 
 status:
+  current_main_sha: 6c4aa8507257cad1cd615915a3ae9613f55a8103
+  open_pull_requests: 0
+  active_work_block: none
   ccl_specification: complete_draft
   json_schemas: complete_draft
   validator: verified
