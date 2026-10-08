@@ -42,8 +42,8 @@ status:
   verification_evidence: verified
   idempotent_canonical_memory: verified
   post_merge_state_transition: verified
-  coordination_state: active_repo_only_post_merge_sot_closeout
-  terminal_post_merge_closeout: in_progress
+  coordination_state: idle_no_active_artifact
+  terminal_post_merge_closeout: completed_by_pr104
   remote_aware_repository_identity: verified
   repository_identity_diagnostics: verified
   repository_identity_policy: verified
@@ -63,7 +63,7 @@ status:
   readme_landing_page: verified
   caser_e_google_drive_workspace: initialized
   caser_e_evidence_mirror: verified_noncanonical
-  caser_e_evidence_mirror_freshness: stale_after_pr102_merge
+  caser_e_evidence_mirror_freshness: stale_after_pr110_merge
   security_source_of_truth_baseline: active
   pr37_security_source_of_truth_activation: merged
   pr38_post_merge_reconciliation: merged
@@ -155,7 +155,7 @@ status:
   pr102_wb0038g_merge_commit: b6c350ef40d21a3939fd0d3d6c0187a934303d31
   pr102_post_merge_gates: ci_975_codeql_976_passed
   wb0038g_source_pr97: closed_historical_source_evidence_superseded_by_pr102_and_pr103
-  wb0038g_source_pr98: open_source_evidence_superseded_by_pr102_and_pr103
+  wb0038g_source_pr98: closed_historical_source_evidence_superseded_by_pr102_pr103
   wb0038g_remote_deployment_authorized: false
   wb0038g_merge_authorized: consumed_exact_head_de3fe76
   wb0038h_canonical_rollback_hardening: merged_verified_canonical
@@ -164,19 +164,26 @@ status:
   pr103_exact_head_gates: ci_989_codeql_990_fresh_codex_clean
   pr103_post_merge_gates: ci_990_codeql_991_passed
   pr103_unresolved_review_threads: 0
-  wb0038h_source_pr100: open_source_evidence_superseded_by_pr103_canonical
+  wb0038h_source_pr100: merged_evidence_only_reconciliation_canonical
   wb0038h_remote_deployment_authorized: false
   wb0038h_merge_authorized: consumed_exact_head_2dfed5d
-  source_of_truth_reconciliation_needed_after_pr103: in_progress
+  source_of_truth_reconciliation_needed_after_pr103: completed_by_pr104
   pr104_reconciled_current_main: 90e6ad9fc713497803e78187958574a3ad2181d0
+  pr104_merge_commit: 79bfd510ad9048bd168e3b1cb4ef0068de1e36d6
+  pr99_merge_commit: 25874ece2019fbdf77db783f6c97204a976b0675
+  pr100_merge_commit: b2ef9088728930707cd9bad3dd5cd33e855c5480
+  pr109_merge_commit: 7def417b8a8e9e25f53fb1f6a627c7b2a9c7efea
+  pr110_merge_commit: 6c4aa8507257cad1cd615915a3ae9613f55a8103
+  current_main_ci: passed
+  current_main_codeql: passed
   wb0035_identifier: conflict_needs_review
   wb0036_identifier: conflict_needs_review
   wb0037_identifier: conflict_needs_review
-  pr61_old_wb0035_vps_vikunja: open_draft_identity_conflict_needs_review
-  pr67_mcp_foundation: open_draft_requires_current_main_revalidation
-  pr74_cyber_voice_intelligence_bridge: open_draft_requires_current_main_revalidation
+  pr61_old_wb0035_vps_vikunja: closed_historical_superseded_for_planning_by_pr110
+  pr67_mcp_foundation: closed_unmerged_historical_candidate_requires_new_current_main_work_item
+  pr74_cyber_voice_intelligence_bridge: closed_historical_predecessor_superseded_by_merged_pr99
   pr94_exec_boundary_repair: closed_unmerged_unique_response_sanitizer_pending_extraction
-  pr99_wb0039_forward_port: open_draft_exact_head_review_in_progress
+  pr99_wb0039_forward_port: merged_verified_canonical
   pr45_staging_plan: closed_unmerged_2026_09_08
   pr13_structured_registry: closed_unmerged_2026_09_08
   pr5_provider_framework: closed_unmerged_2026_09_08
@@ -405,18 +412,16 @@ completed:
     verification: ci_989_codeql_990_fresh_codex_clean_postmerge_ci_990_codeql_991
 
 next:
-  - complete the WB0038H post-merge source-of-truth closeout and return the repository to an idle canonical state; do not create a successor artifact implicitly
-  - preserve closed PR97 as historical superseded source evidence; treat PR98 and PR100 as source-evidence drafts superseded by canonical PR103 and do not merge them
-  - continue PR99 WB0039 forward-port repair independently after this closeout is canonical
-  - extract the one unique request-validation response-sanitization hardening from closed PR94 into a separate minimal current-main change
-  - resolve WB0035, WB0036 and WB0037 identifier collisions with explicit aliases, supersession or renumbering policy without rewriting Git history
-  - review PR61 identity conflict before reuse; preserve PR45, PR13 and PR5 as closed historical candidates
-  - remediate the six high-severity transitive visual-toolchain npm audit findings in a separately reviewed maintenance change
-  - design a separate concurrency-safe first-write mechanism before requesting any future live staging-write authority
-  - refresh the verified non-canonical CASER-E evidence mirror after terminal-closeout maintenance becomes canonical
-  - keep production application mutation prohibited without a separate production MOP and explicit Jan Kočí approval
-  - preserve Cloudflare as authoritative DNS and DirectAdmin as hosting/SSL control plane
-  - preserve GitHub as canonical product state and Google Drive CASER-E as non-canonical evidence/archive/collaboration layer
+  - remain idle until an explicit successor work item is selected
+  - reconcile and classify stale historical GitHub issues before closing them
+  - resolve WB0035, WB0036 and WB0037 identifier collisions without rewriting Git history
+  - review the six high-severity transitive visual-toolchain npm audit findings in a separate maintenance change
+  - re-evaluate the historical PR94 response-sanitizer delta against current main before extracting anything
+  - design concurrency-safe first-write semantics before any staging application write authorization request
+  - continue Nextcloud issue 62 recoverability proof before production remediation
+  - refresh the non-canonical CASER-E mirror after this reconciliation becomes canonical
+  - keep production application mutation prohibited without a separate production MOP and explicit Jan Koci approval
+  - preserve GitHub as canonical product state and CASER-E as a non-canonical evidence/archive layer
 
 rules:
   state_first: true
