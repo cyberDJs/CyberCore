@@ -8,7 +8,9 @@ Reconcile canonical repository state after the 2026-09-29 project-state snapshot
 
 - repository: `cyberDJs/CyberCore`
 - canonical main: `6c4aa8507257cad1cd615915a3ae9613f55a8103`
-- live open pull requests: 0
+- pre-reconciliation live open pull requests: 0
+- reconciliation candidate after creation: PR #111 is the sole open pull request
+- intended canonical idle count after PR #111 is merged or closed: 0
 - current-main CI: PASS
 - current-main CodeQL: PASS
 - Python 3.11 / 3.12 / 3.13 / 3.14: PASS
