@@ -301,6 +301,46 @@ def test_output_backpressure_fails_closed_by_interrupting_output() -> None:
     assert any(event.type is RealtimeEventType.OUTPUT_BACKPRESSURE for event in events)
 
 
+@pytest.mark.parametrize("cleanup_target", ["stt", "tts"])
+def test_cancel_establishes_safe_terminal_state_before_reraising_cleanup_error(
+    cleanup_target: str,
+) -> None:
+    runtime, session, _, stt, tts, transport, events = make_runtime(tts_frames=[frame(20)])
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+    runtime.begin_speaking("answer")
+    runtime.pump_synthesis(max_frames=1)
+
+    if cleanup_target == "stt":
+        original_reset = stt.reset
+
+        def failing_reset() -> None:
+            original_reset()
+            raise RuntimeError("stt cleanup failed")
+
+        stt.reset = failing_reset  # type: ignore[method-assign]
+        expected = "stt cleanup failed"
+    else:
+        original_cancel = tts.cancel
+
+        def failing_cancel() -> None:
+            original_cancel()
+            raise RuntimeError("tts cleanup failed")
+
+        tts.cancel = failing_cancel  # type: ignore[method-assign]
+        expected = "tts cleanup failed"
+
+    with pytest.raises(RuntimeError, match=expected):
+        runtime.cancel("operator stop")
+
+    assert runtime.state is RealtimeState.CANCELLED
+    assert session.status is SessionStatus.CANCELLED
+    assert runtime.input_buffer.snapshot().frame_count == 0
+    assert runtime.output_buffer.snapshot().frame_count == 0
+    assert transport.flush_count == 1
+    assert any(event.type is RealtimeEventType.CANCELLED for event in events)
+
+
 def test_cancel_is_terminal_and_flushes_everything() -> None:
     runtime, session, _, stt, tts, transport, events = make_runtime(tts_frames=[frame(20)])
     runtime.receive_input(frame(1))

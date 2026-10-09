@@ -316,8 +316,18 @@ class RealtimeVoiceRuntime:
     def cancel(self, reason: str = "operator cancellation") -> None:
         if self.state is RealtimeState.CANCELLED:
             return
-        self.tts.cancel()
-        self.stt.reset()
+
+        cleanup_error: Exception | None = None
+        try:
+            self.tts.cancel()
+        except Exception as exc:
+            cleanup_error = exc
+        try:
+            self.stt.reset()
+        except Exception as exc:
+            if cleanup_error is None:
+                cleanup_error = exc
+
         flushed_input = len(self.input_buffer.flush())
         flushed_output = len(self.output_buffer.flush())
         if self.transport is not None:
@@ -332,3 +342,6 @@ class RealtimeVoiceRuntime:
             output_frames=str(flushed_output),
         )
         self._emit(RealtimeEventType.CANCELLED, reason=reason)
+
+        if cleanup_error is not None:
+            raise cleanup_error
