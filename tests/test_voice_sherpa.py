@@ -122,6 +122,15 @@ class FakeSherpa:
     GenerationConfig = FakeGenerationConfig
 
 
+class FakeLatchedVadDetector(FakeVadDetector):
+    def accept_waveform(self, samples) -> None:
+        self.speech = True
+
+
+class FakeLatchedSherpa(FakeSherpa):
+    VoiceActivityDetector = FakeLatchedVadDetector
+
+
 def frame(sequence: int, value: int = 2000) -> AudioFrame:
     payload = int(value).to_bytes(2, "little", signed=True) * 512
     return AudioFrame(sequence=sequence, payload=payload, format=AudioFormat())
@@ -144,6 +153,16 @@ def test_sherpa_vad_maps_detected_speech(tmp_path: Path) -> None:
 
     assert adapter.evaluate(frame(1)).state.value == "speech"
     assert adapter.evaluate(frame(2, value=0)).state.value == "silence"
+
+
+def test_sherpa_vad_rejects_near_silent_latched_speech(tmp_path: Path) -> None:
+    adapter = SherpaVadAdapter(
+        SherpaVadConfig(model=tmp_path / "silero.onnx"),
+        sherpa_module=FakeLatchedSherpa,
+    )
+
+    assert adapter.evaluate(frame(1, value=5)).state.value == "silence"
+    assert adapter.evaluate(frame(2, value=2000)).state.value == "speech"
 
 
 def test_sherpa_streaming_stt_uses_transducer_contract(tmp_path: Path) -> None:

@@ -2,6 +2,8 @@ from pathlib import Path
 import time
 from types import SimpleNamespace
 
+import pytest
+
 from cybercore.voice.adapters import TranscriptResult, VadResult, VadState
 from cybercore.voice.audio import AudioFormat, AudioFrame
 from cybercore.voice.local_config import (
@@ -41,6 +43,18 @@ class DelayedSpeechVad(FakeVad):
     def evaluate(self, audio_frame: AudioFrame) -> VadResult:
         state = (
             VadState.SPEECH if audio_frame.sequence == self.speech_sequence else VadState.SILENCE
+        )
+        return VadResult(state)
+
+
+class SpeechSequencesVad(FakeVad):
+    def __init__(self, speech_sequences: set[int]) -> None:
+        super().__init__()
+        self.speech_sequences = speech_sequences
+
+    def evaluate(self, audio_frame: AudioFrame) -> VadResult:
+        state = (
+            VadState.SPEECH if audio_frame.sequence in self.speech_sequences else VadState.SILENCE
         )
         return VadResult(state)
 
@@ -212,6 +226,35 @@ class PlaybackAwareFakeInput(FakeInput):
         return None
 
 
+class PlaybackFailingFakeInput(FakeInput):
+    def __init__(self, transport: FakeTransport, *, after_sends: int) -> None:
+        super().__init__([frame(1)])
+        self.transport = transport
+        self.after_sends = after_sends
+
+    def read_frame_if_available(self) -> AudioFrame | None:
+        self.nonblocking_reads += 1
+        if len(self.transport.sent) < self.after_sends:
+            return None
+        raise RuntimeError("playback microphone read failed")
+
+
+class PlaybackSequenceFakeInput(FakeInput):
+    def __init__(
+        self, transport: FakeTransport, *, after_sends: int, frames: list[AudioFrame]
+    ) -> None:
+        super().__init__([frame(1)])
+        self.transport = transport
+        self.after_sends = after_sends
+        self.playback_frames = list(frames)
+
+    def read_frame_if_available(self) -> AudioFrame | None:
+        self.nonblocking_reads += 1
+        if len(self.transport.sent) < self.after_sends or not self.playback_frames:
+            return None
+        return self.playback_frames.pop(0)
+
+
 class FakeSoundDevice:
     __version__ = "0.5.6"
 
@@ -343,7 +386,7 @@ def test_capture_replays_bounded_preroll_before_speech_onset() -> None:
 
 
 def test_processing_pumps_live_input_and_preserves_barge_in() -> None:
-    runtime, session, stt, _, source, _ = make_runtime(nonblocking=[frame(2)])
+    runtime, session, stt, _, source, _ = make_runtime(nonblocking=[frame(2), frame(3)])
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
 
     def slow_processing() -> str:
@@ -354,7 +397,7 @@ def test_processing_pumps_live_input_and_preserves_barge_in() -> None:
 
     assert result == "done"
     assert source.nonblocking_reads > 0
-    assert stt.sequences == [2]
+    assert stt.sequences == [2, 3]
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
 
@@ -372,9 +415,9 @@ def test_processing_drains_input_after_barge_in_endpoint() -> None:
     result = runtime.process_with_live_input(slow_processing)
 
     assert result == "done"
-    assert stt.sequences == [2]
+    assert stt.sequences == [2, 3]
     assert source.nonblocking_reads > 1
-    assert len(source.nonblocking) < 199
+    assert len(source.nonblocking) < 198
     assert source.discard_pending_calls == 1
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
@@ -385,13 +428,13 @@ def test_processing_checks_final_available_input_after_operation_completes() -> 
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
 
     def complete_with_available_input() -> str:
-        source.nonblocking.append(frame(2))
+        source.nonblocking.extend([frame(2), frame(3)])
         return "done"
 
     result = runtime.process_with_live_input(complete_with_available_input)
 
     assert result == "done"
-    assert stt.sequences == [2]
+    assert stt.sequences == [2, 3]
     assert source.discard_pending_calls == 1
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
@@ -400,26 +443,26 @@ def test_processing_checks_final_available_input_after_operation_completes() -> 
 def test_processing_drains_all_final_available_input_after_operation_completes() -> None:
     runtime, session, stt, _, source, _ = make_runtime(
         nonblocking=[],
-        vad=DelayedSpeechVad(speech_sequence=3),
+        vad=SpeechSequencesVad({3, 4}),
         blocking=[frame(3)],
     )
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
 
     def complete_with_queued_silence_then_speech() -> str:
-        source.nonblocking.extend([frame(2), frame(3)])
+        source.nonblocking.extend([frame(2), frame(3), frame(4)])
         return "done"
 
     result = runtime.process_with_live_input(complete_with_queued_silence_then_speech)
 
     assert result == "done"
     assert source.nonblocking == []
-    assert stt.sequences[-1] == 3
+    assert stt.sequences[-2:] == [3, 4]
     assert source.discard_pending_calls == 1
     assert runtime.realtime.state is RealtimeState.INTERRUPTED
     assert session.status is SessionStatus.INTERRUPTED
 
 
-def test_processing_preserves_partial_audio_at_inference_boundary() -> None:
+def test_processing_single_partial_speech_frame_does_not_false_barge_in() -> None:
     runtime, session, stt, _, _, _ = make_runtime()
     source = CompletingPartialFakeInput()
     runtime.audio_input = source
@@ -429,12 +472,12 @@ def test_processing_preserves_partial_audio_at_inference_boundary() -> None:
 
     assert result == "done"
     assert source.pending_checks >= 1
-    assert stt.sequences == [2]
-    assert runtime.realtime.state is RealtimeState.INTERRUPTED
-    assert session.status is SessionStatus.INTERRUPTED
+    assert stt.sequences == [1]
+    assert runtime.realtime.state is RealtimeState.PROCESSING
+    assert session.status is SessionStatus.ACTIVE
 
 
-def test_processing_uses_device_completion_grace_for_partial_boundary_audio() -> None:
+def test_processing_completion_grace_single_frame_does_not_false_barge_in() -> None:
     runtime, session, stt, _, _, _ = make_runtime(block_ms=1)
     source = DelayedCompletingPartialFakeInput()
     runtime.audio_input = source
@@ -443,15 +486,15 @@ def test_processing_uses_device_completion_grace_for_partial_boundary_audio() ->
     result = runtime.process_with_live_input(lambda: "done")
 
     assert result == "done"
-    assert stt.sequences == [2]
-    assert runtime.realtime.state is RealtimeState.INTERRUPTED
-    assert session.status is SessionStatus.INTERRUPTED
+    assert stt.sequences == [1]
+    assert runtime.realtime.state is RealtimeState.PROCESSING
+    assert session.status is SessionStatus.ACTIVE
 
 
 def test_capture_finalizes_pending_barge_in_endpoint_before_reading_next_block() -> None:
     runtime, session, _, _, source, _ = make_runtime(
-        blocking=[frame(1), frame(3)],
-        nonblocking=[frame(2)],
+        blocking=[frame(1), frame(4)],
+        nonblocking=[frame(2), frame(3)],
     )
     runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
 
@@ -470,7 +513,7 @@ def test_capture_finalizes_pending_barge_in_endpoint_before_reading_next_block()
     assert utterance is not None
     assert utterance.id == "u-2"
     assert len(source.blocking) == 1
-    assert source.blocking[0].sequence == 3
+    assert source.blocking[0].sequence == 4
 
 
 def test_once_mode_continues_after_processing_barge_in(monkeypatch) -> None:
@@ -574,7 +617,7 @@ def test_speak_sends_audio_and_returns_to_idle() -> None:
     assert runtime.realtime.state is RealtimeState.IDLE
 
 
-def test_local_playback_is_safe_half_duplex_and_drains_mic_speech() -> None:
+def test_local_playback_single_speech_frame_does_not_interrupt() -> None:
     long_tts = LongFakeTts()
     runtime, session, _, tts, _, transport = make_runtime(tts=long_tts)
     source = PlaybackAwareFakeInput(transport, speech_after_sends=1)
@@ -591,6 +634,88 @@ def test_local_playback_is_safe_half_duplex_and_drains_mic_speech() -> None:
     assert transport.sent == [20, 21, 22, 23, 24, 25]
     assert source.delivered_playback_speech is True
     assert source.nonblocking_reads > 0
+
+
+def test_local_playback_confirms_fresh_speech_before_interrupting() -> None:
+    long_tts = LongFakeTts()
+    runtime, session, _, tts, _, transport = make_runtime(tts=long_tts)
+    source = PlaybackSequenceFakeInput(
+        transport,
+        after_sends=1,
+        frames=[frame(99), frame(99), frame(2), frame(3), frame(4)],
+    )
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    interrupted = runtime.speak("long answer")
+
+    assert interrupted is True
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+    assert tts.cancelled == 1
+    assert transport.flush_count == 1
+    assert transport.sent == [20]
+    assert runtime.provider.stt.sequences == [2, 3, 4]
+    assert source.discard_pending_calls == 0
+
+
+def test_local_playback_input_failure_cancels_and_flushes_output() -> None:
+    long_tts = LongFakeTts()
+    runtime, session, _, tts, _, transport = make_runtime(tts=long_tts)
+    source = PlaybackFailingFakeInput(transport, after_sends=1)
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    with pytest.raises(RuntimeError, match="playback microphone read failed"):
+        runtime.speak("long answer")
+
+    assert runtime.realtime.state is RealtimeState.CANCELLED
+    assert session.status is SessionStatus.CANCELLED
+    assert tts.cancelled == 1
+    assert transport.flush_count == 1
+    assert transport.sent == [20]
+
+
+def test_local_playback_silence_does_not_interrupt() -> None:
+    long_tts = LongFakeTts()
+    runtime, session, _, tts, _, transport = make_runtime(tts=long_tts)
+    source = PlaybackSequenceFakeInput(
+        transport,
+        after_sends=1,
+        frames=[frame(99), frame(99), frame(99), frame(99)],
+    )
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    interrupted = runtime.speak("long answer")
+
+    assert interrupted is False
+    assert runtime.realtime.state is RealtimeState.IDLE
+    assert session.status is SessionStatus.ACTIVE
+    assert tts.cancelled == 0
+    assert transport.flush_count == 0
+    assert transport.sent == [20, 21, 22, 23, 24, 25]
+
+
+def test_microphone_is_drained_before_speaking_state_during_synchronous_tts() -> None:
+    source = FakeInput([frame(1)], nonblocking=[frame(99), None])
+
+    class DrainAwareSlowTts(SlowFakeTts):
+        def start(self, text: str) -> None:
+            deadline = time.monotonic() + 0.2
+            while source.nonblocking_reads == 0 and time.monotonic() < deadline:
+                time.sleep(0.005)
+            assert source.nonblocking_reads > 0
+            super().start(text)
+
+    runtime, _, _, _, _, _ = make_runtime(tts=DrainAwareSlowTts())
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    interrupted = runtime.speak("slow answer")
+
+    assert interrupted is False
+    assert runtime.realtime.state is RealtimeState.IDLE
 
 
 def test_microphone_is_drained_while_synchronous_tts_is_generating() -> None:
