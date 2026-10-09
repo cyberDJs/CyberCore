@@ -318,30 +318,51 @@ class RealtimeVoiceRuntime:
             return
 
         cleanup_error: Exception | None = None
+
+        def capture_error(exc: Exception) -> None:
+            nonlocal cleanup_error
+            if cleanup_error is None:
+                cleanup_error = exc
+
         try:
             self.tts.cancel()
         except Exception as exc:
-            cleanup_error = exc
+            capture_error(exc)
         try:
             self.stt.reset()
         except Exception as exc:
-            if cleanup_error is None:
-                cleanup_error = exc
+            capture_error(exc)
 
         flushed_input = len(self.input_buffer.flush())
         flushed_output = len(self.output_buffer.flush())
         if self.transport is not None:
-            self.transport.flush_output()
+            try:
+                self.transport.flush_output()
+            except Exception as exc:
+                capture_error(exc)
+
         self._synthesis_exhausted = False
         self._processing_barge_in_candidate = None
-        self.session.cancel()
-        self._transition(RealtimeState.CANCELLED, reason)
-        self._emit(
-            RealtimeEventType.AUDIO_FLUSHED,
-            input_frames=str(flushed_input),
-            output_frames=str(flushed_output),
-        )
-        self._emit(RealtimeEventType.CANCELLED, reason=reason)
+        try:
+            self.session.cancel()
+        except Exception as exc:
+            capture_error(exc)
+        try:
+            self._transition(RealtimeState.CANCELLED, reason)
+        except Exception as exc:
+            capture_error(exc)
+        try:
+            self._emit(
+                RealtimeEventType.AUDIO_FLUSHED,
+                input_frames=str(flushed_input),
+                output_frames=str(flushed_output),
+            )
+        except Exception as exc:
+            capture_error(exc)
+        try:
+            self._emit(RealtimeEventType.CANCELLED, reason=reason)
+        except Exception as exc:
+            capture_error(exc)
 
         if cleanup_error is not None:
             raise cleanup_error

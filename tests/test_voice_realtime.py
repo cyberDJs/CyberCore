@@ -69,12 +69,15 @@ class FakeTransport:
     def __init__(self) -> None:
         self.sent: list[int] = []
         self.flush_count = 0
+        self.flush_error: Exception | None = None
 
     def send(self, frame: AudioFrame) -> None:
         self.sent.append(frame.sequence)
 
     def flush_output(self) -> None:
         self.flush_count += 1
+        if self.flush_error is not None:
+            raise self.flush_error
 
 
 def frame(sequence: int) -> AudioFrame:
@@ -336,6 +339,51 @@ def test_cancel_establishes_safe_terminal_state_before_reraising_cleanup_error(
     assert runtime.state is RealtimeState.CANCELLED
     assert session.status is SessionStatus.CANCELLED
     assert runtime.input_buffer.snapshot().frame_count == 0
+    assert runtime.output_buffer.snapshot().frame_count == 0
+    assert transport.flush_count == 1
+    assert any(event.type is RealtimeEventType.CANCELLED for event in events)
+
+
+def test_cancel_preserves_first_cleanup_error_when_transport_flush_also_fails() -> None:
+    runtime, session, _, stt, _, transport, events = make_runtime(tts_frames=[frame(20)])
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+    runtime.begin_speaking("answer")
+    runtime.pump_synthesis(max_frames=1)
+
+    original_reset = stt.reset
+
+    def failing_reset() -> None:
+        original_reset()
+        raise RuntimeError("stt cleanup failed first")
+
+    stt.reset = failing_reset  # type: ignore[method-assign]
+    transport.flush_error = RuntimeError("transport flush failed second")
+
+    with pytest.raises(RuntimeError, match="stt cleanup failed first"):
+        runtime.cancel("operator stop")
+
+    assert runtime.state is RealtimeState.CANCELLED
+    assert session.status is SessionStatus.CANCELLED
+    assert runtime.input_buffer.snapshot().frame_count == 0
+    assert runtime.output_buffer.snapshot().frame_count == 0
+    assert transport.flush_count == 1
+    assert any(event.type is RealtimeEventType.CANCELLED for event in events)
+
+
+def test_cancel_rethrows_transport_flush_error_after_terminal_state() -> None:
+    runtime, session, _, _, _, transport, events = make_runtime(tts_frames=[frame(20)])
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+    runtime.begin_speaking("answer")
+    runtime.pump_synthesis(max_frames=1)
+    transport.flush_error = RuntimeError("transport flush failed")
+
+    with pytest.raises(RuntimeError, match="transport flush failed"):
+        runtime.cancel("operator stop")
+
+    assert runtime.state is RealtimeState.CANCELLED
+    assert session.status is SessionStatus.CANCELLED
     assert runtime.output_buffer.snapshot().frame_count == 0
     assert transport.flush_count == 1
     assert any(event.type is RealtimeEventType.CANCELLED for event in events)
