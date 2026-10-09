@@ -12,6 +12,7 @@ import time
 from typing import Any, cast
 
 from cybercore.voice.adapters import VadState
+from cybercore.voice.barge_shadow import FreshSpeechGate
 from cybercore.voice.devices import (
     AudioDeviceError,
     LocalVoiceDependencyError,
@@ -197,6 +198,8 @@ class LocalSpeechRuntime:
             tts=provider.tts,
             transport=transport,
         )
+        self._speaking_barge_in_gate = FreshSpeechGate()
+        self._speaking_barge_in_frames: deque[Any] = deque(maxlen=3)
         self._opened = False
 
     @classmethod
@@ -388,6 +391,28 @@ class LocalSpeechRuntime:
             raise errors[0]
         return results[0]
 
+    def _observe_speaking_barge_in(self, frame: Any) -> bool:
+        if self.realtime.state is not RealtimeState.SPEAKING:
+            return False
+        vad = self.provider.vad.evaluate(frame)
+        if vad.state is VadState.SPEECH:
+            self._speaking_barge_in_frames.append(frame)
+        else:
+            self._speaking_barge_in_frames.clear()
+        if not self._speaking_barge_in_gate.observe(vad.state, frame_sequence=frame.sequence):
+            return False
+        frames = tuple(self._speaking_barge_in_frames)
+        self._speaking_barge_in_frames.clear()
+        self.realtime.confirm_speaking_barge_in(frames)
+        return True
+
+    def _pump_speaking_input_once(self) -> bool:
+        incoming = self.audio_input.read_frame_if_available()
+        if incoming is None:
+            return False
+        self._observe_speaking_barge_in(incoming)
+        return True
+
     def _begin_speaking_with_live_input(self, text: str) -> None:
         stop = threading.Event()
         errors: list[Exception] = []
@@ -397,8 +422,10 @@ class LocalSpeechRuntime:
         def pump_input() -> None:
             while not stop.is_set():
                 try:
-                    incoming = self.audio_input.read_frame_if_available()
-                    if incoming is None:
+                    if self.realtime.state is not RealtimeState.SPEAKING:
+                        time.sleep(idle_sleep)
+                        continue
+                    if not self._pump_speaking_input_once():
                         time.sleep(idle_sleep)
                 except Exception as exc:
                     errors.append(exc)
@@ -450,18 +477,25 @@ class LocalSpeechRuntime:
 
     def speak(self, text: str) -> bool:
         self.open()
+        self._speaking_barge_in_gate.reset()
+        self._speaking_barge_in_frames.clear()
+        self._reset_vad("active playback barge-in observation started")
         self._begin_speaking_with_live_input(text)
-        self._drain_microphone_input("preparing local half-duplex playback")
 
         while self.realtime.state is RealtimeState.SPEAKING:
-            self._drain_microphone_input("draining local half-duplex playback input")
+            while self._pump_speaking_input_once():
+                if self.realtime.state is not RealtimeState.SPEAKING:
+                    break
+            if self.realtime.state is not RealtimeState.SPEAKING:
+                break
             if self.realtime.output_buffer.snapshot().frame_count == 0:
                 self.realtime.pump_synthesis(max_frames=1)
             if self.realtime.state is RealtimeState.SPEAKING:
                 self.realtime.send_next_output()
-            self._drain_microphone_input("draining local half-duplex playback input")
-        self._discard_pending_microphone_audio("returning from local half-duplex playback")
-        return self.realtime.state is RealtimeState.INTERRUPTED
+        interrupted = self.realtime.state is RealtimeState.INTERRUPTED
+        if not interrupted:
+            self._discard_pending_microphone_audio("returning from local playback")
+        return interrupted
 
     def cancel(self, reason: str = "operator cancellation") -> None:
         self.realtime.cancel(reason)

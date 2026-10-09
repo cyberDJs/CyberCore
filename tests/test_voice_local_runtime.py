@@ -224,6 +224,22 @@ class PlaybackAwareFakeInput(FakeInput):
         return None
 
 
+class PlaybackSequenceFakeInput(FakeInput):
+    def __init__(
+        self, transport: FakeTransport, *, after_sends: int, frames: list[AudioFrame]
+    ) -> None:
+        super().__init__([frame(1)])
+        self.transport = transport
+        self.after_sends = after_sends
+        self.playback_frames = list(frames)
+
+    def read_frame_if_available(self) -> AudioFrame | None:
+        self.nonblocking_reads += 1
+        if len(self.transport.sent) < self.after_sends or not self.playback_frames:
+            return None
+        return self.playback_frames.pop(0)
+
+
 class FakeSoundDevice:
     __version__ = "0.5.6"
 
@@ -586,7 +602,7 @@ def test_speak_sends_audio_and_returns_to_idle() -> None:
     assert runtime.realtime.state is RealtimeState.IDLE
 
 
-def test_local_playback_is_safe_half_duplex_and_drains_mic_speech() -> None:
+def test_local_playback_single_speech_frame_does_not_interrupt() -> None:
     long_tts = LongFakeTts()
     runtime, session, _, tts, _, transport = make_runtime(tts=long_tts)
     source = PlaybackAwareFakeInput(transport, speech_after_sends=1)
@@ -603,6 +619,50 @@ def test_local_playback_is_safe_half_duplex_and_drains_mic_speech() -> None:
     assert transport.sent == [20, 21, 22, 23, 24, 25]
     assert source.delivered_playback_speech is True
     assert source.nonblocking_reads > 0
+
+
+def test_local_playback_confirms_fresh_speech_before_interrupting() -> None:
+    long_tts = LongFakeTts()
+    runtime, session, _, tts, _, transport = make_runtime(tts=long_tts)
+    source = PlaybackSequenceFakeInput(
+        transport,
+        after_sends=1,
+        frames=[frame(99), frame(99), frame(2), frame(3), frame(4)],
+    )
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    interrupted = runtime.speak("long answer")
+
+    assert interrupted is True
+    assert runtime.realtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+    assert tts.cancelled == 1
+    assert transport.flush_count == 1
+    assert transport.sent == [20]
+    assert runtime.provider.stt.sequences == [2, 3, 4]
+    assert source.discard_pending_calls == 0
+
+
+def test_local_playback_silence_does_not_interrupt() -> None:
+    long_tts = LongFakeTts()
+    runtime, session, _, tts, _, transport = make_runtime(tts=long_tts)
+    source = PlaybackSequenceFakeInput(
+        transport,
+        after_sends=1,
+        frames=[frame(99), frame(99), frame(99), frame(99)],
+    )
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    interrupted = runtime.speak("long answer")
+
+    assert interrupted is False
+    assert runtime.realtime.state is RealtimeState.IDLE
+    assert session.status is SessionStatus.ACTIVE
+    assert tts.cancelled == 0
+    assert transport.flush_count == 0
+    assert transport.sent == [20, 21, 22, 23, 24, 25]
 
 
 def test_microphone_is_drained_while_synchronous_tts_is_generating() -> None:

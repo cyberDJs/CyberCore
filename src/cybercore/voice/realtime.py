@@ -200,6 +200,26 @@ class RealtimeVoiceRuntime:
 
         return self._accept_input_frame(frame)
 
+    def confirm_speaking_barge_in(
+        self, frames: tuple[AudioFrame, ...]
+    ) -> tuple[TranscriptDelta, ...]:
+        if self.state is not RealtimeState.SPEAKING:
+            raise RuntimeError(f"cannot confirm speaking barge-in from {self.state.value}")
+        if not frames:
+            raise ValueError("speaking barge-in requires at least one audio frame")
+
+        reason = "fresh speech confirmed during speaking"
+        self._interrupt_active_turn(reason)
+        self._emit(
+            RealtimeEventType.BARGE_IN,
+            frame_sequence=str(frames[-1].sequence),
+            reason=reason,
+        )
+        deltas: list[TranscriptDelta] = []
+        for frame in frames:
+            deltas.extend(self._accept_input_frame(frame))
+        return tuple(deltas)
+
     def finish_utterance(self, *, actor_id: str, utterance_id: str) -> Utterance | None:
         if self.state not in {RealtimeState.LISTENING, RealtimeState.INTERRUPTED}:
             raise RuntimeError(f"cannot finish input while {self.state.value}")

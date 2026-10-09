@@ -14,15 +14,8 @@ class BargeInShadowSnapshot:
     candidate_frame_sequence: int | None
 
 
-class FreshSpeechShadowGate:
-    """Observe playback-time VAD without granting interruption authority.
-
-    The gate deliberately refuses to treat speech that is already present when
-    observation begins as fresh user speech. It first requires a bounded run of
-    silence and only then confirms a candidate after a bounded run of speech.
-    This is a shadow-only evidence boundary: callers must not use it to cancel
-    playback or change execution authority.
-    """
+class FreshSpeechGate:
+    """Confirm fresh playback-time speech after a silence boundary."""
 
     def __init__(
         self, *, required_silence_frames: int = 2, required_speech_frames: int = 3
@@ -79,3 +72,7 @@ class FreshSpeechShadowGate:
         else:
             self._speech_frames = 0
         return False
+
+
+class FreshSpeechShadowGate(FreshSpeechGate):
+    """Backward-compatible shadow-probe gate name."""

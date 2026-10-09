@@ -187,6 +187,26 @@ def test_speech_during_speaking_causes_barge_in_and_flushes_output() -> None:
     assert session.status is SessionStatus.ACTIVE
 
 
+def test_confirmed_speaking_barge_in_preserves_confirmed_onset_frames() -> None:
+    runtime, session, _, stt, tts, transport, events = make_runtime(
+        tts_frames=[frame(20), frame(21)]
+    )
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+    runtime.begin_speaking("long answer")
+    runtime.pump_synthesis(max_frames=1)
+
+    deltas = runtime.confirm_speaking_barge_in((frame(2), frame(3), frame(4)))
+
+    assert runtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+    assert stt.frames == [2, 3, 4]
+    assert [delta.text for delta in deltas] == ["delta-2", "delta-3", "delta-4"]
+    assert tts.cancel_count == 1
+    assert transport.flush_count == 1
+    assert any(event.type is RealtimeEventType.BARGE_IN for event in events)
+
+
 def test_silence_during_speaking_is_ignored_without_barge_in() -> None:
     runtime, session, vad, _, tts, transport, events = make_runtime(tts_frames=[frame(20)])
     runtime.receive_input(frame(1))
