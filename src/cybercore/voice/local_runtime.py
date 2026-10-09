@@ -422,10 +422,11 @@ class LocalSpeechRuntime:
         def pump_input() -> None:
             while not stop.is_set():
                 try:
-                    if self.realtime.state is not RealtimeState.SPEAKING:
-                        time.sleep(idle_sleep)
-                        continue
-                    if not self._pump_speaking_input_once():
+                    if self.realtime.state is RealtimeState.SPEAKING:
+                        read = self._pump_speaking_input_once()
+                    else:
+                        read = self.audio_input.read_frame_if_available() is not None
+                    if not read:
                         time.sleep(idle_sleep)
                 except Exception as exc:
                     errors.append(exc)

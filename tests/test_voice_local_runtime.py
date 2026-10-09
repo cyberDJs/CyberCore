@@ -665,6 +665,27 @@ def test_local_playback_silence_does_not_interrupt() -> None:
     assert transport.sent == [20, 21, 22, 23, 24, 25]
 
 
+def test_microphone_is_drained_before_speaking_state_during_synchronous_tts() -> None:
+    source = FakeInput([frame(1)], nonblocking=[frame(99), None])
+
+    class DrainAwareSlowTts(SlowFakeTts):
+        def start(self, text: str) -> None:
+            deadline = time.monotonic() + 0.2
+            while source.nonblocking_reads == 0 and time.monotonic() < deadline:
+                time.sleep(0.005)
+            assert source.nonblocking_reads > 0
+            super().start(text)
+
+    runtime, _, _, _, _, _ = make_runtime(tts=DrainAwareSlowTts())
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    interrupted = runtime.speak("slow answer")
+
+    assert interrupted is False
+    assert runtime.realtime.state is RealtimeState.IDLE
+
+
 def test_microphone_is_drained_while_synchronous_tts_is_generating() -> None:
     slow_tts = SlowFakeTts()
     runtime, _, _, _, source, transport = make_runtime(
