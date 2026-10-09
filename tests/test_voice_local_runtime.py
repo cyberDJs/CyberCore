@@ -2,6 +2,8 @@ from pathlib import Path
 import time
 from types import SimpleNamespace
 
+import pytest
+
 from cybercore.voice.adapters import TranscriptResult, VadResult, VadState
 from cybercore.voice.audio import AudioFormat, AudioFrame
 from cybercore.voice.local_config import (
@@ -222,6 +224,19 @@ class PlaybackAwareFakeInput(FakeInput):
             self.delivered_playback_speech = True
             return frame(2)
         return None
+
+
+class PlaybackFailingFakeInput(FakeInput):
+    def __init__(self, transport: FakeTransport, *, after_sends: int) -> None:
+        super().__init__([frame(1)])
+        self.transport = transport
+        self.after_sends = after_sends
+
+    def read_frame_if_available(self) -> AudioFrame | None:
+        self.nonblocking_reads += 1
+        if len(self.transport.sent) < self.after_sends:
+            return None
+        raise RuntimeError("playback microphone read failed")
 
 
 class PlaybackSequenceFakeInput(FakeInput):
@@ -642,6 +657,23 @@ def test_local_playback_confirms_fresh_speech_before_interrupting() -> None:
     assert transport.sent == [20]
     assert runtime.provider.stt.sequences == [2, 3, 4]
     assert source.discard_pending_calls == 0
+
+
+def test_local_playback_input_failure_cancels_and_flushes_output() -> None:
+    long_tts = LongFakeTts()
+    runtime, session, _, tts, _, transport = make_runtime(tts=long_tts)
+    source = PlaybackFailingFakeInput(transport, after_sends=1)
+    runtime.audio_input = source
+    runtime.capture_utterance(actor_id="johnny", utterance_id="u-1")
+
+    with pytest.raises(RuntimeError, match="playback microphone read failed"):
+        runtime.speak("long answer")
+
+    assert runtime.realtime.state is RealtimeState.CANCELLED
+    assert session.status is SessionStatus.CANCELLED
+    assert tts.cancelled == 1
+    assert transport.flush_count == 1
+    assert transport.sent == [20]
 
 
 def test_local_playback_silence_does_not_interrupt() -> None:

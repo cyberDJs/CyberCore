@@ -484,9 +484,14 @@ class LocalSpeechRuntime:
         self._begin_speaking_with_live_input(text)
 
         while self.realtime.state is RealtimeState.SPEAKING:
-            while self._pump_speaking_input_once():
-                if self.realtime.state is not RealtimeState.SPEAKING:
-                    break
+            try:
+                while self._pump_speaking_input_once():
+                    if self.realtime.state is not RealtimeState.SPEAKING:
+                        break
+            except Exception:
+                if self.realtime.state is not RealtimeState.CANCELLED:
+                    self.realtime.cancel("microphone input failed during local playback")
+                raise
             if self.realtime.state is not RealtimeState.SPEAKING:
                 break
             if self.realtime.output_buffer.snapshot().frame_count == 0:
