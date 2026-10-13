@@ -123,12 +123,29 @@ class Journal:
                     (operation_id, actor, target, action, tier, policy_hash,
                      correlation_id, idempotency_key, state, before_generation)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PREPARED', ?)""",
-                    (req.operation_id, req.actor, req.target, req.action, req.tier,
-                     req.policy_hash, req.correlation_id, req.operation_id, generation),
+                    (
+                        req.operation_id,
+                        req.actor,
+                        req.target,
+                        req.action,
+                        req.tier,
+                        req.policy_hash,
+                        req.correlation_id,
+                        req.operation_id,
+                        generation,
+                    ),
                 )
-                self._event(req.operation_id, now, {"state": "PREPARED", "actor": req.actor,
-                                                     "target": req.target, "policy_hash": req.policy_hash,
-                                                     "correlation_id": req.correlation_id})
+                self._event(
+                    req.operation_id,
+                    now,
+                    {
+                        "state": "PREPARED",
+                        "actor": req.actor,
+                        "target": req.target,
+                        "policy_hash": req.policy_hash,
+                        "correlation_id": req.correlation_id,
+                    },
+                )
         except sqlite3.Error as exc:
             raise AuditUnavailable("journal prepare failed") from exc
 
@@ -138,19 +155,35 @@ class Journal:
             (operation_id, now, json.dumps(data, sort_keys=True, separators=(",", ":"))),
         )
 
-    def transition(self, operation_id: str, now: int, state: str, *,
-                   capability_id: str = "", lease_id: str = "", lease_epoch: int = 0,
-                   verdict: str = "", provider_op: str | None = None,
-                   changed: bool | None = None, reason: str = "") -> None:
+    def transition(
+        self,
+        operation_id: str,
+        now: int,
+        state: str,
+        *,
+        capability_id: str = "",
+        lease_id: str = "",
+        lease_epoch: int = 0,
+        verdict: str = "",
+        provider_op: str | None = None,
+        changed: bool | None = None,
+        reason: str = "",
+    ) -> None:
         self._writable()
         row = self.get(operation_id)
         if row is None:
             raise AuditUnavailable("missing persisted operation")
         event: dict[str, object] = {
-            "state": state, "actor": row["actor"], "target": row["target"],
-            "policy_hash": row["policy_hash"], "correlation_id": row["correlation_id"],
-            "capability_id": capability_id, "lease_id": lease_id,
-            "lease_epoch": lease_epoch, "voodoo": verdict, "reason": reason,
+            "state": state,
+            "actor": row["actor"],
+            "target": row["target"],
+            "policy_hash": row["policy_hash"],
+            "correlation_id": row["correlation_id"],
+            "capability_id": capability_id,
+            "lease_id": lease_id,
+            "lease_epoch": lease_epoch,
+            "voodoo": verdict,
+            "reason": reason,
         }
         try:
             with self.conn:
@@ -159,8 +192,14 @@ class Journal:
                     provider_op=COALESCE(?, provider_op),
                     lease_epoch=CASE WHEN ? > 0 THEN ? ELSE lease_epoch END
                     WHERE operation_id=?""",
-                    (state, None if changed is None else int(changed), provider_op,
-                     lease_epoch, lease_epoch, operation_id),
+                    (
+                        state,
+                        None if changed is None else int(changed),
+                        provider_op,
+                        lease_epoch,
+                        lease_epoch,
+                        operation_id,
+                    ),
                 )
                 self._event(operation_id, now, event)
         except sqlite3.Error as exc:
@@ -172,14 +211,17 @@ class Journal:
         ).fetchone()
 
     def events(self, operation_id: str) -> list[dict[str, object]]:
-        return [dict(seq=row["seq"], timestamp=row["timestamp"], **json.loads(row["record"]))
-                for row in self.conn.execute(
-                    "SELECT seq, timestamp, record FROM events WHERE operation_id=? ORDER BY seq",
-                    (operation_id,),
-                )]
+        return [
+            dict(seq=row["seq"], timestamp=row["timestamp"], **json.loads(row["record"]))
+            for row in self.conn.execute(
+                "SELECT seq, timestamp, record FROM events WHERE operation_id=? ORDER BY seq",
+                (operation_id,),
+            )
+        ]
 
-    def acquire(self, target: str, holder: str, now: int, *,
-                takeover: bool = False, ttl: int = 60) -> Lease:
+    def acquire(
+        self, target: str, holder: str, now: int, *, takeover: bool = False, ttl: int = 60
+    ) -> Lease:
         self._writable()
         try:
             with self.conn:
@@ -204,14 +246,18 @@ class Journal:
         row = self.conn.execute(
             """SELECT 1 FROM operations WHERE target=? AND operation_id != ?
             AND state IN ('PREPARED', 'EXECUTING', 'VERIFYING', 'UNKNOWN', 'RECOVERING')
-            LIMIT 1""", (target, excluding)
+            LIMIT 1""",
+            (target, excluding),
         ).fetchone()
         return row is not None
 
     def current_lease(self, target: str) -> Lease | None:
         row = self.conn.execute("SELECT * FROM leases WHERE target=?", (target,)).fetchone()
-        return (Lease(row["lease_id"], row["holder"], target,
-                      row["epoch"], row["expires"]) if row else None)
+        return (
+            Lease(row["lease_id"], row["holder"], target, row["epoch"], row["expires"])
+            if row
+            else None
+        )
 
     def close(self) -> None:
         self.conn.close()
@@ -220,8 +266,13 @@ class Journal:
 class FakeProvider:
     """Inert in-memory provider with enforced fencing and idempotency."""
 
-    def __init__(self, *, targets: tuple[str, ...] = ("service_a", "service_b"),
-                 fencing: bool = True, idempotency: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        targets: tuple[str, ...] = ("service_a", "service_b"),
+        fencing: bool = True,
+        idempotency: bool = True,
+    ) -> None:
         if any(not re.fullmatch(r"[a-z][a-z0-9_]*", name) for name in targets):
             raise ValueError("fake targets must be local symbolic names")
         self.targets = frozenset(targets)
@@ -271,7 +322,9 @@ class FakeProvider:
 class Simulator:
     """Security-first coordinator; deliberately accepts *only* FakeProvider."""
 
-    def __init__(self, journal: Journal, provider: FakeProvider, clock: Clock | None = None) -> None:
+    def __init__(
+        self, journal: Journal, provider: FakeProvider, clock: Clock | None = None
+    ) -> None:
         if type(provider) is not FakeProvider:
             raise TypeError("only the exact inert FakeProvider class is accepted")
         self.journal = journal
@@ -282,30 +335,48 @@ class Simulator:
         self.human_approvals: set[str] = set()
         self.alerts: list[str] = []
 
-    def grant(self, holder: str, target: str, action: str, *,
-              policy_hash: str = "policy-v1", ttl: int = 60) -> Capability:
+    def grant(
+        self,
+        holder: str,
+        target: str,
+        action: str,
+        *,
+        policy_hash: str = "policy-v1",
+        ttl: int = 60,
+    ) -> Capability:
         if not self.provider.validate_target(target):
             raise UnsafeEffect("invalid fake target")
-        cap = Capability(f"grant-{holder}-{target}-{action}", holder, target,
-                         action, policy_hash, self.clock.now + ttl)
+        cap = Capability(
+            f"grant-{holder}-{target}-{action}",
+            holder,
+            target,
+            action,
+            policy_hash,
+            self.clock.now + ttl,
+        )
         self.capabilities[holder, target, action] = cap
         return cap
 
-    def lease(self, holder: str, target: str = "service_a", *,
-              takeover: bool = False, ttl: int = 60) -> Lease:
+    def lease(
+        self, holder: str, target: str = "service_a", *, takeover: bool = False, ttl: int = 60
+    ) -> Lease:
         if not self.provider.validate_target(target) or not self.provider.fencing:
             raise UnsafeEffect("fencing unavailable")
-        lease = self.journal.acquire(target, holder, self.clock.now,
-                                     takeover=takeover, ttl=ttl)
+        lease = self.journal.acquire(target, holder, self.clock.now, takeover=takeover, ttl=ttl)
         self.provider.fence(target, lease.epoch)
         return lease
 
-    def allow(self, target: str = "service_a", action: str = "restart", *,
-              decision: Literal["ALLOW", "DENY", "UNKNOWN"] = "ALLOW",
-              policy_hash: str = "policy-v1", ttl: int = 60,
-              valid: bool = True) -> Verdict:
-        verdict = Verdict(decision, target, action, policy_hash,
-                          self.clock.now + ttl, valid)
+    def allow(
+        self,
+        target: str = "service_a",
+        action: str = "restart",
+        *,
+        decision: Literal["ALLOW", "DENY", "UNKNOWN"] = "ALLOW",
+        policy_hash: str = "policy-v1",
+        ttl: int = 60,
+        valid: bool = True,
+    ) -> Verdict:
+        verdict = Verdict(decision, target, action, policy_hash, self.clock.now + ttl, valid)
         self.verdicts[target, action] = verdict
         return verdict
 
@@ -322,30 +393,62 @@ class Simulator:
             return False, "unrecognized risk tier", "", "", 0, ""
         if self.journal.in_flight(req.target, req.operation_id):
             return False, "unreconciled prior operation on target", "", "", 0, ""
-        if req.tier in {"AMBER", "RED"} and (req.human_approval != "Jan Kočí"
-                                                 or req.operation_id not in self.human_approvals):
+        if req.tier in {"AMBER", "RED"} and (
+            req.human_approval != "Jan Kočí" or req.operation_id not in self.human_approvals
+        ):
             return False, "explicit scoped Jan approval missing", "", "", 0, ""
         cap = self.capabilities.get((req.actor, req.target, req.action))
         if cap is None or cap.expires <= self.clock.now or cap.policy_hash != req.policy_hash:
             return False, "capability missing, expired or wrong policy", "", "", 0, ""
         lease = self.journal.current_lease(req.target)
-        if (lease is None or lease.holder != req.actor or lease.expires <= self.clock.now
-                or not self.provider.fencing or lease.epoch != self.provider.epochs[req.target]):
+        if (
+            lease is None
+            or lease.holder != req.actor
+            or lease.expires <= self.clock.now
+            or not self.provider.fencing
+            or lease.epoch != self.provider.epochs[req.target]
+        ):
             return False, "exclusive fenced lease missing or stale", cap.capability_id, "", 0, ""
         v = self.verdicts.get((req.target, req.action))
-        if (v is None or v.decision != "ALLOW" or not v.valid
-                or v.expires <= self.clock.now or v.policy_hash != req.policy_hash):
-            return (False, "VOODOO veto/timeout/corrupt verdict", cap.capability_id,
-                    lease.lease_id, lease.epoch, v.decision if v else "UNKNOWN")
+        if (
+            v is None
+            or v.decision != "ALLOW"
+            or not v.valid
+            or v.expires <= self.clock.now
+            or v.policy_hash != req.policy_hash
+        ):
+            return (
+                False,
+                "VOODOO veto/timeout/corrupt verdict",
+                cap.capability_id,
+                lease.lease_id,
+                lease.epoch,
+                v.decision if v else "UNKNOWN",
+            )
         return True, "", cap.capability_id, lease.lease_id, lease.epoch, "ALLOW"
 
-    def _transition(self, req: Request, state: str, *, reason: str = "",
-                    provider_op: str | None = None, changed: bool | None = None) -> None:
+    def _transition(
+        self,
+        req: Request,
+        state: str,
+        *,
+        reason: str = "",
+        provider_op: str | None = None,
+        changed: bool | None = None,
+    ) -> None:
         _ok, _why, cap_id, lease_id, epoch, verdict = self.gates(req)
-        self.journal.transition(req.operation_id, self.clock.now, state,
-                                capability_id=cap_id, lease_id=lease_id,
-                                lease_epoch=epoch, verdict=verdict,
-                                provider_op=provider_op, changed=changed, reason=reason)
+        self.journal.transition(
+            req.operation_id,
+            self.clock.now,
+            state,
+            capability_id=cap_id,
+            lease_id=lease_id,
+            lease_epoch=epoch,
+            verdict=verdict,
+            provider_op=provider_op,
+            changed=changed,
+            reason=reason,
+        )
         if state in {"STOPPED", "UNKNOWN", "RECOVERY_FAILED", "RECOVERY_BLOCKED"}:
             self.alerts.append(f"{req.operation_id}:{state}:{reason}")
 
@@ -353,8 +456,9 @@ class Simulator:
         if self.journal.get(req.operation_id) is not None:
             raise UnsafeEffect("duplicate operation ID; reconcile instead")
         # Invalid symbolic targets are recorded as a refusal, never passed to a provider.
-        generation = (self.provider.generation[req.target]
-                      if self.provider.validate_target(req.target) else 0)
+        generation = (
+            self.provider.generation[req.target] if self.provider.validate_target(req.target) else 0
+        )
         self.journal.begin(req, generation, self.clock.now)
         ok, reason, *_ = self.gates(req)
         if not ok:
@@ -376,8 +480,7 @@ class Simulator:
             self._transition(req, "UNKNOWN", reason="lost lease")
             return "UNKNOWN"
         try:
-            receipt = self.provider.mutate(req.target, req.action,
-                                           lease.epoch, req.operation_id)
+            receipt = self.provider.mutate(req.target, req.action, lease.epoch, req.operation_id)
         except UnsafeEffect as exc:
             self._transition(req, "STOPPED", reason=str(exc))
             return "STOPPED"
@@ -397,8 +500,10 @@ class Simulator:
             raise UnsafeEffect("nothing to reconcile")
         if row["state"] in {"STOPPED", "SUCCEEDED", "RECOVERY_FAILED", "RECOVERY_BLOCKED"}:
             return str(row["state"])
-        if any(row[field] != getattr(req, field) for field in
-               ("actor", "target", "action", "tier", "policy_hash", "correlation_id")):
+        if any(
+            row[field] != getattr(req, field)
+            for field in ("actor", "target", "action", "tier", "policy_hash", "correlation_id")
+        ):
             raise UnsafeEffect("reconciliation request conflicts with durable intent")
         try:
             healthy, _generation, receipt = self.provider.observe(req.target, req.operation_id)
@@ -425,25 +530,37 @@ class Simulator:
         if lease is None:
             self._transition(req, "UNKNOWN", reason="lease vanished")
             return "UNKNOWN"
-        receipt_id = self.provider.mutate(req.target, req.action,
-                                          lease.epoch, req.operation_id)
+        receipt_id = self.provider.mutate(req.target, req.action, lease.epoch, req.operation_id)
         self._transition(req, "VERIFYING", provider_op=receipt_id, changed=True)
         healthy, _, _ = self.provider.observe(req.target, req.operation_id)
         state = "SUCCEEDED" if healthy else "UNKNOWN"
-        self._transition(req, state, reason="provider health verified" if healthy
-                         else "effect unhealthy")
+        self._transition(
+            req, state, reason="provider health verified" if healthy else "effect unhealthy"
+        )
         return state
 
     def compensate(self, req: Request) -> str:
         row = self.journal.get(req.operation_id)
         if row is None or row["state"] not in {"UNKNOWN", "RECOVERING"}:
             raise UnsafeEffect("compensation requires an unresolved operation")
-        if any(row[field] != getattr(req, field) for field in
-               ("actor", "target", "action", "tier", "policy_hash", "correlation_id")):
+        if any(
+            row[field] != getattr(req, field)
+            for field in ("actor", "target", "action", "tier", "policy_hash", "correlation_id")
+        ):
             raise UnsafeEffect("compensation request conflicts with durable intent")
-        restore_req = Request(req.operation_id, req.actor, req.target, "restore", req.tier,
-                              req.policy_hash, req.inventory_fresh, req.restore_verified,
-                              req.production, req.human_approval, req.correlation_id)
+        restore_req = Request(
+            req.operation_id,
+            req.actor,
+            req.target,
+            "restore",
+            req.tier,
+            req.policy_hash,
+            req.inventory_fresh,
+            req.restore_verified,
+            req.production,
+            req.human_approval,
+            req.correlation_id,
+        )
         ok, reason, *_ = self.gates(restore_req)
         if not ok:
             self._transition(req, "RECOVERY_BLOCKED", reason=reason)
@@ -454,23 +571,28 @@ class Simulator:
             self._transition(req, "RECOVERY_BLOCKED", reason="lease missing")
             return "RECOVERY_BLOCKED"
         try:
-            provider_op = self.provider.mutate(req.target, "restore", lease.epoch,
-                                               f"{req.operation_id}:restore")
+            provider_op = self.provider.mutate(
+                req.target, "restore", lease.epoch, f"{req.operation_id}:restore"
+            )
         except UnsafeEffect as exc:
             self._transition(req, "RECOVERY_FAILED", reason=str(exc))
             return "RECOVERY_FAILED"
         self._transition(req, "VERIFYING", provider_op=provider_op, changed=True)
         healthy, _, _ = self.provider.observe(req.target, f"{req.operation_id}:restore")
         state = "SUCCEEDED" if healthy else "RECOVERY_FAILED"
-        self._transition(req, state, reason="restored health verified" if healthy
-                         else "compensation health check failed")
+        self._transition(
+            req,
+            state,
+            reason="restored health verified" if healthy else "compensation health check failed",
+        )
         return state
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Inert CyberCore failover simulator (offline)")
-    parser.add_argument("--scenario", choices=("before", "after", "veto", "healthy"),
-                        default="healthy")
+    parser.add_argument(
+        "--scenario", choices=("before", "after", "veto", "healthy"), default="healthy"
+    )
     parser.add_argument("--db", default=":memory:", help="local SQLite journal, default in-memory")
     args = parser.parse_args()
     journal = Journal(args.db)
@@ -482,12 +604,22 @@ def main() -> int:
     try:
         if args.scenario == "veto":
             sim.allow(decision="DENY")
-        state = sim.run(request, crash={"before": "before_effect", "after": "after_effect"}.get(args.scenario))
+        state = sim.run(
+            request, crash={"before": "before_effect", "after": "after_effect"}.get(args.scenario)
+        )
     except SimulatedCrash:
         state = sim.reconcile(request)
-    print(json.dumps({"scenario": args.scenario, "state": state,
-                      "writes": len(sim.provider.effects), "events": journal.events(request.operation_id)},
-                     sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "scenario": args.scenario,
+                "state": state,
+                "writes": len(sim.provider.effects),
+                "events": journal.events(request.operation_id),
+            },
+            sort_keys=True,
+        )
+    )
     journal.close()
     return 0
 

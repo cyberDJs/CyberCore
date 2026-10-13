@@ -196,8 +196,10 @@ def test_T04_return_handback_preserves_exclusivity(env):
         env.provider.mutate("service_a", "restart", lease2.epoch, "stale")
 
 
-@pytest.mark.parametrize("decision,valid,ttl", [("DENY", True, 60), ("UNKNOWN", True, 60),
-                                                ("ALLOW", False, 60), ("ALLOW", True, 0)])
+@pytest.mark.parametrize(
+    "decision,valid,ttl",
+    [("DENY", True, 60), ("UNKNOWN", True, 60), ("ALLOW", False, 60), ("ALLOW", True, 0)],
+)
 def test_T05_security_veto_including_corrupt_and_timeout(env, decision, valid, ttl):
     env.allow(decision=decision, valid=valid, ttl=ttl)
     assert env.run(request()) == "STOPPED"
@@ -268,8 +270,17 @@ def test_T10_audit_write_failure_fails_closed(env):
 
 
 def test_production_targets_unrepresentable(env):
-    for target in ("https://prod.example", "ssh://host", "10.0.1.138", "prod.example", "../../hosts"):
-        assert env.run(request(f"bad-{len(env.provider.effects)}-{target}", target=target)) == "STOPPED"
+    for target in (
+        "https://prod.example",
+        "ssh://host",
+        "10.0.1.138",
+        "prod.example",
+        "../../hosts",
+    ):
+        assert (
+            env.run(request(f"bad-{len(env.provider.effects)}-{target}", target=target))
+            == "STOPPED"
+        )
     assert env.run(request("production", production=True)) == "STOPPED"
     assert len(env.provider.effects) == 0
 
@@ -324,8 +335,11 @@ def test_reconciliation_cannot_replace_actor_or_policy_from_journal(env):
     req = request()
     with pytest.raises(SimulatedCrash):
         env.run(req, crash="after_effect")
-    for replacement in (request(actor="CyberCore"), request(policy_hash="new-policy"),
-                        request(correlation_id="forged")):
+    for replacement in (
+        request(actor="CyberCore"),
+        request(policy_hash="new-policy"),
+        request(correlation_id="forged"),
+    ):
         with pytest.raises(UnsafeEffect):
             env.reconcile(replacement)
     assert env.reconcile(req) == "SUCCEEDED"
