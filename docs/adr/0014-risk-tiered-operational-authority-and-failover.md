@@ -79,6 +79,10 @@ Start with simulation/no-op + state-machine tests, then isolated staging tests a
 
 Acceptance evidence: no duplicate restart after lost ACK; deny on stale inventory/security veto; no split brain after leader handback; RED cannot execute without explicit operator authorization; audit traces contain every decision; verified recovery for each approved target.
 
+## Failover scenario verification
+
+The normative fault-injection and acceptance matrix for F01–F10 and T01–T10 is documented in [Failover scenarios v0](../operations/failover-scenarios-v0.md). It is a design/test specification only; passing results are not claimed and current production approval gates remain in force.
+
 ## Rollback
 
 This change is documentation-only. Close the draft PR to reject the proposal; any future runtime deployment requires a separate reviewed rollback plan.
