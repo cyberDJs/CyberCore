@@ -48,7 +48,7 @@ No agent can self-award new permissions, impersonate the independent veto, or su
 
 Use durable state machine:
 `PROPOSED -> CLASSIFIED -> PREFLIGHTED -> AUTHORIZED -> PREPARED -> EXECUTING -> VERIFYING -> SUCCEEDED`
-with `UNKNOWN`, `STOPPED` and `RECOVERING` branches.
+with `UNKNOWN`, `STOPPED`, `RECOVERING`, `RECOVERY_FAILED` and `RECOVERY_BLOCKED` branches. A failed compensation attempt terminates as `RECOVERY_FAILED`; if required authorization or VOODOO's security verdict blocks a compensating mutation after an adverse effect, terminate as `RECOVERY_BLOCKED` and alert the operator. Neither outcome counts as success.
 
 Every action uses an `operation_id`, and an `idempotency_key` only when the effect boundary actually supports atomic deduplication. Kato durably records target, plan, authority/policy version, intended state and checkpoint before each effect. On loss of connection it reports the last checkpoint after recovery. CyberCore reads persisted evidence and independently inspects provider state; an `UNKNOWN` action must be **reconciled before any replay**. A stable operation ID or journal entry by itself cannot guarantee exactly-once side effects. When remote operation identity or outcome cannot be proven, no autonomous retry is allowed.
 
@@ -60,7 +60,7 @@ Capability grants must specify: delegator and grantee, allowed actions/targets, 
 
 ## Security, rollback and observability
 
-- VOODOO denial/unavailability is a hard stop.
+- VOODOO denial/unavailability is a hard stop for **every new mutation, including compensation or rollback effects**. An already changed/unhealthy service remains in `RECOVERY_BLOCKED` until a new recovery operation passes fresh security and all applicable operator gates; read-only diagnosis may continue.
 - Enforce immutable or tamper-evident event/decision logging with actor attribution.
 - Test failure injection before activation: partial restart, Kato disconnect, split brain, lost Ruku, stale inventory, VOODOO denial, failed rollback and unknown provider state.
 - Require measurable postflight checks, recovery time and data-loss budgets (RTO/RPO) for each target.
@@ -79,7 +79,7 @@ Capability grants must specify: delegator and grantee, allowed actions/targets, 
 
 Start with simulation/no-op + state-machine tests, then isolated staging tests after staging authorization, then policy/governance review. **Do not enable production automation or change existing gates without separate explicit approval.**
 
-Acceptance evidence: no **unverified autonomous replay** after lost ACK (not a general exactly-once guarantee); explicit proof of idempotent effect-boundary behavior before automatic retry; deny on stale inventory/security veto; enforceable single-controller fencing after handback; RED cannot execute without explicit operator authorization; audit traces contain every decision; verified recovery for each approved target.
+Acceptance evidence: no **unverified autonomous replay** after lost ACK (not a general exactly-once guarantee); explicit proof of idempotent effect-boundary behavior before automatic retry; deny all new mutations (including recovery writes) on stale inventory/security veto; distinguish `RECOVERY_FAILED` from `RECOVERY_BLOCKED`; enforceable single-controller fencing after handback; RED cannot execute without explicit operator authorization; audit traces contain every decision; verified recovery for each approved target.
 
 ## Failover scenario verification
 
