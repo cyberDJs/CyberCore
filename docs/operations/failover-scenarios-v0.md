@@ -9,7 +9,7 @@
 ## Five operational rules
 
 1. **No blind duplicate execution:** `operation_id` identifies intent and enables correlation; it does **not** make side effects idempotent. A provider-supported atomic idempotency key or equivalent enforceable effect-boundary deduplication is required for automatic replay. An ambiguous outcome must first be reconciled against the real target; if that is impossible, halt and escalate instead of promising exactly-once execution. Fencing must also be enforced at the effect boundary.
-2. **No unilateral security bypass:** VOODOO must give a fresh, attributable `ALLOW` for the authorized scope and decision policy. `DENY`, `UNKNOWN` or timeout blocks new effects. An already executing operation may only complete a strictly pre-authorized bounded safe recovery step whose policy explicitly covers gate loss; never broaden the authority.
+2. **No unilateral security bypass:** VOODOO must give a fresh, attributable `ALLOW` for the authorized scope and decision policy **for every proposed mutating step, including compensation**. `DENY`, `UNKNOWN` or timeout forbids initiating **all further writes, including rollback/recovery writes**, even if a prior action changed the service. Keep reading/monitoring and page Jan for secure recovery authorization; do not treat a previously granted ALLOW as continuing permission. If the service is unhealthy and compensation cannot proceed due to the security gate, record `RECOVERY_BLOCKED` (not falsely `SUCCEEDED`).
 3. **Authorization is not leadership:** Ruku may delegate a constrained **capability grant** specifying actions/targets, expiry, budget, policy hash and revocation. Separately, a controller must acquire an **exclusive short-lived leadership/execution lease** with fencing epoch enforced at the effect boundary. A capability alone cannot execute; a leadership lease alone grants no operational permission. CyberCore failover requires both, plus VOODOO allow and any existing human gate.
 4. **Recover, don't assume rollback:** Restart cannot be undone. A rollback means restoring verified workload, traffic and application state with tested recovery runbook; database restores additionally need verified data-integrity and RPO evidence.
 5. **Unknown means safe stop:** Stop *new* mutations, preserve journal/evidence and alert operator. Monitoring may continue read-only.
@@ -22,8 +22,8 @@
 | **F02** | Kato disconnects **after** effect, before acknowledgement | Compare durable journal, provider operation ID (if any), target generation and live service state; reconcile to `VERIFYING` and measure postflight, without dispatching a second write | `SUCCEEDED` if the effect and healthy state are proven; otherwise bounded, separately authorized `RECOVERING` or `UNKNOWN`. No exactly-once guarantee without effect-boundary support |
 | **F03** | Ruku becomes unavailable | Fence/expire Ruku's controller lease; CyberCore acquires a new exclusive epoch **separate from** checking its valid delegated GREEN capability grant; independently rechecks VOODOO allow | GREEN in policy only if both grants, fencing and any human gates are satisfied; otherwise stop and escalate to Jan |
 | **F04** | Ruku returns while CyberCore controls an operation | Read active operations, stop issuing conflicting commands, fence CyberCore's controller epoch at the executor, then acquire a new Ruku epoch and reconcile in-flight effects | Only the new epoch can dispatch; where exclusivity cannot be enforced, freeze autonomous writes and escalate |
-| **F05** | VOODOO denies or times out | Fail closed on initiating new effects; record exact decision and stale/failed gate; do not infer allow from previous successful checks | `STOPPED` with security escalation; only pre-authorized bounded in-flight safe recovery may proceed |
-| **F06** | Restart starts but health checks fail | Stop further rollout; compare service state with expected; execute tested, pre-authorized compensation within recovery budget; verify state and error budget | `SUCCEEDED` only after verified restored health; otherwise `RECOVERY_FAILED` + page Jan |
+| **F05** | VOODOO denies or times out, including mid-recovery | Reject all additional effects, **including compensating writes**; continue read-only observations, persist the gate outcome and page Jan | `STOPPED` before any effect, or `RECOVERY_BLOCKED` if service was already changed and cannot safely recover; no automatic write until a newly valid security verdict and required operator approval |
+| **F06** | Restart starts but health checks fail | Stop further rollout; compare actual vs expected; execute a tested compensating action only with still-valid authorization, exclusive controller lease and **fresh VOODOO ALLOW for that specific effect**; verify service state | `SUCCEEDED` only after verified restored health; `RECOVERY_FAILED` on attempted compensation failure, or `RECOVERY_BLOCKED` when authorization/security prevents compensation; page Jan for both |
 | **F07** | Inventory outdated, target ambiguity, unknown previous effect, or restore untested | Classify as RED/blocked, capture evidence and request human review; no guesswork from a green-looking command | Zero mutating calls; Jan's explicit per-operation approval required for any eventual exception |
 | **F08** | Network partition, two contenders for leadership, or CyberCore unreachable | Separate capability-grant check from exclusive monotonic fencing tokens *enforced at execution/effect boundary*; journal recheck; Kato rejects stale epochs; without proven fencing stop new effects | At most one accepted active epoch at a time **where enforcement is verified**; otherwise `STOPPED` + alert, with no autonomous failover |
 | **F09** | RED operation requested with agent-only approval | Validate policy before issuing execution envelope; VOODOO cannot replace Jan's required authorization | Request explicitly scoped Jan approval; zero production writes until approved |
@@ -50,12 +50,16 @@ Do not include credentials, tokens or private topology in the public repository;
 
 ```text
 PROPOSED -> CLASSIFIED -> PREFLIGHTED -> AUTHORIZED -> PREPARED
- PREPARED -> EXECUTING -> VERIFYING -> SUCCEEDED
-     |           |            |
-     +-----------+------------+-----> UNKNOWN
-                               \-----> RECOVERING -> VERIFYING
-                    ANY unsafe gate --> STOPPED / ESCALATED
+PREPARED -> EXECUTING -> VERIFYING -> SUCCEEDED
+     |         |           |
+     +---------+-----------+----> UNKNOWN -> VERIFYING / STOPPED
+                           +----> RECOVERING -> VERIFYING (verified healthy)
+                                            -> RECOVERY_FAILED (attempt failed)
+                                            -> RECOVERY_BLOCKED (gate denies write)
+Any pre-effect unsafe gate -> STOPPED
 ```
+
+`RECOVERY_FAILED` and `RECOVERY_BLOCKED` are distinct durable terminal/escalation states. Neither implies restoration or permission to retry. A recovered operator-run workflow must create a new independently authorized recovery operation, linked to the original incident.
 
 - `PREPARED` is durable before invocation; no transient memory-only intent.
 - `UNKNOWN` may only become `VERIFYING`, `STOPPED` or a fresh, independently justified `PREPARED` after provider-state reconciliation. Retry requires verified effect-boundary idempotency and current, independent authorization plus controller lease; never blindly jump back to `EXECUTING`.
@@ -71,9 +75,9 @@ PROPOSED -> CLASSIFIED -> PREFLIGHTED -> AUTHORIZED -> PREPARED
 | T02 | Drop Ruku; attempt GREEN and RED with a valid capability grant but no controller lease, then vice versa | Neither case executes without **both** valid grants; with both and VOODOO allow, only pre-authorized GREEN may proceed; RED performs **0 writes** |
 | T03 | Partition leader network; race old/new controller epochs | Old epoch rejected at effect boundary in verified-fencing adapter; adapter lacking fencing refuses autonomous failover |
 | T04 | Return Ruku during recovery | Fenced handback blocks stale executor writes; all outstanding operations reconciled before new writes |
-| T05 | VOODOO DENY, timeout and corrupted verdict | No new side effects; denial is attributed and logged |
+| T05 | VOODOO DENY, timeout and corrupted verdict before a restart and after a failed restart | **Zero additional mutations, including rollback writes**, after gate failure; log verdict and assert `RECOVERY_BLOCKED` if the service is already unhealthy |
 | T06 | Stale inventory and missing restore evidence | Both block autonomy; no unapproved operation |
-| T07 | Induce post-restart health failure | Verified bounded recovery or explicit `RECOVERY_FAILED` alert; no fictional rollback |
+| T07 | Induce post-restart health failure: (a) compensation fails, (b) VOODOO blocks compensation | (a) Persist `RECOVERY_FAILED` with incident alert; (b) persist `RECOVERY_BLOCKED` with incident alert; neither is reported as `SUCCEEDED` |
 | T08 | Crash and restore CyberCore while Kato resumes | Durable event sequence, unambiguous reconciliation and no replay |
 | T09 | Replay expired capability grant, expired controller lease, wrong target or outdated policy hash | Each individually rejected with audit receipt; a valid controller lease does not compensate for missing capability, and vice versa |
 | T10 | Audit log write unavailable | New effect fails closed; partial incident is recoverable/readable from last durable state |
