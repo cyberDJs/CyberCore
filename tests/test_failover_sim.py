@@ -368,9 +368,7 @@ def test_recheck_voodoo_before_effect_boundary(env, monkeypatch):
 
 
 @pytest.mark.parametrize("revoked_gate", ("voodoo", "capability", "lease"))
-def test_reconcile_rechecks_authority_after_executing_checkpoint(
-    env, monkeypatch, revoked_gate
-):
+def test_reconcile_rechecks_authority_after_executing_checkpoint(env, monkeypatch, revoked_gate):
     req = request("retry-gate-revoked")
     with pytest.raises(SimulatedCrash):
         env.run(req, crash="before_effect")
