@@ -487,7 +487,11 @@ class Simulator:
         if crash == "after_effect":
             raise SimulatedCrash("Kato stopped after effect before acknowledgement")
         self._transition(req, "VERIFYING", provider_op=receipt, changed=True)
-        health, _, _ = self.provider.observe(req.target, req.operation_id)
+        try:
+            health, _, _ = self.provider.observe(req.target, req.operation_id)
+        except UnsafeEffect as exc:
+            self._transition(req, "UNKNOWN", reason=f"post-effect observation failed: {exc}")
+            return "UNKNOWN"
         if health:
             self._transition(req, "SUCCEEDED")
             return "SUCCEEDED"
@@ -526,13 +530,23 @@ class Simulator:
             self._transition(req, "STOPPED", reason=reason)
             return "STOPPED"
         self._transition(req, "EXECUTING", reason="safe idempotent re-dispatch")
+        # A durable checkpoint does not preserve authorization; fail closed on
+        # revocation, expiry, or takeover before any replayed effect.
+        ok, reason, *_ = self.gates(req)
+        if not ok:
+            self._transition(req, "STOPPED", reason=reason)
+            return "STOPPED"
         lease = self.journal.current_lease(req.target)
         if lease is None:
             self._transition(req, "UNKNOWN", reason="lease vanished")
             return "UNKNOWN"
         receipt_id = self.provider.mutate(req.target, req.action, lease.epoch, req.operation_id)
         self._transition(req, "VERIFYING", provider_op=receipt_id, changed=True)
-        healthy, _, _ = self.provider.observe(req.target, req.operation_id)
+        try:
+            healthy, _, _ = self.provider.observe(req.target, req.operation_id)
+        except UnsafeEffect as exc:
+            self._transition(req, "UNKNOWN", reason=f"post-retry observation failed: {exc}")
+            return "UNKNOWN"
         state = "SUCCEEDED" if healthy else "UNKNOWN"
         self._transition(
             req, state, reason="provider health verified" if healthy else "effect unhealthy"
@@ -563,22 +577,34 @@ class Simulator:
         )
         ok, reason, *_ = self.gates(restore_req)
         if not ok:
-            self._transition(req, "RECOVERY_BLOCKED", reason=reason)
+            self._transition(restore_req, "RECOVERY_BLOCKED", reason=reason)
             return "RECOVERY_BLOCKED"
-        self._transition(req, "RECOVERING", reason="approved distinct restore effect")
+        self._transition(restore_req, "RECOVERING", reason="approved distinct restore effect")
+        # VOODOO and scoped restore authority must still be valid at the
+        # compensation effect boundary, not just before journaling.
+        ok, reason, *_ = self.gates(restore_req)
+        if not ok:
+            self._transition(restore_req, "RECOVERY_BLOCKED", reason=reason)
+            return "RECOVERY_BLOCKED"
         lease = self.journal.current_lease(req.target)
         if lease is None:
-            self._transition(req, "RECOVERY_BLOCKED", reason="lease missing")
+            self._transition(restore_req, "RECOVERY_BLOCKED", reason="lease missing")
             return "RECOVERY_BLOCKED"
         try:
             provider_op = self.provider.mutate(
                 req.target, "restore", lease.epoch, f"{req.operation_id}:restore"
             )
         except UnsafeEffect as exc:
-            self._transition(req, "RECOVERY_FAILED", reason=str(exc))
+            self._transition(restore_req, "RECOVERY_FAILED", reason=str(exc))
             return "RECOVERY_FAILED"
-        self._transition(req, "VERIFYING", provider_op=provider_op, changed=True)
-        healthy, _, _ = self.provider.observe(req.target, f"{req.operation_id}:restore")
+        self._transition(restore_req, "VERIFYING", provider_op=provider_op, changed=True)
+        try:
+            healthy, _, _ = self.provider.observe(req.target, f"{req.operation_id}:restore")
+        except UnsafeEffect as exc:
+            self._transition(
+                restore_req, "UNKNOWN", reason=f"post-restore observation failed: {exc}"
+            )
+            return "UNKNOWN"
         state = "SUCCEEDED" if healthy else "RECOVERY_FAILED"
         self._transition(
             req,
