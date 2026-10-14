@@ -465,7 +465,114 @@ def test_restore_post_effect_observation_outage_persists_unknown(env, monkeypatc
         return receipt
 
     monkeypatch.setattr(env.provider, "mutate", lose_observation_after_restore)
-    assert env.compensate(req) == "UNKNOWN"
-    assert env.journal.get(req.operation_id)["state"] == "UNKNOWN"
+    assert env.compensate(req) == "RECOVERY_UNKNOWN"
+    assert env.journal.get(req.operation_id)["state"] == "RECOVERY_UNKNOWN"
     assert len(env.provider.effects) == 2
-    assert env.alerts and "UNKNOWN" in env.alerts[-1]
+    assert env.alerts and "RECOVERY_UNKNOWN" in env.alerts[-1]
+
+
+@pytest.mark.parametrize("revocation", ("voodoo", "capability", "lease"))
+def test_retry_effect_dispatch_rechecks_after_last_preflight(env, monkeypatch, revocation):
+    req = request("retry-last-window")
+    with pytest.raises(SimulatedCrash):
+        env.run(req, crash="before_effect")
+    original = env.provider.mutate
+
+    def revoke_at_dispatch(*args):
+        if revocation == "voodoo":
+            env.allow(decision="DENY")
+        elif revocation == "capability":
+            env.capabilities.clear()
+        else:
+            env.lease("CyberCore", takeover=True)
+        return original(*args)
+
+    monkeypatch.setattr(env.provider, "mutate", revoke_at_dispatch)
+    assert env.reconcile(req, retry=True) == "STOPPED"
+    assert not env.provider.effects
+
+
+@pytest.mark.parametrize("revocation", ("voodoo", "capability", "lease"))
+def test_restore_effect_dispatch_rechecks_after_last_preflight(env, monkeypatch, revocation):
+    req = broken_restart(env)
+    env.grant("Ruku", "service_a", "restore")
+    env.allow(action="restore")
+    original = env.provider.mutate
+
+    def revoke_at_dispatch(*args):
+        if revocation == "voodoo":
+            env.allow(action="restore", decision="DENY")
+        elif revocation == "capability":
+            env.capabilities.pop(("Ruku", "service_a", "restore"))
+        else:
+            env.lease("CyberCore", takeover=True)
+        return original(*args)
+
+    monkeypatch.setattr(env.provider, "mutate", revoke_at_dispatch)
+    assert env.compensate(req) in {"RECOVERY_BLOCKED", "RECOVERY_FAILED"}
+    assert len(env.provider.effects) == 1
+
+
+def test_restore_audit_uses_effect_snapshot_after_revocation(env, monkeypatch):
+    req = broken_restart(env)
+    env.grant("Ruku", "service_a", "restore")
+    env.allow(action="restore")
+    original = env.provider.mutate
+
+    def revoke_after_effect(*args):
+        result = original(*args)
+        env.allow(action="restore", decision="DENY")
+        env.capabilities.pop(("Ruku", "service_a", "restore"))
+        return result
+
+    monkeypatch.setattr(env.provider, "mutate", revoke_after_effect)
+    assert env.compensate(req) == "SUCCEEDED"
+    for event in env.journal.events(req.operation_id)[-2:]:
+        assert event["state"] in {"VERIFYING", "SUCCEEDED"}
+        assert event["capability_id"] == "grant-Ruku-service_a-restore"
+        assert event["voodoo"] == "ALLOW"
+
+
+def test_recovery_unknown_reconciles_restore_receipt_not_restart(env, monkeypatch):
+    req = broken_restart(env)
+    restart_receipt = env.provider.receipts[req.operation_id][3]
+    env.grant("Ruku", "service_a", "restore")
+    env.allow(action="restore")
+    original = env.provider.mutate
+
+    def unreadable_after_restore(*args):
+        receipt = original(*args)
+        env.provider.readable = False
+        return receipt
+
+    monkeypatch.setattr(env.provider, "mutate", unreadable_after_restore)
+    assert env.compensate(req) == "RECOVERY_UNKNOWN"
+    restore_receipt = env.provider.receipts[f"{req.operation_id}:restore"][3]
+    assert restore_receipt != restart_receipt
+    env.provider.readable = True
+    env.allow(action="restore", decision="DENY")
+    assert env.reconcile(req) == "SUCCEEDED"
+    assert env.journal.get(req.operation_id)["provider_op"] == restore_receipt
+    assert len(env.provider.effects) == 2
+    assert env.reconcile(req) == "SUCCEEDED"
+    assert env.journal.events(req.operation_id)[-1]["voodoo"] == "ALLOW"
+
+
+def test_recovery_unknown_does_not_infer_success_without_restore_receipt(env, monkeypatch):
+    req = broken_restart(env)
+    env.grant("Ruku", "service_a", "restore")
+    env.allow(action="restore")
+    original = env.provider.mutate
+
+    def unreadable_after_restore(*args):
+        receipt = original(*args)
+        env.provider.readable = False
+        return receipt
+
+    monkeypatch.setattr(env.provider, "mutate", unreadable_after_restore)
+    assert env.compensate(req) == "RECOVERY_UNKNOWN"
+    env.provider.readable = True
+    env.provider.receipts.pop(f"{req.operation_id}:restore")
+    assert env.reconcile(req) == "RECOVERY_UNKNOWN"
+    assert env.journal.get(req.operation_id)["state"] == "RECOVERY_UNKNOWN"
+    assert len(env.provider.effects) == 2
