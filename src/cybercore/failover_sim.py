@@ -607,7 +607,7 @@ class Simulator:
             return "UNKNOWN"
         state = "SUCCEEDED" if healthy else "RECOVERY_FAILED"
         self._transition(
-            req,
+            restore_req,
             state,
             reason="restored health verified" if healthy else "compensation health check failed",
         )
