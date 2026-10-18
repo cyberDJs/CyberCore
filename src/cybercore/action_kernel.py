@@ -3,12 +3,13 @@
 No network I/O, remote execution, generic shell, or persistent audit writer.
 The authenticated caller identity is injected by the trusted application.
 """
+
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
-import json
 from typing import Callable, Mapping
 
 
