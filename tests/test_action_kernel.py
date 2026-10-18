@@ -43,21 +43,29 @@ def test_feature_disabled_and_untrusted_actor() -> None:
 
 
 def test_denies_unknown_capability_target_and_arguments() -> None:
-    result_2 = kernel().execute(task(capability="terminal.execute"), trusted_actor="chatgpt:johnny-work")
+    result_2 = kernel().execute(
+        task(capability="terminal.execute"), trusted_actor="chatgpt:johnny-work"
+    )
     assert result_2.reason == "CAPABILITY_DENIED"
     result_3 = kernel().execute(task(target_id="external"), trusted_actor="chatgpt:johnny-work")
     assert result_3.reason == "TARGET_DENIED"
-    result_4 = kernel().execute(task(arguments={"command": "id"}), trusted_actor="chatgpt:johnny-work")
+    result_4 = kernel().execute(
+        task(arguments={"command": "id"}), trusted_actor="chatgpt:johnny-work"
+    )
     assert result_4.reason == "ARGUMENTS_DENIED"
 
 
 def test_rejects_expired_naive_and_oversized() -> None:
     actor = "chatgpt:johnny-work"
-    result_5 = kernel().execute(task(expires_at=datetime.now(timezone.utc) - timedelta(seconds=1)), trusted_actor=actor)
+    result_5 = kernel().execute(
+        task(expires_at=datetime.now(timezone.utc) - timedelta(seconds=1)), trusted_actor=actor
+    )
     assert result_5.reason == "EXPIRED"
     result_6 = kernel().execute(task(expires_at=datetime.now()), trusted_actor=actor)
     assert result_6.reason == "EXPIRED"
-    result_7 = kernel(max_input_bytes=10).execute(task(arguments={"payload": "x" * 100}), trusted_actor=actor)
+    result_7 = kernel(max_input_bytes=10).execute(
+        task(arguments={"payload": "x" * 100}), trusted_actor=actor
+    )
     assert result_7.reason == "OVERSIZED"
 
 
