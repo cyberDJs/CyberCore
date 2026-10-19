@@ -66,7 +66,7 @@ def test_synthetic_receipt_policy_evidence_and_audit_chain_are_bounded() -> None
     assert result.reason == "SYNTHETIC_ONLY"
     assert result.actor == ACTOR
     assert result.schema_version == ACTION_KERNEL_SCHEMA_VERSION
-    assert result.nexus_contract == NEXUS_ACTION_CONTRACT
+    assert result.nexus_contract_family == NEXUS_ACTION_CONTRACT
     assert result.policy.decision == "ALLOW"
     assert result.policy.reason == "READ_ONLY_ALLOWED"
     assert result.policy.actor == ACTOR
@@ -77,6 +77,9 @@ def test_synthetic_receipt_policy_evidence_and_audit_chain_are_bounded() -> None
     assert result.evidence.byte_count <= 2048
     assert result.evidence.redacted is True
     assert result.provenance.contract == NEXUS_PROVENANCE_CONTRACT
+    nexus_provenance = result.provenance.as_nexus()
+    assert nexus_provenance["contract"] == NEXUS_PROVENANCE_CONTRACT
+    assert nexus_provenance["sourceInstance"] == "cybercore-local"
     assert [event.stage for event in events] == [
         "request",
         "policy",
@@ -147,9 +150,9 @@ def test_capability_descriptor_is_exact_read_only_allowlist() -> None:
         version="1",
         mode="read",
         allowed_targets=frozenset({"herrerbook"}),
-        nexus_contract="capability/v999",
+        nexus_contract_family="capability/v999",
     )
-    assert wrong_contract.nexus_contract != NEXUS_CAPABILITY_CONTRACT
+    assert wrong_contract.nexus_contract_family != NEXUS_CAPABILITY_CONTRACT
     result_3 = kernel(
         capabilities={wrong_contract.name: wrong_contract},
     ).execute(task(), trusted_actor=ACTOR)
@@ -191,7 +194,7 @@ def test_contract_schema_and_provenance_validation_fail_closed() -> None:
     assert result_1.reason == "SCHEMA_DENIED"
 
     result_2 = kernel().execute(
-        task(nexus_contract="action/v999"),
+        task(nexus_contract_family="action/v999"),
         trusted_actor=ACTOR,
     )
     assert result_2.reason == "CONTRACT_DENIED"
