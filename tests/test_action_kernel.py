@@ -160,8 +160,12 @@ def test_capability_descriptor_is_exact_read_only_allowlist() -> None:
 
 
 def test_rejects_expired_naive_reversed_and_oversized_requests() -> None:
+    expired_at = datetime.now(timezone.utc) - timedelta(seconds=1)
     result_1 = kernel().execute(
-        task(expires_at=datetime.now(timezone.utc) - timedelta(seconds=1)),
+        task(
+            requested_at=expired_at - timedelta(minutes=1),
+            expires_at=expired_at,
+        ),
         trusted_actor=ACTOR,
     )
     assert result_1.reason == "EXPIRED"
