@@ -69,9 +69,7 @@ def test_nexus_rejection_exposes_no_evidence() -> None:
         enabled=False,
         evidence_sink=lambda _: None,
     )
-    output = to_nexus_action_result(
-        kernel.execute(request(), trusted_actor="chatgpt:johnny-work")
-    )
+    output = to_nexus_action_result(kernel.execute(request(), trusted_actor="chatgpt:johnny-work"))
     assert output["status"] == "rejected"
     assert output["providerReceipt"] is None
     assert output["error"]["code"] == "FEATURE_DISABLED"
