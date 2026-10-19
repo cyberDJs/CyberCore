@@ -3,6 +3,7 @@
 No network or filesystem I/O, and no authority to dispatch node actions.
 The caller must run the Action Kernel policy before using these functions.
 """
+
 from __future__ import annotations
 
 from typing import Any
