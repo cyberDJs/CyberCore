@@ -18,6 +18,8 @@ NEXUS_ACTION_CONTRACT = "action/v1"
 NEXUS_CAPABILITY_CONTRACT = "capability/v1"
 NEXUS_PROVENANCE_CONTRACT = "provenance/v1"
 
+# Compatibility targets only. Internal dataclasses are not Nexus wire objects unless
+# explicitly serialized into the Nexus shape.
 PolicyDecision = Literal["ALLOW", "DENY"]
 CapabilityMode = Literal["read"]
 AuditStage = Literal["request", "policy", "execution", "evidence"]
@@ -35,6 +37,19 @@ class Provenance:
     collector_run: str | None = None
     contract: str = NEXUS_PROVENANCE_CONTRACT
 
+    def as_nexus(self) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "contract": self.contract,
+            "source": self.source,
+            "adapter": self.adapter,
+            "sourceInstance": self.source_instance,
+            "observedAt": self.observed_at.isoformat(),
+            "confidence": self.confidence,
+        }
+        if self.collector_run is not None:
+            payload["collectorRun"] = self.collector_run
+        return payload
+
 
 @dataclass(frozen=True)
 class TaskRequest:
@@ -48,7 +63,7 @@ class TaskRequest:
     expires_at: datetime
     provenance: Provenance
     schema_version: str = ACTION_KERNEL_SCHEMA_VERSION
-    nexus_contract: str = NEXUS_ACTION_CONTRACT
+    nexus_contract_family: str = NEXUS_ACTION_CONTRACT
 
 
 @dataclass(frozen=True)
@@ -59,7 +74,7 @@ class CapabilityDescriptor:
     allowed_targets: frozenset[str]
     arguments_allowed: bool = False
     schema_version: str = ACTION_KERNEL_SCHEMA_VERSION
-    nexus_contract: str = NEXUS_CAPABILITY_CONTRACT
+    nexus_contract_family: str = NEXUS_CAPABILITY_CONTRACT
 
 
 @dataclass(frozen=True)
@@ -99,7 +114,7 @@ class ExecutionReceipt:
     provenance: Provenance
     evidence: EvidenceMetadata | None = None
     schema_version: str = ACTION_KERNEL_SCHEMA_VERSION
-    nexus_contract: str = NEXUS_ACTION_CONTRACT
+    nexus_contract_family: str = NEXUS_ACTION_CONTRACT
 
     @property
     def evidence_sha256(self) -> str | None:
@@ -243,7 +258,7 @@ class ActionKernel:
             return deny("ACTOR_MISMATCH")
         if request.schema_version != ACTION_KERNEL_SCHEMA_VERSION:
             return deny("SCHEMA_DENIED")
-        if request.nexus_contract != NEXUS_ACTION_CONTRACT:
+        if request.nexus_contract_family != NEXUS_ACTION_CONTRACT:
             return deny("CONTRACT_DENIED")
         if not self._valid_provenance(request.provenance):
             return deny("PROVENANCE_INVALID")
@@ -263,7 +278,7 @@ class ActionKernel:
             return deny("CAPABILITY_DENIED")
         if (
             descriptor.schema_version != ACTION_KERNEL_SCHEMA_VERSION
-            or descriptor.nexus_contract != NEXUS_CAPABILITY_CONTRACT
+            or descriptor.nexus_contract_family != NEXUS_CAPABILITY_CONTRACT
             or descriptor.name != request.capability
             or descriptor.mode != "read"
         ):
