@@ -171,9 +171,7 @@ class ActionKernel:
             mode="read",
             allowed_targets=frozenset(self._targets),
         )
-        self._capabilities = dict(
-            {default.name: default} if capabilities is None else capabilities
-        )
+        self._capabilities = dict({default.name: default} if capabilities is None else capabilities)
 
     def execute(self, request: TaskRequest, *, trusted_actor: str) -> ExecutionReceipt:
         if self._sink is None:
