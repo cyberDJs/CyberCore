@@ -1,4 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from threading import Barrier, Lock
 
 from cybercore.action_kernel import (
     ACTION_KERNEL_SCHEMA_VERSION,
@@ -247,3 +249,90 @@ def test_evidence_size_is_bounded_before_receipt_is_accepted() -> None:
     assert result.status == "FAILED"
     assert result.reason == "EVIDENCE_OVERSIZED"
     assert result.evidence is None
+
+
+def test_explicit_empty_capability_allowlist_stays_empty() -> None:
+    result = kernel(capabilities={}).execute(task(), trusted_actor=ACTOR)
+    assert result.status == "DENIED"
+    assert result.reason == "CAPABILITY_DENIED"
+
+
+def test_missing_synthetic_status_returns_structured_denial() -> None:
+    result = kernel(
+        targets={"herrerbook": {}},
+    ).execute(task(), trusted_actor=ACTOR)
+    assert result.status == "DENIED"
+    assert result.reason == "INVALID_INVENTORY"
+    assert result.evidence is None
+
+
+def test_expiry_is_rechecked_after_policy_audit_before_dispatch() -> None:
+    current = [datetime(2026, 10, 19, 12, 0, tzinfo=timezone.utc)]
+    expires_at = current[0] + timedelta(seconds=10)
+    events: list[AuditEvent] = []
+
+    def sink(event: AuditEvent) -> None:
+        events.append(event)
+        if event.stage == "policy" and event.outcome == "ALLOW":
+            current[0] = expires_at + timedelta(seconds=1)
+
+    k = kernel(evidence_sink=sink, clock=lambda: current[0])
+    result = k.execute(
+        task(
+            requested_at=current[0],
+            expires_at=expires_at,
+        ),
+        trusted_actor=ACTOR,
+    )
+
+    assert result.status == "DENIED"
+    assert result.reason == "EXPIRED"
+    assert result.policy.decision == "DENY"
+    assert [event.stage for event in events] == ["request", "policy", "execution"]
+    assert events[-1].outcome == "DENIED"
+    assert events[-1].reason == "EXPIRED"
+
+
+def test_task_id_reservation_is_atomic_under_concurrent_dispatch() -> None:
+    policy_barrier = Barrier(2)
+    event_lock = Lock()
+    events: list[AuditEvent] = []
+
+    def sink(event: AuditEvent) -> None:
+        if event.stage == "policy" and event.outcome == "ALLOW":
+            policy_barrier.wait(timeout=5)
+        with event_lock:
+            events.append(event)
+
+    k = kernel(evidence_sink=sink)
+    request = task()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(
+            pool.map(
+                lambda _: k.execute(request, trusted_actor=ACTOR),
+                range(2),
+            )
+        )
+
+    assert sorted((result.status, result.reason) for result in results) == [
+        ("DENIED", "DUPLICATE"),
+        ("EXECUTED", "SYNTHETIC_ONLY"),
+    ]
+
+
+def test_reserved_task_id_stays_consumed_after_uncertain_dispatch_failure() -> None:
+    def sink(event: AuditEvent) -> None:
+        if event.stage == "execution":
+            raise RuntimeError("audit backend failed after dispatch boundary")
+
+    k = kernel(evidence_sink=sink)
+    request = task()
+
+    first = k.execute(request, trusted_actor=ACTOR)
+    second = k.execute(request, trusted_actor=ACTOR)
+
+    assert first.status == "FAILED"
+    assert first.reason == "AUDIT_FAILED"
+    assert second.status == "DENIED"
+    assert second.reason == "DUPLICATE"
