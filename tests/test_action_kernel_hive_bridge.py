@@ -5,7 +5,7 @@ import sys
 import pytest
 
 from cybercore.action_kernel import ActionKernel, Provenance, TaskRequest
-from cybercore.action_kernel_hive_bridge import run_local_hive_dry_run
+from cybercore.action_kernel_hive_bridge import InMemoryReplayGuard, run_local_hive_dry_run
 
 
 def setup():
@@ -108,6 +108,60 @@ def test_local_registry_receives_only_typed_dry_run(monkeypatch) -> None:
         trusted_actor=task.actor,
         kernel_receipt=allowed,
         registry=Registry(),
+        replay_guard=InMemoryReplayGuard(),
     )
     assert receipt.status == "dry_run"
     assert receipt.reason == "HIVE_DRY_RUN_ONLY"
+
+
+def test_requires_replay_guard_before_dispatch() -> None:
+    task, kernel = setup()
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Must not dispatch")
+
+    with pytest.raises(PermissionError, match="replay guard required"):
+        run_local_hive_dry_run(
+            task, trusted_actor=task.actor, kernel_receipt=allowed, registry=Forbidden()
+        )
+
+
+def test_replayed_claim_fails_closed() -> None:
+    task, kernel = setup()
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    guard = InMemoryReplayGuard()
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is True
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Must not dispatch")
+
+    with pytest.raises(PermissionError, match="already consumed"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=guard,
+        )
+
+
+def test_replay_guard_backend_failure_fails_closed() -> None:
+    task, kernel = setup()
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+
+    class BrokenGuard:
+        def claim_once(self, _: str) -> bool:
+            raise OSError("store unavailable")
+
+    with pytest.raises(PermissionError, match="guard unavailable"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=None,
+            replay_guard=BrokenGuard(),
+        )

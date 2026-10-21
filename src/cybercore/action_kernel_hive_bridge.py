@@ -7,11 +7,34 @@ opens a network connection, enrolls nodes, or authorizes live actions.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from importlib import import_module
-from typing import Any
+from threading import Lock
+from typing import Any, Protocol
 
 from cybercore.action_kernel import ExecutionReceipt, TaskRequest
 from cybercore.action_kernel_interop import to_hive_health_dry_run
+
+
+class ReplayGuard(Protocol):
+    """Atomic claim store; production callers must use durable shared storage."""
+
+    def claim_once(self, key: str) -> bool: ...
+
+
+class InMemoryReplayGuard:
+    """Thread-safe single-process guard for tests/local dry-run only."""
+
+    def __init__(self) -> None:
+        self._claimed: set[str] = set()
+        self._lock = Lock()
+
+    def claim_once(self, key: str) -> bool:
+        with self._lock:
+            if key in self._claimed:
+                return False
+            self._claimed.add(key)
+            return True
 
 
 @dataclass(frozen=True)
@@ -29,6 +52,7 @@ def run_local_hive_dry_run(
     trusted_actor: str,
     kernel_receipt: ExecutionReceipt,
     registry: Any,
+    replay_guard: ReplayGuard | None = None,
 ) -> HiveDryRunReceipt:
     """Require successful policy evaluation before constructing a typed Hive request.
 
@@ -46,7 +70,19 @@ def run_local_hive_dry_run(
     ):
         raise PermissionError("Task and authorization receipt do not match")
 
+    if task.expires_at.tzinfo is None or task.expires_at <= datetime.now(timezone.utc):
+        raise PermissionError("Task authorization expired")
+    if replay_guard is None:
+        raise PermissionError("Atomic replay guard required")
+
     shaped = to_hive_health_dry_run(task, trusted_actor=trusted_actor)
+    key = f"{trusted_actor}:{task.task_id}:{task.correlation_id}"
+    try:
+        claimed = replay_guard.claim_once(key)
+    except Exception as exc:
+        raise PermissionError("Replay guard unavailable") from exc
+    if not claimed:
+        raise PermissionError("Authorization already consumed")
 
     # Optional dependency: installed only in a composed CyberCore+CyberHIVE runtime.
     # Import failure fails closed; it is not silently simulated as successful execution.
