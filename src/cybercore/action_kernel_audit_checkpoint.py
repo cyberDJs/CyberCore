@@ -51,9 +51,7 @@ def _verified_snapshot(path: str | Path) -> list[tuple[int, str]]:
             for seq, payload, prior, digest in rows:
                 if seq != previous_seq + 1 or prior != previous:
                     raise ValueError("Audit chain verification failed")
-                calculated = hashlib.sha256(
-                    (prior + "\\n" + payload).encode("utf-8")
-                ).hexdigest()
+                calculated = hashlib.sha256((prior + "\n" + payload).encode("utf-8")).hexdigest()
                 if digest != calculated:
                     raise ValueError("Audit chain verification failed")
                 snapshot.append((seq, digest))
