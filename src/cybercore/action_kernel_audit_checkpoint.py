@@ -8,6 +8,7 @@ trust boundary.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import sqlite3
 from pathlib import Path
 
@@ -31,22 +32,43 @@ class AuditCheckpoint:
             raise ValueError("Invalid checkpoint digest") from exc
 
 
-def audit_checkpoint(path: str | Path, *, database_identity: str) -> AuditCheckpoint:
-    """Export a checkpoint after validating the entire local hash chain."""
-    from cybercore.action_kernel_sqlite_audit import SQLiteAuditSink
-
+def _verified_snapshot(path: str | Path) -> list[tuple[int, str]]:
+    """Verify the hash chain and capture its sequence/hash view in one read transaction."""
     db = Path(path)
     if not db.is_absolute():
         raise ValueError("Absolute database path required")
-    if not SQLiteAuditSink(db).verify_chain():
-        raise ValueError("Audit chain verification failed")
-    with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as conn:
-        row = conn.execute(
-            "SELECT seq,event_hash FROM audit_events ORDER BY seq DESC LIMIT 1"
-        ).fetchone()
-    if row is None:
+
+    # Read-only mode prevents accidentally creating a missing database.
+    with sqlite3.connect(db.as_uri() + "?mode=ro", uri=True, timeout=5) as conn:
+        conn.execute("BEGIN")
+        try:
+            rows = conn.execute(
+                "SELECT seq,payload,previous_hash,event_hash FROM audit_events ORDER BY seq"
+            ).fetchall()
+            previous = GENESIS
+            previous_seq = 0
+            snapshot: list[tuple[int, str]] = []
+            for seq, payload, prior, digest in rows:
+                if seq != previous_seq + 1 or prior != previous:
+                    raise ValueError("Audit chain verification failed")
+                calculated = hashlib.sha256((prior + "\n" + payload).encode("utf-8")).hexdigest()
+                if digest != calculated:
+                    raise ValueError("Audit chain verification failed")
+                snapshot.append((seq, digest))
+                previous = digest
+                previous_seq = seq
+            return snapshot
+        finally:
+            conn.rollback()
+
+
+def audit_checkpoint(path: str | Path, *, database_identity: str) -> AuditCheckpoint:
+    """Export an internally consistent checkpoint from a verified read snapshot."""
+    snapshot = _verified_snapshot(path)
+    if not snapshot:
         return AuditCheckpoint(0, GENESIS, database_identity)
-    return AuditCheckpoint(int(row[0]), str(row[1]), database_identity)
+    seq, digest = snapshot[-1]
+    return AuditCheckpoint(seq, digest, database_identity)
 
 
 def verify_anchored_checkpoint(
@@ -55,23 +77,17 @@ def verify_anchored_checkpoint(
     trusted_checkpoint: AuditCheckpoint,
     expected_database_identity: str,
 ) -> bool:
-    """Verify a retained, independently trusted checkpoint exists in intact history.
-
-    Later events are allowed, but truncating/replacing the anchored prefix
-    fails. This does not prove integrity beyond the checkpoint.
-    """
+    """Check that a trusted anchored prefix remains in the verified read snapshot."""
     if trusted_checkpoint.database_identity != expected_database_identity:
         return False
-    from cybercore.action_kernel_sqlite_audit import SQLiteAuditSink
-
-    db = Path(path)
-    if not db.is_absolute() or not SQLiteAuditSink(db).verify_chain():
+    try:
+        snapshot = _verified_snapshot(path)
+    except (ValueError, sqlite3.Error, OSError):
         return False
     if trusted_checkpoint.sequence == 0:
         return trusted_checkpoint.event_hash == GENESIS
-    with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as conn:
-        row = conn.execute(
-            "SELECT event_hash FROM audit_events WHERE seq = ?",
-            (trusted_checkpoint.sequence,),
-        ).fetchone()
-    return row is not None and str(row[0]) == trusted_checkpoint.event_hash
+    index = trusted_checkpoint.sequence - 1
+    return index < len(snapshot) and snapshot[index] == (
+        trusted_checkpoint.sequence,
+        trusted_checkpoint.event_hash,
+    )

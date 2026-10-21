@@ -10,10 +10,13 @@ against a trusted retained checkpoint detects truncating or rewriting its
 anchored prefix. Events after the anchored sequence are not protected by that
 checkpoint. A fake caller-supplied checkpoint offers no protection.
 
-Implementation is currently a non-atomic snapshot/check across separately
-opened SQLite connections. Writers may append during reads; for concurrent
-production operation replace this with a transactionally consistent read-only
-snapshot and independently anchored identity, sequence and digest.
+Checkpoint export and verification now read and validate the hash chain in one
+read-only SQLite transaction. Under SQLite's supported local filesystem semantics,
+each operation sees one consistent database snapshot while writers may append.
+This does **not** authenticate checkpoint identity or protect a writer that can
+rewrite the entire local database; an independently anchored identity, sequence
+and digest are still essential. The snapshot must not be interpreted as
+external publication or trust anchoring.
 
 Do not use a working-directory JSON file, Git commit in the same compromised
 authority, or an automatically editable local checkpoint as proof of immutable
