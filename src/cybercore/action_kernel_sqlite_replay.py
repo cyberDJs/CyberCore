@@ -38,8 +38,6 @@ class SQLiteReplayGuard:
                 "(key TEXT PRIMARY KEY NOT NULL, claimed_at TEXT NOT NULL "
                 "DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')))"
             )
-            cursor = conn.execute(
-                "INSERT OR IGNORE INTO replay_claims (key) VALUES (?)", (key,)
-            )
+            cursor = conn.execute("INSERT OR IGNORE INTO replay_claims (key) VALUES (?)", (key,))
             conn.commit()
             return cursor.rowcount == 1
