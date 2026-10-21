@@ -10,6 +10,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
+REAL_HIVE_WORKFLOW_PATH = WORKFLOW_DIR / "action-kernel-real-hive.yml"
 CI_WORKFLOW_PATH = WORKFLOW_DIR / "ci.yml"
 CODEQL_WORKFLOW_PATH = WORKFLOW_DIR / "codeql.yml"
 STAGING_DRY_RUN_WORKFLOW_PATH = WORKFLOW_DIR / "staging-dry-run.yml"
@@ -118,6 +119,7 @@ def test_all_workflows_parse_as_valid_yaml() -> None:
     paths = _workflow_paths()
 
     assert paths == [
+        REAL_HIVE_WORKFLOW_PATH,
         CI_WORKFLOW_PATH,
         CODEQL_WORKFLOW_PATH,
         STAGING_DRY_RUN_WORKFLOW_PATH,
