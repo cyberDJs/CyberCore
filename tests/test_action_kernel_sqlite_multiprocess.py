@@ -26,9 +26,7 @@ def test_same_claim_is_atomic_across_processes(tmp_path: Path) -> None:
 def test_distinct_claims_across_processes(tmp_path: Path) -> None:
     path = str(tmp_path / "process-claims.sqlite")
     with ProcessPoolExecutor(max_workers=4) as executor:
-        results = list(
-            executor.map(_claim_from_process, [(path, f"unique-{i}") for i in range(8)])
-        )
+        results = list(executor.map(_claim_from_process, [(path, f"unique-{i}") for i in range(8)]))
     assert results == [True] * 8
 
 
