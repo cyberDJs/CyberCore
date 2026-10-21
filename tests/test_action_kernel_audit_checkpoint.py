@@ -54,3 +54,24 @@ def test_wrong_database_identity_denied(tmp_path: Path) -> None:
     assert not verify_anchored_checkpoint(
         path, trusted_checkpoint=trusted, expected_database_identity="instance-B"
     )
+
+
+def test_snapshot_does_not_create_missing_database(tmp_path: Path) -> None:
+    path = tmp_path / "nonexistent.sqlite"
+    import pytest
+
+    with pytest.raises(sqlite3.OperationalError):
+        audit_checkpoint(path, database_identity="instance-A")
+    assert not path.exists()
+
+
+def test_modified_history_rejects_checkpoint_export(tmp_path: Path) -> None:
+    path = tmp_path / "audit.sqlite"
+    sink = SQLiteAuditSink(path)
+    sink(_event(0))
+    with sqlite3.connect(path) as conn:
+        conn.execute("UPDATE audit_events SET payload='forged' WHERE seq=1")
+    import pytest
+
+    with pytest.raises(ValueError, match="chain verification"):
+        audit_checkpoint(path, database_identity="instance-A")
