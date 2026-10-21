@@ -8,7 +8,6 @@ trust boundary.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import sqlite3
 from pathlib import Path
 
