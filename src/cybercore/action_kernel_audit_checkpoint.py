@@ -43,8 +43,7 @@ def _verified_snapshot(path: str | Path) -> list[tuple[int, str]]:
         conn.execute("BEGIN")
         try:
             rows = conn.execute(
-                "SELECT seq,payload,previous_hash,event_hash "
-                "FROM audit_events ORDER BY seq"
+                "SELECT seq,payload,previous_hash,event_hash FROM audit_events ORDER BY seq"
             ).fetchall()
             previous = GENESIS
             previous_seq = 0
