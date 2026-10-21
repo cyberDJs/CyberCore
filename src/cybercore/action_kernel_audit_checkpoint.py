@@ -50,7 +50,8 @@ def audit_checkpoint(path: str | Path, *, database_identity: str) -> AuditCheckp
 
 
 def verify_anchored_checkpoint(
-    path: str | Path, *,
+    path: str | Path,
+    *,
     trusted_checkpoint: AuditCheckpoint,
     expected_database_identity: str,
 ) -> bool:
