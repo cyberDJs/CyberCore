@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import sqlite3
 
 import pytest
 
@@ -36,5 +37,5 @@ def test_invalid_paths_and_keys_fail_closed(tmp_path: Path) -> None:
 
 def test_unavailable_directory_does_not_grant_claim(tmp_path: Path) -> None:
     guard = SQLiteReplayGuard(tmp_path / "missing" / "claims.sqlite")
-    with pytest.raises(OSError):
+    with pytest.raises(sqlite3.OperationalError):
         guard.claim_once("key")
