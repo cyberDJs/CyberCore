@@ -58,7 +58,8 @@ def check_anchor_transition(
 
 
 def verify_and_propose_anchor(
-    path: str, *,
+    path: str,
+    *,
     candidate: AuditCheckpoint,
     previous: AuditCheckpoint | None,
 ) -> AnchorDecision:
