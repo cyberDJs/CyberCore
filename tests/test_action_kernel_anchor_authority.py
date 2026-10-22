@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from cybercore.action_kernel_anchor_authority import check_anchor_transition, verify_and_propose_anchor
+from cybercore.action_kernel_anchor_authority import (
+    check_anchor_transition,
+    verify_and_propose_anchor,
+)
 from cybercore.action_kernel_audit_checkpoint import AuditCheckpoint
 
 
@@ -21,7 +24,10 @@ def test_allows_first_nonempty_checkpoint() -> None:
 def test_rejects_rollback_and_identity_switch() -> None:
     previous = _anchor(5)
     assert check_anchor_transition(previous, _anchor(4)).reason == "ANCHOR_ROLLBACK"
-    assert check_anchor_transition(previous, _anchor(6, identity="auditor-B")).reason == "DATABASE_IDENTITY_MISMATCH"
+    assert (
+        check_anchor_transition(previous, _anchor(6, identity="auditor-B")).reason
+        == "DATABASE_IDENTITY_MISMATCH"
+    )
 
 
 def test_rejects_equivocation_and_duplicate() -> None:
