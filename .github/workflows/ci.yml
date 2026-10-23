@@ -68,6 +68,10 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
           .venv/bin/python -m pip install -e ".[dev]"
+      - name: Validate CASER preflight executable and shell syntax
+        run: |
+          test -x scripts/caser41_preflight.sh
+          bash -n scripts/caser41_preflight.sh
       - name: Ruff lint
         run: .venv/bin/python -m ruff check src tests
       - name: Ruff format check
