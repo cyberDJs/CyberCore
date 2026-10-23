@@ -46,6 +46,34 @@ class HiveDryRunReceipt:
     reason: str
 
 
+# This process-local guard is owned by the bridge boundary and cannot be
+# replaced per invocation. The caller-supplied ReplayGuard remains mandatory
+# as the durable/shared claim layer for cooperating processes.
+_PROCESS_REPLAY_GUARD = InMemoryReplayGuard()
+_MISSING_CORRELATION = object()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _assert_not_expired(task: TaskRequest) -> None:
+    if task.expires_at.tzinfo is None or task.expires_at <= _utc_now():
+        raise PermissionError("Task authorization expired")
+
+
+def _claim_once(replay_guard: ReplayGuard, key: str) -> None:
+    try:
+        durable_claimed = replay_guard.claim_once(key)
+    except Exception as exc:
+        raise PermissionError("Replay guard unavailable") from exc
+    if not durable_claimed:
+        raise PermissionError("Authorization already consumed")
+
+    if not _PROCESS_REPLAY_GUARD.claim_once(key):
+        raise PermissionError("Authorization already consumed")
+
+
 def run_local_hive_dry_run(
     task: TaskRequest,
     *,
@@ -54,10 +82,12 @@ def run_local_hive_dry_run(
     registry: Any,
     replay_guard: ReplayGuard | None = None,
 ) -> HiveDryRunReceipt:
-    """Require successful policy evaluation before constructing a typed Hive request.
+    """Require successful policy evaluation before a typed local Hive dry-run.
 
     `registry` must be a trusted, in-process CyberHIVE NodeAgentRegistry.
-    No arbitrary method/command routing is exposed to model input.
+    `replay_guard` must be durable/shared for production use. A separate
+    process-owned guard prevents per-call replacement from bypassing replay
+    protection inside this bridge process.
     """
     if kernel_receipt.status != "EXECUTED" or kernel_receipt.policy.decision != "ALLOW":
         raise PermissionError("Action Kernel policy did not allow task")
@@ -70,19 +100,12 @@ def run_local_hive_dry_run(
     ):
         raise PermissionError("Task and authorization receipt do not match")
 
-    if task.expires_at.tzinfo is None or task.expires_at <= datetime.now(timezone.utc):
-        raise PermissionError("Task authorization expired")
+    # Cheap early rejection before optional-runtime work.
+    _assert_not_expired(task)
     if replay_guard is None:
         raise PermissionError("Atomic replay guard required")
 
     shaped = to_hive_health_dry_run(task, trusted_actor=trusted_actor)
-    key = f"{trusted_actor}:{task.task_id}:{task.correlation_id}"
-    try:
-        claimed = replay_guard.claim_once(key)
-    except Exception as exc:
-        raise PermissionError("Replay guard unavailable") from exc
-    if not claimed:
-        raise PermissionError("Authorization already consumed")
 
     # Optional dependency: installed only in a composed CyberCore+CyberHIVE runtime.
     # Import failure fails closed; it is not silently simulated as successful execution.
@@ -101,6 +124,20 @@ def run_local_hive_dry_run(
         correlation_id=task.correlation_id,
         created_at=task.requested_at,
     )
+
+    # Authorization lifetime is checked again immediately at the claim/dispatch
+    # boundary so shaping/import/request construction cannot extend validity.
+    _assert_not_expired(task)
+
+    key = f"{trusted_actor}:{task.task_id}:{task.correlation_id}"
+    _claim_once(replay_guard, key)
+
+    # Durable claim acquisition may block long enough for the task to expire.
+    # Claims remain consumed, but an expired task must never reach dispatch.
+    _assert_not_expired(task)
+
+    # Both claims intentionally remain consumed after this boundary, including
+    # uncertain dispatch failures or invalid results.
     result = registry.dispatch(hive_request)
     if (
         result.request_id != task.task_id
@@ -109,6 +146,17 @@ def run_local_hive_dry_run(
         or result.status.value != "dry_run"
     ):
         raise RuntimeError("Unexpected or non-dry-run CyberHIVE result")
+
+    # Current upstream AgentActionResult has no correlation_id attribute.
+    # Compatibility fallback applies only to genuine attribute absence. If a
+    # composed/future result exposes the field, even None must match exactly.
+    result_correlation_id = getattr(result, "correlation_id", _MISSING_CORRELATION)
+    if (
+        result_correlation_id is not _MISSING_CORRELATION
+        and result_correlation_id != task.correlation_id
+    ):
+        raise RuntimeError("CyberHIVE result correlation does not match task")
+
     return HiveDryRunReceipt(
         request_id=result.request_id,
         correlation_id=task.correlation_id,
