@@ -94,6 +94,17 @@ def reconcile_github_snapshot(
         if run_id in all_run_ids:
             return Reconciliation("BLOCKED", "DUPLICATE_RUN_ID")
         all_run_ids.add(run_id)
+        # Validate every provider record, including unrelated workflows, before
+        # ignoring its identity. A foreign run must not hide impossible states.
+        if status not in {"requested", "waiting", "pending", "queued", "in_progress", "completed"}:
+            return Reconciliation("BLOCKED", "INVALID_WORKFLOW_STATE")
+        if (status == "completed") != (conclusion is not None):
+            return Reconciliation("BLOCKED", "INVALID_WORKFLOW_STATE")
+        if conclusion is not None and conclusion not in {
+            "success", "failure", "cancelled", "skipped", "timed_out",
+            "action_required", "neutral", "startup_failure", "stale",
+        }:
+            return Reconciliation("BLOCKED", "INVALID_WORKFLOW_STATE")
         if name not in _REQUIRED:
             continue
         if name in seen_workflows:
