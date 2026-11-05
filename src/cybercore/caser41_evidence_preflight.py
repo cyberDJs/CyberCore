@@ -12,6 +12,7 @@ import re
 _SHA = re.compile(r"[0-9a-f]{40}", re.ASCII)
 _DIGEST = re.compile(r"[0-9a-f]{64}", re.ASCII)
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}", re.ASCII)
+_REPOSITORY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", re.ASCII)
 
 
 @dataclass(frozen=True)
@@ -37,7 +38,7 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
     """Detect invalid, conflicting or stale records; never grant trusted PASS."""
     if (
         not isinstance(repository, str)
-        or not repository.strip()
+        or _REPOSITORY.fullmatch(repository) is None
         or not isinstance(commit_sha, str)
         or _SHA.fullmatch(commit_sha) is None
         or not isinstance(records, tuple)
@@ -53,6 +54,13 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
             for value in (record.provider, record.run_id, record.source_ref)
         ):
             return EvidenceVerdict("BLOCKED", "INVALID_IDENTITY")
+        if (
+            not isinstance(record.repository, str)
+            or _REPOSITORY.fullmatch(record.repository) is None
+            or not isinstance(record.commit_sha, str)
+            or _SHA.fullmatch(record.commit_sha) is None
+        ):
+            return EvidenceVerdict("BLOCKED", "INVALID_SOURCE_IDENTITY")
         if record.repository != repository or record.commit_sha != commit_sha:
             return EvidenceVerdict("BLOCKED", "SOURCE_DRIFT")
         if (
@@ -65,7 +73,9 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
         if key in identities:
             return EvidenceVerdict("BLOCKED", "DUPLICATE_ATTEMPT")
         identities.add(key)
-        if record.conclusion not in ("success", "failure", "cancelled", "timed_out"):
+        if not isinstance(record.conclusion, str) or record.conclusion not in (
+            "success", "failure", "cancelled", "timed_out"
+        ):
             return EvidenceVerdict("BLOCKED", "INVALID_CONCLUSION")
         try:
             if (
@@ -75,7 +85,8 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
             ):
                 return EvidenceVerdict("BLOCKED", "INVALID_TIMESTAMP")
             record.occurred_at.astimezone(timezone.utc)
-        except (OverflowError, ValueError, TypeError):
+        except Exception:
+            # A custom tzinfo supplied by an untrusted record can raise arbitrarily.
             return EvidenceVerdict("BLOCKED", "INVALID_TIMESTAMP")
         if not isinstance(record.digest, str) or _DIGEST.fullmatch(record.digest) is None:
             return EvidenceVerdict("BLOCKED", "INVALID_DIGEST")
