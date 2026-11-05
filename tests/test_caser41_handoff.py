@@ -150,9 +150,7 @@ def test_clean_plan_with_drift_can_require_replan() -> None:
 
 
 def test_completed_receipt_in_planned_state_blocks_replan() -> None:
-    snapshot = replace(
-        _snapshot(), completed_actions=("deploy",), pending_action="inspect"
-    )
+    snapshot = replace(_snapshot(), completed_actions=("deploy",), pending_action="inspect")
     decision = assess_handoff(
         snapshot,
         expected_run_id="caser-run-001",
@@ -170,7 +168,9 @@ def test_completed_receipt_in_planned_state_blocks_even_without_drift() -> None:
 
 def test_committed_completed_receipt_still_requires_effect_verification() -> None:
     snapshot = replace(
-        _snapshot(), completed_actions=("deploy",), pending_action=None,
+        _snapshot(),
+        completed_actions=("deploy",),
+        pending_action=None,
         transaction_state="COMMITTED",
     )
     assert _verdict(snapshot, sha="b" * 40) == "TERMINAL_RUN_VERIFY_EFFECT"
