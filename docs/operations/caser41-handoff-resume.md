@@ -18,9 +18,10 @@ the provider.
 
 A matching clean `PLANNED` state yields `READONLY_RECONCILE`: a prompt to run
 fresh discovery and preflight, **not** permission to execute. Changed repository
-state yields `REPLAN_REQUIRED`, invalid identities/state block, and any
-`ACTIVE`, `VERIFYING`, `COMPENSATING`, `PARTIAL` or open side effect requires
-investigation. Terminal committed/rolled-back transactions still require
+state yields `REPLAN_REQUIRED` **only when no mutation remains unresolved**.
+Any `ACTIVE`, `VERIFYING`, `COMPENSATING`, `PARTIAL` or open side effect blocks
+replanning until its actual outcome is independently reconciled, even if the
+canonical source SHA has changed. Invalid identities/state also block. Terminal committed/rolled-back transactions still require
 read-only effect verification before any further action.
 
 Never infer success from a receipt alone. A separate authorization gate,
