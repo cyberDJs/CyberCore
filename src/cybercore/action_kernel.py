@@ -116,6 +116,9 @@ class ExecutionReceipt:
     evidence: EvidenceMetadata | None = None
     schema_version: str = ACTION_KERNEL_SCHEMA_VERSION
     nexus_contract_family: str = NEXUS_ACTION_CONTRACT
+    # Immutable authorization lifetime recorded by the trusted kernel at evaluation.
+    # None is accepted for legacy construction, but bridge dispatch fails closed.
+    authorization_expires_at: datetime | None = None
 
     @property
     def evidence_sha256(self) -> str | None:
@@ -409,6 +412,7 @@ class ActionKernel:
             completed_at=now,
             provenance=self._kernel_provenance(now),
             evidence=evidence,
+            authorization_expires_at=request.expires_at,
         )
 
     def _audit(
