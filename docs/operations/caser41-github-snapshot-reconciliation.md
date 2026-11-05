@@ -38,6 +38,10 @@ Trusted integration must:
 Synthetic regressions cover missing and incomplete jobs, wrong SHA,
 incorrect CodeQL display label, cancelled/failed outcomes, duplicate run and
 job IDs, foreign run jobs, malformed objects and non-authoritative verdicts.
+All workflow and job records, including foreign workflows and optional jobs,
+are checked for valid status/conclusion combinations before being ignored.
+Invalid optional job states return `BLOCKED / INVALID_JOB_STATE`; valid
+in-progress optional jobs cannot replace mandatory checks.
 Read-only opt-in module. No API call, retention, storage, new dependencies,
 credentials, installed CASER skill or production change. Rollback: stop
 importing the module. Only promote after exact-head CI/CodeQL/CyberHIVE and
