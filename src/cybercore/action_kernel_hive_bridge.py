@@ -81,8 +81,7 @@ class _ExpiringProcessReplayGuard:
             if len(self._claimed_until) >= self._max_entries:
                 raise PermissionError("Process replay guard capacity exhausted")
             actor_claims = sum(
-                1 for _, claimed_actor in self._claimed_until.values()
-                if claimed_actor == actor
+                1 for _, claimed_actor in self._claimed_until.values() if claimed_actor == actor
             )
             if actor_claims >= self._max_per_actor:
                 raise PermissionError("Actor replay guard capacity exhausted")
