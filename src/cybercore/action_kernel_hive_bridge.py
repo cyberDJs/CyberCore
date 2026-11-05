@@ -92,9 +92,7 @@ class HiveDryRunReceipt:
 # replaced per invocation. The caller-supplied ReplayGuard remains mandatory
 # as the durable/shared claim layer for cooperating processes.
 _PROCESS_REPLAY_MAX_ENTRIES = 4096
-_PROCESS_REPLAY_GUARD = _ExpiringProcessReplayGuard(
-    max_entries=_PROCESS_REPLAY_MAX_ENTRIES
-)
+_PROCESS_REPLAY_GUARD = _ExpiringProcessReplayGuard(max_entries=_PROCESS_REPLAY_MAX_ENTRIES)
 _MISSING_CORRELATION = object()
 
 

@@ -251,11 +251,14 @@ def test_process_replay_guard_never_evicts_unexpired_claims() -> None:
     assert guard.claim_once("kept", expires_at=now + timedelta(minutes=1), now=now)
     with pytest.raises(PermissionError, match="capacity exhausted"):
         guard.claim_once("new", expires_at=now + timedelta(minutes=1), now=now)
-    assert guard.claim_once(
-        "kept",
-        expires_at=now + timedelta(minutes=1),
-        now=now,
-    ) is False
+    assert (
+        guard.claim_once(
+            "kept",
+            expires_at=now + timedelta(minutes=1),
+            now=now,
+        )
+        is False
+    )
 
 
 def test_process_replay_guard_does_not_retain_already_expired_claim() -> None:
