@@ -549,6 +549,44 @@ def test_rechecks_expiry_after_claim_before_dispatch(monkeypatch) -> None:
     assert guard.claim_once(key) is False
 
 
+def test_rejects_result_returned_after_authorization_deadline(monkeypatch) -> None:
+    task, kernel = setup("post-dispatch-expiry")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    action = _install_fake_hive(monkeypatch)
+    times = iter(
+        (
+            task.expires_at - timedelta(seconds=5),
+            task.expires_at - timedelta(seconds=4),
+            task.expires_at - timedelta(seconds=3),
+            task.expires_at - timedelta(seconds=2),
+            task.expires_at + timedelta(seconds=1),
+        )
+    )
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: next(times))
+    guard = InMemoryReplayGuard()
+
+    class Registry:
+        def dispatch(self, incoming):
+            return SimpleNamespace(
+                request_id=incoming.id,
+                target_node=incoming.target_node,
+                action=action.HEALTH_CHECK,
+                status=SimpleNamespace(value="dry_run"),
+            )
+
+    with pytest.raises(PermissionError, match="expired"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Registry(),
+            replay_guard=guard,
+        )
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is False
+
+
 def test_rejects_mismatched_result_correlation(monkeypatch) -> None:
     task, kernel = setup("wrong-correlation")
     allowed = kernel.execute(task, trusted_actor=task.actor)
