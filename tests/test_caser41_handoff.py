@@ -93,11 +93,7 @@ def test_failed_state_and_committed_state_are_not_resume_grants() -> None:
 
 
 def test_drift_and_open_mutation_prioritizes_block_over_replan() -> None:
-    snapshot = replace(
-        _snapshot(),
-        transaction_state="ACTIVE",
-        open_side_effects=("deploy",),
-    )
+    snapshot = replace(_snapshot(), transaction_state="ACTIVE", open_side_effects=("deploy",))
     decision = assess_handoff(
         snapshot,
         expected_run_id="caser-run-001",
