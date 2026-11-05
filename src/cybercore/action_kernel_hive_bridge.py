@@ -147,6 +147,15 @@ def run_local_hive_dry_run(
     ):
         raise PermissionError("Task and authorization receipt do not match")
 
+    # The authorization lifetime must be the one approved by the trusted
+    # kernel. A caller must not shorten it to evict a replay claim early, or
+    # extend it to dispatch after the original grant expired.
+    if (
+        kernel_receipt.authorization_expires_at is None
+        or kernel_receipt.authorization_expires_at != task.expires_at
+    ):
+        raise PermissionError("Task and authorization expiry do not match")
+
     # Cheap early rejection before optional-runtime work.
     _assert_not_expired(task)
     if replay_guard is None:
