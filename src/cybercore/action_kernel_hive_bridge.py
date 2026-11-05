@@ -181,12 +181,15 @@ def run_local_hive_dry_run(
     ):
         raise PermissionError("Task and authorization expiry do not match")
 
-    # A bounded lifetime prevents untrusted far-future expiration values
-    # from monopolizing process-local replay capacity.
+    # Bind lifetime to a trusted kernel receipt timestamp, not the
+    # caller-controlled requested_at. Otherwise future-dated requests could
+    # indefinitely occupy the bounded replay cache.
     if (
         task.requested_at.tzinfo is None
-        or task.expires_at - task.requested_at > _MAX_AUTHORIZATION_LIFETIME
+        or kernel_receipt.completed_at.tzinfo is None
         or task.expires_at <= task.requested_at
+        or task.requested_at > kernel_receipt.completed_at
+        or task.expires_at - kernel_receipt.completed_at > _MAX_AUTHORIZATION_LIFETIME
     ):
         raise PermissionError("Task authorization lifetime exceeds policy")
 
