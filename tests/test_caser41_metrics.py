@@ -69,3 +69,10 @@ def test_invalid_observations_rejected(invalid: RunObservation) -> None:
 def test_duplicate_run_ids_are_rejected() -> None:
     with pytest.raises(ValueError, match="DUPLICATE_RUN_ID"):
         aggregate_run_metrics([_run("same", "VERIFIED"), _run("same", "FAILED")])
+
+
+def test_large_finite_observations_do_not_overflow_mean() -> None:
+    report = aggregate_run_metrics(
+        [_run("big-a", "VERIFIED", 1e308), _run("big-b", "VERIFIED", 1e308)]
+    )
+    assert report.mean_time_to_verified_seconds == 1e308
