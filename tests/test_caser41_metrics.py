@@ -32,9 +32,7 @@ def test_counts_all_terminal_outcomes_without_suppressing_failures() -> None:
 
 
 def test_unknown_telemetry_remains_unknown() -> None:
-    report = aggregate_run_metrics(
-        [_run("a", "VERIFIED", None, None, None), _run("b", "FAILED")]
-    )
+    report = aggregate_run_metrics([_run("a", "VERIFIED", None, None, None), _run("b", "FAILED")])
     assert report.mean_time_to_verified_seconds is None
     assert report.ci_retries_total is None
     assert report.provider_poll_calls_total is None
