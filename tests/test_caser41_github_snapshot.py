@@ -100,3 +100,15 @@ def test_incomplete_dataclass_is_blocked() -> None:
     assert _result(workflows=RUNS + (broken,)) == "INVALID_WORKFLOW"
     broken_job = object.__new__(Job)
     assert _result(jobs=JOBS + (broken_job,)) == "INVALID_JOB"
+
+
+def test_foreign_workflow_reusing_required_run_id_is_blocked() -> None:
+    forged = Workflow(101, "Foreign", "completed", "success")
+    assert _result(workflows=RUNS + (forged,)) == "DUPLICATE_RUN_ID"
+
+
+def test_unrelated_workflow_with_distinct_run_id_does_not_count_as_required() -> None:
+    extra = Workflow(104, "Foreign", "completed", "success")
+    assert _result(workflows=RUNS + (extra,)) == (
+        "PROVIDER_ORIGIN_AND_PAGINATION_UNVERIFIED"
+    )
