@@ -135,3 +135,14 @@ def test_forged_datetime_shape_fails_closed() -> None:
     assert _inspect(replace(_record(), occurred_at=ForgedDatetime())).reason == (
         "INVALID_TIMESTAMP"
     )
+
+
+def test_uninitialized_candidate_record_is_blocked() -> None:
+    incomplete = object.__new__(EvidenceCandidate)
+    assert _inspect(incomplete).reason == "INVALID_RECORD"
+
+
+def test_missing_field_after_forced_deletion_is_blocked() -> None:
+    incomplete = _record()
+    object.__delattr__(incomplete, "run_id")
+    assert _inspect(incomplete).reason == "INVALID_RECORD"
