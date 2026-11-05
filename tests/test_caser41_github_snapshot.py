@@ -109,6 +109,4 @@ def test_foreign_workflow_reusing_required_run_id_is_blocked() -> None:
 
 def test_unrelated_workflow_with_distinct_run_id_does_not_count_as_required() -> None:
     extra = Workflow(104, "Foreign", "completed", "success")
-    assert _result(workflows=RUNS + (extra,)) == (
-        "PROVIDER_ORIGIN_AND_PAGINATION_UNVERIFIED"
-    )
+    assert _result(workflows=RUNS + (extra,)) == ("PROVIDER_ORIGIN_AND_PAGINATION_UNVERIFIED")
