@@ -47,7 +47,7 @@ def aggregate_run_metrics(observations: Iterable[RunObservation]) -> RunMetrics:
         if item.run_id in ids:
             raise ValueError("DUPLICATE_RUN_ID")
         ids.add(item.run_id)
-        if item.status not in STATUSES:
+        if not isinstance(item.status, str) or item.status not in STATUSES:
             raise ValueError("UNKNOWN_OUTCOME")
         if item.duration_seconds is not None and (
             isinstance(item.duration_seconds, bool)
@@ -64,18 +64,19 @@ def aggregate_run_metrics(observations: Iterable[RunObservation]) -> RunMetrics:
 
     verified = [item for item in entries if item.status == "VERIFIED"]
     mean_time = (
-        sum(item.duration_seconds for item in verified) / len(verified)
+        sum(item.duration_seconds for item in verified if item.duration_seconds is not None)
+        / len(verified)
         if verified and all(item.duration_seconds is not None for item in verified)
         else None
     )
     ci_retries = (
-        sum(item.ci_retry_count for item in entries)
-        if all(item.ci_retry_count is not None for item in entries)
+        sum(item.ci_retry_count for item in entries if item.ci_retry_count is not None)
+        if entries and all(item.ci_retry_count is not None for item in entries)
         else None
     )
     poll_calls = (
-        sum(item.provider_poll_calls for item in entries)
-        if all(item.provider_poll_calls is not None for item in entries)
+        sum(item.provider_poll_calls for item in entries if item.provider_poll_calls is not None)
+        if entries and all(item.provider_poll_calls is not None for item in entries)
         else None
     )
     return RunMetrics(
