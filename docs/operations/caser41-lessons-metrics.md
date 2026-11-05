@@ -11,8 +11,8 @@ guardrail, evidence references, bounded confidence, timezone-aware verification
 and expiry dates, contradictory evidence, project and context changes.
 All timestamp comparisons are normalized to UTC instants to avoid the
 repeated-hour DST `fold` ambiguity (not local wall-clock ordering).
-UTC-conversion overflow at datetime boundaries yields REJECTED/INVALID_TIMESTAMPS,
-not an uncaught exception.
+UTC-conversion overflow, malformed timezone offset probes, and invalid datetime
+boundaries yield REJECTED/INVALID_TIMESTAMPS, not an uncaught exception.
 It returns `ELIGIBLE_FOR_REVIEW`, `REVALIDATION_REQUIRED` or `REJECTED`.
 
 `ELIGIBLE_FOR_REVIEW` means a reviewer may compare against fresh primary
@@ -53,5 +53,7 @@ status event ingestion, metrics baseline measurement, dashboards, staged CASER
 v4.1 release and independent verifier signoff. No deployment authorized by
 these utilities.
 
-Verified-run mean durations use scaled compensated summation so large finite
-measurements do not overflow an intermediate total into infinity.
+Verified-run mean durations use a bounded online mean (nonnegative finite
+inputs), avoiding overflow of intermediate totals even for repeated maximum
+finite floating-point values. Huge integers that cannot convert to a finite
+float are rejected as INVALID_DURATION.
