@@ -7,7 +7,7 @@ instruction to change source code or execute external actions.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass(frozen=True)
@@ -72,13 +72,16 @@ def assess_lesson(
         for value in (lesson.last_verified_at, lesson.revalidate_after, now)
     ):
         return LessonVerdict("REJECTED", "INVALID_TIMESTAMPS")
-    if lesson.last_verified_at > lesson.revalidate_after or lesson.last_verified_at > now:
+    verified_utc = lesson.last_verified_at.astimezone(timezone.utc)
+    expiry_utc = lesson.revalidate_after.astimezone(timezone.utc)
+    now_utc = now.astimezone(timezone.utc)
+    if verified_utc > expiry_utc or verified_utc > now_utc:
         return LessonVerdict("REJECTED", "INVALID_TIMESTAMPS")
     if lesson.contradicted:
         return LessonVerdict("REVALIDATION_REQUIRED", "CONTRADICTORY_EVIDENCE")
     if lesson.project != project or lesson.context_fingerprint != context_fingerprint:
         return LessonVerdict("REVALIDATION_REQUIRED", "CONTEXT_CHANGED")
-    if now >= lesson.revalidate_after:
+    if now_utc >= expiry_utc:
         return LessonVerdict("REVALIDATION_REQUIRED", "LESSON_EXPIRED")
     if lesson.confidence < 0.8:
         return LessonVerdict("REVALIDATION_REQUIRED", "LOW_CONFIDENCE")
