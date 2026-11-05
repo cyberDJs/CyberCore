@@ -229,6 +229,47 @@ def test_concurrent_fresh_guards_cannot_bypass_process_claim(monkeypatch) -> Non
     assert calls == 1
 
 
+def test_process_replay_guard_prunes_expired_claims() -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+
+    assert guard.claim_once("a", expires_at=now + timedelta(seconds=1), now=now)
+    assert guard.claim_once("b", expires_at=now + timedelta(seconds=1), now=now)
+
+    with pytest.raises(PermissionError, match="capacity exhausted"):
+        guard.claim_once("c", expires_at=now + timedelta(minutes=1), now=now)
+
+    later = now + timedelta(seconds=2)
+    assert guard.claim_once("c", expires_at=later + timedelta(minutes=1), now=later)
+    assert guard.claim_once("a", expires_at=later + timedelta(minutes=1), now=later)
+
+
+def test_process_replay_guard_never_evicts_unexpired_claims() -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1)
+
+    assert guard.claim_once("kept", expires_at=now + timedelta(minutes=1), now=now)
+    with pytest.raises(PermissionError, match="capacity exhausted"):
+        guard.claim_once("new", expires_at=now + timedelta(minutes=1), now=now)
+    assert guard.claim_once(
+        "kept",
+        expires_at=now + timedelta(minutes=1),
+        now=now,
+    ) is False
+
+
+def test_process_replay_guard_does_not_retain_already_expired_claim() -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1)
+
+    assert guard.claim_once("expired", expires_at=now, now=now)
+    assert guard.claim_once(
+        "fresh",
+        expires_at=now + timedelta(minutes=1),
+        now=now,
+    )
+
+
 def test_replay_guard_backend_failure_fails_closed(monkeypatch) -> None:
     task, kernel = setup("guard-failure")
     _install_fake_hive(monkeypatch)

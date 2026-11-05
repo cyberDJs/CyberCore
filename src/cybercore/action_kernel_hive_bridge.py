@@ -37,6 +37,48 @@ class InMemoryReplayGuard:
             return True
 
 
+class _ExpiringProcessReplayGuard:
+    """Bounded process-local replay accelerator.
+
+    Durable replay history remains the responsibility of the caller-provided
+    ReplayGuard. This layer retains only still-valid authorizations and fails
+    closed instead of evicting an unexpired claim when capacity is exhausted.
+    """
+
+    def __init__(self, *, max_entries: int) -> None:
+        if max_entries <= 0:
+            raise ValueError("Replay cache capacity must be positive")
+        self._max_entries = max_entries
+        self._claimed_until: dict[str, datetime] = {}
+        self._lock = Lock()
+
+    def claim_once(self, key: str, *, expires_at: datetime, now: datetime) -> bool:
+        with self._lock:
+            expired_keys = [
+                claimed_key
+                for claimed_key, claimed_until in self._claimed_until.items()
+                if claimed_until <= now
+            ]
+            for claimed_key in expired_keys:
+                del self._claimed_until[claimed_key]
+
+            if key in self._claimed_until:
+                return False
+
+            # If the durable claim completed after authorization expiry, the
+            # caller will fail the immediate post-claim expiry check. No
+            # process-local retention is needed because future attempts are
+            # rejected by the early expiry check.
+            if expires_at <= now:
+                return True
+
+            if len(self._claimed_until) >= self._max_entries:
+                raise PermissionError("Process replay guard capacity exhausted")
+
+            self._claimed_until[key] = expires_at
+            return True
+
+
 @dataclass(frozen=True)
 class HiveDryRunReceipt:
     request_id: str
@@ -49,7 +91,10 @@ class HiveDryRunReceipt:
 # This process-local guard is owned by the bridge boundary and cannot be
 # replaced per invocation. The caller-supplied ReplayGuard remains mandatory
 # as the durable/shared claim layer for cooperating processes.
-_PROCESS_REPLAY_GUARD = InMemoryReplayGuard()
+_PROCESS_REPLAY_MAX_ENTRIES = 4096
+_PROCESS_REPLAY_GUARD = _ExpiringProcessReplayGuard(
+    max_entries=_PROCESS_REPLAY_MAX_ENTRIES
+)
 _MISSING_CORRELATION = object()
 
 
@@ -62,7 +107,7 @@ def _assert_not_expired(task: TaskRequest) -> None:
         raise PermissionError("Task authorization expired")
 
 
-def _claim_once(replay_guard: ReplayGuard, key: str) -> None:
+def _claim_once(replay_guard: ReplayGuard, key: str, *, expires_at: datetime) -> None:
     try:
         durable_claimed = replay_guard.claim_once(key)
     except Exception as exc:
@@ -70,7 +115,11 @@ def _claim_once(replay_guard: ReplayGuard, key: str) -> None:
     if not durable_claimed:
         raise PermissionError("Authorization already consumed")
 
-    if not _PROCESS_REPLAY_GUARD.claim_once(key):
+    if not _PROCESS_REPLAY_GUARD.claim_once(
+        key,
+        expires_at=expires_at,
+        now=_utc_now(),
+    ):
         raise PermissionError("Authorization already consumed")
 
 
@@ -130,7 +179,7 @@ def run_local_hive_dry_run(
     _assert_not_expired(task)
 
     key = f"{trusted_actor}:{task.task_id}:{task.correlation_id}"
-    _claim_once(replay_guard, key)
+    _claim_once(replay_guard, key, expires_at=task.expires_at)
 
     # Durable claim acquisition may block long enough for the task to expire.
     # Claims remain consumed, but an expired task must never reach dispatch.
