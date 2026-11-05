@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 
 from cybercore.caser41_evidence_preflight import EvidenceCandidate, inspect_candidates
 
@@ -57,3 +57,44 @@ def test_invalid_timestamp_fails_closed() -> None:
     )
     boundary = datetime.min.replace(tzinfo=timezone(timedelta(hours=14)))
     assert _inspect(replace(_record(), occurred_at=boundary)).reason == "INVALID_TIMESTAMP"
+
+
+class BrokenOffset(tzinfo):
+    def utcoffset(self, dt: datetime | None) -> timedelta:
+        raise RuntimeError("untrusted timezone failure")
+
+    def dst(self, dt: datetime | None) -> timedelta:
+        return timedelta(0)
+
+
+def test_malformed_expected_repository_is_rejected() -> None:
+    for invalid in ("evil\\nrepo", "bad\\x00repo", "no-slash", "a/b/c"):
+        verdict = inspect_candidates(
+            (replace(_record(), repository=invalid),),
+            repository=invalid,
+            commit_sha=SHA,
+        )
+        assert verdict.reason == "INVALID_BATCH"
+
+
+def test_malformed_record_repository_is_rejected() -> None:
+    assert _inspect(replace(_record(), repository="evil\\nrepo")).reason == (
+        "INVALID_SOURCE_IDENTITY"
+    )
+    assert _inspect(replace(_record(), repository=None)).reason == (
+        "INVALID_SOURCE_IDENTITY"
+    )
+
+
+def test_hostile_timezone_exception_is_blocked() -> None:
+    stamp = NOW.replace(tzinfo=BrokenOffset())
+    assert _inspect(replace(_record(), occurred_at=stamp)).reason == "INVALID_TIMESTAMP"
+
+
+def test_malformed_record_sha_and_conclusion_are_blocked() -> None:
+    assert _inspect(replace(_record(), commit_sha=None)).reason == (
+        "INVALID_SOURCE_IDENTITY"
+    )
+    assert _inspect(replace(_record(), conclusion=None)).reason == (
+        "INVALID_CONCLUSION"
+    )
