@@ -324,12 +324,53 @@ def test_retains_process_claim_after_uncertain_dispatch_failure(monkeypatch) -> 
         )
 
 
+@pytest.mark.parametrize("shift_seconds", [-30, 30])
+def test_rejects_altered_authorization_expiry_before_claim_or_dispatch(
+    shift_seconds: int,
+) -> None:
+    task, kernel = setup(f"altered-expiry-{shift_seconds}")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    altered = replace(task, expires_at=task.expires_at + timedelta(seconds=shift_seconds))
+    guard = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Altered authorization must never dispatch")
+
+    with pytest.raises(PermissionError, match="authorization expiry do not match"):
+        run_local_hive_dry_run(
+            altered,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=guard,
+        )
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is True
+
+
+def test_rejects_receipt_without_bound_authorization_expiry() -> None:
+    task, kernel = setup("missing-receipt-expiry")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    legacy = replace(allowed, authorization_expires_at=None)
+
+    with pytest.raises(PermissionError, match="authorization expiry do not match"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=legacy,
+            registry=None,
+            replay_guard=InMemoryReplayGuard(),
+        )
+
+
 def test_rejects_expired_task_before_optional_runtime_work() -> None:
     task, kernel = setup("already-expired")
     allowed = kernel.execute(task, trusted_actor=task.actor)
     expired = replace(task, expires_at=datetime.now(timezone.utc) - timedelta(seconds=1))
 
-    with pytest.raises(PermissionError, match="expired"):
+    with pytest.raises(PermissionError, match="authorization expiry do not match"):
         run_local_hive_dry_run(
             expired,
             trusted_actor=task.actor,
