@@ -134,3 +134,27 @@ def test_foreign_workflow_invalid_state_fails_closed(
 def test_foreign_workflow_valid_pending_state_is_ignored() -> None:
     foreign = Workflow(104, "Foreign", "in_progress", None)
     assert _result(workflows=RUNS + (foreign,)) == ("PROVIDER_ORIGIN_AND_PAGINATION_UNVERIFIED")
+
+
+@pytest.mark.parametrize(
+    "status,conclusion",
+    [
+        ("in_progress", "success"),
+        ("", None),
+        ("completed", None),
+        ("completed", ""),
+        ("queued", "failure"),
+        ("completed", "unknown"),
+    ],
+)
+def test_optional_job_invalid_state_fails_closed(
+    status: str,
+    conclusion: str | None,
+) -> None:
+    optional = Job(101, 99, "diagnostic", status, conclusion)
+    assert _result(jobs=JOBS + (optional,)) == "INVALID_JOB_STATE"
+
+
+def test_valid_optional_job_state_does_not_count_as_required() -> None:
+    optional = Job(101, 99, "diagnostic", "in_progress", None)
+    assert _result(jobs=JOBS + (optional,)) == ("PROVIDER_ORIGIN_AND_PAGINATION_UNVERIFIED")
