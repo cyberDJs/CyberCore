@@ -109,3 +109,12 @@ def test_dst_fold_future_verified_time_is_rejected() -> None:
         ).reason
         == "INVALID_TIMESTAMPS"
     )
+
+
+def test_utc_conversion_boundary_overflow_is_rejected() -> None:
+    plus_fourteen = timezone(timedelta(hours=14))
+    lesson = replace(
+        _lesson(),
+        last_verified_at=datetime.min.replace(tzinfo=plus_fourteen),
+    )
+    assert _check(lesson) == "INVALID_TIMESTAMPS"
