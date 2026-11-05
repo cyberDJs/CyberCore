@@ -12,7 +12,9 @@ import re
 _SHA = re.compile(r"[0-9a-f]{40}", re.ASCII)
 _DIGEST = re.compile(r"[0-9a-f]{64}", re.ASCII)
 _ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}", re.ASCII)
-_REPOSITORY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", re.ASCII)
+_REPOSITORY = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", re.ASCII
+)
 
 
 @dataclass(frozen=True)
@@ -74,7 +76,10 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
             return EvidenceVerdict("BLOCKED", "DUPLICATE_ATTEMPT")
         identities.add(key)
         if not isinstance(record.conclusion, str) or record.conclusion not in (
-            "success", "failure", "cancelled", "timed_out"
+            "success",
+            "failure",
+            "cancelled",
+            "timed_out",
         ):
             return EvidenceVerdict("BLOCKED", "INVALID_CONCLUSION")
         try:
