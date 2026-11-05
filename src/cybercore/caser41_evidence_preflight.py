@@ -65,9 +65,7 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
             return EvidenceVerdict("BLOCKED", "INVALID_SOURCE_IDENTITY")
         if record.repository != repository or record.commit_sha != commit_sha:
             return EvidenceVerdict("BLOCKED", "SOURCE_DRIFT")
-        if (
-            type(record.attempt) is not int or record.attempt < 1
-        ):
+        if type(record.attempt) is not int or record.attempt < 1:
             return EvidenceVerdict("BLOCKED", "INVALID_ATTEMPT")
         key = (record.provider, record.run_id, record.attempt)
         if key in identities:
