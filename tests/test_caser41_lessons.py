@@ -1,5 +1,6 @@
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from cybercore.caser41_lessons import LessonRecord, assess_lesson
 
@@ -67,3 +68,38 @@ def test_naive_future_and_inverted_timestamps_fail_closed() -> None:
     assert _check(replace(_lesson(), revalidate_after=NOW - timedelta(days=3))) == (
         "INVALID_TIMESTAMPS"
     )
+
+
+def test_dst_fall_back_fold_does_not_keep_expired_lesson_alive() -> None:
+    eastern = ZoneInfo("America/New_York")
+    expiry = datetime(2026, 11, 1, 1, 45, tzinfo=eastern, fold=0)
+    later = datetime(2026, 11, 1, 1, 15, tzinfo=eastern, fold=1)
+    original = _lesson()
+    lesson = replace(
+        original,
+        last_verified_at=datetime(2026, 10, 31, 12, tzinfo=eastern),
+        revalidate_after=expiry,
+    )
+    assert assess_lesson(
+        lesson,
+        project=original.project,
+        context_fingerprint=original.context_fingerprint,
+        now=later,
+    ).reason == "LESSON_EXPIRED"
+
+
+def test_dst_fold_future_verified_time_is_rejected() -> None:
+    eastern = ZoneInfo("America/New_York")
+    now = datetime(2026, 11, 1, 1, 45, tzinfo=eastern, fold=0)
+    later = datetime(2026, 11, 1, 1, 15, tzinfo=eastern, fold=1)
+    lesson = replace(
+        _lesson(),
+        last_verified_at=later,
+        revalidate_after=later + timedelta(days=1),
+    )
+    assert assess_lesson(
+        lesson,
+        project=lesson.project,
+        context_fingerprint=lesson.context_fingerprint,
+        now=now,
+    ).reason == "INVALID_TIMESTAMPS"
