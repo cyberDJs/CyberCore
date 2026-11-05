@@ -303,6 +303,47 @@ def test_rejects_overlong_authorization_before_optional_runtime_or_claim() -> No
     assert guard.claim_once(key) is True
 
 
+def test_future_dated_request_cannot_pin_process_replay_quota() -> None:
+    task, kernel = setup("future-dated-lifetime")
+    future = datetime.now(timezone.utc) + timedelta(days=365)
+    altered = replace(
+        task,
+        requested_at=future,
+        expires_at=future + timedelta(minutes=2),
+    )
+    # Current kernel historically permits a future requested_at, but the
+    # bridge must not use untrusted request time as replay retention authority.
+    allowed = kernel.execute(altered, trusted_actor=altered.actor)
+    assert allowed.status == "EXECUTED"
+    guard = InMemoryReplayGuard()
+
+    with pytest.raises(PermissionError, match="lifetime exceeds policy"):
+        run_local_hive_dry_run(
+            altered,
+            trusted_actor=altered.actor,
+            kernel_receipt=allowed,
+            registry=None,
+            replay_guard=guard,
+        )
+
+    key = f"{altered.actor}:{altered.task_id}:{altered.correlation_id}"
+    assert guard.claim_once(key) is True
+
+
+def test_expiry_bound_to_trusted_receipt_not_request_time() -> None:
+    task, kernel = setup("receipt-clock-bound")
+    altered = replace(
+        task,
+        requested_at=task.requested_at - timedelta(days=1),
+        expires_at=task.expires_at,
+    )
+    allowed = kernel.execute(altered, trusted_actor=altered.actor)
+    assert allowed.status == "EXECUTED"
+    # Historical request timestamps cannot extend a newly issued grant.
+    assert allowed.authorization_expires_at == altered.expires_at
+    assert allowed.completed_at <= altered.expires_at
+
+
 def test_process_capacity_rejects_before_durable_claim(monkeypatch) -> None:
     task, kernel = setup("capacity-before-durable")
     allowed = kernel.execute(task, trusted_actor=task.actor)
