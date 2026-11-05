@@ -80,7 +80,7 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
             return EvidenceVerdict("BLOCKED", "INVALID_CONCLUSION")
         try:
             if (
-                not isinstance(record.occurred_at, datetime)
+                type(record.occurred_at) is not datetime
                 or record.occurred_at.tzinfo is None
                 or record.occurred_at.utcoffset() is None
             ):
