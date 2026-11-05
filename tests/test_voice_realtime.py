@@ -69,12 +69,15 @@ class FakeTransport:
     def __init__(self) -> None:
         self.sent: list[int] = []
         self.flush_count = 0
+        self.flush_error: Exception | None = None
 
     def send(self, frame: AudioFrame) -> None:
         self.sent.append(frame.sequence)
 
     def flush_output(self) -> None:
         self.flush_count += 1
+        if self.flush_error is not None:
+            raise self.flush_error
 
 
 def frame(sequence: int) -> AudioFrame:
@@ -187,6 +190,26 @@ def test_speech_during_speaking_causes_barge_in_and_flushes_output() -> None:
     assert session.status is SessionStatus.ACTIVE
 
 
+def test_confirmed_speaking_barge_in_preserves_confirmed_onset_frames() -> None:
+    runtime, session, _, stt, tts, transport, events = make_runtime(
+        tts_frames=[frame(20), frame(21)]
+    )
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+    runtime.begin_speaking("long answer")
+    runtime.pump_synthesis(max_frames=1)
+
+    deltas = runtime.confirm_speaking_barge_in((frame(2), frame(3), frame(4)))
+
+    assert runtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+    assert stt.frames == [2, 3, 4]
+    assert [delta.text for delta in deltas] == ["delta-2", "delta-3", "delta-4"]
+    assert tts.cancel_count == 1
+    assert transport.flush_count == 1
+    assert any(event.type is RealtimeEventType.BARGE_IN for event in events)
+
+
 def test_silence_during_speaking_is_ignored_without_barge_in() -> None:
     runtime, session, vad, _, tts, transport, events = make_runtime(tts_frames=[frame(20)])
     runtime.receive_input(frame(1))
@@ -200,6 +223,55 @@ def test_silence_during_speaking_is_ignored_without_barge_in() -> None:
     assert tts.cancel_count == 0
     assert transport.flush_count == 0
     assert any(event.type is RealtimeEventType.INPUT_FRAME_IGNORED for event in events)
+
+
+def test_single_speech_frame_during_processing_waits_for_confirmation() -> None:
+    runtime, session, _, stt, tts, transport, events = make_runtime()
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+
+    assert runtime.receive_input(frame(2)) == ()
+
+    assert runtime.state is RealtimeState.PROCESSING
+    assert session.status is SessionStatus.ACTIVE
+    assert stt.frames == [1]
+    assert tts.cancel_count == 0
+    assert transport.flush_count == 0
+    assert not any(event.type is RealtimeEventType.BARGE_IN for event in events)
+
+
+def test_consecutive_speech_frames_confirm_processing_barge_in_and_preserve_onset() -> None:
+    runtime, session, _, stt, tts, transport, events = make_runtime()
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+
+    assert runtime.receive_input(frame(2)) == ()
+    deltas = runtime.receive_input(frame(3))
+
+    assert runtime.state is RealtimeState.INTERRUPTED
+    assert session.status is SessionStatus.INTERRUPTED
+    assert stt.frames == [2, 3]
+    assert [delta.text for delta in deltas] == ["delta-2", "delta-3"]
+    assert tts.cancel_count == 1
+    assert transport.flush_count == 1
+    assert any(event.type is RealtimeEventType.BARGE_IN for event in events)
+
+
+def test_processing_silence_resets_barge_in_confirmation() -> None:
+    runtime, session, vad, stt, _, _, events = make_runtime()
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+
+    assert runtime.receive_input(frame(2)) == ()
+    vad.state = VadState.SILENCE
+    assert runtime.receive_input(frame(3)) == ()
+    vad.state = VadState.SPEECH
+    assert runtime.receive_input(frame(4)) == ()
+
+    assert runtime.state is RealtimeState.PROCESSING
+    assert session.status is SessionStatus.ACTIVE
+    assert stt.frames == [1]
+    assert not any(event.type is RealtimeEventType.BARGE_IN for event in events)
 
 
 def test_input_backpressure_rejects_frame_before_stt() -> None:
@@ -230,6 +302,91 @@ def test_output_backpressure_fails_closed_by_interrupting_output() -> None:
     assert tts.cancel_count == 1
     assert transport.flush_count == 1
     assert any(event.type is RealtimeEventType.OUTPUT_BACKPRESSURE for event in events)
+
+
+@pytest.mark.parametrize("cleanup_target", ["stt", "tts"])
+def test_cancel_establishes_safe_terminal_state_before_reraising_cleanup_error(
+    cleanup_target: str,
+) -> None:
+    runtime, session, _, stt, tts, transport, events = make_runtime(tts_frames=[frame(20)])
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+    runtime.begin_speaking("answer")
+    runtime.pump_synthesis(max_frames=1)
+
+    if cleanup_target == "stt":
+        original_reset = stt.reset
+
+        def failing_reset() -> None:
+            original_reset()
+            raise RuntimeError("stt cleanup failed")
+
+        stt.reset = failing_reset  # type: ignore[method-assign]
+        expected = "stt cleanup failed"
+    else:
+        original_cancel = tts.cancel
+
+        def failing_cancel() -> None:
+            original_cancel()
+            raise RuntimeError("tts cleanup failed")
+
+        tts.cancel = failing_cancel  # type: ignore[method-assign]
+        expected = "tts cleanup failed"
+
+    with pytest.raises(RuntimeError, match=expected):
+        runtime.cancel("operator stop")
+
+    assert runtime.state is RealtimeState.CANCELLED
+    assert session.status is SessionStatus.CANCELLED
+    assert runtime.input_buffer.snapshot().frame_count == 0
+    assert runtime.output_buffer.snapshot().frame_count == 0
+    assert transport.flush_count == 1
+    assert any(event.type is RealtimeEventType.CANCELLED for event in events)
+
+
+def test_cancel_preserves_first_cleanup_error_when_transport_flush_also_fails() -> None:
+    runtime, session, _, stt, _, transport, events = make_runtime(tts_frames=[frame(20)])
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+    runtime.begin_speaking("answer")
+    runtime.pump_synthesis(max_frames=1)
+
+    original_reset = stt.reset
+
+    def failing_reset() -> None:
+        original_reset()
+        raise RuntimeError("stt cleanup failed first")
+
+    stt.reset = failing_reset  # type: ignore[method-assign]
+    transport.flush_error = RuntimeError("transport flush failed second")
+
+    with pytest.raises(RuntimeError, match="stt cleanup failed first"):
+        runtime.cancel("operator stop")
+
+    assert runtime.state is RealtimeState.CANCELLED
+    assert session.status is SessionStatus.CANCELLED
+    assert runtime.input_buffer.snapshot().frame_count == 0
+    assert runtime.output_buffer.snapshot().frame_count == 0
+    assert transport.flush_count == 1
+    assert any(event.type is RealtimeEventType.CANCELLED for event in events)
+
+
+def test_cancel_rethrows_transport_flush_error_after_terminal_state() -> None:
+    runtime, session, _, _, _, transport, events = make_runtime(tts_frames=[frame(20)])
+    runtime.receive_input(frame(1))
+    runtime.finish_utterance(actor_id="johnny", utterance_id="u-1")
+    runtime.begin_speaking("answer")
+    runtime.pump_synthesis(max_frames=1)
+    transport.flush_error = RuntimeError("transport flush failed")
+
+    with pytest.raises(RuntimeError, match="transport flush failed"):
+        runtime.cancel("operator stop")
+
+    assert runtime.state is RealtimeState.CANCELLED
+    assert session.status is SessionStatus.CANCELLED
+    assert runtime.output_buffer.snapshot().frame_count == 0
+    assert transport.flush_count == 1
+    assert any(event.type is RealtimeEventType.CANCELLED for event in events)
 
 
 def test_cancel_is_terminal_and_flushes_everything() -> None:
