@@ -7,7 +7,7 @@ or convert missing telemetry into successes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import fsum, isfinite
+from math import isfinite
 from typing import Iterable
 
 
@@ -49,13 +49,17 @@ def aggregate_run_metrics(observations: Iterable[RunObservation]) -> RunMetrics:
         ids.add(item.run_id)
         if not isinstance(item.status, str) or item.status not in STATUSES:
             raise ValueError("UNKNOWN_OUTCOME")
-        if item.duration_seconds is not None and (
-            isinstance(item.duration_seconds, bool)
-            or not isinstance(item.duration_seconds, (float, int))
-            or not isfinite(item.duration_seconds)
-            or item.duration_seconds < 0
-        ):
-            raise ValueError("INVALID_DURATION")
+        if item.duration_seconds is not None:
+            if isinstance(item.duration_seconds, bool) or not isinstance(
+                item.duration_seconds, (float, int)
+            ):
+                raise ValueError("INVALID_DURATION")
+            try:
+                duration = float(item.duration_seconds)
+            except (OverflowError, ValueError):
+                raise ValueError("INVALID_DURATION") from None
+            if not isfinite(duration) or duration < 0:
+                raise ValueError("INVALID_DURATION")
         for count in (item.ci_retry_count, item.provider_poll_calls):
             if count is not None and (
                 isinstance(count, bool) or not isinstance(count, int) or count < 0
@@ -63,15 +67,15 @@ def aggregate_run_metrics(observations: Iterable[RunObservation]) -> RunMetrics:
                 raise ValueError("INVALID_COUNT")
 
     verified = [item for item in entries if item.status == "VERIFIED"]
-    mean_time = (
-        fsum(
-            item.duration_seconds / len(verified)
-            for item in verified
-            if item.duration_seconds is not None
-        )
-        if verified and all(item.duration_seconds is not None for item in verified)
-        else None
-    )
+    mean_time: float | None = None
+    if verified and all(item.duration_seconds is not None for item in verified):
+        running_mean = 0.0
+        for index, item in enumerate(verified, start=1):
+            if item.duration_seconds is None:
+                raise ValueError("INVALID_DURATION")
+            duration = float(item.duration_seconds)
+            running_mean += (duration - running_mean) / index
+        mean_time = running_mean
     ci_retries = (
         sum(item.ci_retry_count for item in entries if item.ci_retry_count is not None)
         if entries and all(item.ci_retry_count is not None for item in entries)
