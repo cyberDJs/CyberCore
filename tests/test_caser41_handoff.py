@@ -174,3 +174,47 @@ def test_committed_completed_receipt_still_requires_effect_verification() -> Non
         transaction_state="COMMITTED",
     )
     assert _verdict(snapshot, sha="b" * 40) == "TERMINAL_RUN_VERIFY_EFFECT"
+
+
+def test_malformed_untrusted_scalar_types_fail_closed() -> None:
+    for malformed in (
+        replace(_snapshot(), run_id=None),
+        replace(_snapshot(), repository=17),
+        replace(_snapshot(), source_sha=None),
+        replace(_snapshot(), transaction_state=[]),
+        replace(_snapshot(), pending_action=42),
+        replace(_snapshot(), last_verified_step=object()),
+    ):
+        assert _verdict(malformed) == "INVALID_HANDOFF_SHAPE"
+
+
+def test_malformed_collections_fail_closed() -> None:
+    for malformed in (
+        replace(_snapshot(), completed_actions=None),
+        replace(_snapshot(), completed_actions=["deploy"]),
+        replace(_snapshot(), completed_actions=(None,)),
+        replace(_snapshot(), open_side_effects=("deploy", False)),
+        replace(_snapshot(), evidence_refs=(17,)),
+    ):
+        assert _verdict(malformed) == "INVALID_HANDOFF_SHAPE"
+
+
+def test_malformed_caller_inputs_fail_closed() -> None:
+    assert (
+        assess_handoff(
+            _snapshot(),
+            expected_run_id=None,
+            canonical_repository="cyberDJs/CyberCore",
+            current_sha=SHA,
+        ).reason
+        == "INVALID_HANDOFF_SHAPE"
+    )
+    assert (
+        assess_handoff(
+            _snapshot(),
+            expected_run_id="caser-run-001",
+            canonical_repository="cyberDJs/CyberCore",
+            current_sha=None,
+        ).reason
+        == "INVALID_HANDOFF_SHAPE"
+    )
