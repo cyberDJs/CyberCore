@@ -39,9 +39,9 @@ class EvidenceVerdict:
 def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> EvidenceVerdict:
     """Detect invalid, conflicting or stale records; never grant trusted PASS."""
     if (
-        not isinstance(repository, str)
+        type(repository) is not str
         or _REPOSITORY.fullmatch(repository) is None
-        or not isinstance(commit_sha, str)
+        or type(commit_sha) is not str
         or _SHA.fullmatch(commit_sha) is None
         or not isinstance(records, tuple)
         or not 1 <= len(records) <= 1000
@@ -52,14 +52,14 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
         if not isinstance(record, EvidenceCandidate):
             return EvidenceVerdict("BLOCKED", "INVALID_RECORD")
         if any(
-            not isinstance(value, str) or _ID.fullmatch(value) is None
+            type(value) is not str or _ID.fullmatch(value) is None
             for value in (record.provider, record.run_id, record.source_ref)
         ):
             return EvidenceVerdict("BLOCKED", "INVALID_IDENTITY")
         if (
-            not isinstance(record.repository, str)
+            type(record.repository) is not str
             or _REPOSITORY.fullmatch(record.repository) is None
-            or not isinstance(record.commit_sha, str)
+            or type(record.commit_sha) is not str
             or _SHA.fullmatch(record.commit_sha) is None
         ):
             return EvidenceVerdict("BLOCKED", "INVALID_SOURCE_IDENTITY")
@@ -75,7 +75,7 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
         if key in identities:
             return EvidenceVerdict("BLOCKED", "DUPLICATE_ATTEMPT")
         identities.add(key)
-        if not isinstance(record.conclusion, str) or record.conclusion not in (
+        if type(record.conclusion) is not str or record.conclusion not in (
             "success",
             "failure",
             "cancelled",
@@ -93,6 +93,6 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
         except Exception:
             # A custom tzinfo supplied by an untrusted record can raise arbitrarily.
             return EvidenceVerdict("BLOCKED", "INVALID_TIMESTAMP")
-        if not isinstance(record.digest, str) or _DIGEST.fullmatch(record.digest) is None:
+        if type(record.digest) is not str or _DIGEST.fullmatch(record.digest) is None:
             return EvidenceVerdict("BLOCKED", "INVALID_DIGEST")
     return EvidenceVerdict("CANDIDATE_ONLY", "PROVIDER_AND_ANCHOR_UNVERIFIED")
