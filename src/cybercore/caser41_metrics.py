@@ -7,7 +7,7 @@ or convert missing telemetry into successes.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import isfinite
+from math import fsum, isfinite
 from typing import Iterable
 
 
@@ -64,8 +64,11 @@ def aggregate_run_metrics(observations: Iterable[RunObservation]) -> RunMetrics:
 
     verified = [item for item in entries if item.status == "VERIFIED"]
     mean_time = (
-        sum(item.duration_seconds for item in verified if item.duration_seconds is not None)
-        / len(verified)
+        fsum(
+            item.duration_seconds / len(verified)
+            for item in verified
+            if item.duration_seconds is not None
+        )
         if verified and all(item.duration_seconds is not None for item in verified)
         else None
     )
