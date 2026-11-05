@@ -43,13 +43,13 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
         or _REPOSITORY.fullmatch(repository) is None
         or type(commit_sha) is not str
         or _SHA.fullmatch(commit_sha) is None
-        or not isinstance(records, tuple)
+        or type(records) is not tuple
         or not 1 <= len(records) <= 1000
     ):
         return EvidenceVerdict("BLOCKED", "INVALID_BATCH")
     identities: set[tuple[str, str, int]] = set()
     for record in records:
-        if not isinstance(record, EvidenceCandidate):
+        if type(record) is not EvidenceCandidate:
             return EvidenceVerdict("BLOCKED", "INVALID_RECORD")
         if any(
             type(value) is not str or _ID.fullmatch(value) is None
@@ -66,9 +66,7 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
         if record.repository != repository or record.commit_sha != commit_sha:
             return EvidenceVerdict("BLOCKED", "SOURCE_DRIFT")
         if (
-            isinstance(record.attempt, bool)
-            or not isinstance(record.attempt, int)
-            or record.attempt < 1
+            type(record.attempt) is not int or record.attempt < 1
         ):
             return EvidenceVerdict("BLOCKED", "INVALID_ATTEMPT")
         key = (record.provider, record.run_id, record.attempt)
