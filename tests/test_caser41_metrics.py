@@ -53,6 +53,7 @@ def test_empty_sample_is_not_a_success_rate() -> None:
         _run("x", "FAILED", -1),
         _run("x", "FAILED", float("nan")),
         _run("x", "FAILED", float("inf")),
+        _run("x", "FAILED", 10**400),
         _run("x", "FAILED", 1, -1),
         _run("x", "FAILED", 1, True),
         _run("x", "FAILED", 1, 0, -2),
@@ -76,3 +77,16 @@ def test_large_finite_observations_do_not_overflow_mean() -> None:
         [_run("big-a", "VERIFIED", 1e308), _run("big-b", "VERIFIED", 1e308)]
     )
     assert report.mean_time_to_verified_seconds == 1e308
+
+
+def test_float_max_observations_do_not_overflow_online_mean() -> None:
+    from sys import float_info
+
+    report = aggregate_run_metrics(
+        [
+            _run("big-a", "VERIFIED", float_info.max),
+            _run("big-b", "VERIFIED", float_info.max),
+            _run("big-c", "VERIFIED", float_info.max),
+        ]
+    )
+    assert report.mean_time_to_verified_seconds == float_info.max
