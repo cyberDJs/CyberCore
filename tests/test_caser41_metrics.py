@@ -42,6 +42,8 @@ def test_empty_sample_is_not_a_success_rate() -> None:
     report = aggregate_run_metrics([])
     assert report.total == 0
     assert report.mean_time_to_verified_seconds is None
+    assert report.ci_retries_total is None
+    assert report.provider_poll_calls_total is None
 
 
 @pytest.mark.parametrize(
@@ -56,6 +58,7 @@ def test_empty_sample_is_not_a_success_rate() -> None:
         _run("x", "FAILED", 1, 0, -2),
         replace(_run("x", "FAILED"), run_id=None),
         replace(_run("x", "FAILED"), status=None),
+        replace(_run("x", "FAILED"), status=[]),
     ],
 )
 def test_invalid_observations_rejected(invalid: RunObservation) -> None:
