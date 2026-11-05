@@ -8,6 +8,11 @@ execute recovery commands, persist records, authorize tasks, or replay writes.
 
 ## State and source contract
 
+The reader validates runtime types of all scalar and collection fields before
+processing externally supplied handoff data. Malformed values return
+`BLOCKED / INVALID_HANDOFF_SHAPE`, rather than raising a parsing exception.
+This is a shape guard, **not** proof that the record is authentic.
+
 Each handoff records a scoped `run_id`, canonical repository, exact source SHA,
 transaction state, completed/pending action identifiers, open side effects,
 last verified step, and evidence references. A future trusted adapter must read
