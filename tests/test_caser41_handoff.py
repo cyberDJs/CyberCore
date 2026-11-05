@@ -55,9 +55,7 @@ def test_forged_run_or_repo_is_blocked() -> None:
 
 
 def test_unresolved_write_never_replays_automatically() -> None:
-    snapshot = replace(
-        _snapshot(), transaction_state="ACTIVE", open_side_effects=("deploy",)
-    )
+    snapshot = replace(_snapshot(), transaction_state="ACTIVE", open_side_effects=("deploy",))
     assert _verdict(snapshot) == "MUTATION_OUTCOME_REQUIRES_RECONCILIATION"
 
 
@@ -71,9 +69,7 @@ def test_active_transaction_without_recorded_effect_still_blocks() -> None:
 def test_duplicate_and_conflicting_action_receipts_block() -> None:
     duplicate = replace(_snapshot(), completed_actions=("write", "write"))
     assert _verdict(duplicate) == "DUPLICATE_ACTION_RECEIPT"
-    conflicting = replace(
-        _snapshot(), completed_actions=("write",), pending_action="write"
-    )
+    conflicting = replace(_snapshot(), completed_actions=("write",), pending_action="write")
     assert _verdict(conflicting) == "PENDING_ALREADY_COMPLETED"
 
 
@@ -83,7 +79,9 @@ def test_invalid_sha_or_state_is_blocked() -> None:
 
 
 def test_failed_state_and_committed_state_are_not_resume_grants() -> None:
-    assert _verdict(replace(_snapshot(), transaction_state="FAILED")) == "PRIOR_RUN_TERMINAL_FAILURE"
+    assert (
+        _verdict(replace(_snapshot(), transaction_state="FAILED")) == "PRIOR_RUN_TERMINAL_FAILURE"
+    )
     decision = assess_handoff(
         replace(_snapshot(), transaction_state="COMMITTED", pending_action=None),
         expected_run_id="caser-run-001",
