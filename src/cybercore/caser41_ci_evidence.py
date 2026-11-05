@@ -13,14 +13,13 @@ from typing import Iterable
 
 DEFAULT_REQUIRED_CHECKS = frozenset(
     {
-        "CI / quality",
-        "CI / package",
-        "CI / tests (python 3.11)",
-        "CI / tests (python 3.12)",
-        "CI / tests (python 3.13)",
-        "CI / tests (python 3.14)",
-        "CodeQL",
-        "Action Kernel real CyberHIVE contract",
+        "quality",
+        "package",
+        "tests (python 3.11)",
+        "tests (python 3.12)",
+        "tests (python 3.13)",
+        "tests (python 3.14)",
+        "codeql",
     }
 )
 
