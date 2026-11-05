@@ -1,0 +1,3 @@
+# CASER v4.1 evidence preflight
+
+Tracks #141. Optional pure read-only validator of untrusted provider candidates. A syntactically valid batch returns CANDIDATE_ONLY, never VERIFIED. It rejects malformed identities, source SHA drift, duplicate attempts, invalid timestamps and hashes. Provider strings and caller digests are not authentication. Trusted provider adapter and external retained checkpoint are prerequisites for any persistent verification; reuse existing ActionKernel audit and do not build a second audit database. No production, credentials, CASER skill changes, or Drive writes. Rollback: stop importing the pure module. Verify with exact-head CI, CodeQL, CyberHIVE and independent review.
