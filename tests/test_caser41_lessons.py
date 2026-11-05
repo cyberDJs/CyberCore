@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from zoneinfo import ZoneInfo
 
 from cybercore.caser41_lessons import LessonRecord, assess_lesson
@@ -116,5 +116,21 @@ def test_utc_conversion_boundary_overflow_is_rejected() -> None:
     lesson = replace(
         _lesson(),
         last_verified_at=datetime.min.replace(tzinfo=plus_fourteen),
+    )
+    assert _check(lesson) == "INVALID_TIMESTAMPS"
+
+
+class InvalidOffset(tzinfo):
+    def utcoffset(self, dt: datetime | None) -> timedelta:
+        return timedelta(hours=25)
+
+    def dst(self, dt: datetime | None) -> timedelta:
+        return timedelta(0)
+
+
+def test_invalid_timezone_offset_is_rejected() -> None:
+    lesson = replace(
+        _lesson(),
+        last_verified_at=NOW.replace(tzinfo=InvalidOffset()),
     )
     assert _check(lesson) == "INVALID_TIMESTAMPS"
