@@ -21,8 +21,11 @@ fresh discovery and preflight, **not** permission to execute. Changed repository
 state yields `REPLAN_REQUIRED` **only when no mutation remains unresolved**.
 Any `ACTIVE`, `VERIFYING`, `COMPENSATING`, `PARTIAL` or open side effect blocks
 replanning until its actual outcome is independently reconciled, even if the
-canonical source SHA has changed. Invalid identities/state also block. Terminal committed/rolled-back transactions still require
-read-only effect verification before any further action.
+canonical source SHA has changed. Invalid identities/state also block.
+Likewise, `FAILED` or `BLOCKED` remains `BLOCKED` across source drift;
+`COMMITTED` and `ROLLED_BACK` remain `READONLY_RECONCILE` with mandatory
+`TERMINAL_RUN_VERIFY_EFFECT` before any further action, even if the SHA moved.
+Only a clean, non-terminal plan can receive `REPLAN_REQUIRED` on drift.
 
 Never infer success from a receipt alone. A separate authorization gate,
 external effect validation, rollback authority and independent verification
