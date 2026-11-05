@@ -101,8 +101,15 @@ def reconcile_github_snapshot(
         if (status == "completed") != (conclusion is not None):
             return Reconciliation("BLOCKED", "INVALID_WORKFLOW_STATE")
         if conclusion is not None and conclusion not in {
-            "success", "failure", "cancelled", "skipped", "timed_out",
-            "action_required", "neutral", "startup_failure", "stale",
+            "success",
+            "failure",
+            "cancelled",
+            "skipped",
+            "timed_out",
+            "action_required",
+            "neutral",
+            "startup_failure",
+            "stale",
         }:
             return Reconciliation("BLOCKED", "INVALID_WORKFLOW_STATE")
         if name not in _REQUIRED:
