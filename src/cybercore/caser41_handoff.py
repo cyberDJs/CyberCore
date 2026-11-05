@@ -77,9 +77,8 @@ def assess_handoff(
         return HandoffVerdict("BLOCKED", "PENDING_ALREADY_COMPLETED")
     if any(not _SAFE_ID.fullmatch(item) for item in snapshot.open_side_effects):
         return HandoffVerdict("BLOCKED", "INVALID_SIDE_EFFECT_ID")
-    if (
-        snapshot.last_verified_step is not None
-        and not _SAFE_ID.fullmatch(snapshot.last_verified_step)
+    if snapshot.last_verified_step is not None and not _SAFE_ID.fullmatch(
+        snapshot.last_verified_step
     ):
         return HandoffVerdict("BLOCKED", "INVALID_VERIFIED_STEP")
     if any(not ref.strip() for ref in snapshot.evidence_refs):
