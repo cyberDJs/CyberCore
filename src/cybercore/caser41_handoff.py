@@ -55,6 +55,35 @@ def assess_handoff(
     current_sha: str,
 ) -> HandoffVerdict:
     """Permit read-only reconciliation only; never authorize mutable replay."""
+    if not isinstance(snapshot, HandoffSnapshot):
+        return HandoffVerdict("BLOCKED", "INVALID_HANDOFF_SHAPE")
+    if any(
+        not isinstance(value, str)
+        for value in (
+            snapshot.run_id,
+            snapshot.repository,
+            snapshot.source_sha,
+            snapshot.transaction_state,
+            expected_run_id,
+            canonical_repository,
+            current_sha,
+        )
+    ):
+        return HandoffVerdict("BLOCKED", "INVALID_HANDOFF_SHAPE")
+    if any(
+        value is not None and not isinstance(value, str)
+        for value in (snapshot.pending_action, snapshot.last_verified_step)
+    ):
+        return HandoffVerdict("BLOCKED", "INVALID_HANDOFF_SHAPE")
+    if any(
+        not isinstance(items, tuple) or any(not isinstance(item, str) for item in items)
+        for items in (
+            snapshot.completed_actions,
+            snapshot.open_side_effects,
+            snapshot.evidence_refs,
+        )
+    ):
+        return HandoffVerdict("BLOCKED", "INVALID_HANDOFF_SHAPE")
     if not _SAFE_ID.fullmatch(snapshot.run_id) or snapshot.run_id != expected_run_id:
         return HandoffVerdict("BLOCKED", "RUN_ID_MISMATCH")
     if (
