@@ -124,7 +124,8 @@ def test_unrelated_workflow_with_distinct_run_id_does_not_count_as_required() ->
     ],
 )
 def test_foreign_workflow_invalid_state_fails_closed(
-    status: str, conclusion: str | None,
+    status: str,
+    conclusion: str | None,
 ) -> None:
     foreign = Workflow(104, "Foreign", status, conclusion)
     assert _result(workflows=RUNS + (foreign,)) == "INVALID_WORKFLOW_STATE"
@@ -132,6 +133,4 @@ def test_foreign_workflow_invalid_state_fails_closed(
 
 def test_foreign_workflow_valid_pending_state_is_ignored() -> None:
     foreign = Workflow(104, "Foreign", "in_progress", None)
-    assert _result(workflows=RUNS + (foreign,)) == (
-        "PROVIDER_ORIGIN_AND_PAGINATION_UNVERIFIED"
-    )
+    assert _result(workflows=RUNS + (foreign,)) == ("PROVIDER_ORIGIN_AND_PAGINATION_UNVERIFIED")
