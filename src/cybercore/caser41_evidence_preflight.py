@@ -51,27 +51,51 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
     for record in records:
         if type(record) is not EvidenceCandidate:
             return EvidenceVerdict("BLOCKED", "INVALID_RECORD")
+        try:
+            (
+                provider,
+                run_id,
+                attempt,
+                source_repository,
+                source_commit,
+                conclusion,
+                occurred_at,
+                digest,
+                source_ref,
+            ) = (
+                record.provider,
+                record.run_id,
+                record.attempt,
+                record.repository,
+                record.commit_sha,
+                record.conclusion,
+                record.occurred_at,
+                record.digest,
+                record.source_ref,
+            )
+        except AttributeError:
+            return EvidenceVerdict("BLOCKED", "INVALID_RECORD")
         if any(
             type(value) is not str or _ID.fullmatch(value) is None
-            for value in (record.provider, record.run_id, record.source_ref)
+            for value in (provider, run_id, source_ref)
         ):
             return EvidenceVerdict("BLOCKED", "INVALID_IDENTITY")
         if (
-            type(record.repository) is not str
-            or _REPOSITORY.fullmatch(record.repository) is None
-            or type(record.commit_sha) is not str
-            or _SHA.fullmatch(record.commit_sha) is None
+            type(source_repository) is not str
+            or _REPOSITORY.fullmatch(source_repository) is None
+            or type(source_commit) is not str
+            or _SHA.fullmatch(source_commit) is None
         ):
             return EvidenceVerdict("BLOCKED", "INVALID_SOURCE_IDENTITY")
-        if record.repository != repository or record.commit_sha != commit_sha:
+        if source_repository != repository or source_commit != commit_sha:
             return EvidenceVerdict("BLOCKED", "SOURCE_DRIFT")
-        if type(record.attempt) is not int or record.attempt < 1:
+        if type(attempt) is not int or attempt < 1:
             return EvidenceVerdict("BLOCKED", "INVALID_ATTEMPT")
-        key = (record.provider, record.run_id, record.attempt)
+        key = (provider, run_id, attempt)
         if key in identities:
             return EvidenceVerdict("BLOCKED", "DUPLICATE_ATTEMPT")
         identities.add(key)
-        if type(record.conclusion) is not str or record.conclusion not in (
+        if type(conclusion) is not str or conclusion not in (
             "success",
             "failure",
             "cancelled",
@@ -80,15 +104,15 @@ def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> 
             return EvidenceVerdict("BLOCKED", "INVALID_CONCLUSION")
         try:
             if (
-                type(record.occurred_at) is not datetime
-                or record.occurred_at.tzinfo is None
-                or record.occurred_at.utcoffset() is None
+                type(occurred_at) is not datetime
+                or occurred_at.tzinfo is None
+                or occurred_at.utcoffset() is None
             ):
                 return EvidenceVerdict("BLOCKED", "INVALID_TIMESTAMP")
-            record.occurred_at.astimezone(timezone.utc)
+            occurred_at.astimezone(timezone.utc)
         except Exception:
             # A custom tzinfo supplied by an untrusted record can raise arbitrarily.
             return EvidenceVerdict("BLOCKED", "INVALID_TIMESTAMP")
-        if type(record.digest) is not str or _DIGEST.fullmatch(record.digest) is None:
+        if type(digest) is not str or _DIGEST.fullmatch(digest) is None:
             return EvidenceVerdict("BLOCKED", "INVALID_DIGEST")
     return EvidenceVerdict("CANDIDATE_ONLY", "PROVIDER_AND_ANCHOR_UNVERIFIED")
