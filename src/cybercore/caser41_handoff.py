@@ -83,8 +83,6 @@ def assess_handoff(
         return HandoffVerdict("BLOCKED", "INVALID_VERIFIED_STEP")
     if any(not ref.strip() for ref in snapshot.evidence_refs):
         return HandoffVerdict("BLOCKED", "INVALID_EVIDENCE_REF")
-    if snapshot.source_sha != current_sha:
-        return HandoffVerdict("REPLAN_REQUIRED", "CANONICAL_SOURCE_DRIFT")
     if snapshot.open_side_effects or snapshot.transaction_state in {
         "ACTIVE",
         "VERIFYING",
@@ -92,6 +90,8 @@ def assess_handoff(
         "PARTIAL",
     }:
         return HandoffVerdict("BLOCKED", "MUTATION_OUTCOME_REQUIRES_RECONCILIATION")
+    if snapshot.source_sha != current_sha:
+        return HandoffVerdict("REPLAN_REQUIRED", "CANONICAL_SOURCE_DRIFT")
     if snapshot.transaction_state in {"FAILED", "BLOCKED"}:
         return HandoffVerdict("BLOCKED", "PRIOR_RUN_TERMINAL_FAILURE")
     if snapshot.transaction_state in {"COMMITTED", "ROLLED_BACK"}:
