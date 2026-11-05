@@ -150,6 +150,24 @@ def reconcile_github_snapshot(
             or (conclusion is not None and type(conclusion) is not str)
         ):
             return Reconciliation("BLOCKED", "INVALID_JOB")
+        # Even optional jobs must have coherent provider states before being
+        # skipped. Invalid optional observations cannot certify consistency.
+        if status not in {"requested", "waiting", "pending", "queued", "in_progress", "completed"}:
+            return Reconciliation("BLOCKED", "INVALID_JOB_STATE")
+        if (status == "completed") != (conclusion is not None):
+            return Reconciliation("BLOCKED", "INVALID_JOB_STATE")
+        if conclusion is not None and conclusion not in {
+            "success",
+            "failure",
+            "cancelled",
+            "skipped",
+            "timed_out",
+            "action_required",
+            "neutral",
+            "startup_failure",
+            "stale",
+        }:
+            return Reconciliation("BLOCKED", "INVALID_JOB_STATE")
         if job_id in seen_job_ids or (run_id, name) in seen_pairs:
             return Reconciliation("BLOCKED", "DUPLICATE_JOB")
         seen_job_ids.add(job_id)
