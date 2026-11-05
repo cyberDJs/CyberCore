@@ -25,7 +25,11 @@ canonical source SHA has changed. Invalid identities/state also block.
 Likewise, `FAILED` or `BLOCKED` remains `BLOCKED` across source drift;
 `COMMITTED` and `ROLLED_BACK` remain `READONLY_RECONCILE` with mandatory
 `TERMINAL_RUN_VERIFY_EFFECT` before any further action, even if the SHA moved.
-Only a clean, non-terminal plan can receive `REPLAN_REQUIRED` on drift.
+A non-terminal plan that contains any `completed_actions` also returns `BLOCKED`:
+receipts are not proofs of effect, and action identifiers do not distinguish
+writes from reads. Operators must independently reconcile their outcomes.
+Only a clean, non-terminal plan with no completed actions can receive
+`REPLAN_REQUIRED` on drift.
 
 Never infer success from a receipt alone. A separate authorization gate,
 external effect validation, rollback authority and independent verification
@@ -37,6 +41,8 @@ remain mandatory for consequential steps.
 - A valid-looking snapshot can still be forged: independent provenance checks
   are required at the storage adapter.
 - Duplicate action receipts and pending/completed conflicts are rejected.
+- Any unverified completed action in a non-terminal checkpoint blocks replanning,
+  even when the canonical SHA is unchanged.
 - Drift cannot silently replay a write; it forces a new plan.
 - A former approval may be stale when the artifact or provider state changes.
 - The handoff stores identifiers and references, not credentials or secret data.
