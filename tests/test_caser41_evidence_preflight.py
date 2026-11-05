@@ -81,9 +81,7 @@ def test_malformed_record_repository_is_rejected() -> None:
     assert _inspect(replace(_record(), repository="evil\\nrepo")).reason == (
         "INVALID_SOURCE_IDENTITY"
     )
-    assert _inspect(replace(_record(), repository=None)).reason == (
-        "INVALID_SOURCE_IDENTITY"
-    )
+    assert _inspect(replace(_record(), repository=None)).reason == ("INVALID_SOURCE_IDENTITY")
 
 
 def test_hostile_timezone_exception_is_blocked() -> None:
@@ -92,9 +90,5 @@ def test_hostile_timezone_exception_is_blocked() -> None:
 
 
 def test_malformed_record_sha_and_conclusion_are_blocked() -> None:
-    assert _inspect(replace(_record(), commit_sha=None)).reason == (
-        "INVALID_SOURCE_IDENTITY"
-    )
-    assert _inspect(replace(_record(), conclusion=None)).reason == (
-        "INVALID_CONCLUSION"
-    )
+    assert _inspect(replace(_record(), commit_sha=None)).reason == ("INVALID_SOURCE_IDENTITY")
+    assert _inspect(replace(_record(), conclusion=None)).reason == ("INVALID_CONCLUSION")
