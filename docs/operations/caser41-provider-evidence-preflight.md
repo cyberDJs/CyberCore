@@ -7,3 +7,5 @@ The repository identity grammar requires exactly two ASCII owner/repo segments a
 Untrusted scalar and container identities require exact built-in types (str, int and tuple) before equality, set hashing, or iteration; hostile subclasses are rejected rather than interpreted as evidence. This is defensive shape validation, not authentication.
 
 Datetime values must be exact built-in datetime objects; spoofed __class__ values and hostile datetime subclasses cannot bypass the fail-closed timestamp check.
+
+All candidate fields are first captured into local variables. A partially initialized or tampered dataclass with missing attributes is BLOCKED/INVALID_RECORD before parsing, and no later check re-reads the mutable object fields.
