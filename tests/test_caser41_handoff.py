@@ -113,3 +113,37 @@ def test_stale_snapshot_with_open_side_effect_also_blocks() -> None:
         current_sha="b" * 40,
     )
     assert decision.status == "BLOCKED"
+
+
+def test_terminal_committed_drift_requires_effect_verification() -> None:
+    snapshot = replace(_snapshot(), transaction_state="COMMITTED", pending_action=None)
+    decision = assess_handoff(
+        snapshot,
+        expected_run_id="caser-run-001",
+        canonical_repository="cyberDJs/CyberCore",
+        current_sha="b" * 40,
+    )
+    assert decision.status == "READONLY_RECONCILE"
+    assert decision.reason == "TERMINAL_RUN_VERIFY_EFFECT"
+
+
+def test_terminal_rollback_drift_requires_effect_verification() -> None:
+    snapshot = replace(_snapshot(), transaction_state="ROLLED_BACK", pending_action=None)
+    assert _verdict(snapshot, sha="b" * 40) == "TERMINAL_RUN_VERIFY_EFFECT"
+
+
+def test_failed_or_blocked_drift_remains_blocked() -> None:
+    for state in ("FAILED", "BLOCKED"):
+        snapshot = replace(_snapshot(), transaction_state=state, pending_action=None)
+        decision = assess_handoff(
+            snapshot,
+            expected_run_id="caser-run-001",
+            canonical_repository="cyberDJs/CyberCore",
+            current_sha="b" * 40,
+        )
+        assert decision.status == "BLOCKED"
+        assert decision.reason == "PRIOR_RUN_TERMINAL_FAILURE"
+
+
+def test_clean_plan_with_drift_can_require_replan() -> None:
+    assert _verdict(_snapshot(), sha="b" * 40) == "CANONICAL_SOURCE_DRIFT"
