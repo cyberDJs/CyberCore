@@ -22,9 +22,7 @@ def _record() -> EvidenceCandidate:
 
 
 def _inspect(*records: EvidenceCandidate):
-    return inspect_candidates(
-        tuple(records), repository="cyberDJs/CyberCore", commit_sha=SHA
-    )
+    return inspect_candidates(tuple(records), repository="cyberDJs/CyberCore", commit_sha=SHA)
 
 
 def test_valid_shape_never_claims_trusted_evidence() -> None:
