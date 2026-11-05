@@ -90,10 +90,10 @@ def assess_handoff(
         "PARTIAL",
     }:
         return HandoffVerdict("BLOCKED", "MUTATION_OUTCOME_REQUIRES_RECONCILIATION")
-    if snapshot.source_sha != current_sha:
-        return HandoffVerdict("REPLAN_REQUIRED", "CANONICAL_SOURCE_DRIFT")
     if snapshot.transaction_state in {"FAILED", "BLOCKED"}:
         return HandoffVerdict("BLOCKED", "PRIOR_RUN_TERMINAL_FAILURE")
     if snapshot.transaction_state in {"COMMITTED", "ROLLED_BACK"}:
         return HandoffVerdict("READONLY_RECONCILE", "TERMINAL_RUN_VERIFY_EFFECT")
+    if snapshot.source_sha != current_sha:
+        return HandoffVerdict("REPLAN_REQUIRED", "CANONICAL_SOURCE_DRIFT")
     return HandoffVerdict("READONLY_RECONCILE", "PLAN_REQUIRES_FRESH_PREFLIGHT")
