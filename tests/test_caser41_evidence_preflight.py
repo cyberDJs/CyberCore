@@ -113,3 +113,25 @@ def test_hostile_expected_repository_is_blocked_before_comparison() -> None:
         commit_sha=SHA,
     )
     assert verdict.reason == "INVALID_BATCH"
+
+
+class ForgedDatetime:
+    @property
+    def __class__(self) -> type[datetime]:
+        return datetime
+
+    @property
+    def tzinfo(self) -> timezone:
+        return timezone.utc
+
+    def utcoffset(self) -> timedelta:
+        return timedelta(0)
+
+    def astimezone(self, target: timezone) -> datetime:
+        return NOW
+
+
+def test_forged_datetime_shape_fails_closed() -> None:
+    assert _inspect(replace(_record(), occurred_at=ForgedDatetime())).reason == (
+        "INVALID_TIMESTAMP"
+    )
