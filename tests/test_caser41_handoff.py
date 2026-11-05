@@ -147,3 +147,30 @@ def test_failed_or_blocked_drift_remains_blocked() -> None:
 
 def test_clean_plan_with_drift_can_require_replan() -> None:
     assert _verdict(_snapshot(), sha="b" * 40) == "CANONICAL_SOURCE_DRIFT"
+
+
+def test_completed_receipt_in_planned_state_blocks_replan() -> None:
+    snapshot = replace(
+        _snapshot(), completed_actions=("deploy",), pending_action="inspect"
+    )
+    decision = assess_handoff(
+        snapshot,
+        expected_run_id="caser-run-001",
+        canonical_repository="cyberDJs/CyberCore",
+        current_sha="b" * 40,
+    )
+    assert decision.status == "BLOCKED"
+    assert decision.reason == "COMPLETED_ACTIONS_REQUIRE_RECONCILIATION"
+
+
+def test_completed_receipt_in_planned_state_blocks_even_without_drift() -> None:
+    snapshot = replace(_snapshot(), completed_actions=("deploy",))
+    assert _verdict(snapshot) == "COMPLETED_ACTIONS_REQUIRE_RECONCILIATION"
+
+
+def test_committed_completed_receipt_still_requires_effect_verification() -> None:
+    snapshot = replace(
+        _snapshot(), completed_actions=("deploy",), pending_action=None,
+        transaction_state="COMMITTED",
+    )
+    assert _verdict(snapshot, sha="b" * 40) == "TERMINAL_RUN_VERIFY_EFFECT"
