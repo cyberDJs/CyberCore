@@ -94,6 +94,8 @@ def assess_handoff(
         return HandoffVerdict("BLOCKED", "PRIOR_RUN_TERMINAL_FAILURE")
     if snapshot.transaction_state in {"COMMITTED", "ROLLED_BACK"}:
         return HandoffVerdict("READONLY_RECONCILE", "TERMINAL_RUN_VERIFY_EFFECT")
+    if snapshot.completed_actions:
+        return HandoffVerdict("BLOCKED", "COMPLETED_ACTIONS_REQUIRE_RECONCILIATION")
     if snapshot.source_sha != current_sha:
         return HandoffVerdict("REPLAN_REQUIRED", "CANONICAL_SOURCE_DRIFT")
     return HandoffVerdict("READONLY_RECONCILE", "PLAN_REQUIRES_FRESH_PREFLIGHT")
