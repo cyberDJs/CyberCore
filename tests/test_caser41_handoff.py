@@ -90,3 +90,30 @@ def test_failed_state_and_committed_state_are_not_resume_grants() -> None:
     )
     assert decision.status == "READONLY_RECONCILE"
     assert decision.reason == "TERMINAL_RUN_VERIFY_EFFECT"
+
+
+def test_drift_and_open_mutation_prioritizes_block_over_replan() -> None:
+    snapshot = replace(
+        _snapshot(),
+        transaction_state="ACTIVE",
+        open_side_effects=("deploy",),
+    )
+    decision = assess_handoff(
+        snapshot,
+        expected_run_id="caser-run-001",
+        canonical_repository="cyberDJs/CyberCore",
+        current_sha="b" * 40,
+    )
+    assert decision.status == "BLOCKED"
+    assert decision.reason == "MUTATION_OUTCOME_REQUIRES_RECONCILIATION"
+
+
+def test_stale_snapshot_with_open_side_effect_also_blocks() -> None:
+    snapshot = replace(_snapshot(), open_side_effects=("write",))
+    decision = assess_handoff(
+        snapshot,
+        expected_run_id="caser-run-001",
+        canonical_repository="cyberDJs/CyberCore",
+        current_sha="b" * 40,
+    )
+    assert decision.status == "BLOCKED"
