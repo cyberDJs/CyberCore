@@ -67,16 +67,19 @@ def assess_lesson(
         return LessonVerdict("REJECTED", "INVALID_CONFIDENCE")
     if not isinstance(lesson.contradicted, bool):
         return LessonVerdict("REJECTED", "INVALID_LESSON_SHAPE")
-    if any(
-        not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None
-        for value in (lesson.last_verified_at, lesson.revalidate_after, now)
-    ):
-        return LessonVerdict("REJECTED", "INVALID_TIMESTAMPS")
+    timestamps = (lesson.last_verified_at, lesson.revalidate_after, now)
     try:
+        if any(
+            not isinstance(value, datetime)
+            or value.tzinfo is None
+            or value.utcoffset() is None
+            for value in timestamps
+        ):
+            return LessonVerdict("REJECTED", "INVALID_TIMESTAMPS")
         verified_utc = lesson.last_verified_at.astimezone(timezone.utc)
         expiry_utc = lesson.revalidate_after.astimezone(timezone.utc)
         now_utc = now.astimezone(timezone.utc)
-    except (OverflowError, ValueError):
+    except (OverflowError, ValueError, TypeError):
         return LessonVerdict("REJECTED", "INVALID_TIMESTAMPS")
     if verified_utc > expiry_utc or verified_utc > now_utc:
         return LessonVerdict("REJECTED", "INVALID_TIMESTAMPS")
