@@ -70,9 +70,7 @@ def assess_lesson(
     timestamps = (lesson.last_verified_at, lesson.revalidate_after, now)
     try:
         if any(
-            not isinstance(value, datetime)
-            or value.tzinfo is None
-            or value.utcoffset() is None
+            not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None
             for value in timestamps
         ):
             return LessonVerdict("REJECTED", "INVALID_TIMESTAMPS")
