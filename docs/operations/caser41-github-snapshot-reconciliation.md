@@ -43,3 +43,5 @@ credentials, installed CASER skill or production change. Rollback: stop
 importing the module. Only promote after exact-head CI/CodeQL/CyberHIVE and
 independent review. The #141 trusted ingestion/anchor deployment remains
 BLOCKED without independent source and owner proof.
+
+All workflow run IDs must be globally unique across required and unrelated workflows; foreign entries are not allowed to alias a required run ID even though they do not add required check coverage.
