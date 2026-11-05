@@ -8,8 +8,12 @@ replacement, or authority to merge.
 
 `cybercore.caser41_ci_evidence.evaluate_ci_evidence` accepts an exact 40-character
 lowercase commit SHA, a snapshot of named checks, and a nonempty required-check
-set. The default set covers CI quality/package, four Python test jobs, CodeQL,
-and the real CyberHIVE contract workflow.
+set. The default set covers the **seven canonical required job contexts** from
+`docs/security-verification-pipeline.md`: `quality`, `package`,
+`tests (python 3.11)` through `tests (python 3.14)`, and lowercase `codeql`.
+The informational workflow display check `CodeQL` is not authoritative.
+The real CyberHIVE contract is an additional integration gate checked
+separately; this evaluator does not imply it has passed.
 
 `CheckObservation.commit_sha` MUST originate from an authenticated provider
 adapter that verifies the result belongs to the exact PR head. Do not copy
@@ -36,7 +40,8 @@ protection policy and exact PR head **again** immediately before merge.
 ## Regression coverage
 
 Tests demonstrate rejection of missing matrix jobs, stale SHA, duplicate
-contexts, in-progress and failing jobs, empty requirements and invalid SHA.
+contexts, in-progress and failing jobs, empty requirements, invalid SHA,
+and a successful informational `CodeQL` check with absent/failed `codeql`.
 No runtime services, credentials or CI configuration are modified.
 
 ## Rollback
