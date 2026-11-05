@@ -273,6 +273,67 @@ def test_process_replay_guard_does_not_retain_already_expired_claim() -> None:
     )
 
 
+def test_process_replay_quota_isolated_by_trusted_actor() -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=4, max_per_actor=1)
+    expires_at = now + timedelta(minutes=2)
+
+    assert guard.claim_once("alice-1", expires_at=expires_at, now=now, actor="alice")
+    with pytest.raises(PermissionError, match="Actor replay guard capacity exhausted"):
+        guard.claim_once("alice-2", expires_at=expires_at, now=now, actor="alice")
+    assert guard.claim_once("bob-1", expires_at=expires_at, now=now, actor="bob")
+    assert guard.claim_once("bob-1", expires_at=expires_at, now=now, actor="bob") is False
+
+
+def test_rejects_overlong_authorization_before_optional_runtime_or_claim() -> None:
+    task, kernel = setup("overlong-lifetime")
+    long_task = replace(task, expires_at=task.requested_at + timedelta(days=1))
+    allowed = kernel.execute(long_task, trusted_actor=long_task.actor)
+    guard = InMemoryReplayGuard()
+
+    with pytest.raises(PermissionError, match="lifetime exceeds policy"):
+        run_local_hive_dry_run(
+            long_task,
+            trusted_actor=long_task.actor,
+            kernel_receipt=allowed,
+            registry=None,
+            replay_guard=guard,
+        )
+    key = f"{long_task.actor}:{long_task.task_id}:{long_task.correlation_id}"
+    assert guard.claim_once(key) is True
+
+
+def test_process_capacity_rejects_before_durable_claim(monkeypatch) -> None:
+    task, kernel = setup("capacity-before-durable")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1, max_per_actor=1)
+    assert guard.claim_once(
+        "other", expires_at=now + timedelta(minutes=2), now=now, actor=task.actor
+    )
+    monkeypatch.setattr(hive_bridge, "_PROCESS_REPLAY_GUARD", guard)
+
+    class CountingDurable:
+        calls = 0
+
+        def claim_once(self, _: str) -> bool:
+            self.calls += 1
+            return True
+
+    durable = CountingDurable()
+
+    with pytest.raises(PermissionError, match="capacity exhausted"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=None,
+            replay_guard=durable,
+        )
+    assert durable.calls == 0
+
+
 def test_replay_guard_backend_failure_fails_closed(monkeypatch) -> None:
     task, kernel = setup("guard-failure")
     _install_fake_hive(monkeypatch)
