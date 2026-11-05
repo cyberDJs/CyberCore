@@ -92,3 +92,24 @@ def test_hostile_timezone_exception_is_blocked() -> None:
 def test_malformed_record_sha_and_conclusion_are_blocked() -> None:
     assert _inspect(replace(_record(), commit_sha=None)).reason == ("INVALID_SOURCE_IDENTITY")
     assert _inspect(replace(_record(), conclusion=None)).reason == ("INVALID_CONCLUSION")
+
+
+class HostileString(str):
+    def __hash__(self) -> int:
+        raise RuntimeError("hostile string hash")
+
+
+def test_hostile_string_subclasses_are_blocked_before_hashing() -> None:
+    for field in ("provider", "run_id", "source_ref", "repository", "commit_sha", "digest"):
+        record = replace(_record(), **{field: HostileString(getattr(_record(), field))})
+        assert _inspect(record).status == "BLOCKED"
+
+
+def test_hostile_expected_repository_is_blocked_before_comparison() -> None:
+    record = _record()
+    verdict = inspect_candidates(
+        (record,),
+        repository=HostileString(record.repository),
+        commit_sha=SHA,
+    )
+    assert verdict.reason == "INVALID_BATCH"
