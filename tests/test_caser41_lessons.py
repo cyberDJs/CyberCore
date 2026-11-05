@@ -80,12 +80,15 @@ def test_dst_fall_back_fold_does_not_keep_expired_lesson_alive() -> None:
         last_verified_at=datetime(2026, 10, 31, 12, tzinfo=eastern),
         revalidate_after=expiry,
     )
-    assert assess_lesson(
-        lesson,
-        project=original.project,
-        context_fingerprint=original.context_fingerprint,
-        now=later,
-    ).reason == "LESSON_EXPIRED"
+    assert (
+        assess_lesson(
+            lesson,
+            project=original.project,
+            context_fingerprint=original.context_fingerprint,
+            now=later,
+        ).reason
+        == "LESSON_EXPIRED"
+    )
 
 
 def test_dst_fold_future_verified_time_is_rejected() -> None:
@@ -97,9 +100,12 @@ def test_dst_fold_future_verified_time_is_rejected() -> None:
         last_verified_at=later,
         revalidate_after=later + timedelta(days=1),
     )
-    assert assess_lesson(
-        lesson,
-        project=lesson.project,
-        context_fingerprint=lesson.context_fingerprint,
-        now=now,
-    ).reason == "INVALID_TIMESTAMPS"
+    assert (
+        assess_lesson(
+            lesson,
+            project=lesson.project,
+            context_fingerprint=lesson.context_fingerprint,
+            now=now,
+        ).reason
+        == "INVALID_TIMESTAMPS"
+    )
