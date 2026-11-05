@@ -12,14 +12,16 @@ import re
 from cybercore.caser41_ci_evidence import CheckObservation, evaluate_ci_evidence
 
 _REQUIRED = {
-    "CI": frozenset({
-        "quality",
-        "package",
-        "tests (python 3.11)",
-        "tests (python 3.12)",
-        "tests (python 3.13)",
-        "tests (python 3.14)",
-    }),
+    "CI": frozenset(
+        {
+            "quality",
+            "package",
+            "tests (python 3.11)",
+            "tests (python 3.12)",
+            "tests (python 3.13)",
+            "tests (python 3.14)",
+        }
+    ),
     "CodeQL": frozenset({"codeql"}),
     "Action Kernel real CyberHIVE contract": frozenset({"real-hive-contract"}),
 }
