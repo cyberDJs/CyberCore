@@ -76,7 +76,7 @@ def test_failed_workflow_is_blocked_even_when_jobs_succeed() -> None:
 def test_replay_and_foreign_run_jobs_are_blocked() -> None:
     assert _result(jobs=JOBS + (JOBS[0],)) == "DUPLICATE_JOB"
     assert _result(jobs=JOBS[:1] + (replace(JOBS[1], run_id=99),) + JOBS[2:]) == ("FOREIGN_RUN_JOB")
-    assert _result(workflows=RUNS + (RUNS[0],)) == "DUPLICATE_WORKFLOW"
+    assert _result(workflows=RUNS + (RUNS[0],)) == "DUPLICATE_RUN_ID"
 
 
 @pytest.mark.parametrize(
