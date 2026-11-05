@@ -9,6 +9,8 @@ scheduler, production policy engine or self-editing CASER skill.
 `caser41_lessons.assess_lesson` checks nonempty identity/context/root-cause/
 guardrail, evidence references, bounded confidence, timezone-aware verification
 and expiry dates, contradictory evidence, project and context changes.
+All timestamp comparisons are normalized to UTC instants to avoid the
+repeated-hour DST `fold` ambiguity (not local wall-clock ordering).
 It returns `ELIGIBLE_FOR_REVIEW`, `REVALIDATION_REQUIRED` or `REJECTED`.
 
 `ELIGIBLE_FOR_REVIEW` means a reviewer may compare against fresh primary
