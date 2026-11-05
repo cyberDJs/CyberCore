@@ -72,9 +72,12 @@ def assess_lesson(
         for value in (lesson.last_verified_at, lesson.revalidate_after, now)
     ):
         return LessonVerdict("REJECTED", "INVALID_TIMESTAMPS")
-    verified_utc = lesson.last_verified_at.astimezone(timezone.utc)
-    expiry_utc = lesson.revalidate_after.astimezone(timezone.utc)
-    now_utc = now.astimezone(timezone.utc)
+    try:
+        verified_utc = lesson.last_verified_at.astimezone(timezone.utc)
+        expiry_utc = lesson.revalidate_after.astimezone(timezone.utc)
+        now_utc = now.astimezone(timezone.utc)
+    except (OverflowError, ValueError):
+        return LessonVerdict("REJECTED", "INVALID_TIMESTAMPS")
     if verified_utc > expiry_utc or verified_utc > now_utc:
         return LessonVerdict("REJECTED", "INVALID_TIMESTAMPS")
     if lesson.contradicted:
