@@ -74,6 +74,7 @@ def reconcile_github_snapshot(
         return Reconciliation("BLOCKED", "INVALID_COLLECTION")
 
     seen_workflows: dict[str, int] = {}
+    all_run_ids: set[int] = set()
     for run in workflows:
         if type(run) is not Workflow:
             return Reconciliation("BLOCKED", "INVALID_WORKFLOW")
@@ -90,6 +91,9 @@ def reconcile_github_snapshot(
             or (conclusion is not None and type(conclusion) is not str)
         ):
             return Reconciliation("BLOCKED", "INVALID_WORKFLOW")
+        if run_id in all_run_ids:
+            return Reconciliation("BLOCKED", "DUPLICATE_RUN_ID")
+        all_run_ids.add(run_id)
         if name not in _REQUIRED:
             continue
         if name in seen_workflows:
