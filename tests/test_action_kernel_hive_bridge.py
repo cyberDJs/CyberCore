@@ -371,6 +371,7 @@ def test_rechecks_expiry_after_claim_before_dispatch(monkeypatch) -> None:
     _install_fake_hive(monkeypatch)
     times = iter(
         (
+            task.expires_at - timedelta(seconds=3),
             task.expires_at - timedelta(seconds=2),
             task.expires_at - timedelta(seconds=1),
             task.expires_at + timedelta(seconds=1),
