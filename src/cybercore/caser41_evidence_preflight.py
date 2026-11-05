@@ -33,9 +33,7 @@ class EvidenceVerdict:
     reason: str
 
 
-def inspect_candidates(
-    records: object, *, repository: str, commit_sha: str
-) -> EvidenceVerdict:
+def inspect_candidates(records: object, *, repository: str, commit_sha: str) -> EvidenceVerdict:
     """Detect invalid, conflicting or stale records; never grant trusted PASS."""
     if (
         not isinstance(repository, str)
@@ -57,7 +55,11 @@ def inspect_candidates(
             return EvidenceVerdict("BLOCKED", "INVALID_IDENTITY")
         if record.repository != repository or record.commit_sha != commit_sha:
             return EvidenceVerdict("BLOCKED", "SOURCE_DRIFT")
-        if isinstance(record.attempt, bool) or not isinstance(record.attempt, int) or record.attempt < 1:
+        if (
+            isinstance(record.attempt, bool)
+            or not isinstance(record.attempt, int)
+            or record.attempt < 1
+        ):
             return EvidenceVerdict("BLOCKED", "INVALID_ATTEMPT")
         key = (record.provider, record.run_id, record.attempt)
         if key in identities:
