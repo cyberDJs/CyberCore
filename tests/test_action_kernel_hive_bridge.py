@@ -660,3 +660,63 @@ def test_current_upstream_result_without_correlation_remains_supported(monkeypat
     )
 
     assert receipt.correlation_id == task.correlation_id
+
+
+@pytest.mark.parametrize(
+    ("elapsed", "wall_offset", "rejected"),
+    [(1.0, -60, False), (2.0, -60, True), (3.0, -60, True), (1.0, 1, True)],
+)
+def test_dispatch_deadline_survives_wall_clock_corrections(
+    monkeypatch, elapsed: float, wall_offset: int, rejected: bool
+) -> None:
+    task, kernel = setup(f"clock-correction-{elapsed}-{wall_offset}")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    action = _install_fake_hive(monkeypatch)
+    wall_after = task.expires_at + timedelta(seconds=wall_offset)
+    times = iter(
+        (
+            task.expires_at - timedelta(seconds=5),
+            task.expires_at - timedelta(seconds=4),
+            task.expires_at - timedelta(seconds=3),
+            task.expires_at - timedelta(seconds=2),
+            wall_after,
+        )
+    )
+    ticks = iter((100.0, 100.0 + elapsed))
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: next(times, wall_after))
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: next(ticks, 100.0 + elapsed))
+    guard = InMemoryReplayGuard()
+    calls = 0
+
+    class Registry:
+        def dispatch(self, incoming):
+            nonlocal calls
+            calls += 1
+            return SimpleNamespace(
+                request_id=incoming.id,
+                target_node=incoming.target_node,
+                action=action.HEALTH_CHECK,
+                status=SimpleNamespace(value="dry_run"),
+            )
+
+    def invoke(replay_guard):
+        return run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Registry(),
+            replay_guard=replay_guard,
+        )
+
+    if rejected:
+        with pytest.raises(PermissionError, match="expired"):
+            invoke(guard)
+    else:
+        assert invoke(guard).status == "dry_run"
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is False
+    # Even replacing the supplied guard cannot replay under the rolled-back clock.
+    with pytest.raises(PermissionError, match="expired|already consumed"):
+        invoke(InMemoryReplayGuard())
+    assert calls == 1

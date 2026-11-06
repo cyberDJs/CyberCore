@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from importlib import import_module
 from threading import Lock
+from time import monotonic
 from typing import Any, Protocol
 
 from cybercore.action_kernel import ExecutionReceipt, TaskRequest
@@ -116,9 +117,11 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _assert_not_expired(task: TaskRequest) -> None:
-    if task.expires_at.tzinfo is None or task.expires_at <= _utc_now():
+def _assert_not_expired(task: TaskRequest) -> datetime:
+    now = _utc_now()
+    if task.expires_at.tzinfo is None or task.expires_at <= now:
         raise PermissionError("Task authorization expired")
+    return now
 
 
 def _claim_once(
@@ -227,7 +230,10 @@ def run_local_hive_dry_run(
 
     # Durable claim acquisition may block long enough for the task to expire.
     # Claims remain consumed, but an expired task must never reach dispatch.
-    _assert_not_expired(task)
+    # Sample monotonic time first so sampling overhead cannot extend the budget.
+    dispatch_started = monotonic()
+    dispatch_now = _assert_not_expired(task)
+    remaining_seconds = (task.expires_at - dispatch_now).total_seconds()
 
     # Both claims intentionally remain consumed after this boundary, including
     # uncertain dispatch failures or invalid/late results.
@@ -238,6 +244,9 @@ def run_local_hive_dry_run(
     # after authorization expiry instead of accepting late work as success.
     # Claims remain consumed because the dispatch outcome already occurred.
     _assert_not_expired(task)
+    # A backward wall-clock correction must not extend in-flight authorization.
+    if monotonic() - dispatch_started >= remaining_seconds:
+        raise PermissionError("Task authorization expired during dispatch")
 
     if (
         result.request_id != task.task_id
