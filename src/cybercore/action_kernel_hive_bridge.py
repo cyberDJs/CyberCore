@@ -230,10 +230,17 @@ def run_local_hive_dry_run(
 
     # Durable claim acquisition may block long enough for the task to expire.
     # Claims remain consumed, but an expired task must never reach dispatch.
-    # Sample monotonic time first so sampling overhead cannot extend the budget.
+    # Bracket the monotonic anchor with UTC checks. Use the later UTC sample
+    # so a rollback between samples cannot inflate the remaining interval.
+    # The earlier monotonic bound includes sampling overhead conservatively.
+    sampling_started = monotonic()
+    utc_before = _assert_not_expired(task)
     dispatch_started = monotonic()
-    dispatch_now = _assert_not_expired(task)
-    remaining_seconds = (task.expires_at - dispatch_now).total_seconds()
+    utc_after = _assert_not_expired(task)
+    remaining_seconds = (task.expires_at - max(utc_before, utc_after)).total_seconds()
+    remaining_seconds -= dispatch_started - sampling_started
+    if remaining_seconds <= 0:
+        raise PermissionError("Task authorization expired before dispatch")
 
     # Both claims intentionally remain consumed after this boundary, including
     # uncertain dispatch failures or invalid/late results.
