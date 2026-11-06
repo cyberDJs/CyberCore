@@ -4,6 +4,10 @@ on:
   pull_request:
     branches:
       - main
+  # Validate the actual resulting main commit, not only PR candidates.
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
