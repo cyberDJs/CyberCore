@@ -2,6 +2,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from threading import Barrier, Lock
 
+import pytest
+
 from cybercore.action_kernel import (
     ACTION_KERNEL_SCHEMA_VERSION,
     NEXUS_ACTION_CONTRACT,
