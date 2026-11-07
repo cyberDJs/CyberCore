@@ -15,6 +15,12 @@ from cybercore.action_kernel_hive_bridge import InMemoryReplayGuard, run_local_h
 
 
 def setup(suffix: str):
+    kernel = ActionKernel(
+        targets={"local-node": {"synthetic_status": "ok"}},
+        allowed_actors=frozenset({"chatgpt:johnny-work"}),
+        enabled=True,
+        evidence_sink=lambda _: None,
+    )
     now = datetime.now(timezone.utc)
     task = TaskRequest(
         task_id=f"hive-test-{suffix}",
@@ -26,12 +32,6 @@ def setup(suffix: str):
         requested_at=now,
         expires_at=now + timedelta(minutes=2),
         provenance=Provenance("cybercore", "test", "local", now),
-    )
-    kernel = ActionKernel(
-        targets={"local-node": {"synthetic_status": "ok"}},
-        allowed_actors=frozenset({"chatgpt:johnny-work"}),
-        enabled=True,
-        evidence_sink=lambda _: None,
     )
     return task, kernel
 

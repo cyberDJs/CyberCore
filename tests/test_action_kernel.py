@@ -268,6 +268,97 @@ def test_missing_synthetic_status_returns_structured_denial() -> None:
     assert result.evidence is None
 
 
+@pytest.mark.parametrize("rollback_seconds", [7, 60])
+def test_process_clock_floor_blocks_partial_and_full_utc_rollback(
+    rollback_seconds: int,
+) -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    current = [base]
+    mono = [100.0]
+    k = kernel(
+        clock=lambda: current[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+    request = task(
+        requested_at=base,
+        expires_at=base + timedelta(seconds=5),
+    )
+
+    # Real/process time advances beyond expiry while wall time is corrected
+    # backward. The process floor must dominate the rolled-back wall clock.
+    mono[0] = 110.0
+    current[0] = base + timedelta(seconds=10 - rollback_seconds)
+
+    result = k.execute(request, trusted_actor=ACTOR)
+    assert result.status == "DENIED"
+    assert result.reason in {"EXPIRED", "INVALID_TIME"}
+    assert result.authorization_deadline_monotonic is None
+
+
+def test_process_clock_floor_treats_forward_wall_jump_as_upper_bound() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    current = [base]
+    mono = [100.0]
+    k = kernel(
+        clock=lambda: current[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+    request = task(
+        requested_at=base,
+        expires_at=base + timedelta(seconds=10),
+    )
+
+    mono[0] = 101.0
+    current[0] = base + timedelta(seconds=20)
+
+    result = k.execute(request, trusted_actor=ACTOR)
+    assert result.status == "DENIED"
+    assert result.reason == "EXPIRED"
+
+
+def test_process_clock_floor_rejects_future_request_after_construction_rollback() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    current = [base - timedelta(seconds=7)]
+    mono = [100.0]
+    k = kernel(
+        clock=lambda: current[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+    request = task(
+        requested_at=base,
+        expires_at=base + timedelta(seconds=5),
+    )
+
+    result = k.execute(request, trusted_actor=ACTOR)
+    assert result.status == "DENIED"
+    assert result.reason == "INVALID_TIME"
+
+
+def test_process_clock_floor_deadline_equality_fails_closed() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    current = [base]
+    mono = [100.0]
+    k = kernel(
+        clock=lambda: current[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+    request = task(
+        requested_at=base,
+        expires_at=base + timedelta(seconds=5),
+    )
+
+    mono[0] = 105.0
+    current[0] = base + timedelta(seconds=4)
+
+    result = k.execute(request, trusted_actor=ACTOR)
+    assert result.status == "DENIED"
+    assert result.reason == "EXPIRED"
+
+
 def test_executed_receipt_binds_process_local_monotonic_deadline() -> None:
     now = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
     request = task(

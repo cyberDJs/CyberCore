@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
+from math import isfinite
 from os import getpid
 from threading import Lock
 from time import monotonic
@@ -175,6 +176,22 @@ class ActionKernel:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._monotonic = monotonic_clock or monotonic
         self._process_id = process_id_provider or getpid
+
+        # Establish one process-local UTC<->monotonic floor before any task can
+        # receive authority. The monotonic sample intentionally precedes UTC:
+        # scheduler delay or a wall-clock rollback during construction can only
+        # shorten later grants, never extend them.
+        self._clock_floor_monotonic = self._monotonic()
+        self._clock_floor_utc = self._clock()
+        self._clock_floor_process_id = self._process_id()
+        if (
+            not isfinite(self._clock_floor_monotonic)
+            or self._clock_floor_utc.tzinfo is None
+            or isinstance(self._clock_floor_process_id, bool)
+            or not isinstance(self._clock_floor_process_id, int)
+        ):
+            raise ValueError("Action Kernel process-local clock floor is invalid")
+
         self._used: set[str] = set()
         self._task_id_lock = Lock()
 
@@ -187,12 +204,13 @@ class ActionKernel:
         self._capabilities = dict({default.name: default} if capabilities is None else capabilities)
 
     def execute(self, request: TaskRequest, *, trusted_actor: str) -> ExecutionReceipt:
-        # Establish the process-local authorization clock pair before any
-        # caller-supplied audit callback can block. A later wall-clock rollback
-        # cannot hide elapsed scheduler/callback time from this monotonic anchor.
-        authorization_started_monotonic = self._monotonic()
-        authorization_anchor_utc = self._now()
-        authorization_process_id = self._process_id()
+        # Authority is derived from the process-construction clock floor, not
+        # from a fresh UTC/monotonic sample pair at execute() entry.
+        authorization_process_id = self._clock_floor_process_id
+        authorization_deadline_monotonic = (
+            self._clock_floor_monotonic
+            + (request.expires_at - self._clock_floor_utc).total_seconds()
+        )
 
         if self._sink is None:
             verdict = self._verdict(request, trusted_actor, "DENY", "AUDIT_UNAVAILABLE")
@@ -223,16 +241,13 @@ class ActionKernel:
 
         # Time-of-check is not authority to execute later: revalidate immediately
         # before the local dispatch boundary, after the policy audit callback.
-        # The absolute monotonic deadline is derived from the clock pair captured
-        # at execute() entry, before any blocking audit/policy callback.
-        authorization_deadline_monotonic = (
-            authorization_started_monotonic
-            + (request.expires_at - authorization_anchor_utc).total_seconds()
-        )
-        authorization_now = self._now()
+        # UTC may only shorten the process-floor grant; wall-clock rollback can
+        # never mint a later monotonic deadline.
+        authorization_now, authorization_monotonic_now = self._trusted_time()
         if (
-            request.expires_at <= authorization_now
-            or self._monotonic() >= authorization_deadline_monotonic
+            not isfinite(authorization_deadline_monotonic)
+            or request.expires_at <= authorization_now
+            or authorization_monotonic_now >= authorization_deadline_monotonic
         ):
             expired_verdict = self._verdict(request, trusted_actor, "DENY", "EXPIRED")
             if not self._audit(
@@ -356,7 +371,10 @@ class ActionKernel:
             return deny("INVALID_TIME")
         if request.expires_at <= request.requested_at:
             return deny("INVALID_TIME")
-        if request.expires_at <= self._now():
+        trusted_now, _ = self._trusted_time()
+        if request.requested_at > trusted_now:
+            return deny("INVALID_TIME")
+        if request.expires_at <= trusted_now:
             return deny("EXPIRED")
         if self._task_id_is_reserved(request.task_id):
             return deny("DUPLICATE")
@@ -482,6 +500,25 @@ class ActionKernel:
 
     def _now(self) -> datetime:
         return self._clock()
+
+    def _trusted_time(self) -> tuple[datetime, float]:
+        current_process_id = self._process_id()
+        current_monotonic = self._monotonic()
+        current_wall = self._clock()
+        if (
+            current_process_id != self._clock_floor_process_id
+            or isinstance(current_process_id, bool)
+            or not isinstance(current_process_id, int)
+            or not isfinite(current_monotonic)
+            or current_monotonic < self._clock_floor_monotonic
+            or current_wall.tzinfo is None
+        ):
+            raise PermissionError("Action Kernel process-local clock authority unavailable or invalid")
+
+        projected_floor = self._clock_floor_utc + timedelta(
+            seconds=current_monotonic - self._clock_floor_monotonic
+        )
+        return max(current_wall, projected_floor), current_monotonic
 
     def _task_id_is_reserved(self, task_id: str) -> bool:
         with self._task_id_lock:

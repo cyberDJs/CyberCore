@@ -120,3 +120,24 @@ expired, or from another process.
 Stop using the trusted Hive broker/bridge path and preserve existing audit and
 replay records. Removing the new receipt fields restores the prior local API,
 but must not be interpreted as restoring a safe bridge deadline mechanism.
+
+
+## Process-construction monotonic clock floor
+
+The Action Kernel now establishes its process-local clock authority when the
+kernel instance is constructed, before any task can receive authority. The
+kernel records a monotonic anchor, a UTC anchor, and the process id. A task's
+absolute monotonic authorization deadline is derived only from that construction
+anchor and the task's bound UTC expiry; it is no longer minted from a fresh
+sequential UTC/monotonic sample pair at `execute()` entry.
+
+For authorization decisions, trusted current time is the maximum of the live
+UTC clock and the UTC value projected forward from the construction anchor by
+monotonic elapsed time. A backward wall-clock correction therefore cannot move
+trusted authorization time backward or extend a grant. A forward wall-clock
+correction remains an upper bound and can only shorten/reject a grant.
+
+The clock floor is process-local. A changed process id, non-finite/regressing
+monotonic source, naive UTC source, or otherwise invalid floor fails closed and
+must not mint a portable authorization. The existing receipt PID binding and
+bridge monotonic deadline checks remain mandatory.
