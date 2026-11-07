@@ -605,7 +605,7 @@ def test_monotonic_deadline_equality_fails_closed(monkeypatch) -> None:
     deadline = 100.0
     allowed = replace(
         allowed,
-        authorization_floor_monotonic=100.0,
+        authorization_floor_monotonic=99.0,
         authorization_deadline_monotonic=deadline,
         authorization_process_id=getpid(),
     )
