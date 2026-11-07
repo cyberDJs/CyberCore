@@ -908,11 +908,16 @@ def test_utc_rollback_before_first_monotonic_sample_fails_closed(
     _install_fake_hive(monkeypatch)
     elapsed = 0.0
     rolled_back = False
+    mono_calls = 0
     import_module = hive_bridge.import_module
 
     def monotonic_now():
-        nonlocal rolled_back
-        rolled_back = True
+        nonlocal rolled_back, mono_calls
+        mono_calls += 1
+        # The first monotonic bound now precedes the trusted UTC baseline.
+        # Inject after that baseline, at the next monotonic observation.
+        if mono_calls == 2:
+            rolled_back = True
         return 100.0 + elapsed
 
     monkeypatch.setattr(hive_bridge, "monotonic", monotonic_now)
@@ -951,14 +956,17 @@ def test_preanchor_utc_rollback_rejects_without_claim_or_dispatch(monkeypatch) -
     allowed = kernel.execute(task, trusted_actor=task.actor)
     _install_fake_hive(monkeypatch)
     rollback = False
+    mono_calls = 0
 
     def wall_time():
         return task.expires_at - timedelta(seconds=61 if rollback else 1)
 
     def clock():
-        nonlocal rollback
-        # Simulate suspension between first UTC sample and monotonic anchor.
-        rollback = True
+        nonlocal rollback, mono_calls
+        mono_calls += 1
+        # Inject after the first trusted UTC baseline, not before observation.
+        if mono_calls == 2:
+            rollback = True
         return 100.0
 
     monkeypatch.setattr(hive_bridge, "_utc_now", wall_time)
