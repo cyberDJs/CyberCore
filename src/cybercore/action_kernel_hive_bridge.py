@@ -55,22 +55,24 @@ class _ExpiringProcessReplayGuard:
             raise ValueError("Per-actor replay capacity must be positive")
         self._max_entries = max_entries
         self._max_per_actor = max_entries if max_per_actor is None else max_per_actor
-        self._claimed_until: dict[str, tuple[datetime, str]] = {}
+        self._claimed_until: dict[str, tuple[float, str]] = {}
         self._lock = Lock()
 
     def claim_once(
         self,
         key: str,
         *,
-        expires_at: datetime,
-        now: datetime,
+        deadline_monotonic: float,
+        now_monotonic: float,
         actor: str = "",
     ) -> bool:
+        if not isfinite(deadline_monotonic) or not isfinite(now_monotonic):
+            raise PermissionError("Process replay guard timing invalid")
         with self._lock:
             expired_keys = [
                 claimed_key
                 for claimed_key, (claimed_until, _) in self._claimed_until.items()
-                if claimed_until <= now
+                if claimed_until <= now_monotonic
             ]
             for claimed_key in expired_keys:
                 del self._claimed_until[claimed_key]
@@ -78,7 +80,7 @@ class _ExpiringProcessReplayGuard:
             if key in self._claimed_until:
                 return False
 
-            if expires_at <= now:
+            if deadline_monotonic <= now_monotonic:
                 return True
 
             if len(self._claimed_until) >= self._max_entries:
@@ -89,7 +91,7 @@ class _ExpiringProcessReplayGuard:
             if actor_claims >= self._max_per_actor:
                 raise PermissionError("Actor replay guard capacity exhausted")
 
-            self._claimed_until[key] = (expires_at, actor)
+            self._claimed_until[key] = (deadline_monotonic, actor)
             return True
 
 
@@ -130,7 +132,7 @@ def _claim_once(
     replay_guard: ReplayGuard,
     key: str,
     *,
-    expires_at: datetime,
+    deadline_monotonic: float,
     actor: str,
 ) -> None:
     # Reserve the bounded local claim before attempting the irreversible
@@ -138,8 +140,8 @@ def _claim_once(
     # until expiry: replay denial is safer than an ambiguous second dispatch.
     if not _PROCESS_REPLAY_GUARD.claim_once(
         key,
-        expires_at=expires_at,
-        now=_utc_now(),
+        deadline_monotonic=deadline_monotonic,
+        now_monotonic=monotonic(),
         actor=actor,
     ):
         raise PermissionError("Authorization already consumed")
@@ -253,7 +255,12 @@ def run_local_hive_dry_run(
     assert_authorized("before replay claim")
 
     key = f"{trusted_actor}:{task.task_id}:{task.correlation_id}"
-    _claim_once(replay_guard, key, expires_at=task.expires_at, actor=trusted_actor)
+    _claim_once(
+        replay_guard,
+        key,
+        deadline_monotonic=deadline,
+        actor=trusted_actor,
+    )
 
     # Carry the original budget across a potentially blocking durable claim.
     # Claims remain consumed when it expires; do not dispatch or restart it.

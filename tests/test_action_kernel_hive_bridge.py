@@ -231,59 +231,156 @@ def test_concurrent_fresh_guards_cannot_bypass_process_claim(monkeypatch) -> Non
 
 
 def test_process_replay_guard_prunes_expired_claims() -> None:
-    now = datetime.now(timezone.utc)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
 
-    assert guard.claim_once("a", expires_at=now + timedelta(seconds=1), now=now)
-    assert guard.claim_once("b", expires_at=now + timedelta(seconds=1), now=now)
+    assert guard.claim_once("a", deadline_monotonic=101.0, now_monotonic=100.0)
+    assert guard.claim_once("b", deadline_monotonic=101.0, now_monotonic=100.0)
 
     with pytest.raises(PermissionError, match="capacity exhausted"):
-        guard.claim_once("c", expires_at=now + timedelta(minutes=1), now=now)
+        guard.claim_once("c", deadline_monotonic=160.0, now_monotonic=100.0)
 
-    later = now + timedelta(seconds=2)
-    assert guard.claim_once("c", expires_at=later + timedelta(minutes=1), now=later)
-    assert guard.claim_once("a", expires_at=later + timedelta(minutes=1), now=later)
+    assert guard.claim_once("c", deadline_monotonic=160.0, now_monotonic=102.0)
+    assert guard.claim_once("a", deadline_monotonic=160.0, now_monotonic=102.0)
 
 
 def test_process_replay_guard_never_evicts_unexpired_claims() -> None:
-    now = datetime.now(timezone.utc)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1)
 
-    assert guard.claim_once("kept", expires_at=now + timedelta(minutes=1), now=now)
+    assert guard.claim_once("kept", deadline_monotonic=160.0, now_monotonic=100.0)
     with pytest.raises(PermissionError, match="capacity exhausted"):
-        guard.claim_once("new", expires_at=now + timedelta(minutes=1), now=now)
+        guard.claim_once("new", deadline_monotonic=160.0, now_monotonic=100.0)
     assert (
         guard.claim_once(
             "kept",
-            expires_at=now + timedelta(minutes=1),
-            now=now,
+            deadline_monotonic=160.0,
+            now_monotonic=100.0,
         )
         is False
     )
 
 
 def test_process_replay_guard_does_not_retain_already_expired_claim() -> None:
-    now = datetime.now(timezone.utc)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1)
 
-    assert guard.claim_once("expired", expires_at=now, now=now)
+    assert guard.claim_once("expired", deadline_monotonic=100.0, now_monotonic=100.0)
     assert guard.claim_once(
         "fresh",
-        expires_at=now + timedelta(minutes=1),
-        now=now,
+        deadline_monotonic=160.0,
+        now_monotonic=100.0,
     )
 
 
 def test_process_replay_quota_isolated_by_trusted_actor() -> None:
-    now = datetime.now(timezone.utc)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=4, max_per_actor=1)
-    expires_at = now + timedelta(minutes=2)
 
-    assert guard.claim_once("alice-1", expires_at=expires_at, now=now, actor="alice")
+    assert guard.claim_once(
+        "alice-1",
+        deadline_monotonic=220.0,
+        now_monotonic=100.0,
+        actor="alice",
+    )
     with pytest.raises(PermissionError, match="Actor replay guard capacity exhausted"):
-        guard.claim_once("alice-2", expires_at=expires_at, now=now, actor="alice")
-    assert guard.claim_once("bob-1", expires_at=expires_at, now=now, actor="bob")
-    assert guard.claim_once("bob-1", expires_at=expires_at, now=now, actor="bob") is False
+        guard.claim_once(
+            "alice-2",
+            deadline_monotonic=220.0,
+            now_monotonic=100.0,
+            actor="alice",
+        )
+    assert guard.claim_once(
+        "bob-1",
+        deadline_monotonic=220.0,
+        now_monotonic=100.0,
+        actor="bob",
+    )
+    assert (
+        guard.claim_once(
+            "bob-1",
+            deadline_monotonic=220.0,
+            now_monotonic=100.0,
+            actor="bob",
+        )
+        is False
+    )
+
+
+def test_wall_clock_forward_then_backward_cannot_prune_process_replay_claim(
+    monkeypatch,
+) -> None:
+    original, original_kernel = setup("wall-clock-prune-original")
+    original_receipt = original_kernel.execute(original, trusted_actor=original.actor)
+    original_receipt = replace(
+        original_receipt,
+        authorization_deadline_monotonic=110.0,
+        authorization_process_id=getpid(),
+    )
+    trigger, trigger_kernel = setup("wall-clock-prune-trigger")
+    trigger = replace(
+        trigger,
+        expires_at=trigger.requested_at + timedelta(minutes=4),
+    )
+    trigger_receipt = trigger_kernel.execute(trigger, trusted_actor=trigger.actor)
+    trigger_receipt = replace(
+        trigger_receipt,
+        authorization_deadline_monotonic=120.0,
+        authorization_process_id=getpid(),
+    )
+    action = _install_fake_hive(monkeypatch)
+    mono = 100.0
+    wall = original.expires_at - timedelta(seconds=1)
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: mono)
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: wall)
+    calls = 0
+
+    class Registry:
+        def dispatch(self, incoming):
+            nonlocal calls
+            calls += 1
+            return SimpleNamespace(
+                request_id=incoming.id,
+                target_node=incoming.target_node,
+                action=action.HEALTH_CHECK,
+                status=SimpleNamespace(value="dry_run"),
+            )
+
+    assert (
+        run_local_hive_dry_run(
+            original,
+            trusted_actor=original.actor,
+            kernel_receipt=original_receipt,
+            registry=Registry(),
+            replay_guard=InMemoryReplayGuard(),
+        ).status
+        == "dry_run"
+    )
+
+    # A forward wall-clock jump beyond the first task's UTC expiry must not
+    # prune its process-local replay claim while its monotonic grant remains live.
+    wall = original.expires_at + timedelta(seconds=1)
+    mono = 101.0
+    assert (
+        run_local_hive_dry_run(
+            trigger,
+            trusted_actor=trigger.actor,
+            kernel_receipt=trigger_receipt,
+            registry=Registry(),
+            replay_guard=InMemoryReplayGuard(),
+        ).status
+        == "dry_run"
+    )
+
+    # Correct the wall clock backward and replace the caller-provided guard.
+    # The process-owned monotonic claim must still deny replay.
+    wall = original.expires_at - timedelta(seconds=1)
+    mono = 102.0
+    with pytest.raises(PermissionError, match="already consumed"):
+        run_local_hive_dry_run(
+            original,
+            trusted_actor=original.actor,
+            kernel_receipt=original_receipt,
+            registry=Registry(),
+            replay_guard=InMemoryReplayGuard(),
+        )
+    assert calls == 2
 
 
 def test_rejects_overlong_authorization_before_optional_runtime_or_claim() -> None:

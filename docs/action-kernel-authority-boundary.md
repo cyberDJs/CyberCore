@@ -92,6 +92,9 @@ monotonic authority is absent, invalid, expired, or from another process.
 ### Consequences
 
 - Scheduler delay and later wall-clock rollback cannot restart authorization.
+- The process-owned replay cache retains consumed claims against the same
+  monotonic authorization deadline, so forward/backward wall-clock corrections
+  cannot prune a live replay claim early.
 - Receipts containing monotonic deadlines are explicitly process-local and are
   not valid authorization objects across process restarts or IPC boundaries.
 - Cross-process composition still requires an authenticated server-side
