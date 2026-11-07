@@ -873,6 +873,52 @@ def test_optional_setup_cannot_restart_authorization_budget(
     assert guard.claim_once(key) is True
 
 
+def test_deschedule_and_utc_rollback_between_initial_sample_and_anchor_fails_closed(
+    monkeypatch,
+) -> None:
+    task, kernel = setup("initial-sample-deschedule-rollback")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    rolled_back = False
+    mono_calls = 0
+
+    def utc_now():
+        if rolled_back:
+            return task.expires_at - timedelta(seconds=60)
+        return task.expires_at - timedelta(seconds=1)
+
+    def monotonic_now():
+        nonlocal rolled_back, mono_calls
+        mono_calls += 1
+        if mono_calls == 1:
+            # Model descheduling after the initial UTC observation followed by
+            # a backward wall-clock correction before the first monotonic
+            # anchor becomes visible to the caller.
+            rolled_back = True
+            return 102.0
+        return 102.0
+
+    monkeypatch.setattr(hive_bridge, "_utc_now", utc_now)
+    monkeypatch.setattr(hive_bridge, "monotonic", monotonic_now)
+    guard = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Clock rollback must fail before dispatch")
+
+    with pytest.raises(PermissionError, match="expired before replay claim"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=guard,
+        )
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is True
+
+
 @pytest.mark.parametrize("setup_elapsed", [1.0, 3.0])
 def test_utc_rollback_before_first_monotonic_sample_fails_closed(
     monkeypatch, setup_elapsed: float

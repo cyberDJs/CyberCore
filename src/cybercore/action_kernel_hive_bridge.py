@@ -203,6 +203,11 @@ def run_local_hive_dry_run(
     utc_initial = _assert_not_expired(task)
     sampling_started = monotonic()
     utc_before = _assert_not_expired(task)
+    # The interval between the first trusted UTC observation and the first
+    # monotonic anchor is otherwise unmeasured. If wall time moved backward
+    # across that boundary, fail closed before any replay claim or dispatch.
+    if utc_before < utc_initial:
+        raise PermissionError("Task authorization expired before replay claim")
     authorization_started = monotonic()
     utc_after = _assert_not_expired(task)
     remaining_seconds = (task.expires_at - max(utc_initial, utc_before, utc_after)).total_seconds()
