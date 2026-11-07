@@ -261,8 +261,7 @@ class ActionKernel:
         # jumps without resetting the process-local monotonic budget.
         authorization_deadline_monotonic = min(
             construction_deadline_monotonic,
-            authorization_monotonic_now
-            + (request.expires_at - authorization_now).total_seconds(),
+            authorization_monotonic_now + (request.expires_at - authorization_now).total_seconds(),
         )
         if (
             not isfinite(authorization_deadline_monotonic)
