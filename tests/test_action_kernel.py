@@ -373,6 +373,7 @@ def test_executed_receipt_binds_process_local_monotonic_deadline() -> None:
 
     assert result.status == "EXECUTED"
     assert result.authorization_expires_at == request.expires_at
+    assert result.authorization_floor_monotonic == 100.0
     assert result.authorization_deadline_monotonic == 110.0
     assert result.authorization_process_id == 4242
 
@@ -381,6 +382,7 @@ def test_denied_receipt_does_not_mint_monotonic_authority() -> None:
     result = kernel(enabled=False).execute(task(), trusted_actor=ACTOR)
 
     assert result.status == "DENIED"
+    assert result.authorization_floor_monotonic is None
     assert result.authorization_deadline_monotonic is None
     assert result.authorization_process_id is None
 
