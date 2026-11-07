@@ -199,6 +199,9 @@ class ActionKernel:
         # monotonic samples and accidentally trigger clock regression.
         self._clock_observation_lock = Lock()
         self._monotonic_high_water = self._clock_floor_monotonic
+        # A transient forward UTC sample must not be forgotten after a
+        # backward correction during a policy/audit callback.
+        self._utc_high_water = self._clock_floor_utc
 
         self._used: set[str] = set()
         self._task_id_lock = Lock()
@@ -542,11 +545,13 @@ class ActionKernel:
                     "Action Kernel process-local clock authority unavailable or invalid"
                 )
             self._monotonic_high_water = current_monotonic
+            if current_wall > self._utc_high_water:
+                self._utc_high_water = current_wall
 
             projected_floor = self._clock_floor_utc + timedelta(
                 seconds=current_monotonic - self._clock_floor_monotonic
             )
-            return max(current_wall, projected_floor), current_monotonic
+            return max(current_wall, self._utc_high_water, projected_floor), current_monotonic
 
     def _task_id_is_reserved(self, task_id: str) -> bool:
         with self._task_id_lock:
