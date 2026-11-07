@@ -299,7 +299,9 @@ def test_process_utc_observation_is_sampled_under_replay_lock() -> None:
     assert calls == 1
 
 
-def test_forward_utc_expiry_then_rollback_stays_fenced_before_claim(monkeypatch) -> None:
+def test_forward_utc_expiry_then_rollback_stays_fenced_before_claim(
+    monkeypatch,
+) -> None:
     task, kernel = setup("forward-expiry-sticky-fence")
     allowed = kernel.execute(task, trusted_actor=task.actor)
     current = [task.expires_at + timedelta(seconds=1)]
@@ -308,7 +310,9 @@ def test_forward_utc_expiry_then_rollback_stays_fenced_before_claim(monkeypatch)
 
     class Forbidden:
         def dispatch(self, _):
-            raise AssertionError("Expired or rolled-back authorization must not dispatch")
+            raise AssertionError(
+                "Expired or rolled-back authorization must not dispatch"
+            )
 
     with pytest.raises(PermissionError, match="Task authorization expired"):
         run_local_hive_dry_run(
