@@ -1196,21 +1196,24 @@ def test_forward_utc_at_process_claim_rejects_without_dropping_prior_claim(
         == "dry_run"
     )
 
+    # A different, unconsumed receipt must reach the claim-time clock check.
+    second_task, second_kernel = setup("transient-forward-claim-second")
+    second_allowed = second_kernel.execute(second_task, trusted_actor=second_task.actor)
     sample_count = 0
 
     def clock_with_forward_jump():
         nonlocal sample_count
         sample_count += 1
         if sample_count == 5:  # process-owned replay claim time
-            return task.expires_at + timedelta(seconds=60)
+            return second_task.expires_at + timedelta(seconds=60)
         return safe
 
     monkeypatch.setattr(hive_bridge, "_utc_now", clock_with_forward_jump)
     with pytest.raises(PermissionError, match="expired during replay claim"):
         run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=allowed,
+            second_task,
+            trusted_actor=second_task.actor,
+            kernel_receipt=second_allowed,
             registry=Registry(),
             replay_guard=InMemoryReplayGuard(),
         )
