@@ -133,6 +133,7 @@ def _claim_once(
     key: str,
     *,
     deadline_monotonic: float,
+    now_monotonic: float,
     actor: str,
 ) -> None:
     # Reserve the bounded local claim before attempting the irreversible
@@ -141,7 +142,7 @@ def _claim_once(
     if not _PROCESS_REPLAY_GUARD.claim_once(
         key,
         deadline_monotonic=deadline_monotonic,
-        now_monotonic=monotonic(),
+        now_monotonic=now_monotonic,
         actor=actor,
     ):
         raise PermissionError("Authorization already consumed")
@@ -200,30 +201,49 @@ def run_local_hive_dry_run(
     ):
         raise PermissionError("Task authorization lifetime exceeds policy")
 
+    floor = kernel_receipt.authorization_floor_monotonic
     deadline = kernel_receipt.authorization_deadline_monotonic
     process_id = kernel_receipt.authorization_process_id
     if (
-        deadline is None
+        floor is None
+        or isinstance(floor, bool)
+        or not isinstance(floor, (int, float))
+        or not isfinite(float(floor))
+        or deadline is None
         or isinstance(deadline, bool)
         or not isinstance(deadline, (int, float))
         or not isfinite(float(deadline))
+        or float(floor) >= float(deadline)
         or process_id is None
         or isinstance(process_id, bool)
         or not isinstance(process_id, int)
         or process_id != getpid()
     ):
-        raise PermissionError("Trusted monotonic authorization deadline unavailable or invalid")
+        raise PermissionError(
+            "Trusted monotonic authorization deadline/floor unavailable or invalid"
+        )
+    floor = float(floor)
     deadline = float(deadline)
+    last_monotonic = floor
 
-    def assert_authorized(stage: str) -> None:
+    def assert_authorized(stage: str) -> float:
+        nonlocal last_monotonic
         # UTC remains the external policy upper bound and catches forward
-        # corrections. The absolute process-local monotonic deadline prevents
-        # backward wall-clock corrections or scheduling delays from extending
-        # the authorization after the trusted kernel issued its receipt.
+        # corrections. The trusted receipt floor plus a nondecreasing local
+        # stage floor rejects same-PID monotonic regression; the absolute
+        # deadline prevents scheduling delay from extending authorization.
         _assert_not_expired(task)
+        if getpid() != process_id:
+            raise PermissionError(f"Task authorization process changed {stage}")
         current = monotonic()
-        if not isfinite(current) or current >= deadline:
+        if not isfinite(current) or current < floor or current < last_monotonic:
+            raise PermissionError(
+                f"Task authorization monotonic clock regressed {stage}"
+            )
+        if current >= deadline:
             raise PermissionError(f"Task authorization expired {stage}")
+        last_monotonic = current
+        return current
 
     assert_authorized("before dispatch")
 
@@ -252,13 +272,14 @@ def run_local_hive_dry_run(
 
     # Authorization lifetime is checked again immediately at the claim/dispatch
     # boundary so shaping/import/request construction cannot extend validity.
-    assert_authorized("before replay claim")
+    claim_now = assert_authorized("before replay claim")
 
     key = f"{trusted_actor}:{task.task_id}:{task.correlation_id}"
     _claim_once(
         replay_guard,
         key,
         deadline_monotonic=deadline,
+        now_monotonic=claim_now,
         actor=trusted_actor,
     )
 
