@@ -14,6 +14,20 @@ from cybercore.action_kernel import ActionKernel, Provenance, TaskRequest
 from cybercore.action_kernel_hive_bridge import InMemoryReplayGuard, run_local_hive_dry_run
 
 
+@pytest.fixture(autouse=True)
+def isolated_process_replay_guard(monkeypatch) -> None:
+    # Each test models an independent bridge process/clock history. Calls within
+    # one test share the same process guard so sticky rollback/replay state is real.
+    monkeypatch.setattr(
+        hive_bridge,
+        "_PROCESS_REPLAY_GUARD",
+        hive_bridge._ExpiringProcessReplayGuard(
+            max_entries=hive_bridge._PROCESS_REPLAY_MAX_ENTRIES,
+            max_per_actor=hive_bridge._PROCESS_REPLAY_MAX_PER_ACTOR,
+        ),
+    )
+
+
 def setup(suffix: str):
     kernel = ActionKernel(
         targets={"local-node": {"synthetic_status": "ok"}},
@@ -257,6 +271,66 @@ def test_process_replay_guard_never_evicts_unexpired_claims() -> None:
         )
         is False
     )
+
+
+def test_process_utc_rollback_fence_is_sticky() -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+
+    assert guard.observe_utc(now) == now
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.observe_utc(now - timedelta(seconds=1))
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.observe_utc(now)
+
+
+def test_process_utc_observation_is_sampled_under_replay_lock() -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+    calls = 0
+
+    def ordered_sample():
+        nonlocal calls
+        calls += 1
+        assert not guard._lock.acquire(blocking=False)
+        return now
+
+    assert guard.observe_utc(ordered_sample) == now
+    assert calls == 1
+
+
+def test_forward_utc_expiry_then_rollback_stays_fenced_before_claim(monkeypatch) -> None:
+    task, kernel = setup("forward-expiry-sticky-fence")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    current = [task.expires_at + timedelta(seconds=1)]
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: current[0])
+    durable = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Expired or rolled-back authorization must not dispatch")
+
+    with pytest.raises(PermissionError, match="Task authorization expired"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=durable,
+        )
+
+    current[0] = task.expires_at - timedelta(seconds=1)
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=InMemoryReplayGuard(),
+        )
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is True
 
 
 def test_process_replay_guard_does_not_retain_already_expired_claim() -> None:

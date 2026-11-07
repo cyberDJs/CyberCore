@@ -141,3 +141,20 @@ The clock floor is process-local. A changed process id, non-finite/regressing
 monotonic source, naive UTC source, or otherwise invalid floor fails closed and
 must not mint a portable authorization. The existing receipt PID binding and
 bridge monotonic deadline checks remain mandatory.
+
+
+## Clock observation boundary and sticky rollback fence
+
+The reconciled bridge preserves the process-wide rollback hardening introduced
+by merged PR #150 without returning to bridge-derived authorization deadlines.
+Every bridge UTC observation is serialized under the process-owned replay guard
+lock and compared with a sticky maximum-seen UTC value. A detected backward UTC
+step permanently fences that bridge process until restart; replacing the caller's
+durable replay guard cannot clear the fence.
+
+A forward UTC correction remains an external policy upper bound and can terminate
+an authorization earlier than its kernel-issued monotonic deadline. If UTC later
+moves backward, the sticky fence prevents the earlier termination from being
+reversed. Replay claims themselves remain retained against the kernel-issued
+process-local monotonic deadline, so wall-clock movement cannot prune a live
+claim early.

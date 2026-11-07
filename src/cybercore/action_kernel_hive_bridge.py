@@ -13,7 +13,7 @@ from math import isfinite
 from os import getpid
 from threading import Lock
 from time import monotonic
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from cybercore.action_kernel import ExecutionReceipt, TaskRequest
 from cybercore.action_kernel_interop import to_hive_health_dry_run
@@ -56,7 +56,27 @@ class _ExpiringProcessReplayGuard:
         self._max_entries = max_entries
         self._max_per_actor = max_entries if max_per_actor is None else max_per_actor
         self._claimed_until: dict[str, tuple[float, str]] = {}
+        # Preserve PR #150's sticky process UTC rollback fence. A forward UTC
+        # observation may terminate authority early; a later rollback must not
+        # revive any receipt or permit a replacement durable guard to replay it.
+        self._max_seen_utc: datetime | None = None
+        self._utc_rollback_detected = False
         self._lock = Lock()
+
+    def observe_utc(self, now: datetime | Callable[[], datetime]) -> datetime:
+        """Serialize UTC observations and permanently fence detected rollback."""
+        with self._lock:
+            current = now() if callable(now) else now
+            if current.tzinfo is None:
+                self._utc_rollback_detected = True
+                raise PermissionError("Process replay guard UTC observation invalid")
+            if self._utc_rollback_detected:
+                raise PermissionError("Process replay guard UTC rollback detected")
+            if self._max_seen_utc is not None and current < self._max_seen_utc:
+                self._utc_rollback_detected = True
+                raise PermissionError("Process replay guard UTC rollback detected")
+            self._max_seen_utc = current
+            return current
 
     def claim_once(
         self,
@@ -122,7 +142,10 @@ def _utc_now() -> datetime:
 
 
 def _assert_not_expired(task: TaskRequest) -> datetime:
-    now = _utc_now()
+    # Sample UTC while the process-owned replay guard lock is held. This keeps
+    # one serialized high-water mark across bridge calls and preserves PR #150's
+    # fail-closed rollback fence even when durable guards are replaced.
+    now = _PROCESS_REPLAY_GUARD.observe_utc(_utc_now)
     if task.expires_at.tzinfo is None or task.expires_at <= now:
         raise PermissionError("Task authorization expired")
     return now
