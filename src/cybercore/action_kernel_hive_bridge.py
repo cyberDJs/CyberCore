@@ -76,8 +76,9 @@ class _ExpiringProcessReplayGuard:
             if key in self._claimed_until:
                 return False
 
-            if expires_at <= now:
-                return True
+            # Even if UTC leaps forward past expiry, retain a consumed
+            # process claim before rejecting: rollback must not enable replay.
+            expired_at_claim = expires_at <= now
 
             if len(self._claimed_until) >= self._max_entries:
                 raise PermissionError("Process replay guard capacity exhausted")
@@ -88,6 +89,8 @@ class _ExpiringProcessReplayGuard:
                 raise PermissionError("Actor replay guard capacity exhausted")
 
             self._claimed_until[key] = (expires_at, actor)
+            if expired_at_claim:
+                raise PermissionError("Task authorization expired during replay claim")
             return True
 
 
@@ -205,6 +208,10 @@ def run_local_hive_dry_run(
     utc_before = _assert_not_expired(task)
     authorization_started = monotonic()
     utc_after = _assert_not_expired(task)
+    # A pre-anchor pause followed by UTC rollback is invisible to monotonic
+    # elapsed time; reject decreasing UTC samples instead of granting slack.
+    if utc_before < utc_initial or utc_after < utc_before:
+        raise PermissionError("Task authorization expired: UTC clock moved backward")
     remaining_seconds = (task.expires_at - max(utc_initial, utc_before, utc_after)).total_seconds()
     remaining_seconds -= authorization_started - sampling_started
     if remaining_seconds <= 0:
