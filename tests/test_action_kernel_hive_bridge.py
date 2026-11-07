@@ -310,6 +310,7 @@ def test_wall_clock_forward_then_backward_cannot_prune_process_replay_claim(
     original_receipt = original_kernel.execute(original, trusted_actor=original.actor)
     original_receipt = replace(
         original_receipt,
+        authorization_floor_monotonic=100.0,
         authorization_deadline_monotonic=110.0,
         authorization_process_id=getpid(),
     )
@@ -321,6 +322,7 @@ def test_wall_clock_forward_then_backward_cannot_prune_process_replay_claim(
     trigger_receipt = trigger_kernel.execute(trigger, trusted_actor=trigger.actor)
     trigger_receipt = replace(
         trigger_receipt,
+        authorization_floor_monotonic=100.0,
         authorization_deadline_monotonic=120.0,
         authorization_process_id=getpid(),
     )
@@ -558,6 +560,7 @@ def test_rejects_receipt_without_process_local_deadline() -> None:
     allowed = kernel.execute(task, trusted_actor=task.actor)
     legacy = replace(
         allowed,
+        authorization_floor_monotonic=None,
         authorization_deadline_monotonic=None,
         authorization_process_id=None,
     )
@@ -581,6 +584,7 @@ def test_rejects_invalid_or_foreign_process_deadline(deadline, process_id) -> No
     allowed = kernel.execute(task, trusted_actor=task.actor)
     invalid = replace(
         allowed,
+        authorization_floor_monotonic=100.0,
         authorization_deadline_monotonic=deadline,
         authorization_process_id=process_id,
     )
@@ -601,6 +605,7 @@ def test_monotonic_deadline_equality_fails_closed(monkeypatch) -> None:
     deadline = 100.0
     allowed = replace(
         allowed,
+        authorization_floor_monotonic=100.0,
         authorization_deadline_monotonic=deadline,
         authorization_process_id=getpid(),
     )
@@ -619,6 +624,217 @@ def test_monotonic_deadline_equality_fails_closed(monkeypatch) -> None:
             registry=None,
             replay_guard=InMemoryReplayGuard(),
         )
+
+
+def test_monotonic_floor_equality_is_allowed(monkeypatch) -> None:
+    task, kernel = setup("monotonic-floor-equality")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    action = _install_fake_hive(monkeypatch)
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+        authorization_process_id=getpid(),
+    )
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(
+        hive_bridge,
+        "_utc_now",
+        lambda: task.expires_at - timedelta(seconds=30),
+    )
+
+    class Registry:
+        def dispatch(self, incoming):
+            return SimpleNamespace(
+                request_id=incoming.id,
+                target_node=incoming.target_node,
+                action=action.HEALTH_CHECK,
+                status=SimpleNamespace(value="dry_run"),
+            )
+
+    assert (
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Registry(),
+            replay_guard=InMemoryReplayGuard(),
+        ).status
+        == "dry_run"
+    )
+
+
+@pytest.mark.parametrize("rollback_seconds", [7, 60])
+def test_same_pid_monotonic_regression_with_utc_rollback_fails_closed(
+    monkeypatch, rollback_seconds: int
+) -> None:
+    task, kernel = setup(f"monotonic-regression-rollback-{rollback_seconds}")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+        authorization_process_id=getpid(),
+    )
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 99.0)
+    monkeypatch.setattr(
+        hive_bridge,
+        "_utc_now",
+        lambda: task.expires_at - timedelta(seconds=rollback_seconds),
+    )
+    guard = InMemoryReplayGuard()
+
+    with pytest.raises(PermissionError, match="monotonic clock regressed before dispatch"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=None,
+            replay_guard=guard,
+        )
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is True
+
+
+def test_pid_change_between_bridge_boundaries_fails_closed(monkeypatch) -> None:
+    task, kernel = setup("pid-change-boundary")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+        authorization_process_id=4242,
+    )
+    pids = iter((4242, 4242, 4243))
+    monkeypatch.setattr(hive_bridge, "getpid", lambda: next(pids))
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(
+        hive_bridge,
+        "_utc_now",
+        lambda: task.expires_at - timedelta(seconds=30),
+    )
+    guard = InMemoryReplayGuard()
+
+    with pytest.raises(PermissionError, match="process changed before replay claim"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=None,
+            replay_guard=guard,
+        )
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is True
+
+
+@pytest.mark.parametrize("current", [float("nan"), float("inf")])
+def test_nonfinite_current_monotonic_fails_closed(monkeypatch, current: float) -> None:
+    task, kernel = setup(f"nonfinite-current-{current}")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+        authorization_process_id=getpid(),
+    )
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: current)
+    monkeypatch.setattr(
+        hive_bridge,
+        "_utc_now",
+        lambda: task.expires_at - timedelta(seconds=30),
+    )
+
+    with pytest.raises(PermissionError, match="monotonic clock regressed before dispatch"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=None,
+            replay_guard=InMemoryReplayGuard(),
+        )
+
+
+def test_monotonic_regression_during_blocking_claim_fails_closed(monkeypatch) -> None:
+    task, kernel = setup("monotonic-regression-during-claim")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    current = [100.0]
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+        authorization_process_id=getpid(),
+    )
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: current[0])
+    monkeypatch.setattr(
+        hive_bridge,
+        "_utc_now",
+        lambda: task.expires_at - timedelta(seconds=30),
+    )
+    durable = InMemoryReplayGuard()
+
+    class BlockingGuard:
+        def claim_once(self, key):
+            claimed = durable.claim_once(key)
+            current[0] = 99.0
+            return claimed
+
+    with pytest.raises(PermissionError, match="monotonic clock regressed during replay claim"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=None,
+            replay_guard=BlockingGuard(),
+        )
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is False
+
+
+def test_monotonic_regression_during_dispatch_fails_closed(monkeypatch) -> None:
+    task, kernel = setup("monotonic-regression-during-dispatch")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    action = _install_fake_hive(monkeypatch)
+    current = [100.0]
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+        authorization_process_id=getpid(),
+    )
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: current[0])
+    monkeypatch.setattr(
+        hive_bridge,
+        "_utc_now",
+        lambda: task.expires_at - timedelta(seconds=30),
+    )
+    durable = InMemoryReplayGuard()
+
+    class Registry:
+        def dispatch(self, incoming):
+            current[0] = 99.0
+            return SimpleNamespace(
+                request_id=incoming.id,
+                target_node=incoming.target_node,
+                action=action.HEALTH_CHECK,
+                status=SimpleNamespace(value="dry_run"),
+            )
+
+    with pytest.raises(PermissionError, match="monotonic clock regressed during dispatch"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Registry(),
+            replay_guard=durable,
+        )
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is False
 
 
 def test_rejects_receipt_without_bound_authorization_expiry() -> None:
@@ -831,6 +1047,7 @@ def test_partial_and_full_utc_rollback_cannot_extend_monotonic_deadline(
     deadline = 105.0
     allowed = replace(
         allowed,
+        authorization_floor_monotonic=100.0,
         authorization_deadline_monotonic=deadline,
         authorization_process_id=getpid(),
     )
@@ -871,6 +1088,7 @@ def test_delay_before_bridge_entry_consumes_monotonic_budget(monkeypatch) -> Non
     allowed = kernel.execute(task, trusted_actor=task.actor)
     allowed = replace(
         allowed,
+        authorization_floor_monotonic=100.0,
         authorization_deadline_monotonic=105.0,
         authorization_process_id=getpid(),
     )
@@ -903,6 +1121,7 @@ def test_blocking_claim_obeys_kernel_monotonic_deadline(monkeypatch, claim_elaps
     elapsed = 0.0
     allowed = replace(
         allowed,
+        authorization_floor_monotonic=100.0,
         authorization_deadline_monotonic=105.0,
         authorization_process_id=getpid(),
     )
@@ -959,6 +1178,7 @@ def test_dispatch_crossing_monotonic_deadline_is_rejected_with_claim_consumed(
     elapsed = 0.0
     allowed = replace(
         allowed,
+        authorization_floor_monotonic=100.0,
         authorization_deadline_monotonic=105.0,
         authorization_process_id=getpid(),
     )
