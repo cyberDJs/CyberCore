@@ -1063,3 +1063,51 @@ def test_replay_guard_stays_fenced_after_300s_pruning_and_utc_rollback(monkeypat
         guard.claim_once("prior", expires_at=now + timedelta(seconds=1), now=now)
     with pytest.raises(PermissionError, match="UTC rollback detected"):
         guard.claim_once("fresh", expires_at=now + timedelta(minutes=10), now=future)
+
+
+def test_replay_guard_samples_utc_under_its_lock() -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+    calls = 0
+
+    def ordered_utc_sample():
+        nonlocal calls
+        calls += 1
+        # The live clock must be sampled while the replay guard owns its lock.
+        assert not guard._lock.acquire(blocking=False)
+        return now
+
+    assert guard.claim_once(
+        "first", expires_at=now + timedelta(minutes=1),
+        now=ordered_utc_sample,
+    )
+    assert guard.claim_once(
+        "second", expires_at=now + timedelta(minutes=1),
+        now=ordered_utc_sample,
+    )
+    assert calls == 2
+
+
+def test_monotonic_budget_covers_pause_after_first_utc_sample(monkeypatch) -> None:
+    task, kernel = setup("partial-rollback-before-anchor")
+    receipt = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    ticks = iter((100.0, 103.0))
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: next(ticks, 103.0))
+    monkeypatch.setattr(
+        hive_bridge, "_utc_now",
+        lambda: task.expires_at - timedelta(seconds=0.5),
+    )
+    durable = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("No dispatch after elapsed budget")
+
+    with pytest.raises(PermissionError, match="expired before dispatch"):
+        run_local_hive_dry_run(
+            task, trusted_actor=task.actor, kernel_receipt=receipt,
+            registry=Forbidden(), replay_guard=durable,
+        )
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is True
