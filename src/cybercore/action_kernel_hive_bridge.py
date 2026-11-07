@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from importlib import import_module
 from threading import Lock
 from time import monotonic, monotonic as _replay_monotonic
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
 from cybercore.action_kernel import ExecutionReceipt, TaskRequest
 from cybercore.action_kernel_interop import to_hive_health_dry_run
@@ -65,10 +65,13 @@ class _ExpiringProcessReplayGuard:
         key: str,
         *,
         expires_at: datetime,
-        now: datetime,
+        now: datetime | Callable[[], datetime],
         actor: str = "",
     ) -> bool:
         with self._lock:
+            # Sample current UTC only AFTER acquiring the process guard lock.
+            # A delayed earlier request must not look like a backward clock step.
+            now = now() if callable(now) else now
             # Sticky fail-closed state: forward UTC can prune an old claim after
             # its monotonic horizon; a subsequent backward jump must never
             # revive that authorization, including via a replaced durable guard.
@@ -158,7 +161,7 @@ def _claim_once(
     if not _PROCESS_REPLAY_GUARD.claim_once(
         key,
         expires_at=expires_at,
-        now=_utc_now(),
+        now=_utc_now,
         actor=actor,
     ):
         raise PermissionError("Authorization already consumed")
@@ -221,8 +224,8 @@ def run_local_hive_dry_run(
     # Bracket the monotonic anchor with UTC checks. Use the later UTC sample
     # so a rollback between samples cannot inflate the remaining interval.
     # The earlier monotonic bound includes sampling overhead conservatively.
-    utc_initial = _assert_not_expired(task)
     sampling_started = monotonic()
+    utc_initial = _assert_not_expired(task)
     utc_before = _assert_not_expired(task)
     authorization_started = monotonic()
     utc_after = _assert_not_expired(task)
