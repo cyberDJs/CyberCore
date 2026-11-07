@@ -455,10 +455,14 @@ def test_process_capacity_rejects_before_durable_claim(monkeypatch) -> None:
     task, kernel = setup("capacity-before-durable")
     allowed = kernel.execute(task, trusted_actor=task.actor)
     _install_fake_hive(monkeypatch)
-    now = datetime.now(timezone.utc)
+    deadline = allowed.authorization_deadline_monotonic
+    assert deadline is not None
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1, max_per_actor=1)
     assert guard.claim_once(
-        "other", expires_at=now + timedelta(minutes=2), now=now, actor=task.actor
+        "other",
+        deadline_monotonic=deadline,
+        now_monotonic=deadline - 1.0,
+        actor=task.actor,
     )
     monkeypatch.setattr(hive_bridge, "_PROCESS_REPLAY_GUARD", guard)
 
@@ -691,7 +695,6 @@ def test_rechecks_expiry_after_claim_before_dispatch(monkeypatch) -> None:
         (
             task.expires_at - timedelta(seconds=3),
             task.expires_at - timedelta(seconds=2),
-            task.expires_at - timedelta(seconds=1),
             task.expires_at + timedelta(seconds=1),
         )
     )
@@ -724,7 +727,6 @@ def test_rejects_result_returned_after_authorization_deadline(monkeypatch) -> No
             task.expires_at - timedelta(seconds=5),
             task.expires_at - timedelta(seconds=4),
             task.expires_at - timedelta(seconds=3),
-            task.expires_at - timedelta(seconds=2),
             task.expires_at + timedelta(seconds=1),
         )
     )
