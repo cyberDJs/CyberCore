@@ -977,13 +977,16 @@ def test_forward_utc_at_process_claim_rejects_without_dropping_prior_claim(
                 status=SimpleNamespace(value="dry_run"),
             )
 
-    assert run_local_hive_dry_run(
-        task,
-        trusted_actor=task.actor,
-        kernel_receipt=allowed,
-        registry=Registry(),
-        replay_guard=InMemoryReplayGuard(),
-    ).status == "dry_run"
+    assert (
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Registry(),
+            replay_guard=InMemoryReplayGuard(),
+        ).status
+        == "dry_run"
+    )
 
     sample_count = 0
 
