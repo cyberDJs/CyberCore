@@ -318,6 +318,78 @@ def test_process_clock_floor_treats_forward_wall_jump_as_upper_bound() -> None:
     assert result.reason == "EXPIRED"
 
 
+def test_forward_utc_jump_caps_deadline_with_current_trusted_observation() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    current = [base]
+    mono = [100.0]
+    k = kernel(
+        clock=lambda: current[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+
+    # A transient one-hour forward step exists when the short-lived request is
+    # issued. The construction-floor bound alone would allow roughly one hour.
+    current[0] = base + timedelta(hours=1)
+    mono[0] = 101.0
+    request = task(
+        requested_at=current[0],
+        expires_at=current[0] + timedelta(seconds=5),
+    )
+
+    result = k.execute(request, trusted_actor=ACTOR)
+
+    assert result.status == "EXECUTED"
+    assert result.authorization_floor_monotonic == 101.0
+    assert result.authorization_deadline_monotonic == 106.0
+
+
+def test_kernel_high_water_rejects_policy_to_authorization_monotonic_regression() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    ticks = iter((100.0, 104.0, 101.0))
+    k = kernel(
+        clock=lambda: base,
+        monotonic_clock=lambda: next(ticks),
+        process_id_provider=lambda: 4242,
+    )
+    request = task(
+        requested_at=base,
+        expires_at=base + timedelta(seconds=5),
+    )
+
+    with pytest.raises(PermissionError, match="clock authority"):
+        k.execute(request, trusted_actor=ACTOR)
+
+
+def test_concurrent_trusted_time_sampling_cannot_extend_construction_bound() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    source_lock = Lock()
+    tick = [99.0]
+
+    def monotonic_clock() -> float:
+        with source_lock:
+            tick[0] += 1.0
+            return tick[0]
+
+    k = kernel(
+        clock=lambda: base,
+        monotonic_clock=monotonic_clock,
+        process_id_provider=lambda: 4242,
+    )
+    expires_at = base + timedelta(seconds=20)
+    requests = (
+        task(task_id="clock-concurrent-a", correlation_id="clock-corr-a", requested_at=base, expires_at=expires_at),
+        task(task_id="clock-concurrent-b", correlation_id="clock-corr-b", requested_at=base, expires_at=expires_at),
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda request: k.execute(request, trusted_actor=ACTOR), requests))
+
+    assert all(result.status == "EXECUTED" for result in results)
+    assert all(result.authorization_deadline_monotonic is not None for result in results)
+    assert all(result.authorization_deadline_monotonic <= 120.0 for result in results)
+
+
 def test_process_clock_floor_rejects_future_request_after_construction_rollback() -> None:
     base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
     current = [base - timedelta(seconds=7)]

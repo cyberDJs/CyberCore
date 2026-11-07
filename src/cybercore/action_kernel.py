@@ -179,6 +179,7 @@ class ActionKernel:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._monotonic = monotonic_clock or monotonic
         self._process_id = process_id_provider or getpid
+        self._clock_lock = Lock()
 
         # Establish one process-local UTC<->monotonic floor before any task can
         # receive authority. The monotonic sample intentionally precedes UTC:
@@ -194,6 +195,7 @@ class ActionKernel:
             or not isinstance(self._clock_floor_process_id, int)
         ):
             raise ValueError("Action Kernel process-local clock floor is invalid")
+        self._clock_high_water_monotonic = self._clock_floor_monotonic
 
         self._used: set[str] = set()
         self._task_id_lock = Lock()
@@ -238,19 +240,28 @@ class ActionKernel:
         if verdict.decision != "ALLOW":
             return self._receipt(request, trusted_actor, verdict, "DENIED", verdict.reason)
 
-        # Policy validation has established aware, ordered request times. Only
-        # now derive the absolute process-local deadline from the construction
-        # floor, so malformed caller timestamps cannot reach datetime arithmetic.
-        authorization_deadline_monotonic = (
+        # Policy validation has established aware, ordered request times. The
+        # construction floor supplies one immutable upper bound, but a forward
+        # UTC correction observed during this request must never inflate that
+        # process-local budget if UTC later rolls back.
+        authorization_construction_deadline_monotonic = (
             self._clock_floor_monotonic
             + (request.expires_at - self._clock_floor_utc).total_seconds()
         )
 
-        # Time-of-check is not authority to execute later: revalidate immediately
-        # before the local dispatch boundary, after the policy audit callback.
-        # UTC may only shorten the process-floor grant; wall-clock rollback can
-        # never mint a later monotonic deadline.
+        # Revalidate immediately before the local dispatch boundary, after the
+        # policy audit callback. Derive a second deadline from this trusted
+        # observation and keep the earliest bound. UTC may only shorten a grant;
+        # neither forward jumps nor later rollback can mint extra monotonic time.
         authorization_now, authorization_monotonic_now = self._trusted_time()
+        authorization_observation_deadline_monotonic = (
+            authorization_monotonic_now
+            + (request.expires_at - authorization_now).total_seconds()
+        )
+        authorization_deadline_monotonic = min(
+            authorization_construction_deadline_monotonic,
+            authorization_observation_deadline_monotonic,
+        )
         if (
             not isfinite(authorization_deadline_monotonic)
             or request.expires_at <= authorization_now
@@ -512,25 +523,31 @@ class ActionKernel:
         return self._clock()
 
     def _trusted_time(self) -> tuple[datetime, float]:
-        current_process_id = self._process_id()
-        current_monotonic = self._monotonic()
-        current_wall = self._clock()
-        if (
-            current_process_id != self._clock_floor_process_id
-            or isinstance(current_process_id, bool)
-            or not isinstance(current_process_id, int)
-            or not isfinite(current_monotonic)
-            or current_monotonic < self._clock_floor_monotonic
-            or current_wall.tzinfo is None
-        ):
-            raise PermissionError(
-                "Action Kernel process-local clock authority unavailable or invalid"
-            )
+        # Serialize trusted clock observations. The high-water mark records the
+        # order in which the kernel accepted samples, so a same-PID monotonic
+        # regression cannot be hidden by concurrent policy/audit activity.
+        with self._clock_lock:
+            current_process_id = self._process_id()
+            current_monotonic = self._monotonic()
+            current_wall = self._clock()
+            if (
+                current_process_id != self._clock_floor_process_id
+                or isinstance(current_process_id, bool)
+                or not isinstance(current_process_id, int)
+                or not isfinite(current_monotonic)
+                or current_monotonic < self._clock_floor_monotonic
+                or current_monotonic < self._clock_high_water_monotonic
+                or current_wall.tzinfo is None
+            ):
+                raise PermissionError(
+                    "Action Kernel process-local clock authority unavailable or invalid"
+                )
 
-        projected_floor = self._clock_floor_utc + timedelta(
-            seconds=current_monotonic - self._clock_floor_monotonic
-        )
-        return max(current_wall, projected_floor), current_monotonic
+            projected_floor = self._clock_floor_utc + timedelta(
+                seconds=current_monotonic - self._clock_floor_monotonic
+            )
+            self._clock_high_water_monotonic = current_monotonic
+            return max(current_wall, projected_floor), current_monotonic
 
     def _task_id_is_reserved(self, task_id: str) -> bool:
         with self._task_id_lock:

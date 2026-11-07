@@ -158,3 +158,21 @@ moves backward, the sticky fence prevents the earlier termination from being
 reversed. Replay claims themselves remain retained against the kernel-issued
 process-local monotonic deadline, so wall-clock movement cannot prune a live
 claim early.
+
+
+## Conservative observation deadline and monotonic high-water
+
+The kernel now carries two independent process-local deadline bounds for every
+successful authorization. The construction-time UTC/monotonic floor remains the
+long-lived process reference. Immediately before execution authority is issued,
+the kernel also derives a deadline from the current trusted UTC/monotonic
+observation. The receipt records the earlier of those two deadlines. A transient
+forward UTC correction therefore cannot inflate the monotonic authorization
+budget and later become exploitable if UTC is corrected backward.
+
+Trusted clock observations are serialized inside the kernel and maintain a
+nondecreasing process-local monotonic high-water mark. Any later trusted sample
+below the previously accepted monotonic value fails closed even when it remains
+above the original construction floor. This covers regressions hidden between
+policy evaluation, blocking audit callbacks and final authorization, including
+concurrent callers sharing one kernel instance.
