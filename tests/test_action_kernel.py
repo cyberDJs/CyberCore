@@ -560,10 +560,13 @@ def test_kernel_monotonic_high_water_is_shared_across_requests() -> None:
     )
     mono[0] = 103.0
     wall[0] = base + timedelta(seconds=3)
-    assert k.execute(
-        task(task_id="first", requested_at=base, expires_at=base + timedelta(seconds=9)),
-        trusted_actor=ACTOR,
-    ).status == "EXECUTED"
+    assert (
+        k.execute(
+            task(task_id="first", requested_at=base, expires_at=base + timedelta(seconds=9)),
+            trusted_actor=ACTOR,
+        ).status
+        == "EXECUTED"
+    )
 
     # A later request cannot mint authority from the regressed counter.
     mono[0] = 102.0
