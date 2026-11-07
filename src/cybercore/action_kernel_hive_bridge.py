@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from importlib import import_module
+from math import isfinite
+from os import getpid
 from threading import Lock
 from time import monotonic
 from typing import Any, Protocol
@@ -196,24 +198,32 @@ def run_local_hive_dry_run(
     ):
         raise PermissionError("Task authorization lifetime exceeds policy")
 
-    # Establish one budget before any optional setup or blocking claim work.
-    # Bracket the monotonic anchor with UTC checks. Use the later UTC sample
-    # so a rollback between samples cannot inflate the remaining interval.
-    # The earlier monotonic bound includes sampling overhead conservatively.
-    utc_initial = _assert_not_expired(task)
-    sampling_started = monotonic()
-    utc_before = _assert_not_expired(task)
-    # The interval between the first trusted UTC observation and the first
-    # monotonic anchor is otherwise unmeasured. If wall time moved backward
-    # across that boundary, fail closed before any replay claim or dispatch.
-    if utc_before < utc_initial:
-        raise PermissionError("Task authorization expired before replay claim")
-    authorization_started = monotonic()
-    utc_after = _assert_not_expired(task)
-    remaining_seconds = (task.expires_at - max(utc_initial, utc_before, utc_after)).total_seconds()
-    remaining_seconds -= authorization_started - sampling_started
-    if remaining_seconds <= 0:
-        raise PermissionError("Task authorization expired before dispatch")
+    deadline = kernel_receipt.authorization_deadline_monotonic
+    process_id = kernel_receipt.authorization_process_id
+    if (
+        deadline is None
+        or isinstance(deadline, bool)
+        or not isinstance(deadline, (int, float))
+        or not isfinite(float(deadline))
+        or process_id is None
+        or isinstance(process_id, bool)
+        or not isinstance(process_id, int)
+        or process_id != getpid()
+    ):
+        raise PermissionError("Trusted monotonic authorization deadline unavailable or invalid")
+    deadline = float(deadline)
+
+    def assert_authorized(stage: str) -> None:
+        # UTC remains the external policy upper bound and catches forward
+        # corrections. The absolute process-local monotonic deadline prevents
+        # backward wall-clock corrections or scheduling delays from extending
+        # the authorization after the trusted kernel issued its receipt.
+        _assert_not_expired(task)
+        current = monotonic()
+        if not isfinite(current) or current >= deadline:
+            raise PermissionError(f"Task authorization expired {stage}")
+
+    assert_authorized("before dispatch")
 
     if replay_guard is None:
         raise PermissionError("Atomic replay guard required")
@@ -240,18 +250,14 @@ def run_local_hive_dry_run(
 
     # Authorization lifetime is checked again immediately at the claim/dispatch
     # boundary so shaping/import/request construction cannot extend validity.
-    _assert_not_expired(task)
-    if monotonic() - authorization_started >= remaining_seconds:
-        raise PermissionError("Task authorization expired before replay claim")
+    assert_authorized("before replay claim")
 
     key = f"{trusted_actor}:{task.task_id}:{task.correlation_id}"
     _claim_once(replay_guard, key, expires_at=task.expires_at, actor=trusted_actor)
 
     # Carry the original budget across a potentially blocking durable claim.
     # Claims remain consumed when it expires; do not dispatch or restart it.
-    _assert_not_expired(task)
-    if monotonic() - authorization_started >= remaining_seconds:
-        raise PermissionError("Task authorization expired during replay claim")
+    assert_authorized("during replay claim")
 
     # Both claims intentionally remain consumed after this boundary, including
     # uncertain dispatch failures or invalid/late results.
@@ -261,10 +267,7 @@ def run_local_hive_dry_run(
     # and has no cancellation/deadline parameter. Reject a result that returns
     # after authorization expiry instead of accepting late work as success.
     # Claims remain consumed because the dispatch outcome already occurred.
-    _assert_not_expired(task)
-    # A backward wall-clock correction must not extend in-flight authorization.
-    if monotonic() - authorization_started >= remaining_seconds:
-        raise PermissionError("Task authorization expired during dispatch")
+    assert_authorized("during dispatch")
 
     if (
         result.request_id != task.task_id

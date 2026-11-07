@@ -48,11 +48,67 @@ authorized deadline, its result is rejected fail-closed and both replay claims
 remain consumed. This prevents a late result from becoming accepted evidence
 or from being retried ambiguously.
 
-At the initial expiry check, before optional runtime setup or replay claiming, the bridge also captures the remaining UTC
-authorization interval and a monotonic timestamp. A result is rejected when
-monotonic elapsed time across claim acquisition and dispatch reaches that interval, even if the wall clock moves
-backward. The UTC check remains active for forward clock corrections.
+For trusted in-process use, the Action Kernel now binds each successful authorization
+to two independent limits: the immutable UTC `authorization_expires_at` policy
+bound and a process-local absolute monotonic deadline. The monotonic anchor is
+captured by the trusted kernel before its final UTC authorization observation,
+so subsequent scheduler delays are charged against the same budget. The receipt
+also carries the issuing process id; the bridge fails closed if the monotonic
+deadline is missing, non-finite, or belongs to another process.
+
+The bridge does not reconstruct a deadline from later UTC samples. At entry,
+before replay claim, after replay claim, and after synchronous dispatch it checks
+both the UTC upper bound and the kernel-issued monotonic deadline. Backward wall
+clock corrections therefore cannot extend authorization after issuance; forward
+UTC corrections may still terminate it earlier.
 
 Hard cancellation/deadline propagation belongs to a later CyberHIVE contract
 change and requires its own reviewed API rather than a thread-based timeout
 shim that cannot safely stop already-running work.
+
+
+## ADR: process-local monotonic authorization deadline
+
+**Status:** candidate, not authorized for production  
+**Date:** 2026-11-07
+
+### Context
+
+Repeated adversarial review found that deriving a monotonic budget inside the
+Hive bridge from interleaved UTC/monotonic samples leaves unavoidable sampling
+windows. A scheduler pause plus partial wall-clock rollback can hide real elapsed
+time before the bridge establishes its anchor.
+
+### Decision
+
+The trusted Action Kernel establishes the process-local monotonic authorization
+deadline at its final authorization boundary and records it in the internally
+generated `ExecutionReceipt`, together with the issuing process id. The UTC
+expiry remains the externally meaningful policy/audit bound. The trusted local
+broker forwards this receipt internally without accepting caller-supplied
+receipts. The Hive bridge requires both bounds and fails closed when the
+monotonic authority is absent, invalid, expired, or from another process.
+
+### Consequences
+
+- Scheduler delay and later wall-clock rollback cannot restart authorization.
+- Receipts containing monotonic deadlines are explicitly process-local and are
+  not valid authorization objects across process restarts or IPC boundaries.
+- Cross-process composition still requires an authenticated server-side
+  authorization state or a separately designed deadline propagation protocol.
+- The bridge keeps UTC checks for forward clock corrections and audit clarity.
+
+### Rejected alternatives
+
+- Repeated UTC/monotonic sampling inside the bridge: rejected after multiple
+  adversarial P2 findings exposed gaps between samples.
+- Thread/future timeout wrappers: rejected because they cannot safely cancel an
+  already-running synchronous CyberHIVE dispatch.
+- Treating a serialized monotonic float as portable authority: rejected because
+  monotonic epochs are process/boot local.
+
+### Rollback
+
+Stop using the trusted Hive broker/bridge path and preserve existing audit and
+replay records. Removing the new receipt fields restores the prior local API,
+but must not be interpreted as restoring a safe bridge deadline mechanism.

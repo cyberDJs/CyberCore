@@ -1,5 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from os import getpid
 from threading import Barrier, Lock
 
 from cybercore.action_kernel import (
@@ -264,6 +265,32 @@ def test_missing_synthetic_status_returns_structured_denial() -> None:
     assert result.status == "DENIED"
     assert result.reason == "INVALID_INVENTORY"
     assert result.evidence is None
+
+
+def test_executed_receipt_binds_process_local_monotonic_deadline() -> None:
+    now = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    request = task(
+        requested_at=now,
+        expires_at=now + timedelta(seconds=10),
+    )
+    result = kernel(
+        clock=lambda: now,
+        monotonic_clock=lambda: 100.0,
+        process_id_provider=lambda: 4242,
+    ).execute(request, trusted_actor=ACTOR)
+
+    assert result.status == "EXECUTED"
+    assert result.authorization_expires_at == request.expires_at
+    assert result.authorization_deadline_monotonic == 110.0
+    assert result.authorization_process_id == 4242
+
+
+def test_denied_receipt_does_not_mint_monotonic_authority() -> None:
+    result = kernel(enabled=False).execute(task(), trusted_actor=ACTOR)
+
+    assert result.status == "DENIED"
+    assert result.authorization_deadline_monotonic is None
+    assert result.authorization_process_id is None
 
 
 def test_expiry_is_rechecked_after_policy_audit_before_dispatch() -> None:

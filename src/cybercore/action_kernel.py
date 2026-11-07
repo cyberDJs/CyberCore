@@ -10,7 +10,9 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
+from os import getpid
 from threading import Lock
+from time import monotonic
 from typing import Callable, Literal, Mapping
 
 
@@ -119,6 +121,10 @@ class ExecutionReceipt:
     # Immutable authorization lifetime recorded by the trusted kernel at evaluation.
     # None is accepted for legacy construction, but bridge dispatch fails closed.
     authorization_expires_at: datetime | None = None
+    # Process-local absolute deadline in the same monotonic domain used by the
+    # trusted kernel. It is intentionally not a portable/wire authorization.
+    authorization_deadline_monotonic: float | None = None
+    authorization_process_id: int | None = None
 
     @property
     def evidence_sha256(self) -> str | None:
@@ -156,6 +162,8 @@ class ActionKernel:
         evidence_sink: Callable[[AuditEvent], None] | None = None,
         source_instance: str = "cybercore-local",
         clock: Callable[[], datetime] | None = None,
+        monotonic_clock: Callable[[], float] | None = None,
+        process_id_provider: Callable[[], int] | None = None,
     ) -> None:
         self._targets = {target_id: dict(values) for target_id, values in targets.items()}
         self._actors = allowed_actors
@@ -165,6 +173,8 @@ class ActionKernel:
         self._sink = evidence_sink
         self._source_instance = source_instance
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._monotonic = monotonic_clock or monotonic
+        self._process_id = process_id_provider or getpid
         self._used: set[str] = set()
         self._task_id_lock = Lock()
 
@@ -206,7 +216,13 @@ class ActionKernel:
 
         # Time-of-check is not authority to execute later: revalidate immediately
         # before the local dispatch boundary, after the policy audit callback.
-        if request.expires_at <= self._now():
+        #
+        # Capture the process-local monotonic anchor *before* the trusted UTC
+        # observation. From this point onward, any scheduling delay is measured
+        # by monotonic time and cannot be hidden by a later wall-clock rollback.
+        authorization_started_monotonic = self._monotonic()
+        authorization_now = self._now()
+        if request.expires_at <= authorization_now:
             expired_verdict = self._verdict(request, trusted_actor, "DENY", "EXPIRED")
             if not self._audit(
                 request,
@@ -229,6 +245,11 @@ class ActionKernel:
                 "DENIED",
                 "EXPIRED",
             )
+
+        authorization_deadline_monotonic = authorization_started_monotonic + (
+            request.expires_at - authorization_now
+        ).total_seconds()
+        authorization_process_id = self._process_id()
 
         if not self._reserve_task_id(request.task_id):
             duplicate_verdict = self._verdict(request, trusted_actor, "DENY", "DUPLICATE")
@@ -282,6 +303,8 @@ class ActionKernel:
             "EXECUTED",
             "SYNTHETIC_ONLY",
             evidence=evidence,
+            authorization_deadline_monotonic=authorization_deadline_monotonic,
+            authorization_process_id=authorization_process_id,
         )
 
         if not self._audit(
@@ -398,6 +421,8 @@ class ActionKernel:
         reason: str,
         *,
         evidence: EvidenceMetadata | None = None,
+        authorization_deadline_monotonic: float | None = None,
+        authorization_process_id: int | None = None,
     ) -> ExecutionReceipt:
         now = self._now()
         return ExecutionReceipt(
@@ -413,6 +438,8 @@ class ActionKernel:
             provenance=self._kernel_provenance(now),
             evidence=evidence,
             authorization_expires_at=request.expires_at,
+            authorization_deadline_monotonic=authorization_deadline_monotonic,
+            authorization_process_id=authorization_process_id,
         )
 
     def _audit(
