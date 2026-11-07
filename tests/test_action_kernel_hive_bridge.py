@@ -418,7 +418,6 @@ def test_future_dated_request_is_denied_before_process_replay_quota() -> None:
     assert denied.authorization_process_id is None
 
 
-
 def test_expiry_lifetime_uses_receipt_clock_not_old_request_time() -> None:
     task, kernel = setup("receipt-clock-bound")
     altered = replace(
