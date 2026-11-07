@@ -13,6 +13,20 @@ from cybercore.action_kernel import ActionKernel, Provenance, TaskRequest
 from cybercore.action_kernel_hive_bridge import InMemoryReplayGuard, run_local_hive_dry_run
 
 
+@pytest.fixture(autouse=True)
+def isolated_process_replay_guard(monkeypatch) -> None:
+    # Independent tests represent independent processes/clock histories.
+    # Keep this same guard for every call within a test, including replay and races.
+    monkeypatch.setattr(
+        hive_bridge,
+        "_PROCESS_REPLAY_GUARD",
+        hive_bridge._ExpiringProcessReplayGuard(
+            max_entries=hive_bridge._PROCESS_REPLAY_MAX_ENTRIES,
+            max_per_actor=hive_bridge._PROCESS_REPLAY_MAX_PER_ACTOR,
+        ),
+    )
+
+
 def setup(suffix: str):
     now = datetime.now(timezone.utc)
     task = TaskRequest(
@@ -736,7 +750,7 @@ def test_dispatch_deadline_survives_wall_clock_corrections(
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert guard.claim_once(key) is False
     # Even replacing the supplied guard cannot replay under the rolled-back clock.
-    with pytest.raises(PermissionError, match="expired|already consumed"):
+    with pytest.raises(PermissionError, match="UTC rollback detected|expired|already consumed"):
         invoke(InMemoryReplayGuard())
     assert calls == 1
 
@@ -833,7 +847,7 @@ def test_blocking_claim_cannot_extend_deadline_with_utc_rollback(
 
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert durable.claim_once(key) is False
-    with pytest.raises(PermissionError, match="already consumed"):
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
         run_local_hive_dry_run(
             task,
             trusted_actor=task.actor,
@@ -1003,7 +1017,7 @@ def test_forward_utc_during_process_claim_never_allows_replay(monkeypatch) -> No
     # survives UTC rollback and denies a replacement durable guard.
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert durable.claim_once(key) is True
-    with pytest.raises(PermissionError, match="already consumed"):
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
         run_local_hive_dry_run(
             task,
             trusted_actor=task.actor,
