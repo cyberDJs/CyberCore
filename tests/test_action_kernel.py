@@ -576,3 +576,66 @@ def test_kernel_monotonic_high_water_is_shared_across_requests() -> None:
             task(task_id="second", requested_at=base, expires_at=base + timedelta(seconds=9)),
             trusted_actor=ACTOR,
         )
+
+
+def test_forward_utc_during_policy_survives_audit_rollback() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    wall = [base]
+    mono = [100.0]
+    future = base + timedelta(hours=1)
+
+    def audit(event: AuditEvent) -> None:
+        if event.stage == "policy" and event.outcome == "ALLOW":
+            # A transient forward jump was observed by policy, then the
+            # audit blocks until UTC is corrected backward before issuance.
+            wall[0] = base + timedelta(seconds=1)
+
+    k = kernel(
+        clock=lambda: wall[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+        evidence_sink=audit,
+    )
+    wall[0] = future
+    mono[0] = 101.0
+    request = task(
+        task_id="forward-policy-rollback",
+        requested_at=future,
+        expires_at=future + timedelta(seconds=5),
+    )
+    receipt = k.execute(request, trusted_actor=ACTOR)
+    assert receipt.status == "EXECUTED"
+    assert receipt.authorization_floor_monotonic == 101.0
+    assert receipt.authorization_deadline_monotonic == 106.0
+    assert receipt.authorization_deadline_monotonic < 110.0
+
+
+def test_kernel_utc_high_water_is_shared_across_separate_requests() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    wall = [base]
+    mono = [100.0]
+    k = kernel(
+        clock=lambda: wall[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+    forward = base + timedelta(hours=1)
+    wall[0] = forward
+    mono[0] = 101.0
+    first = task(
+        task_id="forward-utc-first",
+        requested_at=forward,
+        expires_at=forward + timedelta(seconds=5),
+    )
+    assert k.execute(first, trusted_actor=ACTOR).status == "EXECUTED"
+
+    wall[0] = base + timedelta(seconds=1)
+    mono[0] = 102.0
+    second = task(
+        task_id="after-utc-rollback",
+        requested_at=forward,
+        expires_at=forward + timedelta(seconds=5),
+    )
+    receipt = k.execute(second, trusted_actor=ACTOR)
+    assert receipt.status == "EXECUTED"
+    assert receipt.authorization_deadline_monotonic == 107.0
