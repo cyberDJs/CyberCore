@@ -1126,7 +1126,6 @@ def test_monotonic_budget_covers_pause_after_first_utc_sample(monkeypatch) -> No
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert durable.claim_once(key) is True
 
-
 # Reconciled regression scenarios from merged PR #149; error expectations
 # intentionally reflect the stricter process UTC rollback fence in PR #150.
 
@@ -1241,4 +1240,3 @@ def test_expired_forward_clock_probe_cannot_evict_existing_process_claim() -> No
         )
     with pytest.raises(PermissionError, match="UTC rollback detected"):
         guard.claim_once("original", expires_at=expiry, now=now)
-
