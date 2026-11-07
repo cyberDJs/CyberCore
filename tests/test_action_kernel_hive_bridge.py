@@ -447,10 +447,10 @@ def test_wall_clock_forward_then_backward_cannot_prune_process_replay_claim(
     )
 
     # Correct the wall clock backward and replace the caller-provided guard.
-    # The process-owned monotonic claim must still deny replay.
+    # PR #150's process-owned sticky UTC fence now rejects before replay lookup.
     wall = original.expires_at - timedelta(seconds=1)
     mono = 102.0
-    with pytest.raises(PermissionError, match="already consumed"):
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
         run_local_hive_dry_run(
             original,
             trusted_actor=original.actor,
