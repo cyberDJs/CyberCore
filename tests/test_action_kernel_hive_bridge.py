@@ -1126,8 +1126,10 @@ def test_monotonic_budget_covers_pause_after_first_utc_sample(monkeypatch) -> No
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert durable.claim_once(key) is True
 
+
 # Reconciled regression scenarios from merged PR #149; error expectations
 # intentionally reflect the stricter process UTC rollback fence in PR #150.
+
 
 @pytest.mark.parametrize("rollback_at", ["before_monotonic", "second_utc"])
 def test_utc_rollback_during_initial_anchor_fails_before_claim(
