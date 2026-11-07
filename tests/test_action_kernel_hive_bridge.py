@@ -229,8 +229,10 @@ def test_concurrent_fresh_guards_cannot_bypass_process_claim(monkeypatch) -> Non
     assert calls == 1
 
 
-def test_process_replay_guard_prunes_expired_claims() -> None:
+def test_process_replay_guard_prunes_expired_claims(monkeypatch) -> None:
     now = datetime.now(timezone.utc)
+    elapsed = 0.0
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", lambda: elapsed)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
 
     assert guard.claim_once("a", expires_at=now + timedelta(seconds=1), now=now)
@@ -239,7 +241,11 @@ def test_process_replay_guard_prunes_expired_claims() -> None:
     with pytest.raises(PermissionError, match="capacity exhausted"):
         guard.claim_once("c", expires_at=now + timedelta(minutes=1), now=now)
 
+    # UTC alone cannot prune a claim; a full monotonic retention horizon can.
     later = now + timedelta(seconds=2)
+    with pytest.raises(PermissionError, match="capacity exhausted"):
+        guard.claim_once("c", expires_at=later + timedelta(minutes=1), now=later)
+    elapsed = 301.0
     assert guard.claim_once("c", expires_at=later + timedelta(minutes=1), now=later)
     assert guard.claim_once("a", expires_at=later + timedelta(minutes=1), now=later)
 
@@ -261,19 +267,20 @@ def test_process_replay_guard_never_evicts_unexpired_claims() -> None:
     )
 
 
-def test_process_replay_guard_does_not_retain_already_expired_claim() -> None:
+def test_process_replay_guard_rejects_expiry_and_retains_tombstone(monkeypatch) -> None:
     now = datetime.now(timezone.utc)
+    elapsed = 100.0
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", lambda: elapsed)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1)
 
     with pytest.raises(PermissionError, match="expired during replay claim"):
         guard.claim_once("expired", expires_at=now, now=now)
     # A forward-clock rejection retains a replay tombstone if UTC rolls back.
     assert guard.claim_once("expired", expires_at=now, now=now - timedelta(seconds=1)) is False
-    assert guard.claim_once(
-        "fresh",
-        expires_at=now + timedelta(minutes=1),
-        now=now,
-    )
+    with pytest.raises(PermissionError, match="capacity exhausted"):
+        guard.claim_once("fresh", expires_at=now + timedelta(minutes=1), now=now)
+    elapsed = 401.0
+    assert guard.claim_once("fresh", expires_at=now + timedelta(minutes=1), now=now)
 
 
 def test_process_replay_quota_isolated_by_trusted_actor() -> None:
@@ -1002,3 +1009,18 @@ def test_forward_utc_during_process_claim_never_allows_replay(monkeypatch) -> No
             registry=Forbidden(),
             replay_guard=InMemoryReplayGuard(),
         )
+
+
+def test_forward_utc_jump_cannot_prune_prior_process_replay_claim(monkeypatch) -> None:
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", lambda: 100.0)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=3)
+
+    assert guard.claim_once("prior", expires_at=now + timedelta(minutes=1), now=now)
+    # An NTP forward step cannot be used to erase the previous replay claim.
+    with pytest.raises(PermissionError, match="expired during replay claim"):
+        guard.claim_once(
+            "later", expires_at=now + timedelta(minutes=1), now=now + timedelta(minutes=2)
+        )
+    assert guard.claim_once("prior", expires_at=now + timedelta(minutes=1), now=now) is False
+    assert guard.claim_once("later", expires_at=now + timedelta(minutes=1), now=now) is False
