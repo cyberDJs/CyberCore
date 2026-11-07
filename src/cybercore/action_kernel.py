@@ -207,10 +207,6 @@ class ActionKernel:
         # Authority is derived from the process-construction clock floor, not
         # from a fresh UTC/monotonic sample pair at execute() entry.
         authorization_process_id = self._clock_floor_process_id
-        authorization_deadline_monotonic = (
-            self._clock_floor_monotonic
-            + (request.expires_at - self._clock_floor_utc).total_seconds()
-        )
 
         if self._sink is None:
             verdict = self._verdict(request, trusted_actor, "DENY", "AUDIT_UNAVAILABLE")
@@ -238,6 +234,14 @@ class ActionKernel:
 
         if verdict.decision != "ALLOW":
             return self._receipt(request, trusted_actor, verdict, "DENIED", verdict.reason)
+
+        # Policy validation has established aware, ordered request times. Only
+        # now derive the absolute process-local deadline from the construction
+        # floor, so malformed caller timestamps cannot reach datetime arithmetic.
+        authorization_deadline_monotonic = (
+            self._clock_floor_monotonic
+            + (request.expires_at - self._clock_floor_utc).total_seconds()
+        )
 
         # Time-of-check is not authority to execute later: revalidate immediately
         # before the local dispatch boundary, after the policy audit callback.
@@ -513,7 +517,9 @@ class ActionKernel:
             or current_monotonic < self._clock_floor_monotonic
             or current_wall.tzinfo is None
         ):
-            raise PermissionError("Action Kernel process-local clock authority unavailable or invalid")
+            raise PermissionError(
+                "Action Kernel process-local clock authority unavailable or invalid"
+            )
 
         projected_floor = self._clock_floor_utc + timedelta(
             seconds=current_monotonic - self._clock_floor_monotonic

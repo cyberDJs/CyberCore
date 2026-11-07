@@ -401,7 +401,7 @@ def test_rejects_overlong_authorization_before_optional_runtime_or_claim() -> No
     assert guard.claim_once(key) is True
 
 
-def test_future_dated_request_cannot_pin_process_replay_quota() -> None:
+def test_future_dated_request_is_denied_before_process_replay_quota() -> None:
     task, kernel = setup("future-dated-lifetime")
     future = datetime.now(timezone.utc) + timedelta(days=365)
     altered = replace(
@@ -409,23 +409,14 @@ def test_future_dated_request_cannot_pin_process_replay_quota() -> None:
         requested_at=future,
         expires_at=future + timedelta(minutes=2),
     )
-    # Current kernel historically permits a future requested_at, but the
-    # bridge must not use untrusted request time as replay retention authority.
-    allowed = kernel.execute(altered, trusted_actor=altered.actor)
-    assert allowed.status == "EXECUTED"
-    guard = InMemoryReplayGuard()
 
-    with pytest.raises(PermissionError, match="lifetime exceeds policy"):
-        run_local_hive_dry_run(
-            altered,
-            trusted_actor=altered.actor,
-            kernel_receipt=allowed,
-            registry=None,
-            replay_guard=guard,
-        )
+    denied = kernel.execute(altered, trusted_actor=altered.actor)
 
-    key = f"{altered.actor}:{altered.task_id}:{altered.correlation_id}"
-    assert guard.claim_once(key) is True
+    assert denied.status == "DENIED"
+    assert denied.reason == "INVALID_TIME"
+    assert denied.authorization_deadline_monotonic is None
+    assert denied.authorization_process_id is None
+
 
 
 def test_expiry_lifetime_uses_receipt_clock_not_old_request_time() -> None:
