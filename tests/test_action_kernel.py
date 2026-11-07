@@ -498,3 +498,78 @@ def test_reserved_task_id_stays_consumed_after_uncertain_dispatch_failure() -> N
     assert first.reason == "AUDIT_FAILED"
     assert second.status == "DENIED"
     assert second.reason == "DUPLICATE"
+
+
+def test_issue_deadline_caps_forward_utc_jump() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    wall = [base]
+    mono = [100.0]
+    k = kernel(
+        clock=lambda: wall[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+
+    # Kernel construction predates a +1h UTC correction. The new request
+    # is valid at the observed corrected clock, but not for an hour.
+    wall[0] = base + timedelta(hours=1)
+    mono[0] = 101.0
+    req = task(
+        requested_at=wall[0],
+        expires_at=wall[0] + timedelta(seconds=5),
+    )
+    receipt = k.execute(req, trusted_actor=ACTOR)
+    assert receipt.status == "EXECUTED"
+    assert receipt.authorization_floor_monotonic == 101.0
+    assert receipt.authorization_deadline_monotonic == 106.0
+
+
+def test_kernel_rejects_monotonic_rollback_after_policy_before_authority() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    mono = [100.0]
+    wall = [base]
+
+    def audit(event: AuditEvent) -> None:
+        if event.stage == "policy" and event.outcome == "ALLOW":
+            # Policy already observed monotonic 104; even after a clock
+            # rollback with plausible UTC, no new receipt can be issued.
+            mono[0] = 101.0
+            wall[0] = base + timedelta(seconds=1)
+
+    k = kernel(
+        clock=lambda: wall[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+        evidence_sink=audit,
+    )
+    mono[0] = 104.0
+    wall[0] = base + timedelta(seconds=4)
+    req = task(requested_at=base, expires_at=base + timedelta(seconds=5))
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(req, trusted_actor=ACTOR)
+
+
+def test_kernel_monotonic_high_water_is_shared_across_requests() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    mono = [100.0]
+    wall = [base]
+    k = kernel(
+        clock=lambda: wall[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+    mono[0] = 103.0
+    wall[0] = base + timedelta(seconds=3)
+    assert k.execute(
+        task(task_id="first", requested_at=base, expires_at=base + timedelta(seconds=9)),
+        trusted_actor=ACTOR,
+    ).status == "EXECUTED"
+
+    # A later request cannot mint authority from the regressed counter.
+    mono[0] = 102.0
+    wall[0] = base + timedelta(seconds=2)
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(
+            task(task_id="second", requested_at=base, expires_at=base + timedelta(seconds=9)),
+            trusted_actor=ACTOR,
+        )
