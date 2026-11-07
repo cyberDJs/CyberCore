@@ -187,6 +187,13 @@ class ActionKernel:
         self._capabilities = dict({default.name: default} if capabilities is None else capabilities)
 
     def execute(self, request: TaskRequest, *, trusted_actor: str) -> ExecutionReceipt:
+        # Establish the process-local authorization clock pair before any
+        # caller-supplied audit callback can block. A later wall-clock rollback
+        # cannot hide elapsed scheduler/callback time from this monotonic anchor.
+        authorization_started_monotonic = self._monotonic()
+        authorization_anchor_utc = self._now()
+        authorization_process_id = self._process_id()
+
         if self._sink is None:
             verdict = self._verdict(request, trusted_actor, "DENY", "AUDIT_UNAVAILABLE")
             return self._receipt(request, trusted_actor, verdict, "DENIED", verdict.reason)
@@ -216,13 +223,17 @@ class ActionKernel:
 
         # Time-of-check is not authority to execute later: revalidate immediately
         # before the local dispatch boundary, after the policy audit callback.
-        #
-        # Capture the process-local monotonic anchor *before* the trusted UTC
-        # observation. From this point onward, any scheduling delay is measured
-        # by monotonic time and cannot be hidden by a later wall-clock rollback.
-        authorization_started_monotonic = self._monotonic()
+        # The absolute monotonic deadline is derived from the clock pair captured
+        # at execute() entry, before any blocking audit/policy callback.
+        authorization_deadline_monotonic = (
+            authorization_started_monotonic
+            + (request.expires_at - authorization_anchor_utc).total_seconds()
+        )
         authorization_now = self._now()
-        if request.expires_at <= authorization_now:
+        if (
+            request.expires_at <= authorization_now
+            or self._monotonic() >= authorization_deadline_monotonic
+        ):
             expired_verdict = self._verdict(request, trusted_actor, "DENY", "EXPIRED")
             if not self._audit(
                 request,
@@ -245,12 +256,6 @@ class ActionKernel:
                 "DENIED",
                 "EXPIRED",
             )
-
-        authorization_deadline_monotonic = (
-            authorization_started_monotonic
-            + (request.expires_at - authorization_now).total_seconds()
-        )
-        authorization_process_id = self._process_id()
 
         if not self._reserve_task_id(request.task_id):
             duplicate_verdict = self._verdict(request, trusted_actor, "DENY", "DUPLICATE")

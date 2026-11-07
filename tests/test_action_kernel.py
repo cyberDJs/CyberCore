@@ -292,6 +292,47 @@ def test_denied_receipt_does_not_mint_monotonic_authority() -> None:
     assert result.authorization_process_id is None
 
 
+@pytest.mark.parametrize("blocked_stage", ["request", "policy"])
+def test_blocking_audit_cannot_restart_deadline_after_partial_utc_rollback(
+    blocked_stage: str,
+) -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    current = [base]
+    monotonic_now = [100.0]
+    expires_at = base + timedelta(seconds=5)
+    events: list[AuditEvent] = []
+
+    def sink(event: AuditEvent) -> None:
+        events.append(event)
+        if event.stage == blocked_stage and (
+            blocked_stage == "request" or event.outcome == "ALLOW"
+        ):
+            # Ten seconds of real elapsed time are hidden behind only three
+            # seconds of apparent UTC progress by a seven-second rollback.
+            monotonic_now[0] = 110.0
+            current[0] = base + timedelta(seconds=3)
+
+    k = kernel(
+        evidence_sink=sink,
+        clock=lambda: current[0],
+        monotonic_clock=lambda: monotonic_now[0],
+        process_id_provider=lambda: 4242,
+    )
+    result = k.execute(
+        task(
+            requested_at=base,
+            expires_at=expires_at,
+        ),
+        trusted_actor=ACTOR,
+    )
+
+    assert result.status == "DENIED"
+    assert result.reason == "EXPIRED"
+    assert result.authorization_deadline_monotonic is None
+    assert result.authorization_process_id is None
+    assert any(event.stage == blocked_stage for event in events)
+
+
 def test_expiry_is_rechecked_after_policy_audit_before_dispatch() -> None:
     current = [datetime(2026, 10, 19, 12, 0, tzinfo=timezone.utc)]
     expires_at = current[0] + timedelta(seconds=10)

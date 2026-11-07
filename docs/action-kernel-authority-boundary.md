@@ -81,17 +81,22 @@ time before the bridge establishes its anchor.
 
 ### Decision
 
-The trusted Action Kernel establishes the process-local monotonic authorization
-deadline at its final authorization boundary and records it in the internally
-generated `ExecutionReceipt`, together with the issuing process id. The UTC
-expiry remains the externally meaningful policy/audit bound. The trusted local
-broker forwards this receipt internally without accepting caller-supplied
-receipts. The Hive bridge requires both bounds and fails closed when the
-monotonic authority is absent, invalid, expired, or from another process.
+The trusted Action Kernel captures a process-local monotonic anchor, UTC anchor,
+and process id at the start of `execute()`, before any injected audit callback
+can block. After policy evaluation/audit it derives the absolute monotonic
+authorization deadline from that original clock pair and records the deadline in
+the internally generated `ExecutionReceipt`. Any scheduler or audit-callback
+delay therefore consumes the original budget even if wall time is partially
+corrected backward during the delay. The UTC expiry remains the externally
+meaningful policy/audit bound. The trusted local broker forwards this receipt
+internally without accepting caller-supplied receipts. The Hive bridge requires
+both bounds and fails closed when the monotonic authority is absent, invalid,
+expired, or from another process.
 
 ### Consequences
 
-- Scheduler delay and later wall-clock rollback cannot restart authorization.
+- Scheduler delay, including delay inside request/policy audit callbacks, and
+  later wall-clock rollback cannot restart authorization.
 - The process-owned replay cache retains consumed claims against the same
   monotonic authorization deadline, so forward/backward wall-clock corrections
   cannot prune a live replay claim early.
