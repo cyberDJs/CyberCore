@@ -1,6 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from os import getpid
 from threading import Barrier, Lock
 
 from cybercore.action_kernel import (
