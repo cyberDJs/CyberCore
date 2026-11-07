@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from importlib import import_module
 from threading import Lock
-from time import monotonic
+from time import monotonic, monotonic as _replay_monotonic
 from typing import Any, Protocol
 
 from cybercore.action_kernel import ExecutionReceipt, TaskRequest
@@ -53,7 +53,7 @@ class _ExpiringProcessReplayGuard:
             raise ValueError("Per-actor replay capacity must be positive")
         self._max_entries = max_entries
         self._max_per_actor = max_entries if max_per_actor is None else max_per_actor
-        self._claimed_until: dict[str, tuple[datetime, str]] = {}
+        self._claimed_until: dict[str, tuple[datetime, str, float]] = {}
         self._lock = Lock()
 
     def claim_once(
@@ -65,10 +65,15 @@ class _ExpiringProcessReplayGuard:
         actor: str = "",
     ) -> bool:
         with self._lock:
+            process_now = _replay_monotonic()
+            # UTC jumps are not proof that a claimed authorization elapsed.
+            # Retain every claim for at least the maximum trusted lifetime
+            # on an independent monotonic clock before pruning by UTC.
             expired_keys = [
                 claimed_key
-                for claimed_key, (claimed_until, _) in self._claimed_until.items()
+                for claimed_key, (claimed_until, _, claimed_at) in self._claimed_until.items()
                 if claimed_until <= now
+                and process_now - claimed_at >= _MAX_AUTHORIZATION_LIFETIME.total_seconds()
             ]
             for claimed_key in expired_keys:
                 del self._claimed_until[claimed_key]
@@ -83,12 +88,12 @@ class _ExpiringProcessReplayGuard:
             if len(self._claimed_until) >= self._max_entries:
                 raise PermissionError("Process replay guard capacity exhausted")
             actor_claims = sum(
-                1 for _, claimed_actor in self._claimed_until.values() if claimed_actor == actor
+                1 for _, claimed_actor, _ in self._claimed_until.values() if claimed_actor == actor
             )
             if actor_claims >= self._max_per_actor:
                 raise PermissionError("Actor replay guard capacity exhausted")
 
-            self._claimed_until[key] = (expires_at, actor)
+            self._claimed_until[key] = (expires_at, actor, process_now)
             if expired_at_claim:
                 raise PermissionError("Task authorization expired during replay claim")
             return True
