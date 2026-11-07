@@ -35,14 +35,8 @@ A separate full CyberHIVE runtime integration is required before promotion.
 
 ## Authorization deadline behavior
 
-The trusted local broker receives a process-local monotonic authorization
-deadline only from the Action Kernel receipt it creates inside the same trusted
-call path. Callers still cannot inject or replace a receipt. The bridge requires
-the issuing process id and the absolute monotonic deadline to match the current
-process and fails closed when either is unavailable or invalid.
-
-The UTC `expires_at` remains the policy/audit upper bound. A dry-run result
-returned after either the UTC bound or the monotonic deadline is rejected rather
-than reported as success. Because CyberHIVE's current registry is synchronous,
-this is result-acceptance enforcement, not hard cancellation of an in-flight
+The trusted local broker inherits the bridge deadline checks. A dry-run result
+returned after the task's bound authorization expiry is rejected rather than
+reported as success. Because CyberHIVE's current local registry is synchronous,
+this is a result-acceptance deadline, not hard cancellation of an in-flight
 handler. Replay claims remain consumed after dispatch starts.

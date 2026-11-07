@@ -3,7 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from os import getpid
 from threading import Barrier, Lock
 from types import SimpleNamespace
 
@@ -14,13 +13,21 @@ from cybercore.action_kernel import ActionKernel, Provenance, TaskRequest
 from cybercore.action_kernel_hive_bridge import InMemoryReplayGuard, run_local_hive_dry_run
 
 
-def setup(suffix: str):
-    kernel = ActionKernel(
-        targets={"local-node": {"synthetic_status": "ok"}},
-        allowed_actors=frozenset({"chatgpt:johnny-work"}),
-        enabled=True,
-        evidence_sink=lambda _: None,
+@pytest.fixture(autouse=True)
+def isolated_process_replay_guard(monkeypatch) -> None:
+    # Independent tests represent independent processes/clock histories.
+    # Keep this same guard for every call within a test, including replay and races.
+    monkeypatch.setattr(
+        hive_bridge,
+        "_PROCESS_REPLAY_GUARD",
+        hive_bridge._ExpiringProcessReplayGuard(
+            max_entries=hive_bridge._PROCESS_REPLAY_MAX_ENTRIES,
+            max_per_actor=hive_bridge._PROCESS_REPLAY_MAX_PER_ACTOR,
+        ),
     )
+
+
+def setup(suffix: str):
     now = datetime.now(timezone.utc)
     task = TaskRequest(
         task_id=f"hive-test-{suffix}",
@@ -32,6 +39,12 @@ def setup(suffix: str):
         requested_at=now,
         expires_at=now + timedelta(minutes=2),
         provenance=Provenance("cybercore", "test", "local", now),
+    )
+    kernel = ActionKernel(
+        targets={"local-node": {"synthetic_status": "ok"}},
+        allowed_actors=frozenset({"chatgpt:johnny-work"}),
+        enabled=True,
+        evidence_sink=lambda _: None,
     )
     return task, kernel
 
@@ -230,159 +243,72 @@ def test_concurrent_fresh_guards_cannot_bypass_process_claim(monkeypatch) -> Non
     assert calls == 1
 
 
-def test_process_replay_guard_prunes_expired_claims() -> None:
+def test_process_replay_guard_prunes_expired_claims(monkeypatch) -> None:
+    now = datetime.now(timezone.utc)
+    elapsed = 0.0
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", lambda: elapsed)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
 
-    assert guard.claim_once("a", deadline_monotonic=101.0, now_monotonic=100.0)
-    assert guard.claim_once("b", deadline_monotonic=101.0, now_monotonic=100.0)
+    assert guard.claim_once("a", expires_at=now + timedelta(seconds=1), now=now)
+    assert guard.claim_once("b", expires_at=now + timedelta(seconds=1), now=now)
 
     with pytest.raises(PermissionError, match="capacity exhausted"):
-        guard.claim_once("c", deadline_monotonic=160.0, now_monotonic=100.0)
+        guard.claim_once("c", expires_at=now + timedelta(minutes=1), now=now)
 
-    assert guard.claim_once("c", deadline_monotonic=160.0, now_monotonic=102.0)
-    assert guard.claim_once("a", deadline_monotonic=160.0, now_monotonic=102.0)
+    # UTC alone cannot prune a claim; a full monotonic retention horizon can.
+    later = now + timedelta(seconds=2)
+    with pytest.raises(PermissionError, match="capacity exhausted"):
+        guard.claim_once("c", expires_at=later + timedelta(minutes=1), now=later)
+    elapsed = 301.0
+    assert guard.claim_once("c", expires_at=later + timedelta(minutes=1), now=later)
+    assert guard.claim_once("a", expires_at=later + timedelta(minutes=1), now=later)
 
 
 def test_process_replay_guard_never_evicts_unexpired_claims() -> None:
+    now = datetime.now(timezone.utc)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1)
 
-    assert guard.claim_once("kept", deadline_monotonic=160.0, now_monotonic=100.0)
+    assert guard.claim_once("kept", expires_at=now + timedelta(minutes=1), now=now)
     with pytest.raises(PermissionError, match="capacity exhausted"):
-        guard.claim_once("new", deadline_monotonic=160.0, now_monotonic=100.0)
+        guard.claim_once("new", expires_at=now + timedelta(minutes=1), now=now)
     assert (
         guard.claim_once(
             "kept",
-            deadline_monotonic=160.0,
-            now_monotonic=100.0,
+            expires_at=now + timedelta(minutes=1),
+            now=now,
         )
         is False
     )
 
 
-def test_process_replay_guard_does_not_retain_already_expired_claim() -> None:
+def test_process_replay_guard_rejects_expiry_and_retains_tombstone(monkeypatch) -> None:
+    now = datetime.now(timezone.utc)
+    elapsed = 100.0
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", lambda: elapsed)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1)
 
-    assert guard.claim_once("expired", deadline_monotonic=100.0, now_monotonic=100.0)
-    assert guard.claim_once(
-        "fresh",
-        deadline_monotonic=160.0,
-        now_monotonic=100.0,
-    )
+    with pytest.raises(PermissionError, match="expired during replay claim"):
+        guard.claim_once("expired", expires_at=now, now=now)
+    # UTC rollback disables the process guard rather than reviving any claim.
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("expired", expires_at=now, now=now - timedelta(seconds=1))
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("fresh", expires_at=now + timedelta(minutes=1), now=now)
+    elapsed = 401.0
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("fresh", expires_at=now + timedelta(minutes=1), now=now)
 
 
 def test_process_replay_quota_isolated_by_trusted_actor() -> None:
+    now = datetime.now(timezone.utc)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=4, max_per_actor=1)
+    expires_at = now + timedelta(minutes=2)
 
-    assert guard.claim_once(
-        "alice-1",
-        deadline_monotonic=220.0,
-        now_monotonic=100.0,
-        actor="alice",
-    )
+    assert guard.claim_once("alice-1", expires_at=expires_at, now=now, actor="alice")
     with pytest.raises(PermissionError, match="Actor replay guard capacity exhausted"):
-        guard.claim_once(
-            "alice-2",
-            deadline_monotonic=220.0,
-            now_monotonic=100.0,
-            actor="alice",
-        )
-    assert guard.claim_once(
-        "bob-1",
-        deadline_monotonic=220.0,
-        now_monotonic=100.0,
-        actor="bob",
-    )
-    assert (
-        guard.claim_once(
-            "bob-1",
-            deadline_monotonic=220.0,
-            now_monotonic=100.0,
-            actor="bob",
-        )
-        is False
-    )
-
-
-def test_wall_clock_forward_then_backward_cannot_prune_process_replay_claim(
-    monkeypatch,
-) -> None:
-    original, original_kernel = setup("wall-clock-prune-original")
-    original_receipt = original_kernel.execute(original, trusted_actor=original.actor)
-    original_receipt = replace(
-        original_receipt,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=110.0,
-        authorization_process_id=getpid(),
-    )
-    trigger, trigger_kernel = setup("wall-clock-prune-trigger")
-    trigger = replace(
-        trigger,
-        expires_at=trigger.requested_at + timedelta(minutes=4),
-    )
-    trigger_receipt = trigger_kernel.execute(trigger, trusted_actor=trigger.actor)
-    trigger_receipt = replace(
-        trigger_receipt,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=120.0,
-        authorization_process_id=getpid(),
-    )
-    action = _install_fake_hive(monkeypatch)
-    mono = 100.0
-    wall = original.expires_at - timedelta(seconds=1)
-    monkeypatch.setattr(hive_bridge, "monotonic", lambda: mono)
-    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: wall)
-    calls = 0
-
-    class Registry:
-        def dispatch(self, incoming):
-            nonlocal calls
-            calls += 1
-            return SimpleNamespace(
-                request_id=incoming.id,
-                target_node=incoming.target_node,
-                action=action.HEALTH_CHECK,
-                status=SimpleNamespace(value="dry_run"),
-            )
-
-    assert (
-        run_local_hive_dry_run(
-            original,
-            trusted_actor=original.actor,
-            kernel_receipt=original_receipt,
-            registry=Registry(),
-            replay_guard=InMemoryReplayGuard(),
-        ).status
-        == "dry_run"
-    )
-
-    # A forward wall-clock jump beyond the first task's UTC expiry must not
-    # prune its process-local replay claim while its monotonic grant remains live.
-    wall = original.expires_at + timedelta(seconds=1)
-    mono = 101.0
-    assert (
-        run_local_hive_dry_run(
-            trigger,
-            trusted_actor=trigger.actor,
-            kernel_receipt=trigger_receipt,
-            registry=Registry(),
-            replay_guard=InMemoryReplayGuard(),
-        ).status
-        == "dry_run"
-    )
-
-    # Correct the wall clock backward and replace the caller-provided guard.
-    # The process-owned monotonic claim must still deny replay.
-    wall = original.expires_at - timedelta(seconds=1)
-    mono = 102.0
-    with pytest.raises(PermissionError, match="already consumed"):
-        run_local_hive_dry_run(
-            original,
-            trusted_actor=original.actor,
-            kernel_receipt=original_receipt,
-            registry=Registry(),
-            replay_guard=InMemoryReplayGuard(),
-        )
-    assert calls == 2
+        guard.claim_once("alice-2", expires_at=expires_at, now=now, actor="alice")
+    assert guard.claim_once("bob-1", expires_at=expires_at, now=now, actor="bob")
+    assert guard.claim_once("bob-1", expires_at=expires_at, now=now, actor="bob") is False
 
 
 def test_rejects_overlong_authorization_before_optional_runtime_or_claim() -> None:
@@ -403,7 +329,7 @@ def test_rejects_overlong_authorization_before_optional_runtime_or_claim() -> No
     assert guard.claim_once(key) is True
 
 
-def test_future_dated_request_is_denied_before_process_replay_quota() -> None:
+def test_future_dated_request_cannot_pin_process_replay_quota() -> None:
     task, kernel = setup("future-dated-lifetime")
     future = datetime.now(timezone.utc) + timedelta(days=365)
     altered = replace(
@@ -411,13 +337,23 @@ def test_future_dated_request_is_denied_before_process_replay_quota() -> None:
         requested_at=future,
         expires_at=future + timedelta(minutes=2),
     )
+    # Current kernel historically permits a future requested_at, but the
+    # bridge must not use untrusted request time as replay retention authority.
+    allowed = kernel.execute(altered, trusted_actor=altered.actor)
+    assert allowed.status == "EXECUTED"
+    guard = InMemoryReplayGuard()
 
-    denied = kernel.execute(altered, trusted_actor=altered.actor)
+    with pytest.raises(PermissionError, match="lifetime exceeds policy"):
+        run_local_hive_dry_run(
+            altered,
+            trusted_actor=altered.actor,
+            kernel_receipt=allowed,
+            registry=None,
+            replay_guard=guard,
+        )
 
-    assert denied.status == "DENIED"
-    assert denied.reason == "INVALID_TIME"
-    assert denied.authorization_deadline_monotonic is None
-    assert denied.authorization_process_id is None
+    key = f"{altered.actor}:{altered.task_id}:{altered.correlation_id}"
+    assert guard.claim_once(key) is True
 
 
 def test_expiry_lifetime_uses_receipt_clock_not_old_request_time() -> None:
@@ -447,14 +383,10 @@ def test_process_capacity_rejects_before_durable_claim(monkeypatch) -> None:
     task, kernel = setup("capacity-before-durable")
     allowed = kernel.execute(task, trusted_actor=task.actor)
     _install_fake_hive(monkeypatch)
-    deadline = allowed.authorization_deadline_monotonic
-    assert deadline is not None
+    now = datetime.now(timezone.utc)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1, max_per_actor=1)
     assert guard.claim_once(
-        "other",
-        deadline_monotonic=deadline,
-        now_monotonic=deadline - 1.0,
-        actor=task.actor,
+        "other", expires_at=now + timedelta(minutes=2), now=now, actor=task.actor
     )
     monkeypatch.setattr(hive_bridge, "_PROCESS_REPLAY_GUARD", guard)
 
@@ -555,288 +487,6 @@ def test_rejects_altered_authorization_expiry_before_claim_or_dispatch(
     assert guard.claim_once(key) is True
 
 
-def test_rejects_receipt_without_process_local_deadline() -> None:
-    task, kernel = setup("missing-monotonic-deadline")
-    allowed = kernel.execute(task, trusted_actor=task.actor)
-    legacy = replace(
-        allowed,
-        authorization_floor_monotonic=None,
-        authorization_deadline_monotonic=None,
-        authorization_process_id=None,
-    )
-
-    with pytest.raises(PermissionError, match="monotonic authorization deadline"):
-        run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=legacy,
-            registry=None,
-            replay_guard=InMemoryReplayGuard(),
-        )
-
-
-@pytest.mark.parametrize(
-    ("deadline", "process_id"),
-    [(float("nan"), getpid()), (float("inf"), getpid()), (100.0, getpid() + 1)],
-)
-def test_rejects_invalid_or_foreign_process_deadline(deadline, process_id) -> None:
-    task, kernel = setup(f"invalid-monotonic-{deadline}-{process_id}")
-    allowed = kernel.execute(task, trusted_actor=task.actor)
-    invalid = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=deadline,
-        authorization_process_id=process_id,
-    )
-
-    with pytest.raises(PermissionError, match="monotonic authorization deadline"):
-        run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=invalid,
-            registry=None,
-            replay_guard=InMemoryReplayGuard(),
-        )
-
-
-def test_monotonic_deadline_equality_fails_closed(monkeypatch) -> None:
-    task, kernel = setup("monotonic-equality")
-    allowed = kernel.execute(task, trusted_actor=task.actor)
-    deadline = 100.0
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=99.0,
-        authorization_deadline_monotonic=deadline,
-        authorization_process_id=getpid(),
-    )
-    monkeypatch.setattr(hive_bridge, "monotonic", lambda: deadline)
-    monkeypatch.setattr(
-        hive_bridge,
-        "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=30),
-    )
-
-    with pytest.raises(PermissionError, match="expired before dispatch"):
-        run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=allowed,
-            registry=None,
-            replay_guard=InMemoryReplayGuard(),
-        )
-
-
-def test_monotonic_floor_equality_is_allowed(monkeypatch) -> None:
-    task, kernel = setup("monotonic-floor-equality")
-    allowed = kernel.execute(task, trusted_actor=task.actor)
-    action = _install_fake_hive(monkeypatch)
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=110.0,
-        authorization_process_id=getpid(),
-    )
-    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
-    monkeypatch.setattr(
-        hive_bridge,
-        "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=30),
-    )
-
-    class Registry:
-        def dispatch(self, incoming):
-            return SimpleNamespace(
-                request_id=incoming.id,
-                target_node=incoming.target_node,
-                action=action.HEALTH_CHECK,
-                status=SimpleNamespace(value="dry_run"),
-            )
-
-    assert (
-        run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=allowed,
-            registry=Registry(),
-            replay_guard=InMemoryReplayGuard(),
-        ).status
-        == "dry_run"
-    )
-
-
-@pytest.mark.parametrize("rollback_seconds", [7, 60])
-def test_same_pid_monotonic_regression_with_utc_rollback_fails_closed(
-    monkeypatch, rollback_seconds: int
-) -> None:
-    task, kernel = setup(f"monotonic-regression-rollback-{rollback_seconds}")
-    allowed = kernel.execute(task, trusted_actor=task.actor)
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=110.0,
-        authorization_process_id=getpid(),
-    )
-    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 99.0)
-    monkeypatch.setattr(
-        hive_bridge,
-        "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=rollback_seconds),
-    )
-    guard = InMemoryReplayGuard()
-
-    with pytest.raises(PermissionError, match="monotonic clock regressed before dispatch"):
-        run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=allowed,
-            registry=None,
-            replay_guard=guard,
-        )
-
-    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
-    assert guard.claim_once(key) is True
-
-
-def test_pid_change_between_bridge_boundaries_fails_closed(monkeypatch) -> None:
-    task, kernel = setup("pid-change-boundary")
-    allowed = kernel.execute(task, trusted_actor=task.actor)
-    _install_fake_hive(monkeypatch)
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=110.0,
-        authorization_process_id=4242,
-    )
-    pids = iter((4242, 4242, 4243))
-    monkeypatch.setattr(hive_bridge, "getpid", lambda: next(pids))
-    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
-    monkeypatch.setattr(
-        hive_bridge,
-        "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=30),
-    )
-    guard = InMemoryReplayGuard()
-
-    with pytest.raises(PermissionError, match="process changed before replay claim"):
-        run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=allowed,
-            registry=None,
-            replay_guard=guard,
-        )
-
-    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
-    assert guard.claim_once(key) is True
-
-
-@pytest.mark.parametrize("current", [float("nan"), float("inf")])
-def test_nonfinite_current_monotonic_fails_closed(monkeypatch, current: float) -> None:
-    task, kernel = setup(f"nonfinite-current-{current}")
-    allowed = kernel.execute(task, trusted_actor=task.actor)
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=110.0,
-        authorization_process_id=getpid(),
-    )
-    monkeypatch.setattr(hive_bridge, "monotonic", lambda: current)
-    monkeypatch.setattr(
-        hive_bridge,
-        "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=30),
-    )
-
-    with pytest.raises(PermissionError, match="monotonic clock regressed before dispatch"):
-        run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=allowed,
-            registry=None,
-            replay_guard=InMemoryReplayGuard(),
-        )
-
-
-def test_monotonic_regression_during_blocking_claim_fails_closed(monkeypatch) -> None:
-    task, kernel = setup("monotonic-regression-during-claim")
-    allowed = kernel.execute(task, trusted_actor=task.actor)
-    _install_fake_hive(monkeypatch)
-    current = [100.0]
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=110.0,
-        authorization_process_id=getpid(),
-    )
-    monkeypatch.setattr(hive_bridge, "monotonic", lambda: current[0])
-    monkeypatch.setattr(
-        hive_bridge,
-        "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=30),
-    )
-    durable = InMemoryReplayGuard()
-
-    class BlockingGuard:
-        def claim_once(self, key):
-            claimed = durable.claim_once(key)
-            current[0] = 99.0
-            return claimed
-
-    with pytest.raises(PermissionError, match="monotonic clock regressed during replay claim"):
-        run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=allowed,
-            registry=None,
-            replay_guard=BlockingGuard(),
-        )
-
-    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
-    assert durable.claim_once(key) is False
-
-
-def test_monotonic_regression_during_dispatch_fails_closed(monkeypatch) -> None:
-    task, kernel = setup("monotonic-regression-during-dispatch")
-    allowed = kernel.execute(task, trusted_actor=task.actor)
-    action = _install_fake_hive(monkeypatch)
-    current = [100.0]
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=110.0,
-        authorization_process_id=getpid(),
-    )
-    monkeypatch.setattr(hive_bridge, "monotonic", lambda: current[0])
-    monkeypatch.setattr(
-        hive_bridge,
-        "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=30),
-    )
-    durable = InMemoryReplayGuard()
-
-    class Registry:
-        def dispatch(self, incoming):
-            current[0] = 99.0
-            return SimpleNamespace(
-                request_id=incoming.id,
-                target_node=incoming.target_node,
-                action=action.HEALTH_CHECK,
-                status=SimpleNamespace(value="dry_run"),
-            )
-
-    with pytest.raises(PermissionError, match="monotonic clock regressed during dispatch"):
-        run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=allowed,
-            registry=Registry(),
-            replay_guard=durable,
-        )
-
-    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
-    assert durable.claim_once(key) is False
-
-
 def test_rejects_receipt_without_bound_authorization_expiry() -> None:
     task, kernel = setup("missing-receipt-expiry")
     allowed = kernel.execute(task, trusted_actor=task.actor)
@@ -874,6 +524,7 @@ def test_rechecks_expiry_immediately_before_claim_and_dispatch(monkeypatch) -> N
     times = iter(
         (
             task.expires_at - timedelta(seconds=1),
+            task.expires_at - timedelta(seconds=1),
             task.expires_at + timedelta(seconds=1),
         )
     )
@@ -900,7 +551,10 @@ def test_rechecks_expiry_after_claim_before_dispatch(monkeypatch) -> None:
     times = iter(
         (
             task.expires_at - timedelta(seconds=3),
+            task.expires_at - timedelta(seconds=3),
             task.expires_at - timedelta(seconds=2),
+            task.expires_at - timedelta(seconds=1),
+            task.expires_at - timedelta(seconds=1),
             task.expires_at + timedelta(seconds=1),
         )
     )
@@ -931,8 +585,11 @@ def test_rejects_result_returned_after_authorization_deadline(monkeypatch) -> No
     times = iter(
         (
             task.expires_at - timedelta(seconds=5),
+            task.expires_at - timedelta(seconds=5),
             task.expires_at - timedelta(seconds=4),
             task.expires_at - timedelta(seconds=3),
+            task.expires_at - timedelta(seconds=2),
+            task.expires_at - timedelta(seconds=2),
             task.expires_at + timedelta(seconds=1),
         )
     )
@@ -1036,33 +693,38 @@ def test_current_upstream_result_without_correlation_remains_supported(monkeypat
     assert receipt.correlation_id == task.correlation_id
 
 
-@pytest.mark.parametrize("rollback_seconds", [7, 60])
-def test_partial_and_full_utc_rollback_cannot_extend_monotonic_deadline(
-    monkeypatch, rollback_seconds: int
+@pytest.mark.parametrize(
+    ("elapsed", "wall_offset", "rejected"),
+    [(1.0, -60, False), (2.0, -60, True), (3.0, -60, True), (1.0, 1, True)],
+)
+def test_dispatch_deadline_survives_wall_clock_corrections(
+    monkeypatch, elapsed: float, wall_offset: int, rejected: bool
 ) -> None:
-    task, kernel = setup(f"utc-rollback-{rollback_seconds}")
+    task, kernel = setup(f"clock-correction-{elapsed}-{wall_offset}")
     allowed = kernel.execute(task, trusted_actor=task.actor)
     action = _install_fake_hive(monkeypatch)
-    elapsed = 0.0
-    deadline = 105.0
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=deadline,
-        authorization_process_id=getpid(),
+    wall_after = task.expires_at + timedelta(seconds=wall_offset)
+    times = iter(
+        (
+            task.expires_at - timedelta(seconds=5),
+            task.expires_at - timedelta(seconds=5),
+            task.expires_at - timedelta(seconds=2),
+            task.expires_at - timedelta(seconds=2),
+            task.expires_at - timedelta(seconds=2),
+            task.expires_at - timedelta(seconds=2),
+            wall_after,
+        )
     )
-    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0 + elapsed)
-    monkeypatch.setattr(
-        hive_bridge,
-        "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=rollback_seconds),
-    )
+    ticks = iter((100.0, 100.0, 100.0, 100.0, 100.0 + elapsed))
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: next(times, wall_after))
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: next(ticks, 100.0 + elapsed))
     guard = InMemoryReplayGuard()
+    calls = 0
 
     class Registry:
         def dispatch(self, incoming):
-            nonlocal elapsed
-            elapsed = 6.0
+            nonlocal calls
+            calls += 1
             return SimpleNamespace(
                 request_id=incoming.id,
                 target_node=incoming.target_node,
@@ -1070,7 +732,70 @@ def test_partial_and_full_utc_rollback_cannot_extend_monotonic_deadline(
                 status=SimpleNamespace(value="dry_run"),
             )
 
-    with pytest.raises(PermissionError, match="expired during dispatch"):
+    def invoke(replay_guard):
+        return run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Registry(),
+            replay_guard=replay_guard,
+        )
+
+    if rejected:
+        with pytest.raises(PermissionError, match="expired"):
+            invoke(guard)
+    else:
+        assert invoke(guard).status == "dry_run"
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is False
+    # Even replacing the supplied guard cannot replay under the rolled-back clock.
+    with pytest.raises(PermissionError, match="UTC rollback detected|expired|already consumed"):
+        invoke(InMemoryReplayGuard())
+    assert calls == 1
+
+
+@pytest.mark.parametrize("rollback_at", ["anchor", "second_utc"])
+def test_rollback_between_deadline_samples_cannot_extend_budget(
+    monkeypatch, rollback_at: str
+) -> None:
+    task, kernel = setup(f"sampling-rollback-{rollback_at}")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    action = _install_fake_hive(monkeypatch)
+    utc_calls = 0
+    mono_calls = 0
+    rolled_back = False
+
+    def utc_now():
+        nonlocal utc_calls, rolled_back
+        utc_calls += 1
+        if utc_calls <= 3:
+            return task.expires_at - timedelta(seconds=2)
+        if rollback_at == "second_utc" and utc_calls == 5:
+            rolled_back = True
+        return task.expires_at - timedelta(seconds=62 if rolled_back else 2)
+
+    def monotonic_now():
+        nonlocal mono_calls, rolled_back
+        mono_calls += 1
+        if rollback_at == "anchor" and mono_calls == 2:
+            rolled_back = True
+        return {1: 100.0, 2: 100.0, 3: 103.0}.get(mono_calls, 103.0)
+
+    monkeypatch.setattr(hive_bridge, "_utc_now", utc_now)
+    monkeypatch.setattr(hive_bridge, "monotonic", monotonic_now)
+    guard = InMemoryReplayGuard()
+
+    class Registry:
+        def dispatch(self, incoming):
+            return SimpleNamespace(
+                request_id=incoming.id,
+                target_node=incoming.target_node,
+                action=action.HEALTH_CHECK,
+                status=SimpleNamespace(value="dry_run"),
+            )
+
+    with pytest.raises(PermissionError, match="expired"):
         run_local_hive_dry_run(
             task,
             trusted_actor=task.actor,
@@ -1078,122 +803,383 @@ def test_partial_and_full_utc_rollback_cannot_extend_monotonic_deadline(
             registry=Registry(),
             replay_guard=guard,
         )
-
-    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
-    assert guard.claim_once(key) is False
-
-
-def test_delay_before_bridge_entry_consumes_monotonic_budget(monkeypatch) -> None:
-    task, kernel = setup("delay-before-bridge")
-    allowed = kernel.execute(task, trusted_actor=task.actor)
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=105.0,
-        authorization_process_id=getpid(),
-    )
-    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 105.0)
-    monkeypatch.setattr(
-        hive_bridge,
-        "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=30),
-    )
-    guard = InMemoryReplayGuard()
-
-    with pytest.raises(PermissionError, match="expired before dispatch"):
-        run_local_hive_dry_run(
-            task,
-            trusted_actor=task.actor,
-            kernel_receipt=allowed,
-            registry=None,
-            replay_guard=guard,
-        )
-
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert guard.claim_once(key) is True
 
 
-@pytest.mark.parametrize("claim_elapsed", [4.0, 6.0])
-def test_blocking_claim_obeys_kernel_monotonic_deadline(monkeypatch, claim_elapsed: float) -> None:
-    task, kernel = setup(f"blocking-claim-{claim_elapsed}")
+@pytest.mark.parametrize("claim_elapsed", [1.0, 3.0])
+def test_blocking_claim_cannot_extend_deadline_with_utc_rollback(
+    monkeypatch, claim_elapsed: float
+) -> None:
+    task, kernel = setup(f"claim-rollback-{claim_elapsed}")
     allowed = kernel.execute(task, trusted_actor=task.actor)
     _install_fake_hive(monkeypatch)
     elapsed = 0.0
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=105.0,
-        authorization_process_id=getpid(),
-    )
+    rolled_back = False
     monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0 + elapsed)
     monkeypatch.setattr(
         hive_bridge,
         "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=30),
+        lambda: task.expires_at - timedelta(seconds=61 if rolled_back else 1),
     )
     durable = InMemoryReplayGuard()
 
     class BlockingGuard:
         def claim_once(self, key):
-            nonlocal elapsed
+            nonlocal elapsed, rolled_back
             claimed = durable.claim_once(key)
             elapsed = claim_elapsed
+            rolled_back = True
             return claimed
 
-    class Registry:
+    class Forbidden:
         def dispatch(self, _):
             raise AssertionError("Expired claim must never dispatch")
 
-    if claim_elapsed >= 5.0:
-        with pytest.raises(PermissionError, match="expired during replay claim"):
-            run_local_hive_dry_run(
-                task,
-                trusted_actor=task.actor,
-                kernel_receipt=allowed,
-                registry=Registry(),
-                replay_guard=BlockingGuard(),
-            )
-    else:
-        # The claim completed before the absolute deadline. A no-op dispatch
-        # failure proves the bridge reached dispatch without resetting budget.
-        with pytest.raises(AssertionError, match="Expired claim must never dispatch"):
-            run_local_hive_dry_run(
-                task,
-                trusted_actor=task.actor,
-                kernel_receipt=allowed,
-                registry=Registry(),
-                replay_guard=BlockingGuard(),
-            )
+    with pytest.raises(PermissionError, match="expired during replay claim"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=BlockingGuard(),
+        )
 
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert durable.claim_once(key) is False
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=InMemoryReplayGuard(),
+        )
 
 
-def test_dispatch_crossing_monotonic_deadline_is_rejected_with_claim_consumed(
-    monkeypatch,
+@pytest.mark.parametrize("setup_elapsed", [1.0, 3.0])
+def test_optional_setup_cannot_restart_authorization_budget(
+    monkeypatch, setup_elapsed: float
 ) -> None:
-    task, kernel = setup("dispatch-crosses-deadline")
+    task, kernel = setup(f"setup-rollback-{setup_elapsed}")
     allowed = kernel.execute(task, trusted_actor=task.actor)
-    action = _install_fake_hive(monkeypatch)
+    _install_fake_hive(monkeypatch)
     elapsed = 0.0
-    allowed = replace(
-        allowed,
-        authorization_floor_monotonic=100.0,
-        authorization_deadline_monotonic=105.0,
-        authorization_process_id=getpid(),
-    )
+    rolled_back = False
+    import_module = hive_bridge.import_module
     monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0 + elapsed)
     monkeypatch.setattr(
         hive_bridge,
         "_utc_now",
-        lambda: task.expires_at - timedelta(seconds=60),
+        lambda: task.expires_at - timedelta(seconds=61 if rolled_back else 1),
     )
+
+    def delayed_import(name):
+        nonlocal elapsed, rolled_back
+        elapsed = setup_elapsed
+        rolled_back = True
+        return import_module(name)
+
+    monkeypatch.setattr(hive_bridge, "import_module", delayed_import)
     guard = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Expired setup must never dispatch")
+
+    with pytest.raises(PermissionError, match="expired before replay claim"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=guard,
+        )
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is True
+
+
+@pytest.mark.parametrize("setup_elapsed", [1.0, 3.0])
+def test_utc_rollback_before_first_monotonic_sample_fails_closed(
+    monkeypatch, setup_elapsed: float
+) -> None:
+    task, kernel = setup(f"initial-sample-rollback-{setup_elapsed}")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    elapsed = 0.0
+    rolled_back = False
+    mono_calls = 0
+    import_module = hive_bridge.import_module
+
+    def monotonic_now():
+        nonlocal rolled_back, mono_calls
+        mono_calls += 1
+        # The first monotonic bound now precedes the trusted UTC baseline.
+        # Inject after that baseline, at the next monotonic observation.
+        if mono_calls == 2:
+            rolled_back = True
+        return 100.0 + elapsed
+
+    monkeypatch.setattr(hive_bridge, "monotonic", monotonic_now)
+    monkeypatch.setattr(
+        hive_bridge,
+        "_utc_now",
+        lambda: task.expires_at - timedelta(seconds=61 if rolled_back else 1),
+    )
+
+    def delayed_import(name):
+        nonlocal elapsed
+        elapsed = setup_elapsed
+        return import_module(name)
+
+    monkeypatch.setattr(hive_bridge, "import_module", delayed_import)
+    guard = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Initial-sample rollback must not dispatch")
+
+    with pytest.raises(PermissionError, match="expired: UTC clock moved backward"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=guard,
+        )
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is True
+
+
+def test_preanchor_utc_rollback_rejects_without_claim_or_dispatch(monkeypatch) -> None:
+    task, kernel = setup("preanchor-rollback-hardening")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    rollback = False
+    mono_calls = 0
+
+    def wall_time():
+        return task.expires_at - timedelta(seconds=61 if rollback else 1)
+
+    def clock():
+        nonlocal rollback, mono_calls
+        mono_calls += 1
+        # Inject after the first trusted UTC baseline, not before observation.
+        if mono_calls == 2:
+            rollback = True
+        return 100.0
+
+    monkeypatch.setattr(hive_bridge, "_utc_now", wall_time)
+    monkeypatch.setattr(hive_bridge, "monotonic", clock)
+    durable = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("UTC rollback must not dispatch")
+
+    with pytest.raises(PermissionError, match="expired"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=durable,
+        )
+
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is True  # Rejected before claiming.
+
+
+def test_forward_utc_during_process_claim_never_allows_replay(monkeypatch) -> None:
+    task, kernel = setup("claim-forward-clock-hardening")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    calls = 0
+    clock_rolled_back = False
+    durable = InMemoryReplayGuard()
+
+    def utc_now():
+        nonlocal calls, clock_rolled_back
+        calls += 1
+        if calls == 5:
+            clock_rolled_back = True
+            return task.expires_at + timedelta(seconds=1)
+        return task.expires_at - timedelta(seconds=61 if clock_rolled_back else 1)
+
+    monkeypatch.setattr(hive_bridge, "_utc_now", utc_now)
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Expired claim or replay must not dispatch")
+
+    with pytest.raises(PermissionError, match="expired during replay claim"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=durable,
+        )
+    # The forward sample did not call durable storage, but the process claim
+    # survives UTC rollback and denies a replacement durable guard.
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is True
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=InMemoryReplayGuard(),
+        )
+
+
+def test_forward_utc_jump_cannot_prune_prior_process_replay_claim(monkeypatch) -> None:
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", lambda: 100.0)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=3)
+
+    assert guard.claim_once("prior", expires_at=now + timedelta(minutes=1), now=now)
+    # An NTP forward step cannot be used to erase the previous replay claim.
+    with pytest.raises(PermissionError, match="expired during replay claim"):
+        guard.claim_once(
+            "later", expires_at=now + timedelta(minutes=1), now=now + timedelta(minutes=2)
+        )
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("prior", expires_at=now + timedelta(minutes=1), now=now)
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("later", expires_at=now + timedelta(minutes=1), now=now)
+
+
+def test_replay_guard_stays_fenced_after_300s_pruning_and_utc_rollback(monkeypatch) -> None:
+    now = datetime.now(timezone.utc)
+    elapsed = 0.0
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", lambda: elapsed)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+    assert guard.claim_once("prior", expires_at=now + timedelta(seconds=1), now=now)
+
+    # More than five monotonic minutes elapsed; a forward UTC sample prunes
+    # the key, but this observed UTC value becomes a process-wide high-water.
+    elapsed = 301.0
+    future = now + timedelta(minutes=6)
+    with pytest.raises(PermissionError, match="expired during replay claim"):
+        guard.claim_once("probe", expires_at=now + timedelta(minutes=1), now=future)
+
+    # A backward correction must not permit reuse of the pruned key.
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("prior", expires_at=now + timedelta(seconds=1), now=now)
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("fresh", expires_at=now + timedelta(minutes=10), now=future)
+
+
+def test_replay_guard_samples_utc_under_its_lock() -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+    calls = 0
+
+    def ordered_utc_sample():
+        nonlocal calls
+        calls += 1
+        # The live clock must be sampled while the replay guard owns its lock.
+        assert not guard._lock.acquire(blocking=False)
+        return now
+
+    assert guard.claim_once(
+        "first",
+        expires_at=now + timedelta(minutes=1),
+        now=ordered_utc_sample,
+    )
+    assert guard.claim_once(
+        "second",
+        expires_at=now + timedelta(minutes=1),
+        now=ordered_utc_sample,
+    )
+    assert calls == 2
+
+
+def test_monotonic_budget_covers_pause_after_first_utc_sample(monkeypatch) -> None:
+    task, kernel = setup("partial-rollback-before-anchor")
+    receipt = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    ticks = iter((100.0, 103.0))
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: next(ticks, 103.0))
+    monkeypatch.setattr(
+        hive_bridge,
+        "_utc_now",
+        lambda: task.expires_at - timedelta(seconds=0.5),
+    )
+    durable = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("No dispatch after elapsed budget")
+
+    with pytest.raises(PermissionError, match="expired before dispatch"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=receipt,
+            registry=Forbidden(),
+            replay_guard=durable,
+        )
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is True
+
+
+# Reconciled regression scenarios from merged PR #149; error expectations
+# intentionally reflect the stricter process UTC rollback fence in PR #150.
+
+
+@pytest.mark.parametrize("rollback_at", ["before_monotonic", "second_utc"])
+def test_utc_rollback_during_initial_anchor_fails_before_claim(
+    monkeypatch, rollback_at: str
+) -> None:
+    task, kernel = setup(f"initial-anchor-window-{rollback_at}")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    samples = iter(
+        (
+            task.expires_at - timedelta(seconds=1),
+            task.expires_at - timedelta(seconds=61 if rollback_at == "before_monotonic" else 1),
+            task.expires_at - timedelta(seconds=61),
+        )
+    )
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: next(samples))
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Rollback before monotonic budget must not dispatch")
+
+    guard = InMemoryReplayGuard()
+    with pytest.raises(PermissionError, match="UTC clock moved backward"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=guard,
+        )
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is True
+
+
+def test_forward_utc_at_process_claim_rejects_without_dropping_prior_claim(
+    monkeypatch,
+) -> None:
+    task, kernel = setup("transient-forward-claim")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    action = _install_fake_hive(monkeypatch)
+    safe = task.expires_at - timedelta(seconds=5)
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: safe)
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
+    dispatches = 0
 
     class Registry:
         def dispatch(self, incoming):
-            nonlocal elapsed
-            elapsed = 5.0
+            nonlocal dispatches
+            dispatches += 1
             return SimpleNamespace(
                 request_id=incoming.id,
                 target_node=incoming.target_node,
@@ -1201,14 +1187,61 @@ def test_dispatch_crossing_monotonic_deadline_is_rejected_with_claim_consumed(
                 status=SimpleNamespace(value="dry_run"),
             )
 
-    with pytest.raises(PermissionError, match="expired during dispatch"):
+    assert (
         run_local_hive_dry_run(
             task,
             trusted_actor=task.actor,
             kernel_receipt=allowed,
             registry=Registry(),
-            replay_guard=guard,
+            replay_guard=InMemoryReplayGuard(),
+        ).status
+        == "dry_run"
+    )
+
+    # A different, unconsumed receipt must reach the claim-time clock check.
+    second_task, second_kernel = setup("transient-forward-claim-second")
+    second_allowed = second_kernel.execute(second_task, trusted_actor=second_task.actor)
+    sample_count = 0
+
+    def clock_with_forward_jump():
+        nonlocal sample_count
+        sample_count += 1
+        if sample_count == 5:  # process-owned replay claim time
+            return second_task.expires_at + timedelta(seconds=60)
+        return safe
+
+    monkeypatch.setattr(hive_bridge, "_utc_now", clock_with_forward_jump)
+    with pytest.raises(PermissionError, match="expired during replay claim"):
+        run_local_hive_dry_run(
+            second_task,
+            trusted_actor=second_task.actor,
+            kernel_receipt=second_allowed,
+            registry=Registry(),
+            replay_guard=InMemoryReplayGuard(),
         )
 
-    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
-    assert guard.claim_once(key) is False
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: safe)
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Registry(),
+            replay_guard=InMemoryReplayGuard(),
+        )
+    assert dispatches == 1
+
+
+def test_expired_forward_clock_probe_cannot_evict_existing_process_claim() -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+    expiry = now + timedelta(minutes=1)
+    assert guard.claim_once("original", expires_at=expiry, now=now)
+    with pytest.raises(PermissionError, match="expired during replay claim"):
+        guard.claim_once(
+            "forward-jump",
+            expires_at=expiry,
+            now=now + timedelta(minutes=2),
+        )
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("original", expires_at=expiry, now=now)
