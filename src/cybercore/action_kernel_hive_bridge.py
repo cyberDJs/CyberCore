@@ -230,8 +230,15 @@ def run_local_hive_dry_run(
     _assert_not_expired(task)
 
     # Both claims intentionally remain consumed after this boundary, including
-    # uncertain dispatch failures or invalid results.
+    # uncertain dispatch failures or invalid/late results.
     result = registry.dispatch(hive_request)
+
+    # The current CyberHIVE NodeAgentRegistry dispatch contract is synchronous
+    # and has no cancellation/deadline parameter. Reject a result that returns
+    # after authorization expiry instead of accepting late work as success.
+    # Claims remain consumed because the dispatch outcome already occurred.
+    _assert_not_expired(task)
+
     if (
         result.request_id != task.task_id
         or result.target_node != task.target_id
