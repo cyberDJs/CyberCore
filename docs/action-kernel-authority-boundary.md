@@ -56,3 +56,13 @@ backward. The UTC check remains active for forward clock corrections.
 Hard cancellation/deadline propagation belongs to a later CyberHIVE contract
 change and requires its own reviewed API rather than a thread-based timeout
 shim that cannot safely stop already-running work.
+
+## Clock observation boundary
+
+The first observed UTC value must be trustworthy. The bridge captures a
+monotonic bound before that value and accounts for subsequent sampling, setup,
+claims and dispatch using one budget. UTC corrections predating the first UTC
+observation cannot be reconstructed from these local samples; this is not an
+authenticated time source. Tests inject corrections after the observed baseline
+and retain no-claim/no-dispatch assertions. Detected process UTC rollback keeps
+the replay guard failed closed; no automatic reset is introduced.

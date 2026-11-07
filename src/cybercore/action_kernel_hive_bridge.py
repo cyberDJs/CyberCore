@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from importlib import import_module
 from threading import Lock
-from time import monotonic
-from typing import Any, Protocol
+from time import monotonic, monotonic as _replay_monotonic
+from typing import Any, Callable, Protocol
 
 from cybercore.action_kernel import ExecutionReceipt, TaskRequest
 from cybercore.action_kernel_interop import to_hive_health_dry_run
@@ -53,7 +53,11 @@ class _ExpiringProcessReplayGuard:
             raise ValueError("Per-actor replay capacity must be positive")
         self._max_entries = max_entries
         self._max_per_actor = max_entries if max_per_actor is None else max_per_actor
-        self._claimed_until: dict[str, tuple[datetime, str]] = {}
+        self._claimed_until: dict[str, tuple[datetime, str, float]] = {}
+        # A bounded cache must not accept old grants after any observed UTC
+        # rollback, even if the earlier claim was safely pruned by elapsed time.
+        self._max_seen_utc: datetime | None = None
+        self._utc_rollback_detected = False
         self._lock = Lock()
 
     def claim_once(
@@ -61,18 +65,31 @@ class _ExpiringProcessReplayGuard:
         key: str,
         *,
         expires_at: datetime,
-        now: datetime,
+        now: datetime | Callable[[], datetime],
         actor: str = "",
     ) -> bool:
         with self._lock:
-            # A transient forward UTC jump must not evict old claims or
-            # authorize an expired new claim after the clock rolls back.
-            if expires_at <= now:
-                raise PermissionError("Task authorization expired during replay claim")
+            # Sample current UTC only AFTER acquiring the process guard lock.
+            # A delayed earlier request must not look like a backward clock step.
+            now = now() if callable(now) else now
+            # Sticky fail-closed state: forward UTC can prune an old claim after
+            # its monotonic horizon; a subsequent backward jump must never
+            # revive that authorization, including via a replaced durable guard.
+            if self._utc_rollback_detected:
+                raise PermissionError("Process replay guard UTC rollback detected")
+            if self._max_seen_utc is not None and now < self._max_seen_utc:
+                self._utc_rollback_detected = True
+                raise PermissionError("Process replay guard UTC rollback detected")
+            self._max_seen_utc = now
+            process_now = _replay_monotonic()
+            # UTC jumps are not proof that a claimed authorization elapsed.
+            # Retain every claim for at least the maximum trusted lifetime
+            # on an independent monotonic clock before pruning by UTC.
             expired_keys = [
                 claimed_key
-                for claimed_key, (claimed_until, _) in self._claimed_until.items()
+                for claimed_key, (claimed_until, _, claimed_at) in self._claimed_until.items()
                 if claimed_until <= now
+                and process_now - claimed_at >= _MAX_AUTHORIZATION_LIFETIME.total_seconds()
             ]
             for claimed_key in expired_keys:
                 del self._claimed_until[claimed_key]
@@ -80,15 +97,21 @@ class _ExpiringProcessReplayGuard:
             if key in self._claimed_until:
                 return False
 
+            # Even if UTC leaps forward past expiry, retain a consumed
+            # process claim before rejecting: rollback must not enable replay.
+            expired_at_claim = expires_at <= now
+
             if len(self._claimed_until) >= self._max_entries:
                 raise PermissionError("Process replay guard capacity exhausted")
             actor_claims = sum(
-                1 for _, claimed_actor in self._claimed_until.values() if claimed_actor == actor
+                1 for _, claimed_actor, _ in self._claimed_until.values() if claimed_actor == actor
             )
             if actor_claims >= self._max_per_actor:
                 raise PermissionError("Actor replay guard capacity exhausted")
 
-            self._claimed_until[key] = (expires_at, actor)
+            self._claimed_until[key] = (expires_at, actor, process_now)
+            if expired_at_claim:
+                raise PermissionError("Task authorization expired during replay claim")
             return True
 
 
@@ -138,7 +161,7 @@ def _claim_once(
     if not _PROCESS_REPLAY_GUARD.claim_once(
         key,
         expires_at=expires_at,
-        now=_utc_now(),
+        now=_utc_now,
         actor=actor,
     ):
         raise PermissionError("Authorization already consumed")
@@ -201,15 +224,15 @@ def run_local_hive_dry_run(
     # Bracket the monotonic anchor with UTC checks. Use the later UTC sample
     # so a rollback between samples cannot inflate the remaining interval.
     # The earlier monotonic bound includes sampling overhead conservatively.
-    utc_initial = _assert_not_expired(task)
     sampling_started = monotonic()
+    utc_initial = _assert_not_expired(task)
     utc_before = _assert_not_expired(task)
     authorization_started = monotonic()
     utc_after = _assert_not_expired(task)
-    # Any backward UTC step inside the anchor window makes elapsed wall
-    # time unverifiable; the monotonic budget may not include that gap.
+    # A pre-anchor pause followed by UTC rollback is invisible to monotonic
+    # elapsed time; reject decreasing UTC samples instead of granting slack.
     if utc_before < utc_initial or utc_after < utc_before:
-        raise PermissionError("Task authorization expired: UTC rollback during sampling")
+        raise PermissionError("Task authorization expired: UTC clock moved backward")
     remaining_seconds = (task.expires_at - max(utc_initial, utc_before, utc_after)).total_seconds()
     remaining_seconds -= authorization_started - sampling_started
     if remaining_seconds <= 0:
