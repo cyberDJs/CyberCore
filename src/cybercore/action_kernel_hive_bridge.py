@@ -65,6 +65,10 @@ class _ExpiringProcessReplayGuard:
         actor: str = "",
     ) -> bool:
         with self._lock:
+            # A transient forward UTC jump must not evict old claims or
+            # authorize an expired new claim after the clock rolls back.
+            if expires_at <= now:
+                raise PermissionError("Task authorization expired during replay claim")
             expired_keys = [
                 claimed_key
                 for claimed_key, (claimed_until, _) in self._claimed_until.items()
@@ -75,9 +79,6 @@ class _ExpiringProcessReplayGuard:
 
             if key in self._claimed_until:
                 return False
-
-            if expires_at <= now:
-                return True
 
             if len(self._claimed_until) >= self._max_entries:
                 raise PermissionError("Process replay guard capacity exhausted")
@@ -200,11 +201,16 @@ def run_local_hive_dry_run(
     # Bracket the monotonic anchor with UTC checks. Use the later UTC sample
     # so a rollback between samples cannot inflate the remaining interval.
     # The earlier monotonic bound includes sampling overhead conservatively.
+    utc_initial = _assert_not_expired(task)
     sampling_started = monotonic()
     utc_before = _assert_not_expired(task)
     authorization_started = monotonic()
     utc_after = _assert_not_expired(task)
-    remaining_seconds = (task.expires_at - max(utc_before, utc_after)).total_seconds()
+    # Any backward UTC step inside the anchor window makes elapsed wall
+    # time unverifiable; the monotonic budget may not include that gap.
+    if utc_before < utc_initial or utc_after < utc_before:
+        raise PermissionError("Task authorization expired: UTC rollback during sampling")
+    remaining_seconds = (task.expires_at - max(utc_initial, utc_before, utc_after)).total_seconds()
     remaining_seconds -= authorization_started - sampling_started
     if remaining_seconds <= 0:
         raise PermissionError("Task authorization expired before dispatch")
