@@ -54,6 +54,10 @@ class _ExpiringProcessReplayGuard:
         self._max_entries = max_entries
         self._max_per_actor = max_entries if max_per_actor is None else max_per_actor
         self._claimed_until: dict[str, tuple[datetime, str, float]] = {}
+        # A bounded cache must not accept old grants after any observed UTC
+        # rollback, even if the earlier claim was safely pruned by elapsed time.
+        self._max_seen_utc: datetime | None = None
+        self._utc_rollback_detected = False
         self._lock = Lock()
 
     def claim_once(
@@ -65,6 +69,15 @@ class _ExpiringProcessReplayGuard:
         actor: str = "",
     ) -> bool:
         with self._lock:
+            # Sticky fail-closed state: forward UTC can prune an old claim after
+            # its monotonic horizon; a subsequent backward jump must never
+            # revive that authorization, including via a replaced durable guard.
+            if self._utc_rollback_detected:
+                raise PermissionError("Process replay guard UTC rollback detected")
+            if self._max_seen_utc is not None and now < self._max_seen_utc:
+                self._utc_rollback_detected = True
+                raise PermissionError("Process replay guard UTC rollback detected")
+            self._max_seen_utc = now
             process_now = _replay_monotonic()
             # UTC jumps are not proof that a claimed authorization elapsed.
             # Retain every claim for at least the maximum trusted lifetime
