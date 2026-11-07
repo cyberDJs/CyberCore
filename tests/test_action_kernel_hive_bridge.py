@@ -337,13 +337,14 @@ def test_future_dated_request_cannot_pin_process_replay_quota() -> None:
         requested_at=future,
         expires_at=future + timedelta(minutes=2),
     )
-    # Current kernel historically permits a future requested_at, but the
-    # bridge must not use untrusted request time as replay retention authority.
+    # The hardened kernel now denies a future-dated request itself. Keep
+    # the bridge denial and prove that neither layer consumes replay state.
     allowed = kernel.execute(altered, trusted_actor=altered.actor)
-    assert allowed.status == "EXECUTED"
+    assert allowed.status == "DENIED"
+    assert allowed.reason == "INVALID_TIME"
     guard = InMemoryReplayGuard()
 
-    with pytest.raises(PermissionError, match="lifetime exceeds policy"):
+    with pytest.raises(PermissionError, match="policy did not allow task"):
         run_local_hive_dry_run(
             altered,
             trusted_actor=altered.actor,
