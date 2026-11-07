@@ -275,12 +275,14 @@ def test_process_replay_guard_rejects_expiry_and_retains_tombstone(monkeypatch) 
 
     with pytest.raises(PermissionError, match="expired during replay claim"):
         guard.claim_once("expired", expires_at=now, now=now)
-    # A forward-clock rejection retains a replay tombstone if UTC rolls back.
-    assert guard.claim_once("expired", expires_at=now, now=now - timedelta(seconds=1)) is False
-    with pytest.raises(PermissionError, match="capacity exhausted"):
+    # UTC rollback disables the process guard rather than reviving any claim.
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("expired", expires_at=now, now=now - timedelta(seconds=1))
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
         guard.claim_once("fresh", expires_at=now + timedelta(minutes=1), now=now)
     elapsed = 401.0
-    assert guard.claim_once("fresh", expires_at=now + timedelta(minutes=1), now=now)
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("fresh", expires_at=now + timedelta(minutes=1), now=now)
 
 
 def test_process_replay_quota_isolated_by_trusted_actor() -> None:
@@ -1022,5 +1024,28 @@ def test_forward_utc_jump_cannot_prune_prior_process_replay_claim(monkeypatch) -
         guard.claim_once(
             "later", expires_at=now + timedelta(minutes=1), now=now + timedelta(minutes=2)
         )
-    assert guard.claim_once("prior", expires_at=now + timedelta(minutes=1), now=now) is False
-    assert guard.claim_once("later", expires_at=now + timedelta(minutes=1), now=now) is False
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("prior", expires_at=now + timedelta(minutes=1), now=now)
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("later", expires_at=now + timedelta(minutes=1), now=now)
+
+
+def test_replay_guard_stays_fenced_after_300s_pruning_and_utc_rollback(monkeypatch) -> None:
+    now = datetime.now(timezone.utc)
+    elapsed = 0.0
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", lambda: elapsed)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+    assert guard.claim_once("prior", expires_at=now + timedelta(seconds=1), now=now)
+
+    # More than five monotonic minutes elapsed; a forward UTC sample prunes
+    # the key, but this observed UTC value becomes a process-wide high-water.
+    elapsed = 301.0
+    future = now + timedelta(minutes=6)
+    with pytest.raises(PermissionError, match="expired during replay claim"):
+        guard.claim_once("probe", expires_at=now + timedelta(minutes=1), now=future)
+
+    # A backward correction must not permit reuse of the pruned key.
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("prior", expires_at=now + timedelta(seconds=1), now=now)
+    with pytest.raises(PermissionError, match="UTC rollback detected"):
+        guard.claim_once("fresh", expires_at=now + timedelta(minutes=10), now=future)
