@@ -141,3 +141,23 @@ The clock floor is process-local. A changed process id, non-finite/regressing
 monotonic source, naive UTC source, or otherwise invalid floor fails closed and
 must not mint a portable authorization. The existing receipt PID binding and
 bridge monotonic deadline checks remain mandatory.
+
+## Kernel issuance clock guard — isolated PR151 candidate
+
+A kernel instance records a trusted construction baseline and observes subsequent
+monotonic samples under a per-instance lock. Each observation must be finite,
+use the original process PID, and meet the previously observed monotonic
+high-water mark; regression fails closed without issuing new execution authority.
+
+The issuance deadline is the **minimum** of the construction-based projection
+and the final trusted current-UTC observation projected onto current monotonic
+time. This prevents a transient forward UTC step from inflating a short grant.
+A policy/audit delay cannot reset the budget. Equality at the deadline is
+expired; no attempt is made to authenticate absolute UTC or cancel a handler
+already running. The initial trusted UTC baseline remains a documented
+environmental assumption, not a new trust mechanism.
+
+Regression evidence: forward-UTC short grant cap; monotonic regression between
+policy and final issuance; regression across separate requests. Full hosted
+CI/CodeQL and independent security review must be collected on the exact
+candidate SHA before promotion. This candidate is not merged or deployed.
