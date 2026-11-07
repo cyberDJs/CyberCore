@@ -567,7 +567,6 @@ def test_rechecks_expiry_immediately_before_claim_and_dispatch(monkeypatch) -> N
     times = iter(
         (
             task.expires_at - timedelta(seconds=1),
-            task.expires_at - timedelta(seconds=1),
             task.expires_at + timedelta(seconds=1),
         )
     )
@@ -594,9 +593,7 @@ def test_rechecks_expiry_after_claim_before_dispatch(monkeypatch) -> None:
     times = iter(
         (
             task.expires_at - timedelta(seconds=3),
-            task.expires_at - timedelta(seconds=3),
             task.expires_at - timedelta(seconds=2),
-            task.expires_at - timedelta(seconds=1),
             task.expires_at - timedelta(seconds=1),
             task.expires_at + timedelta(seconds=1),
         )
@@ -628,10 +625,8 @@ def test_rejects_result_returned_after_authorization_deadline(monkeypatch) -> No
     times = iter(
         (
             task.expires_at - timedelta(seconds=5),
-            task.expires_at - timedelta(seconds=5),
             task.expires_at - timedelta(seconds=4),
             task.expires_at - timedelta(seconds=3),
-            task.expires_at - timedelta(seconds=2),
             task.expires_at - timedelta(seconds=2),
             task.expires_at + timedelta(seconds=1),
         )
