@@ -260,9 +260,7 @@ def run_local_hive_dry_run(
             raise PermissionError(f"Task authorization process changed {stage}")
         current = monotonic()
         if not isfinite(current) or current < floor or current < last_monotonic:
-            raise PermissionError(
-                f"Task authorization monotonic clock regressed {stage}"
-            )
+            raise PermissionError(f"Task authorization monotonic clock regressed {stage}")
         if current >= deadline:
             raise PermissionError(f"Task authorization expired {stage}")
         last_monotonic = current

@@ -344,8 +344,7 @@ def test_forward_utc_jump_caps_deadline_with_current_trusted_observation() -> No
     assert result.authorization_deadline_monotonic == 106.0
 
 
-def test_kernel_high_water_rejects_policy_to_authorization_monotonic_regression(
-) -> None:
+def test_kernel_high_water_rejects_policy_to_authorization_monotonic_regression() -> None:
     base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
     ticks = iter((100.0, 104.0, 101.0))
     k = kernel(
@@ -402,9 +401,7 @@ def test_concurrent_trusted_time_sampling_cannot_extend_construction_bound() -> 
         )
 
     assert all(result.status == "EXECUTED" for result in results)
-    assert all(
-        result.authorization_deadline_monotonic is not None for result in results
-    )
+    assert all(result.authorization_deadline_monotonic is not None for result in results)
     assert all(result.authorization_deadline_monotonic <= 120.0 for result in results)
 
 

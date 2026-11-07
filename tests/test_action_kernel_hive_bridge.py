@@ -310,9 +310,7 @@ def test_forward_utc_expiry_then_rollback_stays_fenced_before_claim(
 
     class Forbidden:
         def dispatch(self, _):
-            raise AssertionError(
-                "Expired or rolled-back authorization must not dispatch"
-            )
+            raise AssertionError("Expired or rolled-back authorization must not dispatch")
 
     with pytest.raises(PermissionError, match="Task authorization expired"):
         run_local_hive_dry_run(

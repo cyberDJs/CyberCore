@@ -255,8 +255,7 @@ class ActionKernel:
         # neither forward jumps nor later rollback can mint extra monotonic time.
         authorization_now, authorization_monotonic_now = self._trusted_time()
         authorization_observation_deadline_monotonic = (
-            authorization_monotonic_now
-            + (request.expires_at - authorization_now).total_seconds()
+            authorization_monotonic_now + (request.expires_at - authorization_now).total_seconds()
         )
         authorization_deadline_monotonic = min(
             authorization_construction_deadline_monotonic,
