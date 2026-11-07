@@ -70,9 +70,12 @@ the replay guard failed closed; no automatic reset is introduced.
 ## Isolated ActionKernel issuance-clock hardening (PR #152)
 
 The kernel stores a process-local construction UTC/monotonic baseline and samples
-subsequent monotonic clock values under a per-kernel lock. The recorded
+subsequent monotonic clock values under a per-kernel lock. The monotonic
 high-water is nondecreasing across policy evaluation and issuance as well as
-across requests. A same-process monotonic regression fails closed.
+across requests. A same-process monotonic regression fails closed. A separate
+trusted UTC high-water retains a forward correction seen by policy even when
+wall time rolls back during a blocking audit; issued deadlines are always
+bounded using the maximum observed UTC in the kernel's lifetime.
 
 At issuance the absolute process-local deadline is the minimum of the
 construction-baseline projection and the trusted current-UTC projection.
