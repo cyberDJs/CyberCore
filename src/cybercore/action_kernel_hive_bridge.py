@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from importlib import import_module
 from threading import Lock
+from time import monotonic
 from typing import Any, Protocol
 
 from cybercore.action_kernel import ExecutionReceipt, TaskRequest
@@ -116,9 +117,11 @@ def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _assert_not_expired(task: TaskRequest) -> None:
-    if task.expires_at.tzinfo is None or task.expires_at <= _utc_now():
+def _assert_not_expired(task: TaskRequest) -> datetime:
+    now = _utc_now()
+    if task.expires_at.tzinfo is None or task.expires_at <= now:
         raise PermissionError("Task authorization expired")
+    return now
 
 
 def _claim_once(
@@ -193,8 +196,19 @@ def run_local_hive_dry_run(
     ):
         raise PermissionError("Task authorization lifetime exceeds policy")
 
-    # Cheap early rejection before optional-runtime work.
-    _assert_not_expired(task)
+    # Establish one budget before any optional setup or blocking claim work.
+    # Bracket the monotonic anchor with UTC checks. Use the later UTC sample
+    # so a rollback between samples cannot inflate the remaining interval.
+    # The earlier monotonic bound includes sampling overhead conservatively.
+    sampling_started = monotonic()
+    utc_before = _assert_not_expired(task)
+    authorization_started = monotonic()
+    utc_after = _assert_not_expired(task)
+    remaining_seconds = (task.expires_at - max(utc_before, utc_after)).total_seconds()
+    remaining_seconds -= authorization_started - sampling_started
+    if remaining_seconds <= 0:
+        raise PermissionError("Task authorization expired before dispatch")
+
     if replay_guard is None:
         raise PermissionError("Atomic replay guard required")
 
@@ -221,17 +235,31 @@ def run_local_hive_dry_run(
     # Authorization lifetime is checked again immediately at the claim/dispatch
     # boundary so shaping/import/request construction cannot extend validity.
     _assert_not_expired(task)
+    if monotonic() - authorization_started >= remaining_seconds:
+        raise PermissionError("Task authorization expired before replay claim")
 
     key = f"{trusted_actor}:{task.task_id}:{task.correlation_id}"
     _claim_once(replay_guard, key, expires_at=task.expires_at, actor=trusted_actor)
 
-    # Durable claim acquisition may block long enough for the task to expire.
-    # Claims remain consumed, but an expired task must never reach dispatch.
+    # Carry the original budget across a potentially blocking durable claim.
+    # Claims remain consumed when it expires; do not dispatch or restart it.
     _assert_not_expired(task)
+    if monotonic() - authorization_started >= remaining_seconds:
+        raise PermissionError("Task authorization expired during replay claim")
 
     # Both claims intentionally remain consumed after this boundary, including
-    # uncertain dispatch failures or invalid results.
+    # uncertain dispatch failures or invalid/late results.
     result = registry.dispatch(hive_request)
+
+    # The current CyberHIVE NodeAgentRegistry dispatch contract is synchronous
+    # and has no cancellation/deadline parameter. Reject a result that returns
+    # after authorization expiry instead of accepting late work as success.
+    # Claims remain consumed because the dispatch outcome already occurred.
+    _assert_not_expired(task)
+    # A backward wall-clock correction must not extend in-flight authorization.
+    if monotonic() - authorization_started >= remaining_seconds:
+        raise PermissionError("Task authorization expired during dispatch")
+
     if (
         result.request_id != task.task_id
         or result.target_node != task.target_id

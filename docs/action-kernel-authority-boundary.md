@@ -33,3 +33,26 @@ integration CI is evidence that arbitrary callers are authorized.
 An independent security review must verify the trusted caller/broker contract,
 credential custody, persisted audit evidence and replay behavior under process
 crash/restart. Production integration needs separate authorization and tests.
+
+
+## Deadline semantics for the local dry-run MVP
+
+The current CyberHIVE `NodeAgentRegistry.dispatch()` API is synchronous and
+does not expose cancellation, a deadline parameter, or a safe way to terminate
+an in-flight handler. CyberCore therefore does not claim to provide hard
+execution cancellation in this MVP.
+
+The bridge checks authorization expiry before claim, after replay claim, and
+again immediately after synchronous dispatch returns. If dispatch crosses the
+authorized deadline, its result is rejected fail-closed and both replay claims
+remain consumed. This prevents a late result from becoming accepted evidence
+or from being retried ambiguously.
+
+At the initial expiry check, before optional runtime setup or replay claiming, the bridge also captures the remaining UTC
+authorization interval and a monotonic timestamp. A result is rejected when
+monotonic elapsed time across claim acquisition and dispatch reaches that interval, even if the wall clock moves
+backward. The UTC check remains active for forward clock corrections.
+
+Hard cancellation/deadline propagation belongs to a later CyberHIVE contract
+change and requires its own reviewed API rather than a thread-based timeout
+shim that cannot safely stop already-running work.

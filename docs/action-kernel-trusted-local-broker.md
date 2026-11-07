@@ -31,3 +31,12 @@ enabled, and all Hive requests remain explicitly dry-run.
 Tests reject actor impersonation, disabled policy and missing audit, and check
 that the broker has no API parameter accepting an external receipt.
 A separate full CyberHIVE runtime integration is required before promotion.
+
+
+## Authorization deadline behavior
+
+The trusted local broker inherits the bridge deadline checks. A dry-run result
+returned after the task's bound authorization expiry is rejected rather than
+reported as success. Because CyberHIVE's current local registry is synchronous,
+this is a result-acceptance deadline, not hard cancellation of an in-flight
+handler. Replay claims remain consumed after dispatch starts.
