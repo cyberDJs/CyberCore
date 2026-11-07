@@ -66,3 +66,23 @@ observation cannot be reconstructed from these local samples; this is not an
 authenticated time source. Tests inject corrections after the observed baseline
 and retain no-claim/no-dispatch assertions. Detected process UTC rollback keeps
 the replay guard failed closed; no automatic reset is introduced.
+
+## Isolated ActionKernel issuance-clock hardening (PR #152)
+
+The kernel stores a process-local construction UTC/monotonic baseline and samples
+subsequent monotonic clock values under a per-kernel lock. The recorded
+high-water is nondecreasing across policy evaluation and issuance as well as
+across requests. A same-process monotonic regression fails closed.
+
+At issuance the absolute process-local deadline is the minimum of the
+construction-baseline projection and the trusted current-UTC projection.
+A transient forward UTC correction must not expand the duration of a grant.
+This code remains a local read-only synthetic ActionKernel reference; it is
+not a trusted cross-process authority, a hard cancellation mechanism, or
+authenticated external time. Its bridge to CyberHIVE remains the already
+merged, post-merge tested implementation from PR #150; this isolated change
+does not replace that bridge.
+
+Evidence requirements before promotion: exact-head Python 3.11-3.14 CI,
+CodeQL, CyberHIVE contract, review of high-water/clock ordering, and a
+separate independent security verdict. No merge or deployment authorized.
