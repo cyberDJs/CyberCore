@@ -246,9 +246,10 @@ class ActionKernel:
                 "EXPIRED",
             )
 
-        authorization_deadline_monotonic = authorization_started_monotonic + (
-            request.expires_at - authorization_now
-        ).total_seconds()
+        authorization_deadline_monotonic = (
+            authorization_started_monotonic
+            + (request.expires_at - authorization_now).total_seconds()
+        )
         authorization_process_id = self._process_id()
 
         if not self._reserve_task_id(request.task_id):

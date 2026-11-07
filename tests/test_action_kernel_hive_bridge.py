@@ -812,9 +812,7 @@ def test_delay_before_bridge_entry_consumes_monotonic_budget(monkeypatch) -> Non
 
 
 @pytest.mark.parametrize("claim_elapsed", [4.0, 6.0])
-def test_blocking_claim_obeys_kernel_monotonic_deadline(
-    monkeypatch, claim_elapsed: float
-) -> None:
+def test_blocking_claim_obeys_kernel_monotonic_deadline(monkeypatch, claim_elapsed: float) -> None:
     task, kernel = setup(f"blocking-claim-{claim_elapsed}")
     allowed = kernel.execute(task, trusted_actor=task.actor)
     _install_fake_hive(monkeypatch)
@@ -910,4 +908,3 @@ def test_dispatch_crossing_monotonic_deadline_is_rejected_with_claim_consumed(
 
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert guard.claim_once(key) is False
-
