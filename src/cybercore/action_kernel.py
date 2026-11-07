@@ -122,6 +122,9 @@ class ExecutionReceipt:
     # Immutable authorization lifetime recorded by the trusted kernel at evaluation.
     # None is accepted for legacy construction, but bridge dispatch fails closed.
     authorization_expires_at: datetime | None = None
+    # Trusted lower bound sampled by the kernel before issuing execution authority.
+    # The bridge rejects same-process monotonic regression below this floor.
+    authorization_floor_monotonic: float | None = None
     # Process-local absolute deadline in the same monotonic domain used by the
     # trusted kernel. It is intentionally not a portable/wire authorization.
     authorization_deadline_monotonic: float | None = None
@@ -328,6 +331,7 @@ class ActionKernel:
             "EXECUTED",
             "SYNTHETIC_ONLY",
             evidence=evidence,
+            authorization_floor_monotonic=authorization_monotonic_now,
             authorization_deadline_monotonic=authorization_deadline_monotonic,
             authorization_process_id=authorization_process_id,
         )
@@ -449,6 +453,7 @@ class ActionKernel:
         reason: str,
         *,
         evidence: EvidenceMetadata | None = None,
+        authorization_floor_monotonic: float | None = None,
         authorization_deadline_monotonic: float | None = None,
         authorization_process_id: int | None = None,
     ) -> ExecutionReceipt:
@@ -466,6 +471,7 @@ class ActionKernel:
             provenance=self._kernel_provenance(now),
             evidence=evidence,
             authorization_expires_at=request.expires_at,
+            authorization_floor_monotonic=authorization_floor_monotonic,
             authorization_deadline_monotonic=authorization_deadline_monotonic,
             authorization_process_id=authorization_process_id,
         )
