@@ -498,6 +498,7 @@ def test_rechecks_expiry_immediately_before_claim_and_dispatch(monkeypatch) -> N
     times = iter(
         (
             task.expires_at - timedelta(seconds=1),
+            task.expires_at - timedelta(seconds=1),
             task.expires_at + timedelta(seconds=1),
         )
     )
@@ -523,6 +524,7 @@ def test_rechecks_expiry_after_claim_before_dispatch(monkeypatch) -> None:
     _install_fake_hive(monkeypatch)
     times = iter(
         (
+            task.expires_at - timedelta(seconds=3),
             task.expires_at - timedelta(seconds=3),
             task.expires_at - timedelta(seconds=2),
             task.expires_at - timedelta(seconds=1),
@@ -556,6 +558,7 @@ def test_rejects_result_returned_after_authorization_deadline(monkeypatch) -> No
     action = _install_fake_hive(monkeypatch)
     times = iter(
         (
+            task.expires_at - timedelta(seconds=5),
             task.expires_at - timedelta(seconds=5),
             task.expires_at - timedelta(seconds=4),
             task.expires_at - timedelta(seconds=3),
@@ -677,6 +680,7 @@ def test_dispatch_deadline_survives_wall_clock_corrections(
     wall_after = task.expires_at + timedelta(seconds=wall_offset)
     times = iter(
         (
+            task.expires_at - timedelta(seconds=5),
             task.expires_at - timedelta(seconds=5),
             task.expires_at - timedelta(seconds=2),
             task.expires_at - timedelta(seconds=2),
@@ -856,6 +860,53 @@ def test_optional_setup_cannot_restart_authorization_budget(
     class Forbidden:
         def dispatch(self, _):
             raise AssertionError("Expired setup must never dispatch")
+
+    with pytest.raises(PermissionError, match="expired before replay claim"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=guard,
+        )
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert guard.claim_once(key) is True
+
+
+@pytest.mark.parametrize("setup_elapsed", [1.0, 3.0])
+def test_utc_rollback_before_first_monotonic_sample_fails_closed(
+    monkeypatch, setup_elapsed: float
+) -> None:
+    task, kernel = setup(f"initial-sample-rollback-{setup_elapsed}")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    elapsed = 0.0
+    rolled_back = False
+    import_module = hive_bridge.import_module
+
+    def monotonic_now():
+        nonlocal rolled_back
+        rolled_back = True
+        return 100.0 + elapsed
+
+    monkeypatch.setattr(hive_bridge, "monotonic", monotonic_now)
+    monkeypatch.setattr(
+        hive_bridge,
+        "_utc_now",
+        lambda: task.expires_at - timedelta(seconds=61 if rolled_back else 1),
+    )
+
+    def delayed_import(name):
+        nonlocal elapsed
+        elapsed = setup_elapsed
+        return import_module(name)
+
+    monkeypatch.setattr(hive_bridge, "import_module", delayed_import)
+    guard = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Initial-sample rollback must not dispatch")
 
     with pytest.raises(PermissionError, match="expired before replay claim"):
         run_local_hive_dry_run(
