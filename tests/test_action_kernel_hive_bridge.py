@@ -1078,11 +1078,13 @@ def test_replay_guard_samples_utc_under_its_lock() -> None:
         return now
 
     assert guard.claim_once(
-        "first", expires_at=now + timedelta(minutes=1),
+        "first",
+        expires_at=now + timedelta(minutes=1),
         now=ordered_utc_sample,
     )
     assert guard.claim_once(
-        "second", expires_at=now + timedelta(minutes=1),
+        "second",
+        expires_at=now + timedelta(minutes=1),
         now=ordered_utc_sample,
     )
     assert calls == 2
@@ -1095,7 +1097,8 @@ def test_monotonic_budget_covers_pause_after_first_utc_sample(monkeypatch) -> No
     ticks = iter((100.0, 103.0))
     monkeypatch.setattr(hive_bridge, "monotonic", lambda: next(ticks, 103.0))
     monkeypatch.setattr(
-        hive_bridge, "_utc_now",
+        hive_bridge,
+        "_utc_now",
         lambda: task.expires_at - timedelta(seconds=0.5),
     )
     durable = InMemoryReplayGuard()
@@ -1106,8 +1109,11 @@ def test_monotonic_budget_covers_pause_after_first_utc_sample(monkeypatch) -> No
 
     with pytest.raises(PermissionError, match="expired before dispatch"):
         run_local_hive_dry_run(
-            task, trusted_actor=task.actor, kernel_receipt=receipt,
-            registry=Forbidden(), replay_guard=durable,
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=receipt,
+            registry=Forbidden(),
+            replay_guard=durable,
         )
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert durable.claim_once(key) is True
