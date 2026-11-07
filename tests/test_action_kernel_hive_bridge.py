@@ -911,7 +911,7 @@ def test_utc_rollback_before_first_monotonic_sample_fails_closed(
         def dispatch(self, _):
             raise AssertionError("Initial-sample rollback must not dispatch")
 
-    with pytest.raises(PermissionError, match="expired before replay claim"):
+    with pytest.raises(PermissionError, match="expired: UTC clock moved backward"):
         run_local_hive_dry_run(
             task,
             trusted_actor=task.actor,
