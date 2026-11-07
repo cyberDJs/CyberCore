@@ -48,6 +48,11 @@ authorized deadline, its result is rejected fail-closed and both replay claims
 remain consumed. This prevents a late result from becoming accepted evidence
 or from being retried ambiguously.
 
-Before the replay claim, the bridge also captures the remaining UTC\nauthorization interval and a monotonic timestamp. A result is rejected when\nmonotonic elapsed time across claim acquisition and dispatch reaches that interval, even if the wall clock moves\nbackward. The UTC check remains active for forward clock corrections.\n\nHard cancellation/deadline propagation belongs to a later CyberHIVE contract
+At the initial expiry check, before optional runtime setup or replay claiming, the bridge also captures the remaining UTC
+authorization interval and a monotonic timestamp. A result is rejected when
+monotonic elapsed time across claim acquisition and dispatch reaches that interval, even if the wall clock moves
+backward. The UTC check remains active for forward clock corrections.
+
+Hard cancellation/deadline propagation belongs to a later CyberHIVE contract
 change and requires its own reviewed API rather than a thread-based timeout
 shim that cannot safely stop already-running work.
