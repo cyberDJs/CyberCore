@@ -129,3 +129,7 @@ and regression from PR #151. Both source PRs remain separately writable and
 are NOT equivalent promotion candidates until individually reconciled. Every
 change to the source PRs invalidates the previous comparison and requires a
 fresh read-only reconciliation before promotion. No merge or deploy authorized.
+
+### Sticky invalid-clock authority fence (PR #153)
+
+After a trusted sample detects a monotonic regression or invalid process/clock identity, the Action Kernel instance latches its clock authority invalid and rejects all subsequent trusted observations. A later apparently valid sample cannot silently restore authorization; recovery requires a new, reviewed kernel instance. Regression coverage includes rollback followed by recovery-looking observations. This fence is process-local and does not provide authenticated external time, hard cancellation, or cross-process authorization.
