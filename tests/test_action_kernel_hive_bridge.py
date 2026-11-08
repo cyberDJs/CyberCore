@@ -1405,9 +1405,7 @@ def test_consolidated_bridge_rejects_monotonic_regression_during_claim(monkeypat
     )
     monkeypatch.setattr(hive_bridge, "_issued_monotonic", lambda: current[0])
     monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
-    monkeypatch.setattr(
-        hive_bridge, "_utc_now", lambda: task.expires_at - timedelta(seconds=30)
-    )
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: task.expires_at - timedelta(seconds=30))
     durable = InMemoryReplayGuard()
 
     class BlockingGuard:
@@ -1440,9 +1438,7 @@ def test_consolidated_bridge_rejects_monotonic_regression_after_dispatch(monkeyp
     )
     monkeypatch.setattr(hive_bridge, "_issued_monotonic", lambda: current[0])
     monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
-    monkeypatch.setattr(
-        hive_bridge, "_utc_now", lambda: task.expires_at - timedelta(seconds=30)
-    )
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: task.expires_at - timedelta(seconds=30))
     durable = InMemoryReplayGuard()
 
     class Registry:
