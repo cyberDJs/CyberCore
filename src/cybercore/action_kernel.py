@@ -371,7 +371,39 @@ class ActionKernel:
         ):
             return self._receipt(request, trusted_actor, verdict, "FAILED", "AUDIT_FAILED")
 
-        return result
+        # The execution/evidence callbacks are untrusted for scheduling and
+        # can block beyond the original authorization. Refresh the trusted
+        # monotonic issuance floor after both callbacks; never return a stale
+        # pre-audit receipt capable of dispatching through the Hive bridge.
+        final_authorization_now, final_authorization_monotonic = self._trusted_time()
+        final_observation_deadline_monotonic = (
+            final_authorization_monotonic
+            + (request.expires_at - final_authorization_now).total_seconds()
+        )
+        authorization_deadline_monotonic = min(
+            authorization_deadline_monotonic,
+            final_observation_deadline_monotonic,
+        )
+        if (
+            not isfinite(authorization_deadline_monotonic)
+            or request.expires_at <= final_authorization_now
+            or final_authorization_monotonic >= authorization_deadline_monotonic
+        ):
+            # Reservation remains consumed: output of blocked/ambiguous
+            # callbacks is not safe to replay even when no receipt issued.
+            return self._receipt(request, trusted_actor, verdict, "FAILED", "EXPIRED")
+
+        return self._receipt(
+            request,
+            trusted_actor,
+            verdict,
+            "EXECUTED",
+            "SYNTHETIC_ONLY",
+            evidence=evidence,
+            authorization_floor_monotonic=final_authorization_monotonic,
+            authorization_deadline_monotonic=authorization_deadline_monotonic,
+            authorization_process_id=authorization_process_id,
+        )
 
     def _evaluate_policy(self, request: TaskRequest, trusted_actor: str) -> PolicyVerdict:
         def deny(reason: str) -> PolicyVerdict:
