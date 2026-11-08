@@ -12,7 +12,7 @@ from importlib import import_module
 from math import isfinite
 from os import getpid
 from threading import Lock
-from time import monotonic, monotonic as _replay_monotonic
+from time import monotonic, monotonic as _issued_monotonic, monotonic as _replay_monotonic
 from typing import Any, Callable, Protocol
 
 from cybercore.action_kernel import ExecutionReceipt, TaskRequest
@@ -251,7 +251,9 @@ def run_local_hive_dry_run(
         nonlocal last_issued_sample
         if issued_pid != getpid():
             raise PermissionError(f"Task authorization process changed {stage}")
-        current = monotonic()
+        # Sample the same process-local clock domain used by the kernel;
+        # the legacy bridge wall-clock budget remains independently testable.
+        current = _issued_monotonic()
         if (
             not isfinite(current)
             or current < floor
