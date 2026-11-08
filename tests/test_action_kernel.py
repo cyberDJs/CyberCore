@@ -811,7 +811,10 @@ def test_kernel_clock_regression_is_sticky_after_recovery() -> None:
 
     mono[0] = 101.0
     wall[0] = base + timedelta(seconds=5)
-    second = task(task_id="clock-second", requested_at=base, expires_at=base + timedelta(seconds=20))
+    second = task(
+        task_id="clock-second", requested_at=base,
+        expires_at=base + timedelta(seconds=20),
+    )
     with pytest.raises(PermissionError, match="clock authority unavailable"):
         k.execute(second, trusted_actor=ACTOR)
 
@@ -819,7 +822,13 @@ def test_kernel_clock_regression_is_sticky_after_recovery() -> None:
     mono[0] = 105.0
     wall[0] = base + timedelta(seconds=6)
     with pytest.raises(PermissionError, match="clock authority unavailable"):
-        k.execute(task(task_id="clock-third", requested_at=base, expires_at=base + timedelta(seconds=20)), trusted_actor=ACTOR)
+        k.execute(
+            task(
+                task_id="clock-third", requested_at=base,
+                expires_at=base + timedelta(seconds=20),
+            ),
+            trusted_actor=ACTOR,
+        )
 
 
 def test_kernel_nonfinite_monotonic_is_sticky_after_recovery() -> None:
@@ -836,5 +845,11 @@ def test_kernel_nonfinite_monotonic_is_sticky_after_recovery() -> None:
         k.execute(req, trusted_actor=ACTOR)
     mono[0] = 101.0
     with pytest.raises(PermissionError, match="clock authority unavailable"):
-        k.execute(task(task_id="clock-retry", requested_at=base, expires_at=base + timedelta(seconds=20)), trusted_actor=ACTOR)
+        k.execute(
+            task(
+                task_id="clock-retry", requested_at=base,
+                expires_at=base + timedelta(seconds=20),
+            ),
+            trusted_actor=ACTOR,
+        )
 
