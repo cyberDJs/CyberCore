@@ -257,6 +257,38 @@ def test_process_replay_guard_prunes_expired_claims() -> None:
     assert guard.claim_once("a", deadline_monotonic=160.0, now_monotonic=102.0)
 
 
+def test_process_replay_guard_monotonic_regression_is_sticky_before_pruning() -> None:
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=3)
+
+    assert guard.claim_once(
+        "authorization-a",
+        deadline_monotonic=110.0,
+        now_monotonic=101.0,
+    )
+    # A later valid authorization advances the process high-water and prunes A.
+    assert guard.claim_once(
+        "authorization-b",
+        deadline_monotonic=120.0,
+        now_monotonic=111.0,
+    )
+
+    # Returning to 105 would otherwise make A look live again after pruning.
+    with pytest.raises(PermissionError, match="monotonic regression detected"):
+        guard.claim_once(
+            "authorization-a",
+            deadline_monotonic=110.0,
+            now_monotonic=105.0,
+        )
+
+    # The fence is sticky even if the clock subsequently moves forward again.
+    with pytest.raises(PermissionError, match="monotonic regression detected"):
+        guard.claim_once(
+            "authorization-c",
+            deadline_monotonic=130.0,
+            now_monotonic=112.0,
+        )
+
+
 def test_process_replay_guard_never_evicts_unexpired_claims() -> None:
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1)
 
@@ -458,6 +490,91 @@ def test_wall_clock_forward_then_backward_cannot_prune_process_replay_claim(
             registry=Registry(),
             replay_guard=InMemoryReplayGuard(),
         )
+    assert calls == 2
+
+
+def test_bridge_monotonic_regression_after_prune_cannot_replay(
+    monkeypatch,
+) -> None:
+    original, original_kernel = setup("monotonic-prune-original")
+    original_receipt = original_kernel.execute(
+        original,
+        trusted_actor=original.actor,
+    )
+    original_receipt = replace(
+        original_receipt,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+        authorization_process_id=getpid(),
+    )
+
+    trigger, trigger_kernel = setup("monotonic-prune-trigger")
+    trigger_receipt = trigger_kernel.execute(
+        trigger,
+        trusted_actor=trigger.actor,
+    )
+    trigger_receipt = replace(
+        trigger_receipt,
+        authorization_floor_monotonic=111.0,
+        authorization_deadline_monotonic=120.0,
+        authorization_process_id=getpid(),
+    )
+
+    action = _install_fake_hive(monkeypatch)
+    monotonic_now = 101.0
+    wall = max(original.requested_at, trigger.requested_at) + timedelta(seconds=1)
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: monotonic_now)
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: wall)
+    calls = 0
+
+    class Registry:
+        def dispatch(self, incoming):
+            nonlocal calls
+            calls += 1
+            return SimpleNamespace(
+                request_id=incoming.id,
+                target_node=incoming.target_node,
+                action=action.HEALTH_CHECK,
+                status=SimpleNamespace(value="dry_run"),
+            )
+
+    assert (
+        run_local_hive_dry_run(
+            original,
+            trusted_actor=original.actor,
+            kernel_receipt=original_receipt,
+            registry=Registry(),
+            replay_guard=InMemoryReplayGuard(),
+        ).status
+        == "dry_run"
+    )
+
+    # Advance beyond A's deadline. Claiming B prunes A at process high-water 111.
+    monotonic_now = 111.0
+    assert (
+        run_local_hive_dry_run(
+            trigger,
+            trusted_actor=trigger.actor,
+            kernel_receipt=trigger_receipt,
+            registry=Registry(),
+            replay_guard=InMemoryReplayGuard(),
+        ).status
+        == "dry_run"
+    )
+
+    # UTC never moved backward and A's local receipt checks would accept 105.
+    # The process guard must nevertheless reject the monotonic regression before
+    # any replay pruning/claim can resurrect A through a replacement durable guard.
+    monotonic_now = 105.0
+    with pytest.raises(PermissionError, match="monotonic regression detected"):
+        run_local_hive_dry_run(
+            original,
+            trusted_actor=original.actor,
+            kernel_receipt=original_receipt,
+            registry=Registry(),
+            replay_guard=InMemoryReplayGuard(),
+        )
+
     assert calls == 2
 
 

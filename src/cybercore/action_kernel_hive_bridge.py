@@ -61,6 +61,11 @@ class _ExpiringProcessReplayGuard:
         # revive any receipt or permit a replacement durable guard to replay it.
         self._max_seen_utc: datetime | None = None
         self._utc_rollback_detected = False
+        # Replay pruning also depends on monotonic time. Track one process-wide
+        # high-water mark so a same-PID regression cannot resurrect a claim
+        # that was pruned after a later monotonic observation.
+        self._max_seen_monotonic: float | None = None
+        self._monotonic_regression_detected = False
         self._lock = Lock()
 
     def observe_utc(self, now: datetime | Callable[[], datetime]) -> datetime:
@@ -89,6 +94,23 @@ class _ExpiringProcessReplayGuard:
         if not isfinite(deadline_monotonic) or not isfinite(now_monotonic):
             raise PermissionError("Process replay guard timing invalid")
         with self._lock:
+            # Check the process monotonic high-water before pruning. Once a
+            # regression is observed, fail closed permanently for this guard
+            # instance: already-pruned consumed claims must never be revivable.
+            if self._monotonic_regression_detected:
+                raise PermissionError(
+                    "Process replay guard monotonic regression detected"
+                )
+            if (
+                self._max_seen_monotonic is not None
+                and now_monotonic < self._max_seen_monotonic
+            ):
+                self._monotonic_regression_detected = True
+                raise PermissionError(
+                    "Process replay guard monotonic regression detected"
+                )
+            self._max_seen_monotonic = now_monotonic
+
             expired_keys = [
                 claimed_key
                 for claimed_key, (claimed_until, _) in self._claimed_until.items()
