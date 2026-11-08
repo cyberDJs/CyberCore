@@ -1461,3 +1461,67 @@ def test_consolidated_bridge_rejects_monotonic_regression_after_dispatch(monkeyp
         )
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert durable.claim_once(key) is False
+
+
+def test_bridge_rejected_entry_regression_cannot_retry_same_receipt(monkeypatch) -> None:
+    task, kernel = setup("sticky-bridge-entry-retry")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+    )
+    current = [99.0]
+    monkeypatch.setattr(hive_bridge, "_issued_monotonic", lambda: current[0])
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: task.expires_at - timedelta(seconds=30))
+    durable = InMemoryReplayGuard()
+
+    with pytest.raises(PermissionError, match="expired or regressed at bridge entry"):
+        run_local_hive_dry_run(
+            task, trusted_actor=task.actor, kernel_receipt=allowed,
+            registry=None, replay_guard=durable,
+        )
+    # No replay claim occurred; a plausible later clock must not revive receipt.
+    current[0] = 101.0
+    with pytest.raises(PermissionError, match="expired or regressed at bridge entry"):
+        run_local_hive_dry_run(
+            task, trusted_actor=task.actor, kernel_receipt=allowed,
+            registry=None, replay_guard=durable,
+        )
+
+
+def test_bridge_nonfinite_issued_clock_cannot_recover(monkeypatch) -> None:
+    task, kernel = setup("sticky-bridge-nonfinite")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+    )
+    current = [float("nan")]
+    monkeypatch.setattr(hive_bridge, "_issued_monotonic", lambda: current[0])
+    durable = InMemoryReplayGuard()
+    with pytest.raises(PermissionError, match="expired or regressed at bridge entry"):
+        run_local_hive_dry_run(
+            task, trusted_actor=task.actor, kernel_receipt=allowed,
+            registry=None, replay_guard=durable,
+        )
+    current[0] = 102.0
+    with pytest.raises(PermissionError, match="expired or regressed at bridge entry"):
+        run_local_hive_dry_run(
+            task, trusted_actor=task.actor, kernel_receipt=allowed,
+            registry=None, replay_guard=durable,
+        )
+
+
+def test_bridge_issued_clock_regression_fences_other_receipts(monkeypatch) -> None:
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=4)
+    current = [103.0]
+    monkeypatch.setattr(hive_bridge, "_issued_monotonic", lambda: current[0])
+    assert guard.check_issued_clock(floor=100.0, deadline=120.0, previous=100.0) == 103.0
+    current[0] = 101.0
+    with pytest.raises(PermissionError, match="expired or regressed"):
+        guard.check_issued_clock(floor=100.0, deadline=120.0, previous=100.0)
+    current[0] = 105.0
+    with pytest.raises(PermissionError, match="expired or regressed"):
+        guard.check_issued_clock(floor=100.0, deadline=120.0, previous=100.0)
