@@ -739,6 +739,7 @@ def test_later_wall_value_cannot_lower_projected_utc_peak() -> None:
     assert result.reason == "EXPIRED"
     assert result.authorization_deadline_monotonic is None
 
+
 @pytest.mark.parametrize("blocked_stage", ["execution", "evidence"])
 def test_post_authorization_audit_revalidates_floor_after_partial_utc_rollback(
     blocked_stage: str,
@@ -792,4 +793,3 @@ def test_post_authorization_audit_revalidates_floor_after_partial_utc_rollback(
     duplicate = k.execute(duplicate_request, trusted_actor=ACTOR)
     assert duplicate.status == "DENIED"
     assert duplicate.reason == "DUPLICATE"
-
