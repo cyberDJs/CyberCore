@@ -1391,3 +1391,77 @@ def test_process_guard_nonfinite_monotonic_fails_closed(monkeypatch) -> None:
             expires_at=now + timedelta(minutes=1),
             now=now + timedelta(seconds=1),
         )
+
+
+def test_consolidated_bridge_rejects_monotonic_regression_during_claim(monkeypatch) -> None:
+    task, kernel = setup("consolidated-claim-clock-rollback")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    current = [100.0]
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+    )
+    monkeypatch.setattr(hive_bridge, "_issued_monotonic", lambda: current[0])
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(
+        hive_bridge, "_utc_now", lambda: task.expires_at - timedelta(seconds=30)
+    )
+    durable = InMemoryReplayGuard()
+
+    class BlockingGuard:
+        def claim_once(self, key):
+            claimed = durable.claim_once(key)
+            current[0] = 99.0
+            return claimed
+
+    with pytest.raises(PermissionError, match="expired or regressed during replay claim"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=None,
+            replay_guard=BlockingGuard(),
+        )
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is False
+
+
+def test_consolidated_bridge_rejects_monotonic_regression_after_dispatch(monkeypatch) -> None:
+    task, kernel = setup("consolidated-dispatch-clock-rollback")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    action = _install_fake_hive(monkeypatch)
+    current = [100.0]
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+    )
+    monkeypatch.setattr(hive_bridge, "_issued_monotonic", lambda: current[0])
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(
+        hive_bridge, "_utc_now", lambda: task.expires_at - timedelta(seconds=30)
+    )
+    durable = InMemoryReplayGuard()
+
+    class Registry:
+        def dispatch(self, incoming):
+            current[0] = 99.0
+            return SimpleNamespace(
+                request_id=incoming.id,
+                target_node=incoming.target_node,
+                action=action.HEALTH_CHECK,
+                status=SimpleNamespace(value="dry_run"),
+            )
+
+    with pytest.raises(PermissionError, match="expired or regressed during dispatch"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Registry(),
+            replay_guard=durable,
+        )
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is False
