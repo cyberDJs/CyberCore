@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from importlib import import_module
+from math import isfinite
+from os import getpid
 from threading import Lock
 from time import monotonic, monotonic as _replay_monotonic
 from typing import Any, Callable, Protocol
@@ -220,6 +222,47 @@ def run_local_hive_dry_run(
     ):
         raise PermissionError("Task authorization lifetime exceeds policy")
 
+    # An in-process kernel receipt is authoritative only in its issuing PID
+    # and monotonic clock domain. Missing or malformed fields fail closed.
+    floor = kernel_receipt.authorization_floor_monotonic
+    issued_deadline = kernel_receipt.authorization_deadline_monotonic
+    issued_pid = kernel_receipt.authorization_process_id
+    if (
+        floor is None
+        or issued_deadline is None
+        or isinstance(floor, bool)
+        or isinstance(issued_deadline, bool)
+        or not isinstance(floor, (float, int))
+        or not isinstance(issued_deadline, (float, int))
+        or not isfinite(floor)
+        or not isfinite(issued_deadline)
+        or floor >= issued_deadline
+        or isinstance(issued_pid, bool)
+        or not isinstance(issued_pid, int)
+        or issued_pid != getpid()
+    ):
+        raise PermissionError("Task monotonic authorization is missing or invalid")
+
+    # Repeated boundary samples must be nondecreasing. The original absolute
+    # kernel deadline is never restarted after audit, replay claim or dispatch.
+    last_issued_sample = floor
+
+    def assert_issued_monotonic(stage: str) -> None:
+        nonlocal last_issued_sample
+        if issued_pid != getpid():
+            raise PermissionError(f"Task authorization process changed {stage}")
+        current = monotonic()
+        if (
+            not isfinite(current)
+            or current < floor
+            or current < last_issued_sample
+            or current >= issued_deadline
+        ):
+            raise PermissionError(f"Task monotonic authorization expired or regressed {stage}")
+        last_issued_sample = current
+
+    assert_issued_monotonic("at bridge entry")
+
     # Establish one budget before any optional setup or blocking claim work.
     # Bracket the monotonic anchor with UTC checks. Use the later UTC sample
     # so a rollback between samples cannot inflate the remaining interval.
@@ -238,6 +281,7 @@ def run_local_hive_dry_run(
     if remaining_seconds <= 0:
         raise PermissionError("Task authorization expired before dispatch")
 
+    assert_issued_monotonic("before optional runtime setup")
     if replay_guard is None:
         raise PermissionError("Atomic replay guard required")
 
@@ -264,6 +308,7 @@ def run_local_hive_dry_run(
     # Authorization lifetime is checked again immediately at the claim/dispatch
     # boundary so shaping/import/request construction cannot extend validity.
     _assert_not_expired(task)
+    assert_issued_monotonic("before replay claim")
     if monotonic() - authorization_started >= remaining_seconds:
         raise PermissionError("Task authorization expired before replay claim")
 
@@ -273,6 +318,7 @@ def run_local_hive_dry_run(
     # Carry the original budget across a potentially blocking durable claim.
     # Claims remain consumed when it expires; do not dispatch or restart it.
     _assert_not_expired(task)
+    assert_issued_monotonic("during replay claim")
     if monotonic() - authorization_started >= remaining_seconds:
         raise PermissionError("Task authorization expired during replay claim")
 
@@ -285,6 +331,7 @@ def run_local_hive_dry_run(
     # after authorization expiry instead of accepting late work as success.
     # Claims remain consumed because the dispatch outcome already occurred.
     _assert_not_expired(task)
+    assert_issued_monotonic("during dispatch")
     # A backward wall-clock correction must not extend in-flight authorization.
     if monotonic() - authorization_started >= remaining_seconds:
         raise PermissionError("Task authorization expired during dispatch")
