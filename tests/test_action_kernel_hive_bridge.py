@@ -1340,3 +1340,56 @@ def test_issued_monotonic_deadline_rejects_result_after_dispatch(monkeypatch) ->
     assert calls == 1
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert durable.claim_once(key) is False
+
+
+def test_process_guard_rejects_monotonic_rollback_after_pruning(monkeypatch) -> None:
+    now = datetime(2026, 11, 8, 10, 0, tzinfo=timezone.utc)
+    monotonic_now = [101.0]
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", lambda: monotonic_now[0])
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+    assert guard.claim_once("old", expires_at=now + timedelta(seconds=1), now=now)
+
+    # After 300s a forward UTC sample can prune "old", but the observed
+    # monotonic 411 becomes a permanent high-water even after pruning.
+    monotonic_now[0] = 411.0
+    advanced_utc = now + timedelta(minutes=6)
+    with pytest.raises(PermissionError, match="expired during replay claim"):
+        guard.claim_once(
+            "expired-probe", expires_at=now + timedelta(minutes=1), now=advanced_utc
+        )
+    assert "old" not in guard._claimed_until
+
+    # UTC continues forward, so only monotonic high-water can reject.
+    monotonic_now[0] = 105.0
+    with pytest.raises(PermissionError, match="monotonic rollback detected"):
+        guard.claim_once(
+            "old",
+            expires_at=now + timedelta(minutes=10),
+            now=advanced_utc + timedelta(seconds=1),
+        )
+
+    # Sticky failure prevents resuming after a later forward correction.
+    monotonic_now[0] = 412.0
+    with pytest.raises(PermissionError, match="monotonic rollback detected"):
+        guard.claim_once(
+            "fresh",
+            expires_at=now + timedelta(minutes=10),
+            now=advanced_utc + timedelta(seconds=2),
+        )
+
+
+def test_process_guard_nonfinite_monotonic_fails_closed(monkeypatch) -> None:
+    now = datetime(2026, 11, 8, 10, 0, tzinfo=timezone.utc)
+    monotonic_now = [float("nan")]
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", lambda: monotonic_now[0])
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+
+    with pytest.raises(PermissionError, match="monotonic rollback detected"):
+        guard.claim_once("bad", expires_at=now + timedelta(minutes=1), now=now)
+    monotonic_now[0] = 100.0
+    with pytest.raises(PermissionError, match="monotonic rollback detected"):
+        guard.claim_once(
+            "fresh",
+            expires_at=now + timedelta(minutes=1),
+            now=now + timedelta(seconds=1),
+        )
