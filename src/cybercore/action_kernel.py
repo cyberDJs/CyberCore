@@ -199,6 +199,8 @@ class ActionKernel:
         # monotonic samples and accidentally trigger clock regression.
         self._clock_observation_lock = Lock()
         self._monotonic_high_water = self._clock_floor_monotonic
+        # An observed regression/nonfinite clock permanently revokes this kernel.
+        self._clock_authority_failed = False
         # A transient forward UTC sample must not be forgotten after a
         # backward correction during a policy/audit callback.
         self._utc_high_water = self._clock_floor_utc
@@ -551,6 +553,10 @@ class ActionKernel:
         # Check and advance the high-water in acquisition order, not in the
         # order threads happened to sample time before acquiring a lock.
         with self._clock_observation_lock:
+            if self._clock_authority_failed:
+                raise PermissionError(
+                    "Action Kernel process-local clock authority unavailable or invalid"
+                )
             current_process_id = self._process_id()
             current_monotonic = self._monotonic()
             current_wall = self._clock()
@@ -562,6 +568,8 @@ class ActionKernel:
                 or current_monotonic < self._monotonic_high_water
                 or current_wall.tzinfo is None
             ):
+                # Do not resume authority after a later plausible clock sample.
+                self._clock_authority_failed = True
                 raise PermissionError(
                     "Action Kernel process-local clock authority unavailable or invalid"
                 )
