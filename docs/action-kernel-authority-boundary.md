@@ -109,3 +109,23 @@ minimum retention and a previous key was pruned. The caller-provided durable
 claim store remains required, and no in-process cache is a replacement for
 cross-process replay authority. Regression cases verify prune-then-rollback,
 continued UTC progression, and persistent denial after a non-finite sample.
+
+### Post-audit issuance authority
+
+Execution and evidence audit callbacks may block or change the clocks. No
+pre-audit `EXECUTED` receipt is returned: after the final callback,
+`ActionKernel` samples the process-bound trusted monotonic/UTC pair again,
+refreshes the issued monotonic floor, and conservatively caps the existing
+absolute deadline. If the receipt is expired, returns `FAILED/EXPIRED`
+without a dispatch-capable grant. The reserved task ID remains consumed to
+prevent replay after ambiguous or late audit effects. The kernel cannot undo
+an already performed synchronous synthetic action, and this mechanism does
+not imply hard cancellation of CyberHIVE dispatch.
+
+This isolated reconciliation candidate preserves PR #152's UTC+monotonic
+high-water, bridge PID/issued-deadline enforcement and process replay monotonic
+rollback fence, while porting only the missing post-audit issuance behavior
+and regression from PR #151. Both source PRs remain separately writable and
+are NOT equivalent promotion candidates until individually reconciled. Every
+change to the source PRs invalidates the previous comparison and requires a
+fresh read-only reconciliation before promotion. No merge or deploy authorized.
