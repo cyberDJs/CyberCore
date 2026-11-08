@@ -48,13 +48,20 @@ class _ExpiringProcessReplayGuard:
     closed instead of evicting an unexpired claim when capacity is exhausted.
     """
 
-    def __init__(self, *, max_entries: int, max_per_actor: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        max_entries: int,
+        max_per_actor: int | None = None,
+        monotonic_clock: Callable[[], float] | None = None,
+    ) -> None:
         if max_entries <= 0:
             raise ValueError("Replay cache capacity must be positive")
         if max_per_actor is not None and max_per_actor <= 0:
             raise ValueError("Per-actor replay capacity must be positive")
         self._max_entries = max_entries
         self._max_per_actor = max_entries if max_per_actor is None else max_per_actor
+        self._monotonic_clock = monotonic_clock
         self._claimed_until: dict[str, tuple[float, str]] = {}
         # Preserve PR #150's sticky process UTC rollback fence. A forward UTC
         # observation may terminate authority early; a later rollback must not
@@ -88,12 +95,19 @@ class _ExpiringProcessReplayGuard:
         key: str,
         *,
         deadline_monotonic: float,
-        now_monotonic: float,
         actor: str = "",
     ) -> bool:
-        if not isfinite(deadline_monotonic) or not isfinite(now_monotonic):
+        if not isfinite(deadline_monotonic):
             raise PermissionError("Process replay guard timing invalid")
         with self._lock:
+            # Sample process monotonic time only after acquiring this lock.
+            # Caller-side samples can be reordered by scheduling and must not
+            # define the process-wide high-water ordering.
+            clock = self._monotonic_clock or monotonic
+            now_monotonic = clock()
+            if not isfinite(now_monotonic):
+                raise PermissionError("Process replay guard timing invalid")
+
             # Check the process monotonic high-water before pruning. Once a
             # regression is observed, fail closed permanently for this guard
             # instance: already-pruned consumed claims must never be revivable.
@@ -171,7 +185,6 @@ def _claim_once(
     key: str,
     *,
     deadline_monotonic: float,
-    now_monotonic: float,
     actor: str,
 ) -> None:
     # Reserve the bounded local claim before attempting the irreversible
@@ -180,7 +193,6 @@ def _claim_once(
     if not _PROCESS_REPLAY_GUARD.claim_once(
         key,
         deadline_monotonic=deadline_monotonic,
-        now_monotonic=now_monotonic,
         actor=actor,
     ):
         raise PermissionError("Authorization already consumed")
@@ -308,14 +320,13 @@ def run_local_hive_dry_run(
 
     # Authorization lifetime is checked again immediately at the claim/dispatch
     # boundary so shaping/import/request construction cannot extend validity.
-    claim_now = assert_authorized("before replay claim")
+    assert_authorized("before replay claim")
 
     key = f"{trusted_actor}:{task.task_id}:{task.correlation_id}"
     _claim_once(
         replay_guard,
         key,
         deadline_monotonic=deadline,
-        now_monotonic=claim_now,
         actor=trusted_actor,
     )
 

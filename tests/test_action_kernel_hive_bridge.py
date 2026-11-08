@@ -245,64 +245,115 @@ def test_concurrent_fresh_guards_cannot_bypass_process_claim(monkeypatch) -> Non
 
 
 def test_process_replay_guard_prunes_expired_claims() -> None:
-    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=2)
+    now = [100.0]
+    guard = hive_bridge._ExpiringProcessReplayGuard(
+        max_entries=2,
+        monotonic_clock=lambda: now[0],
+    )
 
-    assert guard.claim_once("a", deadline_monotonic=101.0, now_monotonic=100.0)
-    assert guard.claim_once("b", deadline_monotonic=101.0, now_monotonic=100.0)
+    assert guard.claim_once("a", deadline_monotonic=101.0)
+    assert guard.claim_once("b", deadline_monotonic=101.0)
 
     with pytest.raises(PermissionError, match="capacity exhausted"):
-        guard.claim_once("c", deadline_monotonic=160.0, now_monotonic=100.0)
+        guard.claim_once("c", deadline_monotonic=160.0)
 
-    assert guard.claim_once("c", deadline_monotonic=160.0, now_monotonic=102.0)
-    assert guard.claim_once("a", deadline_monotonic=160.0, now_monotonic=102.0)
+    now[0] = 102.0
+    assert guard.claim_once("c", deadline_monotonic=160.0)
+    assert guard.claim_once("a", deadline_monotonic=160.0)
 
 
 def test_process_replay_guard_monotonic_regression_is_sticky_before_pruning() -> None:
-    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=3)
+    now = [101.0]
+    guard = hive_bridge._ExpiringProcessReplayGuard(
+        max_entries=3,
+        monotonic_clock=lambda: now[0],
+    )
 
     assert guard.claim_once(
         "authorization-a",
         deadline_monotonic=110.0,
-        now_monotonic=101.0,
     )
     # A later valid authorization advances the process high-water and prunes A.
+    now[0] = 111.0
     assert guard.claim_once(
         "authorization-b",
         deadline_monotonic=120.0,
-        now_monotonic=111.0,
     )
 
     # Returning to 105 would otherwise make A look live again after pruning.
+    now[0] = 105.0
     with pytest.raises(PermissionError, match="monotonic regression detected"):
         guard.claim_once(
             "authorization-a",
             deadline_monotonic=110.0,
-            now_monotonic=105.0,
         )
 
     # The fence is sticky even if the clock subsequently moves forward again.
+    now[0] = 112.0
     with pytest.raises(PermissionError, match="monotonic regression detected"):
         guard.claim_once(
             "authorization-c",
             deadline_monotonic=130.0,
-            now_monotonic=112.0,
         )
 
 
 def test_process_replay_guard_never_evicts_unexpired_claims() -> None:
-    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1)
-
-    assert guard.claim_once("kept", deadline_monotonic=160.0, now_monotonic=100.0)
-    with pytest.raises(PermissionError, match="capacity exhausted"):
-        guard.claim_once("new", deadline_monotonic=160.0, now_monotonic=100.0)
-    assert (
-        guard.claim_once(
-            "kept",
-            deadline_monotonic=160.0,
-            now_monotonic=100.0,
-        )
-        is False
+    guard = hive_bridge._ExpiringProcessReplayGuard(
+        max_entries=1,
+        monotonic_clock=lambda: 100.0,
     )
+
+    assert guard.claim_once("kept", deadline_monotonic=160.0)
+    with pytest.raises(PermissionError, match="capacity exhausted"):
+        guard.claim_once("new", deadline_monotonic=160.0)
+    assert guard.claim_once("kept", deadline_monotonic=160.0) is False
+
+
+def test_process_monotonic_observation_is_sampled_under_replay_lock() -> None:
+    calls = 0
+    guard: hive_bridge._ExpiringProcessReplayGuard
+
+    def ordered_sample() -> float:
+        nonlocal calls
+        calls += 1
+        assert not guard._lock.acquire(blocking=False)
+        return 100.0
+
+    guard = hive_bridge._ExpiringProcessReplayGuard(
+        max_entries=2,
+        monotonic_clock=ordered_sample,
+    )
+
+    assert guard.claim_once("a", deadline_monotonic=110.0)
+    assert calls == 1
+
+
+def test_concurrent_process_claims_do_not_false_fence_on_thread_reordering() -> None:
+    tick = 100.0
+
+    def ordered_sample() -> float:
+        nonlocal tick
+        tick += 1.0
+        return tick
+
+    guard = hive_bridge._ExpiringProcessReplayGuard(
+        max_entries=4,
+        monotonic_clock=ordered_sample,
+    )
+    start = Barrier(3)
+
+    def claim(key: str) -> bool:
+        start.wait()
+        return guard.claim_once(key, deadline_monotonic=120.0)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(claim, "a")
+        second = pool.submit(claim, "b")
+        start.wait()
+        outcomes = [first.result(), second.result()]
+
+    assert outcomes == [True, True]
+    assert guard.claim_once("c", deadline_monotonic=120.0) is True
 
 
 def test_process_utc_rollback_fence_is_sticky() -> None:
@@ -368,43 +419,45 @@ def test_forward_utc_expiry_then_rollback_stays_fenced_before_claim(
 
 
 def test_process_replay_guard_does_not_retain_already_expired_claim() -> None:
-    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1)
+    guard = hive_bridge._ExpiringProcessReplayGuard(
+        max_entries=1,
+        monotonic_clock=lambda: 100.0,
+    )
 
-    assert guard.claim_once("expired", deadline_monotonic=100.0, now_monotonic=100.0)
+    assert guard.claim_once("expired", deadline_monotonic=100.0)
     assert guard.claim_once(
         "fresh",
         deadline_monotonic=160.0,
-        now_monotonic=100.0,
     )
 
 
 def test_process_replay_quota_isolated_by_trusted_actor() -> None:
-    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=4, max_per_actor=1)
+    guard = hive_bridge._ExpiringProcessReplayGuard(
+        max_entries=4,
+        max_per_actor=1,
+        monotonic_clock=lambda: 100.0,
+    )
 
     assert guard.claim_once(
         "alice-1",
         deadline_monotonic=220.0,
-        now_monotonic=100.0,
         actor="alice",
     )
     with pytest.raises(PermissionError, match="Actor replay guard capacity exhausted"):
         guard.claim_once(
             "alice-2",
             deadline_monotonic=220.0,
-            now_monotonic=100.0,
             actor="alice",
         )
     assert guard.claim_once(
         "bob-1",
         deadline_monotonic=220.0,
-        now_monotonic=100.0,
         actor="bob",
     )
     assert (
         guard.claim_once(
             "bob-1",
             deadline_monotonic=220.0,
-            now_monotonic=100.0,
             actor="bob",
         )
         is False
@@ -646,11 +699,14 @@ def test_process_capacity_rejects_before_durable_claim(monkeypatch) -> None:
         authorization_deadline_monotonic=110.0,
         authorization_process_id=getpid(),
     )
-    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1, max_per_actor=1)
+    guard = hive_bridge._ExpiringProcessReplayGuard(
+        max_entries=1,
+        max_per_actor=1,
+        monotonic_clock=lambda: 100.0,
+    )
     assert guard.claim_once(
         "other",
         deadline_monotonic=110.0,
-        now_monotonic=100.0,
         actor=task.actor,
     )
     monkeypatch.setattr(hive_bridge, "_PROCESS_REPLAY_GUARD", guard)
