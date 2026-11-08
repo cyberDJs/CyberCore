@@ -98,17 +98,10 @@ class _ExpiringProcessReplayGuard:
             # regression is observed, fail closed permanently for this guard
             # instance: already-pruned consumed claims must never be revivable.
             if self._monotonic_regression_detected:
-                raise PermissionError(
-                    "Process replay guard monotonic regression detected"
-                )
-            if (
-                self._max_seen_monotonic is not None
-                and now_monotonic < self._max_seen_monotonic
-            ):
+                raise PermissionError("Process replay guard monotonic regression detected")
+            if self._max_seen_monotonic is not None and now_monotonic < self._max_seen_monotonic:
                 self._monotonic_regression_detected = True
-                raise PermissionError(
-                    "Process replay guard monotonic regression detected"
-                )
+                raise PermissionError("Process replay guard monotonic regression detected")
             self._max_seen_monotonic = now_monotonic
 
             expired_keys = [

@@ -640,16 +640,21 @@ def test_process_capacity_rejects_before_durable_claim(monkeypatch) -> None:
     task, kernel = setup("capacity-before-durable")
     allowed = kernel.execute(task, trusted_actor=task.actor)
     _install_fake_hive(monkeypatch)
-    deadline = allowed.authorization_deadline_monotonic
-    assert deadline is not None
+    allowed = replace(
+        allowed,
+        authorization_floor_monotonic=100.0,
+        authorization_deadline_monotonic=110.0,
+        authorization_process_id=getpid(),
+    )
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=1, max_per_actor=1)
     assert guard.claim_once(
         "other",
-        deadline_monotonic=deadline,
-        now_monotonic=deadline - 1.0,
+        deadline_monotonic=110.0,
+        now_monotonic=100.0,
         actor=task.actor,
     )
     monkeypatch.setattr(hive_bridge, "_PROCESS_REPLAY_GUARD", guard)
+    monkeypatch.setattr(hive_bridge, "monotonic", lambda: 100.0)
 
     class CountingDurable:
         calls = 0
