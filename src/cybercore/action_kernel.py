@@ -202,6 +202,7 @@ class ActionKernel:
         # A transient forward UTC sample must not be forgotten after a
         # backward correction during a policy/audit callback.
         self._utc_high_water = self._clock_floor_utc
+        self._utc_high_water_monotonic = self._clock_floor_monotonic
 
         self._used: set[str] = set()
         self._task_id_lock = Lock()
@@ -547,11 +548,18 @@ class ActionKernel:
             self._monotonic_high_water = current_monotonic
             if current_wall > self._utc_high_water:
                 self._utc_high_water = current_wall
+                # This bound is anchored to the monotonic time *at which*
+                # the forward UTC value was observed, not the later issuance
+                # sample after an arbitrarily long blocking audit.
+                self._utc_high_water_monotonic = current_monotonic
 
             projected_floor = self._clock_floor_utc + timedelta(
                 seconds=current_monotonic - self._clock_floor_monotonic
             )
-            return max(current_wall, self._utc_high_water, projected_floor), current_monotonic
+            projected_utc_peak = self._utc_high_water + timedelta(
+                seconds=current_monotonic - self._utc_high_water_monotonic
+            )
+            return max(current_wall, projected_utc_peak, projected_floor), current_monotonic
 
     def _task_id_is_reserved(self, task_id: str) -> bool:
         with self._task_id_lock:
