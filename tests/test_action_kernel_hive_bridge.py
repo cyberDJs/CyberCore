@@ -1246,3 +1246,96 @@ def test_expired_forward_clock_probe_cannot_evict_existing_process_claim() -> No
         )
     with pytest.raises(PermissionError, match="UTC rollback detected"):
         guard.claim_once("original", expires_at=expiry, now=now)
+
+
+def test_issued_monotonic_deadline_prevents_restarted_bridge_budget(monkeypatch) -> None:
+    task, kernel = setup("issued-deadline-expired-before-bridge")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    _install_fake_hive(monkeypatch)
+    assert allowed.authorization_floor_monotonic is not None
+    assert allowed.authorization_deadline_monotonic is not None
+
+    # UTC rolls back and would restart the legacy bridge countdown. A
+    # kernel-issued deadline that has elapsed must reject before any claim.
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: task.expires_at - timedelta(seconds=1))
+    monkeypatch.setattr(
+        hive_bridge, "_issued_monotonic",
+        lambda: allowed.authorization_deadline_monotonic + 1.0,
+    )
+    durable = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Expired kernel receipt cannot dispatch")
+
+    with pytest.raises(PermissionError, match="monotonic authorization expired"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=durable,
+        )
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is True
+
+
+def test_bridge_rejects_post_fork_kernel_receipt_before_replay_claim(monkeypatch) -> None:
+    task, kernel = setup("issued-pid-fork")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    assert allowed.authorization_process_id is not None
+    monkeypatch.setattr(hive_bridge, "getpid", lambda: allowed.authorization_process_id + 1)
+    durable = InMemoryReplayGuard()
+
+    class Forbidden:
+        def dispatch(self, _):
+            raise AssertionError("Forked receipt cannot dispatch")
+
+    with pytest.raises(PermissionError, match="monotonic authorization is missing or invalid"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Forbidden(),
+            replay_guard=durable,
+        )
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is True
+
+
+def test_issued_monotonic_deadline_rejects_result_after_dispatch(monkeypatch) -> None:
+    task, kernel = setup("issued-deadline-crossed-in-dispatch")
+    allowed = kernel.execute(task, trusted_actor=task.actor)
+    action = _install_fake_hive(monkeypatch)
+    assert allowed.authorization_floor_monotonic is not None
+    assert allowed.authorization_deadline_monotonic is not None
+    floor = allowed.authorization_floor_monotonic
+    deadline = allowed.authorization_deadline_monotonic
+    samples = iter((floor, floor, floor, floor, deadline))
+    monkeypatch.setattr(hive_bridge, "_issued_monotonic", lambda: next(samples, deadline))
+    monkeypatch.setattr(hive_bridge, "_utc_now", lambda: task.expires_at - timedelta(seconds=1))
+    durable = InMemoryReplayGuard()
+    calls = 0
+
+    class Registry:
+        def dispatch(self, incoming):
+            nonlocal calls
+            calls += 1
+            return SimpleNamespace(
+                request_id=incoming.id,
+                target_node=incoming.target_node,
+                action=action.HEALTH_CHECK,
+                status=SimpleNamespace(value="dry_run"),
+            )
+
+    with pytest.raises(PermissionError, match="monotonic authorization expired"):
+        run_local_hive_dry_run(
+            task,
+            trusted_actor=task.actor,
+            kernel_receipt=allowed,
+            registry=Registry(),
+            replay_guard=durable,
+        )
+    assert calls == 1
+    key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
+    assert durable.claim_once(key) is False
