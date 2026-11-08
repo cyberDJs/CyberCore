@@ -702,3 +702,39 @@ def test_forward_utc_peak_deadline_equality_denies_after_rollback() -> None:
     result = k.execute(req, trusted_actor=ACTOR)
     assert result.status == "DENIED"
     assert result.reason == "EXPIRED"
+
+
+def test_later_wall_value_cannot_lower_projected_utc_peak() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    forward = base + timedelta(hours=1)
+    wall = [base]
+    mono = [100.0]
+    k = kernel(
+        clock=lambda: wall[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+
+    wall[0] = forward
+    mono[0] = 101.0
+    first = task(
+        task_id="forward-utc-peak-anchor",
+        requested_at=forward,
+        expires_at=forward + timedelta(seconds=15),
+    )
+    assert k.execute(first, trusted_actor=ACTOR).status == "EXECUTED"
+
+    # At monotonic 120, the peak projects to forward+19 seconds.
+    # UTC forward+1 is larger than the raw stored peak but must not reset
+    # its monotonic anchor or revive a grant already expired at 116.
+    mono[0] = 120.0
+    wall[0] = forward + timedelta(seconds=1)
+    second = task(
+        task_id="late-wall-below-projected-peak",
+        requested_at=forward,
+        expires_at=forward + timedelta(seconds=15),
+    )
+    result = k.execute(second, trusted_actor=ACTOR)
+    assert result.status == "DENIED"
+    assert result.reason == "EXPIRED"
+    assert result.authorization_deadline_monotonic is None
