@@ -60,6 +60,10 @@ class _ExpiringProcessReplayGuard:
         # rollback, even if the earlier claim was safely pruned by elapsed time.
         self._max_seen_utc: datetime | None = None
         self._utc_rollback_detected = False
+        # Persist a process-local monotonic high-water even after a claim
+        # is pruned. Regression can otherwise resurrect an old grant.
+        self._max_seen_monotonic: float | None = None
+        self._monotonic_rollback_detected = False
         self._lock = Lock()
 
     def claim_once(
@@ -83,7 +87,20 @@ class _ExpiringProcessReplayGuard:
                 self._utc_rollback_detected = True
                 raise PermissionError("Process replay guard UTC rollback detected")
             self._max_seen_utc = now
+            # Sample under the same lock as replay pruning and UTC sampling.
+            # Once a regression is detected, fail closed for the lifetime of
+            # the process guard; capacity/pruning cannot restore authority.
+            if self._monotonic_rollback_detected:
+                raise PermissionError("Process replay guard monotonic rollback detected")
             process_now = _replay_monotonic()
+            if (
+                not isfinite(process_now)
+                or self._max_seen_monotonic is not None
+                and process_now < self._max_seen_monotonic
+            ):
+                self._monotonic_rollback_detected = True
+                raise PermissionError("Process replay guard monotonic rollback detected")
+            self._max_seen_monotonic = process_now
             # UTC jumps are not proof that a claimed authorization elapsed.
             # Retain every claim for at least the maximum trusted lifetime
             # on an independent monotonic clock before pruning by UTC.
