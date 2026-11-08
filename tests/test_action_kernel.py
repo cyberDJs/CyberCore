@@ -738,3 +738,59 @@ def test_later_wall_value_cannot_lower_projected_utc_peak() -> None:
     assert result.status == "DENIED"
     assert result.reason == "EXPIRED"
     assert result.authorization_deadline_monotonic is None
+
+
+@pytest.mark.parametrize("blocked_stage", ["execution", "evidence"])
+def test_post_authorization_audit_revalidates_floor_after_partial_utc_rollback(
+    blocked_stage: str,
+) -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    current = [base]
+    monotonic_now = [100.0]
+    expires_at = base + timedelta(seconds=5)
+    events: list[AuditEvent] = []
+
+    def sink(event: AuditEvent) -> None:
+        events.append(event)
+        if event.stage == blocked_stage:
+            # Ten seconds of process time elapse while UTC shows only three:
+            # the final authority sample must project from the construction
+            # floor and refuse to mint a stale bridge-capable receipt.
+            monotonic_now[0] = 110.0
+            current[0] = base + timedelta(seconds=3)
+
+    k = kernel(
+        evidence_sink=sink,
+        clock=lambda: current[0],
+        monotonic_clock=lambda: monotonic_now[0],
+        process_id_provider=lambda: 4242,
+    )
+    request = task(
+        task_id=f"post-audit-{blocked_stage}",
+        correlation_id=f"corr-post-audit-{blocked_stage}",
+        requested_at=base,
+        expires_at=expires_at,
+    )
+
+    result = k.execute(request, trusted_actor=ACTOR)
+
+    assert result.status == "FAILED"
+    assert result.reason == "EXPIRED"
+    assert result.authorization_floor_monotonic is None
+    assert result.authorization_deadline_monotonic is None
+    assert result.authorization_process_id is None
+    assert any(event.stage == blocked_stage for event in events)
+
+    # Reservation stays consumed after crossing the execution boundary.
+    # Use a fresh, time-valid request so expiry ordering cannot mask DUPLICATE.
+    current[0] = base + timedelta(seconds=10)
+    duplicate_request = task(
+        task_id=request.task_id,
+        correlation_id=request.correlation_id,
+        requested_at=current[0],
+        expires_at=current[0] + timedelta(seconds=5),
+    )
+    duplicate = k.execute(duplicate_request, trusted_actor=ACTOR)
+    assert duplicate.status == "DENIED"
+    assert duplicate.reason == "DUPLICATE"
+
