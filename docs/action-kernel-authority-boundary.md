@@ -109,3 +109,25 @@ minimum retention and a previous key was pruned. The caller-provided durable
 claim store remains required, and no in-process cache is a replacement for
 cross-process replay authority. Regression cases verify prune-then-rollback,
 continued UTC progression, and persistent denial after a non-finite sample.
+
+### Canonical consolidation of PR #151 and PR #152
+
+This isolated candidate originates from PR #152 HEAD
+`1815d3bf770b0e12eec9d80fd73ff1144a8228eb` and retains the
+paired UTC/monotonic high-water, original kernel-issued PID and deadline
+checks in the CyberHIVE bridge, and sticky replay monotonic high-water.
+
+It also brings forward the distinct PR #151 protection (snapshot
+`5db815a5365ccee755fdbcb29d768c9fb28b8ab3`): the kernel re-observes
+trusted UTC and monotonic high-water **after execution and evidence audit
+callbacks** before returning an authorized receipt. The previously computed
+deadline is never enlarged; expiration fails closed as `FAILED/EXPIRED` and
+the task ID remains consumed after reaching the execution boundary.
+
+Regression evidence: post-authorization blocking callbacks at both execution
+and evidence stages, with a ten-second monotonic delay and partial UTC rollback,
+plus duplicate task reservation; supplemented by the independent PR #152
+clock/replay regressions. This candidate is not approval to merge or deploy,
+and the two source PR branches remain unchanged. An independent security
+review must reconcile any additional unique PR #151 test coverage and validate
+the final exact SHA before promotion.
