@@ -30,10 +30,12 @@ Captured documentation media:
 ## Reproducible workflow
 
 The Node toolchain is isolated in `tools/visual-docs`; it is not part of the
-Python runtime package. Install its pinned dependencies once:
+Python runtime package. It requires Node.js >=22.13.0. Install pinned dependencies
+without downloading redundant Puppeteer browsers; install Chromium for
+Playwright separately:
 
 ```bash
-(cd tools/visual-docs && npm ci)
+(cd tools/visual-docs && PUPPETEER_SKIP_DOWNLOAD=1 npm ci)
 (cd tools/visual-docs && npx playwright install chromium)
 ```
 
@@ -61,9 +63,11 @@ when FFmpeg, Playwright, or a local Chromium executable is unavailable. No
 global Node packages, remote browser resources, capture frames, browser binaries, or
 `node_modules` are committed.
 
-## Toolchain follow-up
+## Toolchain security
 
-`npm audit` reports six high-severity transitive findings in this isolated
-documentation toolchain. They are explicitly deferred security debt for
-WB-0027 and do not affect the Python runtime package; update the pinned visual
-tool dependencies in a separately reviewed maintenance change.
+The visual-docs npm dependency tree is separate from the Python runtime. The
+2026-10-18 dependency maintenance update moved Mermaid CLI to 12.0.0 and
+Playwright to 1.64.1. At the time of that update, `npm audit` reported no
+high, critical, or moderate findings; two low-severity entries remain via
+KaTeX. Run `npm audit` regularly and review the trustworthiness of diagram
+inputs; track the remaining LOW advisory separately.
