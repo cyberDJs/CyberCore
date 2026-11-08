@@ -75,7 +75,9 @@ high-water is nondecreasing across policy evaluation and issuance as well as
 across requests. A same-process monotonic regression fails closed. A separate
 trusted UTC high-water retains a forward correction seen by policy even when
 wall time rolls back during a blocking audit. Each new UTC peak is paired with
-its monotonic observation and projected forward by elapsed monotonic time,
+its monotonic observation and projected forward by elapsed monotonic time;
+a later raw UTC value only replaces the peak if it exceeds the *projected*
+peak, preventing time corrections from reducing trusted elapsed time,
 so a blocked audit cannot restart a grant at the later issuance sample.
 Issued deadlines remain bounded by the peak's original observation time.
 
