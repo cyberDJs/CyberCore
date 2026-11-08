@@ -557,7 +557,15 @@ def test_post_authorization_audit_revalidates_floor_after_partial_utc_rollback(
     assert any(event.stage == blocked_stage for event in events)
 
     # Reservation stays consumed after crossing the execution boundary.
-    duplicate = k.execute(request, trusted_actor=ACTOR)
+    # Use a fresh, time-valid request so expiry ordering cannot mask DUPLICATE.
+    current[0] = base + timedelta(seconds=10)
+    duplicate_request = task(
+        task_id=request.task_id,
+        correlation_id=request.correlation_id,
+        requested_at=current[0],
+        expires_at=current[0] + timedelta(seconds=5),
+    )
+    duplicate = k.execute(duplicate_request, trusted_actor=ACTOR)
     assert duplicate.status == "DENIED"
     assert duplicate.reason == "DUPLICATE"
 
