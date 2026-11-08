@@ -1259,7 +1259,8 @@ def test_issued_monotonic_deadline_prevents_restarted_bridge_budget(monkeypatch)
     # kernel-issued deadline that has elapsed must reject before any claim.
     monkeypatch.setattr(hive_bridge, "_utc_now", lambda: task.expires_at - timedelta(seconds=1))
     monkeypatch.setattr(
-        hive_bridge, "_issued_monotonic",
+        hive_bridge,
+        "_issued_monotonic",
         lambda: allowed.authorization_deadline_monotonic + 1.0,
     )
     durable = InMemoryReplayGuard()
