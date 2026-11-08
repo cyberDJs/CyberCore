@@ -131,3 +131,22 @@ clock/replay regressions. This candidate is not approval to merge or deploy,
 and the two source PR branches remain unchanged. An independent security
 review must reconcile any additional unique PR #151 test coverage and validate
 the final exact SHA before promotion.
+
+### Sticky issued-clock authority fence (isolated follow-up)
+
+A rejected nonfinite/regressed monotonic observation permanently revokes that
+ActionKernel instance; recovering the observed counter cannot renew authority.
+The bridge's process-owned replay guard additionally serializes kernel-issued
+monotonic checks across invocations, retains a process-wide high-water, and
+latches invalid issued-clock samples before claim. Thus retrying an unclaimed
+receipt after its clock appears to recover cannot dispatch. A normal per-receipt
+deadline expiry does not poison other receipts, but it still rejects the expired
+receipt. An observed rollback invalidates all future issued-receipt bridge
+attempts in that process. Restarting a process is not a substitute for trusted
+time or durable replay protection, and the protection cannot detect an
+unobserved clock correction. The reference remains synthetic/read-only.
+
+Evidence: sticky kernel regression/nonfinite recovery tests, bridge entry
+retry/nonfinite recovery tests, and cross-receipt high-water regression. Review
+the fail-closed impact on liveness and the sampling lock's serialization
+before promotion. The existing source branches and main remain untouched.
