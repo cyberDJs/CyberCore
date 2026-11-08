@@ -1354,9 +1354,7 @@ def test_process_guard_rejects_monotonic_rollback_after_pruning(monkeypatch) -> 
     monotonic_now[0] = 411.0
     advanced_utc = now + timedelta(minutes=6)
     with pytest.raises(PermissionError, match="expired during replay claim"):
-        guard.claim_once(
-            "expired-probe", expires_at=now + timedelta(minutes=1), now=advanced_utc
-        )
+        guard.claim_once("expired-probe", expires_at=now + timedelta(minutes=1), now=advanced_utc)
     assert "old" not in guard._claimed_until
 
     # UTC continues forward, so only monotonic high-water can reject.
