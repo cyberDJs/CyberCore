@@ -74,8 +74,10 @@ subsequent monotonic clock values under a per-kernel lock. The monotonic
 high-water is nondecreasing across policy evaluation and issuance as well as
 across requests. A same-process monotonic regression fails closed. A separate
 trusted UTC high-water retains a forward correction seen by policy even when
-wall time rolls back during a blocking audit; issued deadlines are always
-bounded using the maximum observed UTC in the kernel's lifetime.
+wall time rolls back during a blocking audit. Each new UTC peak is paired with
+its monotonic observation and projected forward by elapsed monotonic time,
+so a blocked audit cannot restart a grant at the later issuance sample.
+Issued deadlines remain bounded by the peak's original observation time.
 
 At issuance the absolute process-local deadline is the minimum of the
 construction-baseline projection and the trusted current-UTC projection.
