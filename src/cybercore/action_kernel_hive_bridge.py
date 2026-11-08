@@ -64,7 +64,31 @@ class _ExpiringProcessReplayGuard:
         # is pruned. Regression can otherwise resurrect an old grant.
         self._max_seen_monotonic: float | None = None
         self._monotonic_rollback_detected = False
+        # Issued-receipt checks must survive failed bridge-entry retries.
+        self._issued_monotonic_high_water: float | None = None
+        self._issued_clock_failed = False
         self._lock = Lock()
+
+    def check_issued_clock(self, *, floor: float, deadline: float, previous: float) -> float:
+        # Shared process guard: rejecting a clock regression cannot be undone
+        # by retrying an unclaimed receipt after the clock appears to recover.
+        with self._lock:
+            if self._issued_clock_failed:
+                raise PermissionError("Task monotonic authorization expired or regressed")
+            sample = _issued_monotonic()
+            if (
+                not isfinite(sample)
+                or sample < floor
+                or sample < previous
+                or self._issued_monotonic_high_water is not None
+                and sample < self._issued_monotonic_high_water
+            ):
+                self._issued_clock_failed = True
+                raise PermissionError("Task monotonic authorization expired or regressed")
+            self._issued_monotonic_high_water = sample
+            if sample >= deadline:
+                raise PermissionError("Task monotonic authorization expired or regressed")
+            return sample
 
     def claim_once(
         self,
@@ -270,15 +294,14 @@ def run_local_hive_dry_run(
             raise PermissionError(f"Task authorization process changed {stage}")
         # Sample the same process-local clock domain used by the kernel;
         # the legacy bridge wall-clock budget remains independently testable.
-        current = _issued_monotonic()
-        if (
-            not isfinite(current)
-            or current < floor
-            or current < last_issued_sample
-            or current >= issued_deadline
-        ):
-            raise PermissionError(f"Task monotonic authorization expired or regressed {stage}")
-        last_issued_sample = current
+        try:
+            last_issued_sample = _PROCESS_REPLAY_GUARD.check_issued_clock(
+                floor=floor, deadline=issued_deadline, previous=last_issued_sample
+            )
+        except PermissionError as exc:
+            raise PermissionError(
+                f"Task monotonic authorization expired or regressed {stage}"
+            ) from exc
 
     assert_issued_monotonic("at bridge entry")
 
