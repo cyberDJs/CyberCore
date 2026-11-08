@@ -82,9 +82,13 @@ construction-baseline projection and the trusted current-UTC projection.
 A transient forward UTC correction must not expand the duration of a grant.
 This code remains a local read-only synthetic ActionKernel reference; it is
 not a trusted cross-process authority, a hard cancellation mechanism, or
-authenticated external time. Its bridge to CyberHIVE remains the already
-merged, post-merge tested implementation from PR #150; this isolated change
-does not replace that bridge.
+authenticated external time. The bridge retains the replay and UTC defenses
+merged in PR #150, and additionally verifies the issuing PID and a finite,
+nondecreasing monotonic sample against the original kernel-issued floor and
+absolute deadline before claim/dispatch and after synchronous dispatch.
+Missing/legacy receipt bounds fail closed; a result accepted after the
+kernel-issued deadline is forbidden even after UTC rollback. Hard cancellation
+is not provided.
 
 Evidence requirements before promotion: exact-head Python 3.11-3.14 CI,
 CodeQL, CyberHIVE contract, review of high-water/clock ordering, and a
