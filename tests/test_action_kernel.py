@@ -638,4 +638,67 @@ def test_kernel_utc_high_water_is_shared_across_separate_requests() -> None:
     )
     receipt = k.execute(second, trusted_actor=ACTOR)
     assert receipt.status == "EXECUTED"
-    assert receipt.authorization_deadline_monotonic == 107.0
+    # The forward UTC observation occurred at monotonic 101, so its
+    # five-second deadline remains 106 even when checked later at 102.
+    assert receipt.authorization_deadline_monotonic == 106.0
+
+
+def test_forward_utc_peak_expires_during_blocking_policy_audit() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    forward = base + timedelta(hours=1)
+    wall = [base]
+    mono = [100.0]
+
+    def audit(event: AuditEvent) -> None:
+        if event.stage == "policy" and event.outcome == "ALLOW":
+            # Peak sampled at monotonic 101; ten seconds later the wall
+            # clock has rolled back but the five-second grant is expired.
+            mono[0] = 111.0
+            wall[0] = base + timedelta(seconds=1)
+
+    k = kernel(
+        clock=lambda: wall[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+        evidence_sink=audit,
+    )
+    wall[0] = forward
+    mono[0] = 101.0
+    req = task(
+        task_id="forward-peak-audit-delay",
+        requested_at=forward,
+        expires_at=forward + timedelta(seconds=5),
+    )
+    result = k.execute(req, trusted_actor=ACTOR)
+    assert result.status == "DENIED"
+    assert result.reason == "EXPIRED"
+    assert result.authorization_deadline_monotonic is None
+
+
+def test_forward_utc_peak_deadline_equality_denies_after_rollback() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    forward = base + timedelta(hours=1)
+    wall = [base]
+    mono = [100.0]
+
+    def audit(event: AuditEvent) -> None:
+        if event.stage == "policy" and event.outcome == "ALLOW":
+            mono[0] = 106.0
+            wall[0] = base + timedelta(seconds=1)
+
+    k = kernel(
+        clock=lambda: wall[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+        evidence_sink=audit,
+    )
+    wall[0] = forward
+    mono[0] = 101.0
+    req = task(
+        task_id="forward-peak-equality",
+        requested_at=forward,
+        expires_at=forward + timedelta(seconds=5),
+    )
+    result = k.execute(req, trusted_actor=ACTOR)
+    assert result.status == "DENIED"
+    assert result.reason == "EXPIRED"
