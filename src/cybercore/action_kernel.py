@@ -340,24 +340,15 @@ class ActionKernel:
             sha256=sha256(encoded_evidence).hexdigest(),
             byte_count=len(encoded_evidence),
         )
-        result = self._receipt(
-            request,
-            trusted_actor,
-            verdict,
-            "EXECUTED",
-            "SYNTHETIC_ONLY",
-            evidence=evidence,
-            authorization_floor_monotonic=authorization_monotonic_now,
-            authorization_deadline_monotonic=authorization_deadline_monotonic,
-            authorization_process_id=authorization_process_id,
-        )
-
+        # Never issue a bridge-capable receipt before externally supplied
+        # execution/evidence audit callbacks have finished. Those callbacks
+        # may block past the kernel's original monotonic deadline.
         if not self._audit(
             request,
             trusted_actor,
             stage="execution",
             outcome="COMPLETED",
-            reason=result.reason,
+            reason="SYNTHETIC_ONLY",
         ):
             return self._receipt(request, trusted_actor, verdict, "FAILED", "AUDIT_FAILED")
 
@@ -371,7 +362,36 @@ class ActionKernel:
         ):
             return self._receipt(request, trusted_actor, verdict, "FAILED", "AUDIT_FAILED")
 
-        return result
+        # Revalidate under the same monotonic/UTC high-water lock after the
+        # final callback. Keep every earlier deadline bound; never restart
+        # authorization from a late or rolled-back wall-clock sample.
+        final_authorization_now, final_authorization_monotonic = self._trusted_time()
+        final_observation_deadline = (
+            final_authorization_monotonic
+            + (request.expires_at - final_authorization_now).total_seconds()
+        )
+        authorization_deadline_monotonic = min(
+            authorization_deadline_monotonic,
+            final_observation_deadline,
+        )
+        if (
+            not isfinite(authorization_deadline_monotonic)
+            or request.expires_at <= final_authorization_now
+            or final_authorization_monotonic >= authorization_deadline_monotonic
+        ):
+            return self._receipt(request, trusted_actor, verdict, "FAILED", "EXPIRED")
+
+        return self._receipt(
+            request,
+            trusted_actor,
+            verdict,
+            "EXECUTED",
+            "SYNTHETIC_ONLY",
+            evidence=evidence,
+            authorization_floor_monotonic=final_authorization_monotonic,
+            authorization_deadline_monotonic=authorization_deadline_monotonic,
+            authorization_process_id=authorization_process_id,
+        )
 
     def _evaluate_policy(self, request: TaskRequest, trusted_actor: str) -> PolicyVerdict:
         def deny(reason: str) -> PolicyVerdict:
