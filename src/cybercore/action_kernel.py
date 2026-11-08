@@ -546,18 +546,19 @@ class ActionKernel:
                     "Action Kernel process-local clock authority unavailable or invalid"
                 )
             self._monotonic_high_water = current_monotonic
-            if current_wall > self._utc_high_water:
+            projected_utc_peak = self._utc_high_water + timedelta(
+                seconds=current_monotonic - self._utc_high_water_monotonic
+            )
+            # Compare against the projected peak, NOT its original UTC
+            # value: a later clock correction above the raw old peak but
+            # below its elapsed-time projection must not reduce authority.
+            if current_wall > projected_utc_peak:
                 self._utc_high_water = current_wall
-                # This bound is anchored to the monotonic time *at which*
-                # the forward UTC value was observed, not the later issuance
-                # sample after an arbitrarily long blocking audit.
                 self._utc_high_water_monotonic = current_monotonic
+                projected_utc_peak = current_wall
 
             projected_floor = self._clock_floor_utc + timedelta(
                 seconds=current_monotonic - self._clock_floor_monotonic
-            )
-            projected_utc_peak = self._utc_high_water + timedelta(
-                seconds=current_monotonic - self._utc_high_water_monotonic
             )
             return max(current_wall, projected_utc_peak, projected_floor), current_monotonic
 
