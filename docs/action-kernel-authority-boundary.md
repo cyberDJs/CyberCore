@@ -97,3 +97,15 @@ is not provided.
 Evidence requirements before promotion: exact-head Python 3.11-3.14 CI,
 CodeQL, CyberHIVE contract, review of high-water/clock ordering, and a
 separate independent security verdict. No merge or deployment authorized.
+
+### Process replay monotonic rollback fence
+
+The process-owned replay guard records both a UTC high-water and a monotonic
+high-water under its claim/pruning lock. Before pruning or storing a claim it
+rejects non-finite or decreasing monotonic samples and enters sticky
+fail-closed state. A UTC correction that remains nondecreasing must not revive
+a claimed receipt if the monotonic clock regresses after the cache's 300-second
+minimum retention and a previous key was pruned. The caller-provided durable
+claim store remains required, and no in-process cache is a replacement for
+cross-process replay authority. Regression cases verify prune-then-rollback,
+continued UTC progression, and persistent denial after a non-finite sample.
