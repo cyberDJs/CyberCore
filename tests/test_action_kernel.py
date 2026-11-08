@@ -793,3 +793,48 @@ def test_post_authorization_audit_revalidates_floor_after_partial_utc_rollback(
     duplicate = k.execute(duplicate_request, trusted_actor=ACTOR)
     assert duplicate.status == "DENIED"
     assert duplicate.reason == "DUPLICATE"
+
+
+def test_kernel_clock_regression_is_sticky_after_recovery() -> None:
+    base = datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc)
+    mono = [100.0]
+    wall = [base]
+    k = kernel(
+        clock=lambda: wall[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+    mono[0] = 104.0
+    wall[0] = base + timedelta(seconds=4)
+    first = task(task_id="clock-first", requested_at=base, expires_at=base + timedelta(seconds=20))
+    assert k.execute(first, trusted_actor=ACTOR).status == "EXECUTED"
+
+    mono[0] = 101.0
+    wall[0] = base + timedelta(seconds=5)
+    second = task(task_id="clock-second", requested_at=base, expires_at=base + timedelta(seconds=20))
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(second, trusted_actor=ACTOR)
+
+    # Returning to the previous high water cannot reset the failed kernel.
+    mono[0] = 105.0
+    wall[0] = base + timedelta(seconds=6)
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(task(task_id="clock-third", requested_at=base, expires_at=base + timedelta(seconds=20)), trusted_actor=ACTOR)
+
+
+def test_kernel_nonfinite_monotonic_is_sticky_after_recovery() -> None:
+    base = datetime(2026, 11, 8, 12, 0, tzinfo=timezone.utc)
+    mono = [100.0]
+    k = kernel(
+        clock=lambda: base,
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+    mono[0] = float("nan")
+    req = task(requested_at=base, expires_at=base + timedelta(seconds=20))
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(req, trusted_actor=ACTOR)
+    mono[0] = 101.0
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(task(task_id="clock-retry", requested_at=base, expires_at=base + timedelta(seconds=20)), trusted_actor=ACTOR)
+
