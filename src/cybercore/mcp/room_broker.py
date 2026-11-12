@@ -152,13 +152,12 @@ def _dispatch(
         with ledger_lock:
             return dict(backend.get_runtime_status())
     if method == "invoke_tool":
-        with ledger_lock:
-            return dict(
-                backend.invoke_tool(
-                    tool_name=args["tool_name"],
-                    arguments=args.get("arguments") or {},
-                )
+        return dict(
+            backend.invoke_tool(
+                tool_name=args["tool_name"],
+                arguments=args.get("arguments") or {},
             )
+        )
     raise ValueError("unsupported broker method")
 
 
