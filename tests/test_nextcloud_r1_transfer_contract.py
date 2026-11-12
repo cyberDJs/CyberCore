@@ -36,6 +36,7 @@ def test_source_exporter_is_forced_command_only_and_self_revoking() -> None:
     assert 'mode == "stream"' in text
     assert 'mode == "revoke"' in text
     assert "_revoke_key()" in text
+    assert "_revoke_key(allow_absent=True)" in text
     assert "os.O_NOFOLLOW" in text
     assert "os.replace(temporary, AUTHORIZED_KEYS)" in text
     assert "subprocess" not in text
@@ -48,6 +49,9 @@ def test_rollback_never_deletes_verified_archive() -> None:
     assert "_unlink_regular(PARTIAL_ARCHIVE)" in text
     assert "_unlink_regular(PRIVATE_KEY)" in text
     assert "verified_archive_preserved" in text
+    assert "ROLLBACK_BLOCKED_SOURCE_REVOKE" in text
+    assert "elif PRIVATE_KEY.exists()" in text
+    assert "source_revoked_or_already_absent" in text
     assert "TARGET_ROOT / ARCHIVE_NAME).unlink" not in text
     assert "shell=False" in text
     assert "shell=True" not in text
