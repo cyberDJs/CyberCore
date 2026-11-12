@@ -40,6 +40,20 @@ class FakeRoomBackend:
             "participant_role": "participant",
         }
 
+    def invoke_tool(self, **kwargs):
+        assert kwargs["tool_name"] == "governed.nextcloud_r1_offhost_transfer"
+        assert set(kwargs["arguments"]) == {
+            "operation_id",
+            "plan_id",
+            "plan_revision",
+            "authorization_reference",
+        }
+        return {
+            "status": "EXECUTED",
+            "authorization_reference_sha256": "a" * 64,
+            "secret_values_recorded": False,
+        }
+
 
 async def exercise_room_app():
     backend = FakeRoomBackend()
@@ -66,6 +80,18 @@ async def exercise_room_app():
         caps = await client.call_tool("cyberdjs.room.capabilities", {})
         assert caps.structured_content["wake"]["event_driven"] is True
         assert caps.structured_content["wake"]["polling"] is False
+
+        transfer = await client.call_tool(
+            "cyberdjs.room.nextcloud_r1_offhost_transfer",
+            {
+                "operation_id": "NC-R1-113",
+                "plan_id": "#113",
+                "plan_revision": "draft-1",
+                "authorization_reference": "APPROVE-113",
+            },
+        )
+        assert transfer.structured_content["receipt"]["status"] == "EXECUTED"
+        assert transfer.structured_content["receipt"]["secret_values_recorded"] is False
 
 
 def test_room_app_protocol_and_identity_boundary():
