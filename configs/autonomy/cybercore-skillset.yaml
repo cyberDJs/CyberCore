@@ -8,6 +8,14 @@ spec:
   mode: strict_skillset
   selection_source: capability-router
   execution_status: proposal_only
+  selected_skills:
+    - caser
+    - cyberdjs-github-workflow
+    - github-repo-auditor
+    - systematic-debugging-and-root-cause-engineer
+    - adversary-lens
+    - release-change-manager
+    - cyberdjs-portfolio-index
   nodes:
     portfolio:
       capability: cyberdjs-portfolio-index
@@ -39,15 +47,36 @@ spec:
       needs: [github]
       inputs: [updated_exact_head, failing_gates, review_findings]
       outputs: [root_cause, minimal_fix, regression_evidence]
+    repair:
+      capability: cyberdjs-github-workflow
+      needs: [debug, portfolio]
+      inputs:
+        - updated_exact_head
+        - minimal_fix
+        - regression_evidence
+        - authorization_scope
+        - canonical_lane
+        - parallel_work
+        - drift_status
+      outputs:
+        - verified_exact_head
+        - verified_workflow_evidence
+        - verified_failing_gates
     security:
       capability: adversary-lens
-      needs: [debug]
-      inputs: [updated_exact_head, security_boundaries, regression_evidence]
+      needs: [debug, repair]
+      inputs: [verified_exact_head, security_boundaries, regression_evidence]
       outputs: [independent_security_findings, residual_risk, security_verdict]
     release:
       capability: release-change-manager
-      needs: [portfolio, audit, govern, github, debug, security]
-      inputs: [updated_exact_head, workflow_evidence, security_verdict, residual_risk, pending_gates]
+      needs: [portfolio, audit, govern, github, debug, repair, security]
+      inputs:
+        - verified_exact_head
+        - verified_workflow_evidence
+        - verified_failing_gates
+        - security_verdict
+        - residual_risk
+        - pending_gates
       outputs: [go_no_go, merge_readiness, post_change_verification_plan]
   gates:
     canonical_merge:
@@ -79,6 +108,8 @@ spec:
     on_unverified_source: BLOCKED
     on_unavailable_check: UNKNOWN_not_PASS
     on_verification_failure: STOP_AND_REPAIR_WITH_BOUNDED_RETRIES
+    repair_loop: "github -> debug -> repair -> fresh checks -> security -> release"
+    repair_noop: "when no fix is required, repair performs identity/drift recheck and forwards only freshly verified exact-head evidence"
     max_repair_attempts_per_root_cause: 3
   extensions:
     execution_note: "Skill orchestration contract only. This YAML is not a scheduler or an authority grant."

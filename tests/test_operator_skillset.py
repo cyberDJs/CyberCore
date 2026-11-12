@@ -26,9 +26,11 @@ def test_skillset_contains_exactly_the_approved_seven_real_skills() -> None:
     assert spec["mode"] == "strict_skillset"
     assert spec["selection_source"] == "capability-router"
     assert spec["execution_status"] == "proposal_only"
+    assert set(spec["selected_skills"]) == SELECTED
+    assert len(spec["selected_skills"]) == 7
     capabilities = [node["capability"] for node in spec["nodes"].values()]
-    assert len(capabilities) == 7
     assert set(capabilities) == SELECTED
+    assert capabilities.count("cyberdjs-github-workflow") == 2
 
 
 def test_dependencies_are_valid_and_acyclic() -> None:
@@ -49,7 +51,7 @@ def test_dependencies_are_valid_and_acyclic() -> None:
 
     for name in nodes:
         visit(name)
-    assert len(visited) == 7
+    assert len(visited) == len(nodes)
 
 
 def test_writer_consumes_drift_and_parallel_ownership_before_writes() -> None:
@@ -57,6 +59,33 @@ def test_writer_consumes_drift_and_parallel_ownership_before_writes() -> None:
     writer = nodes["github"]
     assert "portfolio" in writer["needs"]
     assert {"canonical_lane", "parallel_work", "drift_status"} <= set(writer["inputs"])
+
+
+def test_diagnosed_fix_returns_through_writer_and_fresh_verification() -> None:
+    nodes = _contract()["spec"]["nodes"]
+    repair = nodes["repair"]
+    assert repair["capability"] == "cyberdjs-github-workflow"
+    assert {"debug", "portfolio"} <= set(repair["needs"])
+    assert {"minimal_fix", "regression_evidence", "updated_exact_head"} <= set(
+        repair["inputs"]
+    )
+    assert {
+        "verified_exact_head",
+        "verified_workflow_evidence",
+        "verified_failing_gates",
+    } <= set(repair["outputs"])
+
+    assert "repair" in nodes["security"]["needs"]
+    assert "verified_exact_head" in nodes["security"]["inputs"]
+
+    release_inputs = set(nodes["release"]["inputs"])
+    assert {
+        "verified_exact_head",
+        "verified_workflow_evidence",
+        "verified_failing_gates",
+    } <= release_inputs
+    assert "updated_exact_head" not in release_inputs
+    assert "workflow_evidence" not in release_inputs
 
 
 def test_security_waits_for_debug_regression_evidence() -> None:

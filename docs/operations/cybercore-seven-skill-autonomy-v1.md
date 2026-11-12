@@ -24,11 +24,19 @@ a separately reviewed runtime adapter and authority exist.
 | 3 | `caser` | approved scope, snapshot, risks | bounded plan, receipts, exact HEAD | retry ≤3 per root cause, otherwise block |
 | 4 | `cyberdjs-github-workflow` | bounded plan, exact HEAD, authority | scoped branch/PR actions, workflow evidence | permission or drift → stop |
 | 5 | `systematic-debugging-and-root-cause-engineer` | failing gates/findings | proven root cause, minimal fix, regression evidence | unproven cause → no speculative fix |
-| 6 | `adversary-lens` | exact candidate, security boundaries | independent security findings, residual risk | P1/P2 → blocked |
-| 7 | `release-change-manager` | verification, residual risk, authority | GO / HOLD / merge readiness / effect plan | missing authority/evidence → HOLD |
+| 6 | `cyberdjs-github-workflow` *(reused)* | minimal fix, prior HEAD, drift/ownership | repaired-or-rechecked exact HEAD + fresh workflow evidence | drift/failed recheck → stop/replan |
+| 7 | `adversary-lens` | post-repair candidate, security boundaries | independent security findings, residual risk | P1/P2 → blocked |
+| 8 | `release-change-manager` | post-repair verification, residual risk, authority | GO / HOLD / merge readiness / effect plan | missing authority/evidence → HOLD |
+
+There are still exactly **seven selected Skills**; the GitHub workflow Skill is intentionally reused for
+the repair/recheck node. A diagnosed `minimal_fix` never flows directly to security/release. It must
+return through the write/recheck boundary, revalidate drift/ownership, and produce a freshly verified
+exact HEAD and workflow evidence. When no fix is required, that node is a no-op write-wise but still
+performs the identity/drift recheck before forwarding evidence.
 
 Debugging and security verification are logically separate from the builder path. Release readiness
-consumes both and must not infer security PASS from CI or a generic code-review receipt.
+consumes only post-repair/recheck evidence and must not infer security PASS from CI or a generic
+code-review receipt.
 
 ## Permission and concurrency
 
