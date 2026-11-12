@@ -46,8 +46,9 @@ code-review receipt.
 - A2: within already-approved target and change budget, implement reversible isolated-branch
   changes, test, open/update Draft PR and document receipts.
 - A3: canonical merge or staging write requires exact scoped human authority (including a valid
-  explicit standing authorization when it covers the exact action), plus exact identity, CI,
-  protection and independent review.
+  explicit standing authorization when it covers the exact action), plus the **post-repair
+  verified release-candidate identity**, CI, protection and independent review. A pre-repair
+  `exact_head` can never satisfy the merge identity gate.
 - A4: production changes, access to secret values including read/disclosure, ACL/credentials,
   deletions and force pushes. Never autonomous. Production requires its own approved MOP,
   restore evidence, effect verification, release identity and separate human authorization.

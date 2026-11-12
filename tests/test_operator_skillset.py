@@ -124,7 +124,10 @@ def test_release_consumes_security_residual_risk() -> None:
 def test_protected_actions_are_explicitly_separated() -> None:
     gates = _contract()["spec"]["gates"]
     assert gates["canonical_merge"]["approval"] == "explicit_identity_bound_user_approval"
-    assert "no_parallel_canonical_writer" in gates["canonical_merge"]["require"]
+    merge_requirements = set(gates["canonical_merge"]["require"])
+    assert "verified_exact_head" in merge_requirements
+    assert "exact_head" not in merge_requirements
+    assert "no_parallel_canonical_writer" in merge_requirements
     assert gates["production_mutation"]["default"] == "denied"
     assert gates["secrets"]["default"] == "denied"
     assert "secret_read" in gates["secrets"]["before"]

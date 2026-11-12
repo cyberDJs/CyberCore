@@ -83,7 +83,7 @@ spec:
       before: "release:merge"
       approval: explicit_identity_bound_user_approval
       require:
-        - exact_head
+        - verified_exact_head
         - current_main
         - no_parallel_canonical_writer
         - required_checks
