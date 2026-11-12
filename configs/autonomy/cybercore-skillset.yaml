@@ -1,0 +1,76 @@
+apiVersion: capability.cyberdjs.org/v1alpha1
+kind: Skillset
+metadata:
+  name: cybercore-governed-autonomy-ux
+  version: 0.1.0
+spec:
+  goal: "Safe bounded engineering with evidence-first progress and low-noise operator reports"
+  mode: skillset
+  selection_source: capability-router
+  execution_status: proposal_only
+  nodes:
+    source:
+      capability: caser-sourcer
+      inputs: [project_id, live_repo_refs, authorization_scope]
+      outputs: [authoritative_snapshot, provenance, drift_status]
+    agent_design:
+      capability: ai-agent-designer
+      needs: [source]
+      inputs: [authoritative_snapshot, user_goal]
+      outputs: [scope, tool_permissions, acceptance_criteria]
+    compose:
+      capability: capability-composer
+      needs: [source, agent_design]
+      inputs: [selected_seven_skills, scope, acceptance_criteria]
+      outputs: [bounded_plan, approval_points]
+    execute:
+      capability: caser
+      needs: [compose]
+      inputs: [bounded_plan, authoritative_snapshot, authorization_scope]
+      outputs: [action_receipts, exact_head, pending_gates]
+    reporting:
+      capability: capability-observability
+      needs: [execute]
+      inputs: [action_receipts, exact_head, pending_gates]
+      outputs: [sanitized_material_events, operator_report]
+    verify:
+      capability: ai-evaluation-red-team
+      needs: [execute]
+      inputs: [exact_head, action_receipts, acceptance_criteria]
+      outputs: [independent_findings, gate_verdict]
+    release:
+      capability: release-change-manager
+      needs: [reporting, verify]
+      inputs: [gate_verdict, action_receipts, approval_points]
+      outputs: [hold_or_approval_request, post_change_verification_plan]
+  gates:
+    canonical_merge:
+      before: "release:merge"
+      approval: explicit_identity_bound_user_approval
+      require: [exact_head, current_main, required_checks, independent_review, branch_protection]
+    staging_mutation:
+      before: "release:staging_write"
+      approval: explicit_environment_bound_user_approval
+    production_mutation:
+      before: "release:production_write"
+      approval: separate_production_MOP_and_explicit_authorization
+      default: denied
+    secrets:
+      before: "any:secret_read_write_or_disclosure"
+      approval: separate_explicit_authorization
+      default: denied
+  completion:
+    require: [exact_identity_verified, user_impact_reported, residual_risk_recorded]
+  failure:
+    on_drift: REPLAN_REQUIRED
+    on_unverified_source: BLOCKED
+    on_unavailable_check: UNKNOWN_not_PASS
+    on_verification_failure: STOP_AND_REPAIR_WITH_BOUNDED_RETRIES
+    max_repair_attempts_per_root_cause: 3
+  extensions:
+    execution_note: "Skill orchestration contract only. This YAML is not a scheduler or an authority grant."
+    github_connector: "Provider data must be independently checked; PR runs cannot attest main push runs."
+    notifications: "Material changes only; no secret-bearing fields or unverified causal claims."
+    artifacts:
+      runbook: docs/operations/cybercore-seven-skill-autonomy-v1.md
+      presentation_module: src/cybercore/operator_reporting.py
