@@ -13,6 +13,7 @@ from cybercore.execution.nextcloud_r1_transfer import (
     KNOWN_HOSTS,
     PARTIAL_ARCHIVE,
     PRIVATE_KEY,
+    RECEIPT as TRANSFER_RECEIPT,
     SOURCE_SHA256,
     STATE_ROOT,
     _fsync_directory,
@@ -76,6 +77,7 @@ def rollback_local() -> dict[str, object]:
     public_present = _regular_owned_or_absent(PUBLIC_KEY)
     known_hosts_present = _regular_owned_or_absent(KNOWN_HOSTS)
     source_hash_present = _regular_owned_or_absent(SOURCE_SHA256)
+    transfer_receipt_present = _regular_owned_or_absent(TRANSFER_RECEIPT)
 
     removed = {
         "partial_removed": _unlink_if_present(PARTIAL_ARCHIVE, partial_present),
@@ -92,7 +94,7 @@ def rollback_local() -> dict[str, object]:
         "status": "LOCAL_CONTAINMENT_COMPLETE_REMOTE_REVOKE_REQUIRED",
         "completed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "final_archive_preserved": final_present,
-        "transfer_receipt_preserved": True,
+        "transfer_receipt_preserved": transfer_receipt_present,
         "remote_authorized_key_cleanup_required": True,
         "secret_values_recorded": False,
         **removed,

@@ -115,6 +115,7 @@ def _prepare_private_tree(tmp_path: Path, monkeypatch):
     partial = backups / "archive.tar.gz.partial"
     final = backups / "archive.tar.gz"
     receipt = state / "rollback-receipt.json"
+    transfer_receipt = state / "transfer-receipt.json"
 
     monkeypatch.setattr(rollback, "CREDENTIAL_ROOT", credentials)
     monkeypatch.setattr(rollback, "STATE_ROOT", state)
@@ -126,7 +127,18 @@ def _prepare_private_tree(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(rollback, "PARTIAL_ARCHIVE", partial)
     monkeypatch.setattr(rollback, "FINAL_ARCHIVE", final)
     monkeypatch.setattr(rollback, "ROLLBACK_RECEIPT", receipt)
-    return rollback, private_key, public_key, known_hosts, source_hash, partial, final, receipt
+    monkeypatch.setattr(rollback, "TRANSFER_RECEIPT", transfer_receipt)
+    return (
+        rollback,
+        private_key,
+        public_key,
+        known_hosts,
+        source_hash,
+        partial,
+        final,
+        receipt,
+        transfer_receipt,
+    )
 
 
 def test_local_rollback_removes_only_local_artifacts_and_preserves_final(
@@ -142,9 +154,18 @@ def test_local_rollback_removes_only_local_artifacts_and_preserves_final(
         partial,
         final,
         receipt,
+        transfer_receipt,
     ) = _prepare_private_tree(tmp_path, monkeypatch)
 
-    for path in (private_key, public_key, known_hosts, source_hash, partial, final):
+    for path in (
+        private_key,
+        public_key,
+        known_hosts,
+        source_hash,
+        partial,
+        final,
+        transfer_receipt,
+    ):
         path.write_bytes(b"evidence")
         path.chmod(0o600)
 
@@ -160,6 +181,8 @@ def test_local_rollback_removes_only_local_artifacts_and_preserves_final(
     assert not known_hosts.exists()
     assert not source_hash.exists()
     assert receipt.is_file()
+    assert transfer_receipt.read_bytes() == b"evidence"
+    assert result["transfer_receipt_preserved"] is True
     assert result["secret_values_recorded"] is False
 
 
@@ -173,6 +196,7 @@ def test_local_rollback_rejects_symlink_before_mutation(tmp_path: Path, monkeypa
         partial,
         _final,
         _receipt,
+        _transfer_receipt,
     ) = _prepare_private_tree(tmp_path, monkeypatch)
 
     victim = tmp_path / "victim"
