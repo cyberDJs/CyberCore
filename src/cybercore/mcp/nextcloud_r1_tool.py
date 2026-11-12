@@ -1,15 +1,22 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any
 
-from cybercore.execution.authorization import ExecutionAuthorizationVerifier
+from cybercore.execution.authorization import (
+    ExecutionAuthorizationVerifier,
+    FileBoundExecutionAuthorizationVerifier,
+)
 from cybercore.execution.models import ExecutionReceipt, GovernedAction
 from cybercore.execution.policy import NEXTCLOUD_R1_TARGET
 from cybercore.execution.ssh_runner import execute_action
 
 
 TOOL_NAME = "nextcloud.r1.offhost"
+NEXTCLOUD_R1_CLIENT_APPROVAL_PATH = Path(
+    "/etc/cyberdjs-room/approvals/nextcloud-r1.json"
+)
 _ALLOWED_KEYS = frozenset(
     {
         "action",
@@ -87,3 +94,12 @@ def build_nextcloud_r1_handler(
         return _receipt_payload(receipt)
 
     return handler
+
+
+
+def build_bound_nextcloud_r1_handler(
+    approval_path: str | Path = NEXTCLOUD_R1_CLIENT_APPROVAL_PATH,
+) -> Callable[[Mapping[str, Any]], Mapping[str, Any]]:
+    return build_nextcloud_r1_handler(
+        authorization_verifier=FileBoundExecutionAuthorizationVerifier(approval_path)
+    )

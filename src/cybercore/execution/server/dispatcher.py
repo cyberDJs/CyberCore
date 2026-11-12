@@ -15,12 +15,14 @@ if __package__ in {None, ""}:
         from authorization import (  # type: ignore[import-not-found]
             DenyAllExecutionAuthorizationVerifier,
             ExecutionAuthorizationVerifier,
+            FileBoundExecutionAuthorizationVerifier,
         )
     except ImportError:
         sys.path.insert(0, str(server_dir.parents[2]))
         from cybercore.execution.authorization import (
             DenyAllExecutionAuthorizationVerifier,
             ExecutionAuthorizationVerifier,
+            FileBoundExecutionAuthorizationVerifier,
         )
     from inventory import validate_inventory_payload  # type: ignore[import-not-found]
     from operations import resolve_operation  # type: ignore[import-not-found]
@@ -36,6 +38,7 @@ else:
     from cybercore.execution.authorization import (
         DenyAllExecutionAuthorizationVerifier,
         ExecutionAuthorizationVerifier,
+        FileBoundExecutionAuthorizationVerifier,
     )
     from cybercore.execution.server.inventory import validate_inventory_payload
     from cybercore.execution.server.operations import resolve_operation
@@ -50,6 +53,19 @@ else:
 
 
 RunCallable = Callable[..., subprocess.CompletedProcess[bytes]]
+NEXTCLOUD_R1_SERVER_APPROVAL_PATH = Path(
+    "/etc/cybercore-exec/approvals/nextcloud-r1.json"
+)
+
+
+def _authorization_verifier_for_target(
+    target_id: str,
+) -> ExecutionAuthorizationVerifier:
+    if target_id == "cyberskills-vps":
+        return FileBoundExecutionAuthorizationVerifier(
+            NEXTCLOUD_R1_SERVER_APPROVAL_PATH
+        )
+    return DenyAllExecutionAuthorizationVerifier()
 
 
 def _utc_now() -> str:
@@ -179,7 +195,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         target_id = _configured_target_id(args)
         request = _load_request(raw, expected_target_id=target_id)
-        payload = execute_request(request).as_dict()
+        payload = execute_request(
+            request,
+            authorization_verifier=_authorization_verifier_for_target(target_id),
+        ).as_dict()
         exit_code = 0 if payload["status"] == "EXECUTED" else 1
     except RequestValidationError as exc:
         payload = _blocked(str(exc))
