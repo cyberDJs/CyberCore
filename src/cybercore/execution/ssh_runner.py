@@ -26,10 +26,13 @@ class ExecutionBlockedError(RuntimeError):
 
 
 RunCallable = Callable[..., subprocess.CompletedProcess[bytes]]
-TRANSPORT_TIMEOUT_SECONDS = max(
-    MAX_SERVER_OPERATION_TIMEOUT_SECONDS,
-    MAX_NEXTCLOUD_R1_OPERATION_TIMEOUT_SECONDS,
-) + 30
+TRANSPORT_TIMEOUT_SECONDS = (
+    max(
+        MAX_SERVER_OPERATION_TIMEOUT_SECONDS,
+        MAX_NEXTCLOUD_R1_OPERATION_TIMEOUT_SECONDS,
+    )
+    + 30
+)
 _SERVER_RECEIPT_KEYS = frozenset(
     {
         "operation_id",
