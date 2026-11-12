@@ -1462,6 +1462,7 @@ def test_consolidated_bridge_rejects_monotonic_regression_after_dispatch(monkeyp
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert durable.claim_once(key) is False
 
+
 def test_replay_monotonic_sample_occurs_under_guard_lock(monkeypatch) -> None:
     now = datetime.now(timezone.utc)
     guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=3)
@@ -1493,9 +1494,7 @@ def test_concurrent_valid_claims_do_not_create_false_monotonic_fence(monkeypatch
 
     def claim(key: str) -> bool:
         start.wait()
-        return guard.claim_once(
-            key, expires_at=now + timedelta(minutes=2), now=lambda: now
-        )
+        return guard.claim_once(key, expires_at=now + timedelta(minutes=2), now=lambda: now)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(claim, "concurrent-a")
@@ -1503,7 +1502,5 @@ def test_concurrent_valid_claims_do_not_create_false_monotonic_fence(monkeypatch
         start.wait()
         assert [first.result(), second.result()] == [True, True]
 
-    assert guard.claim_once(
-        "concurrent-c", expires_at=now + timedelta(minutes=2), now=lambda: now
-    )
+    assert guard.claim_once("concurrent-c", expires_at=now + timedelta(minutes=2), now=lambda: now)
     assert not guard._monotonic_rollback_detected
