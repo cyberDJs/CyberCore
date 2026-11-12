@@ -29,9 +29,17 @@ def test_target_transfer_is_fixed_shell_free_and_fail_closed() -> None:
 
 def test_source_exporter_is_forced_command_only_and_self_revoking() -> None:
     text = SOURCE.read_text()
-    assert 'ARCHIVE = Path("/home/eimyherr/softaculous_backups/nextcloud.586_28528.2026-10-07_18-30-01.tar.gz")' in text
+    assert (
+        'ARCHIVE = Path("/home/eimyherr/softaculous_backups/'
+        'nextcloud.586_28528.2026-10-07_18-30-01.tar.gz")'
+        in text
+    )
     assert 'KEY_MARKER = "cc-r1-113-temp"' in text
-    assert 'EXPECTED_FORCED_COMMAND = "/home/eimyherr/.local/libexec/cybercore-nextcloud-r1-source-export"' in text
+    assert (
+        'EXPECTED_FORCED_COMMAND = "/home/eimyherr/.local/libexec/'
+        'cybercore-nextcloud-r1-source-export"'
+        in text
+    )
     assert 'os.environ.get("SSH_ORIGINAL_COMMAND", "")' in text
     assert 'mode == "metadata"' in text
     assert 'mode == "stream"' in text
@@ -65,8 +73,7 @@ def test_nextcloud_target_subsystem_is_physically_bound_and_forwarding_disabled(
         "/usr/local/libexec/cybercore-exec/nextcloud_dispatcher.py"
     ) in text
     assert (
-        "ForceCommand /usr/bin/python3 "
-        "/usr/local/libexec/cybercore-exec/nextcloud_dispatcher.py"
+        "ForceCommand /usr/bin/python3 /usr/local/libexec/cybercore-exec/nextcloud_dispatcher.py"
     ) in text
     assert "PermitTTY no" in text
     assert "AllowTcpForwarding no" in text
