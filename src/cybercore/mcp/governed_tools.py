@@ -6,9 +6,10 @@ from typing import Any
 from cybercore.execution.authorization import ExecutionAuthorizationVerifier
 from cybercore.execution.models import GovernedAction
 from cybercore.execution.policy import NEXTCLOUD_R1_TARGET
-from cybercore.execution.ssh_runner import execute_action
+from cybercore.execution.ssh_runner import TRANSPORT_TIMEOUT_SECONDS, execute_action
 
 NEXTCLOUD_R1_TOOL = "governed.nextcloud_r1_offhost_transfer"
+NEXTCLOUD_R1_TOOL_TIMEOUT_SECONDS = float(TRANSPORT_TIMEOUT_SECONDS + 30)
 _REQUIRED_ARGUMENTS = frozenset(
     {"operation_id", "plan_id", "plan_revision", "authorization_reference"}
 )
