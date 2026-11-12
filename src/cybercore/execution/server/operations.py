@@ -9,14 +9,9 @@ else:
     from cybercore.execution.server.protocol import RequestValidationError, ServerRequest
 
 
-TASKS_TARGET_ID = "tasks.cyberdjs.org"
-NEXTCLOUD_R1_TARGET_ID = "cyberskills-vps-nextcloud-r1"
-
-
 @dataclass(frozen=True)
 class OperationSpec:
     name: str
-    target_id: str
     argv: tuple[str, ...]
     mutating: bool
     timeout_seconds: int
@@ -26,7 +21,6 @@ class OperationSpec:
 _OPERATION_SPECS: Mapping[str, OperationSpec] = {
     "system.inventory": OperationSpec(
         name="system.inventory",
-        target_id=TASKS_TARGET_ID,
         argv=(
             "/usr/bin/python3",
             "/usr/local/libexec/cybercore-exec/inventory.py",
@@ -37,7 +31,6 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
     ),
     "vikunja.backup.install": OperationSpec(
         name="vikunja.backup.install",
-        target_id=TASKS_TARGET_ID,
         argv=(
             "/usr/bin/systemctl",
             "start",
@@ -48,7 +41,6 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
     ),
     "vikunja.backup.run": OperationSpec(
         name="vikunja.backup.run",
-        target_id=TASKS_TARGET_ID,
         argv=(
             "/usr/bin/systemctl",
             "start",
@@ -59,14 +51,12 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
     ),
     "vikunja.backup.status": OperationSpec(
         name="vikunja.backup.status",
-        target_id=TASKS_TARGET_ID,
         argv=("/usr/bin/systemctl", "is-active", "vikunja-backup.timer"),
         mutating=False,
         timeout_seconds=15,
     ),
     "vikunja.health.verify": OperationSpec(
         name="vikunja.health.verify",
-        target_id=TASKS_TARGET_ID,
         argv=(
             "/usr/bin/curl",
             "--fail",
@@ -78,26 +68,6 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
         ),
         mutating=False,
         timeout_seconds=15,
-    ),
-    "nextcloud.r1.offhost.transfer": OperationSpec(
-        name="nextcloud.r1.offhost.transfer",
-        target_id=NEXTCLOUD_R1_TARGET_ID,
-        argv=(
-            "/usr/bin/python3",
-            "/usr/local/libexec/cybercore-exec/nextcloud-r1-offhost-transfer",
-        ),
-        mutating=True,
-        timeout_seconds=3300,
-    ),
-    "nextcloud.r1.offhost.rollback": OperationSpec(
-        name="nextcloud.r1.offhost.rollback",
-        target_id=NEXTCLOUD_R1_TARGET_ID,
-        argv=(
-            "/usr/bin/python3",
-            "/usr/local/libexec/cybercore-exec/nextcloud-r1-offhost-rollback",
-        ),
-        mutating=True,
-        timeout_seconds=120,
     ),
 }
 
@@ -111,9 +81,6 @@ def resolve_operation(request: ServerRequest) -> OperationSpec:
     if request.arguments:
         raise RequestValidationError("operation arguments must be empty")
     try:
-        spec = _OPERATION_SPECS[request.operation]
+        return _OPERATION_SPECS[request.operation]
     except KeyError as exc:
         raise RequestValidationError("operation is not supported by the server allowlist") from exc
-    if request.target_id != spec.target_id:
-        raise RequestValidationError("operation target does not match the server allowlist")
-    return spec
