@@ -199,3 +199,23 @@ WB-0038E, WB-0038G and WB-0038H are repository-only. They do not create credenti
 Polkit on a target, deploy the subsystem, run A6 backups, mutate a VPS, or grant
 production authority. Any deployment requires a separate target-bound plan, a real server-side
 authorization verifier, fresh verification, and explicit authorization.
+
+
+## Proposed #113 Nextcloud R1 extension
+
+Draft work for issue #113 adds a second fixed governed target and a two-operation
+family for full-archive off-host transfer and rollback. The extension preserves the
+existing no-general-shell invariant: no operation accepts caller-selected hosts,
+paths, commands, ports or credentials.
+
+The source side is a forced-command exporter bound to a fresh temporary SSH key.
+The target side performs source metadata hashing, bounded streaming, local digest
+verification, atomic promotion, credential cleanup and a rollback path that never
+removes a verified final archive.
+
+The Room MCP surface is explicit rather than generic and remains unusable without
+an injected trusted `ExecutionAuthorizationVerifier`.
+
+**This section describes a repository candidate only. It does not activate the
+CyberSkills VPS target, install a source forced command, create a credential, merge
+the candidate or deploy it.** See ADR-0015 and issue #113.
