@@ -158,12 +158,13 @@ def _dispatch(
         if not callable(invoke):
             raise PermissionError("broker backend does not expose governed tools")
         with ledger_lock:
-            return dict(
-                invoke(
-                    tool_name=args["tool_name"],
-                    arguments=args.get("arguments") or {},
-                )
+            result = invoke(
+                tool_name=args["tool_name"],
+                arguments=args.get("arguments") or {},
             )
+        if not isinstance(result, Mapping):
+            raise RuntimeError("broker governed tool returned a malformed result")
+        return dict(result)
     raise ValueError("unsupported broker method")
 
 

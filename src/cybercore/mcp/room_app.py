@@ -83,7 +83,7 @@ def room_capability_manifest(
     wake_enabled: bool,
     governed_tools: tuple[str, ...] = (),
 ) -> dict[str, object]:
-    tools = list(ROOM_TOOLS)
+    tools: list[str] = list(ROOM_TOOLS)
     if NEXTCLOUD_R1_HANDLER_NAME in governed_tools:
         tools.append(NEXTCLOUD_R1_MCP_TOOL)
     return {
