@@ -1,0 +1,91 @@
+#!/usr/bin/python3
+from __future__ import annotations
+
+import json
+from pathlib import Path
+import stat
+import subprocess
+
+SOURCE_HOST = "162.250.126.107"
+SOURCE_USER = "eimyherr"
+CREDENTIAL_ROOT = Path("/etc/cybercore-exec/nextcloud-r1-113")
+PRIVATE_KEY = CREDENTIAL_ROOT / "id_ed25519"
+KNOWN_HOSTS = CREDENTIAL_ROOT / "known_hosts"
+TARGET_ROOT = Path("/var/backups/cybercore/nextcloud-r1-113/2026-10-13")
+ARCHIVE_NAME = "nextcloud.586_28528.2026-10-07_18-30-01.tar.gz"
+PARTIAL_ARCHIVE = TARGET_ROOT / f".{ARCHIVE_NAME}.partial"
+SSH = "/usr/bin/ssh"
+
+
+def _ssh_revoke() -> bool:
+    try:
+        key = PRIVATE_KEY.lstat()
+        known = KNOWN_HOSTS.lstat()
+    except FileNotFoundError:
+        return False
+    if not stat.S_ISREG(key.st_mode) or stat.S_ISLNK(key.st_mode):
+        return False
+    if not stat.S_ISREG(known.st_mode) or stat.S_ISLNK(known.st_mode):
+        return False
+    completed = subprocess.run(
+        [
+            SSH,
+            "-i",
+            str(PRIVATE_KEY),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "IdentitiesOnly=yes",
+            "-o",
+            "StrictHostKeyChecking=yes",
+            "-o",
+            f"UserKnownHostsFile={KNOWN_HOSTS}",
+            "-o",
+            "ConnectTimeout=15",
+            f"{SOURCE_USER}@{SOURCE_HOST}",
+            "revoke",
+        ],
+        shell=False,
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        timeout=60,
+    )
+    return completed.returncode == 0
+
+
+def _unlink_regular(path: Path) -> bool:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        raise RuntimeError(f"refusing non-regular rollback target: {path}")
+    path.unlink()
+    return True
+
+
+def main() -> int:
+    source_revoked = _ssh_revoke()
+    private_removed = _unlink_regular(PRIVATE_KEY)
+    public_removed = _unlink_regular(Path(f"{PRIVATE_KEY}.pub"))
+    partial_removed = _unlink_regular(PARTIAL_ARCHIVE)
+    print(
+        json.dumps(
+            {
+                "status": "ROLLBACK_COMPLETE",
+                "source_revoke_attempted": source_revoked,
+                "target_private_key_removed": private_removed,
+                "target_public_key_removed": public_removed,
+                "partial_removed": partial_removed,
+                "verified_archive_preserved": (TARGET_ROOT / ARCHIVE_NAME).exists(),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
