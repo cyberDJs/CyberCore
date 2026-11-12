@@ -47,6 +47,20 @@ def test_protocol_rejects_free_form_arguments() -> None:
         ServerRequest.from_mapping(_request(arguments={"path": "/tmp"}))
 
 
-def test_protocol_preserves_nonempty_target_for_operation_specific_binding() -> None:
-    request = ServerRequest.from_mapping(_request(target_id="example.org"))
-    assert request.target_id == "example.org"
+def test_protocol_rejects_other_target() -> None:
+    with pytest.raises(RequestValidationError):
+        ServerRequest.from_mapping(_request(target_id="example.org"))
+
+
+def test_protocol_accepts_only_explicit_alternate_physical_target() -> None:
+    request = ServerRequest.from_mapping(
+        _request(target_id="cyberskills-vps-nextcloud-r1"),
+        expected_target_id="cyberskills-vps-nextcloud-r1",
+    )
+    assert request.target_id == "cyberskills-vps-nextcloud-r1"
+
+    with pytest.raises(RequestValidationError):
+        ServerRequest.from_mapping(
+            _request(target_id="tasks.cyberdjs.org"),
+            expected_target_id="cyberskills-vps-nextcloud-r1",
+        )
