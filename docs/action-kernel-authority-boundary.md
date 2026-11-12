@@ -132,6 +132,24 @@ and the two source PR branches remain unchanged. An independent security
 review must reconcile any additional unique PR #151 test coverage and validate
 the final exact SHA before promotion.
 
+### Sticky Action Kernel clock-authority invalidation (post-#154 follow-up)
+
+The kernel's per-instance time authority is now latched invalid if a
+trusted-time observation detects a PID change, malformed/non-finite sample,
+naive UTC, or monotonic regression below the recorded high-water mark.
+Subsequent calls to the *same* kernel instance fail closed even if the
+next wall/monotonic readings look plausible. Reconstructing a kernel must
+re-establish the process-local baseline and satisfy normal authorization;
+there is no automatic reset of the invalidation flag.
+
+This closes the distinct PR #153 regression
+`test_invalid_monotonic_observation_latches_kernel_fail_closed`
+that was not present after consolidated PR #154. The fix does not
+make process-local clocks an authenticated time source or replace
+durable cross-process replay protection. Verify exact-HEAD CI,
+CodeQL, CyberHIVE contract and independent security review before
+any separate merge decision.
+
 ### Sticky issued-clock authority fence (isolated follow-up)
 
 A rejected nonfinite/regressed monotonic observation permanently revokes that
@@ -150,3 +168,8 @@ Evidence: sticky kernel regression/nonfinite recovery tests, bridge entry
 retry/nonfinite recovery tests, and cross-receipt high-water regression. Review
 the fail-closed impact on liveness and the sampling lock's serialization
 before promotion. The existing source branches and main remain untouched.
+
+
+Reconciliation with merged PR #157 keeps its kernel clock latch implementation
+and regression intact; this repair adds bridge-issued clock failure fencing and
+retains the additional kernel nonfinite recovery coverage.
