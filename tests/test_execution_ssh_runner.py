@@ -99,14 +99,11 @@ def _server_inventory_receipt(action: GovernedAction) -> bytes:
 
 def _nextcloud_server_receipt(action: GovernedAction) -> bytes:
     payload = {
-        "operation_id_sha256": hashlib.sha256(action.operation_id.encode("utf-8")).hexdigest(),
         "operation": action.operation,
         "target_id": NEXTCLOUD_R1_TARGET.id,
-        "plan_id_sha256": hashlib.sha256(action.plan_id.encode("utf-8")).hexdigest(),
-        "plan_revision_sha256": hashlib.sha256(action.plan_revision.encode("utf-8")).hexdigest(),
-        "authorization_reference_sha256": hashlib.sha256(
-            action.authorization_reference.encode("utf-8")
-        ).hexdigest(),
+        "request_schema_verified": True,
+        "plan_binding_verified": True,
+        "authorization_verified": True,
         "started_at": "2026-11-12T00:00:00Z",
         "completed_at": "2026-11-12T00:00:01Z",
         "exit_code": 0,
@@ -420,8 +417,8 @@ def test_nextcloud_r1_rejects_unbound_success_receipt() -> None:
     )
 
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
-        payload = json.loads(_server_receipt(action, mutation_possible=True))
-        payload["plan_revision"] = "wrong"
+        payload = json.loads(_nextcloud_server_receipt(action))
+        payload["authorization_verified"] = False
         return subprocess.CompletedProcess(
             argv,
             0,
@@ -438,3 +435,4 @@ def test_nextcloud_r1_rejects_unbound_success_receipt() -> None:
     assert receipt.status is ExecutionStatus.FAILED
     assert receipt.exit_code == 65
     assert receipt.mutation_possible is True
+
