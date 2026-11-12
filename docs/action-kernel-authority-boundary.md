@@ -131,3 +131,21 @@ clock/replay regressions. This candidate is not approval to merge or deploy,
 and the two source PR branches remain unchanged. An independent security
 review must reconcile any additional unique PR #151 test coverage and validate
 the final exact SHA before promotion.
+
+### Sticky Action Kernel clock-authority invalidation (post-#154 follow-up)
+
+The kernel's per-instance time authority is now latched invalid if a
+trusted-time observation detects a PID change, malformed/non-finite sample,
+naive UTC, or monotonic regression below the recorded high-water mark.
+Subsequent calls to the *same* kernel instance fail closed even if the
+next wall/monotonic readings look plausible. Reconstructing a kernel must
+re-establish the process-local baseline and satisfy normal authorization;
+there is no automatic reset of the invalidation flag.
+
+This closes the distinct PR #153 regression
+`test_invalid_monotonic_observation_latches_kernel_fail_closed`
+that was not present after consolidated PR #154. The fix does not
+make process-local clocks an authenticated time source or replace
+durable cross-process replay protection. Verify exact-HEAD CI,
+CodeQL, CyberHIVE contract and independent security review before
+any separate merge decision.

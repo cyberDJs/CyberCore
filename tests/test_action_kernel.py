@@ -793,3 +793,50 @@ def test_post_authorization_audit_revalidates_floor_after_partial_utc_rollback(
     duplicate = k.execute(duplicate_request, trusted_actor=ACTOR)
     assert duplicate.status == "DENIED"
     assert duplicate.reason == "DUPLICATE"
+
+
+def test_invalid_monotonic_observation_latches_kernel_fail_closed() -> None:
+    base = datetime(2026, 11, 7, 12, 0, tzinfo=timezone.utc)
+    mono = [100.0]
+    wall = [base]
+    k = kernel(
+        clock=lambda: wall[0],
+        monotonic_clock=lambda: mono[0],
+        process_id_provider=lambda: 4242,
+    )
+    mono[0] = 110.0
+    wall[0] = base + timedelta(seconds=10)
+    assert (
+        k.execute(
+            task(
+                task_id="clock-first",
+                requested_at=base,
+                expires_at=base + timedelta(seconds=30),
+            ),
+            trusted_actor=ACTOR,
+        ).status
+        == "EXECUTED"
+    )
+    mono[0] = 109.0
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(
+            task(
+                task_id="clock-rollback",
+                requested_at=base,
+                expires_at=base + timedelta(seconds=30),
+            ),
+            trusted_actor=ACTOR,
+        )
+
+    # A later plausible observation must not silently reset the sticky fence.
+    mono[0] = 111.0
+    wall[0] = base + timedelta(seconds=11)
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(
+            task(
+                task_id="clock-after-rollback",
+                requested_at=base,
+                expires_at=base + timedelta(seconds=30),
+            ),
+            trusted_actor=ACTOR,
+        )
