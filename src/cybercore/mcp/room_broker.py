@@ -5,8 +5,10 @@ from dataclasses import dataclass
 import json
 import os
 from pathlib import Path
+import socket
 import socketserver
 import stat
+import struct
 import time
 from threading import RLock, Thread
 from typing import Any, Mapping, Protocol, cast
@@ -77,18 +79,43 @@ class RoomBackend(Protocol):
     def get_runtime_status(self) -> Mapping[str, Any]: ...
 
 
+def _peer_uid(client: socket.socket) -> int:
+    getpeereid = getattr(client, "getpeereid", None)
+    if callable(getpeereid):
+        peer_ids = cast(tuple[int, int], getpeereid())
+        return int(peer_ids[0])
+    if hasattr(socket, "SO_PEERCRED"):
+        size = struct.calcsize("3i")
+        raw = client.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, size)
+        _pid, uid, _gid = struct.unpack("3i", raw)
+        return int(uid)
+    raise RuntimeError("broker peer identity is unavailable")
+
+
 class _IdentityUnixServer(socketserver.ThreadingUnixStreamServer):
     daemon_threads = True
 
-    def __init__(self, socket_path: str, backend: RoomBackend, ledger_lock: RLock) -> None:
+    def __init__(
+        self,
+        socket_path: str,
+        backend: RoomBackend,
+        ledger_lock: RLock,
+        *,
+        expected_peer_uid: int | None = None,
+    ) -> None:
         self.backend = backend
         self.ledger_lock = ledger_lock
+        self.expected_peer_uid = expected_peer_uid
         super().__init__(socket_path, _RoomRequestHandler)
 
 
 class _RoomRequestHandler(socketserver.StreamRequestHandler):
     def handle(self) -> None:
         server = cast(_IdentityUnixServer, self.server)
+        if server.expected_peer_uid is not None:
+            client = cast(socket.socket, self.request)
+            if _peer_uid(client) != server.expected_peer_uid:
+                return
         line = self.rfile.readline(_MAX_REQUEST_BYTES + 1)
         if not line or len(line) > _MAX_REQUEST_BYTES:
             return
@@ -181,11 +208,20 @@ class RoomBroker:
         self,
         backends: Mapping[str, RoomBackend],
         socket_paths: Mapping[str, str | Path],
+        *,
+        expected_peer_uids: Mapping[str, int] | None = None,
     ) -> None:
         if set(backends) != set(socket_paths):
             raise ValueError("broker backends and socket paths must have identical identities")
+        peer_uids = dict(expected_peer_uids or {})
+        if set(peer_uids) - set(backends):
+            raise ValueError("peer UID policy contains an unknown broker identity")
+        for peer_uid in peer_uids.values():
+            if isinstance(peer_uid, bool) or not isinstance(peer_uid, int) or peer_uid < 0:
+                raise ValueError("expected peer UID must be a non-negative integer")
         self.backends = dict(backends)
         self.socket_paths = {key: Path(value) for key, value in socket_paths.items()}
+        self.expected_peer_uids = peer_uids
         self._servers: list[_IdentityUnixServer] = []
         self._threads: list[Thread] = []
         self._ledger_lock = RLock()
@@ -205,6 +241,7 @@ class RoomBroker:
                 str(path),
                 self.backends[identity],
                 self._ledger_lock,
+                expected_peer_uid=self.expected_peer_uids.get(identity),
             )
             os.chmod(path, 0o600)
             thread = Thread(
@@ -253,18 +290,31 @@ def build_cyberdjs_room_broker_runtime(
     room_id: str = "cyberdjs-main",
     slack_webhook_url: str | None = None,
     tool_handlers_by_identity: ToolHandlersByIdentity | None = None,
+    peer_uids_by_identity: Mapping[str, int] | None = None,
 ) -> CyberDJSRoomBrokerRuntime:
     room_id = room_id.strip()
     if not room_id:
         raise ValueError("room_id must not be empty")
 
     configured_handlers = dict(tool_handlers_by_identity or {})
+    configured_peer_uids = dict(peer_uids_by_identity or {})
     unknown_identities = set(configured_handlers) - ALLOWED_CHATGPT_IDENTITIES
     if unknown_identities:
         raise ValueError("tool handlers include an unknown ChatGPT identity")
+    if set(configured_peer_uids) - ALLOWED_CHATGPT_IDENTITIES:
+        raise ValueError("peer UID policy contains an unknown ChatGPT identity")
     for identity, handlers in configured_handlers.items():
-        if NEXTCLOUD_R1_HANDLER_NAME in handlers and identity != JOHNNY_WORK_IDENTITY:
+        if NEXTCLOUD_R1_HANDLER_NAME not in handlers:
+            continue
+        if identity != JOHNNY_WORK_IDENTITY:
             raise ValueError("Nextcloud R1 governed handler is restricted to Johnny Work identity")
+        peer_uid = configured_peer_uids.get(identity)
+        if peer_uid is None:
+            raise ValueError("Nextcloud R1 governed handler requires a Johnny Work peer UID")
+        if isinstance(peer_uid, bool) or not isinstance(peer_uid, int) or peer_uid <= 0:
+            raise ValueError("Johnny Work peer UID must be a positive non-root integer")
+        if peer_uid == os.geteuid():
+            raise ValueError("Johnny Work governed frontend must use a distinct Unix identity")
 
     base = build_local_runtime(log_path)
     sinks: dict[str, Any] = {}
@@ -313,7 +363,11 @@ def build_cyberdjs_room_broker_runtime(
         for identity in ALLOWED_CHATGPT_IDENTITIES
     }
     return CyberDJSRoomBrokerRuntime(
-        broker=RoomBroker(backends, socket_paths),
+        broker=RoomBroker(
+            backends,
+            socket_paths,
+            expected_peer_uids=configured_peer_uids,
+        ),
         dispatcher=dispatcher,
         local_runtime=base,
     )

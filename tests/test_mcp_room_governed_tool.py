@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 
 from mcp import Client
 
@@ -105,3 +106,52 @@ def test_broker_rejects_nextcloud_r1_handler_for_non_johnny_identity(tmp_path) -
                 "chatgpt:eimy": {NEXTCLOUD_R1_HANDLER_NAME: handler},
             },
         )
+
+
+def _governed_handler(arguments):
+    return {"ok": True}
+
+
+def test_governed_runtime_requires_peer_uid_for_johnny_work(tmp_path) -> None:
+    with pytest.raises(ValueError, match="requires a Johnny Work peer UID"):
+        build_cyberdjs_room_broker_runtime(
+            tmp_path / "room.jsonl",
+            socket_dir=tmp_path / "sockets",
+            tool_handlers_by_identity={
+                "chatgpt:johnny-work": {NEXTCLOUD_R1_HANDLER_NAME: _governed_handler},
+            },
+        )
+
+
+def test_governed_runtime_rejects_same_uid_as_broker(tmp_path) -> None:
+    if os.geteuid() == 0:
+        same_uid = 0
+        expected = "positive non-root"
+    else:
+        same_uid = os.geteuid()
+        expected = "distinct Unix identity"
+    with pytest.raises(ValueError, match=expected):
+        build_cyberdjs_room_broker_runtime(
+            tmp_path / "room.jsonl",
+            socket_dir=tmp_path / "sockets",
+            tool_handlers_by_identity={
+                "chatgpt:johnny-work": {NEXTCLOUD_R1_HANDLER_NAME: _governed_handler},
+            },
+            peer_uids_by_identity={"chatgpt:johnny-work": same_uid},
+        )
+
+
+def test_governed_runtime_accepts_distinct_non_root_peer_uid_policy(tmp_path) -> None:
+    candidate_uid = 10001 if os.geteuid() != 10001 else 10002
+    runtime = build_cyberdjs_room_broker_runtime(
+        tmp_path / "room.jsonl",
+        socket_dir=tmp_path / "sockets",
+        tool_handlers_by_identity={
+            "chatgpt:johnny-work": {NEXTCLOUD_R1_HANDLER_NAME: _governed_handler},
+        },
+        peer_uids_by_identity={"chatgpt:johnny-work": candidate_uid},
+    )
+    try:
+        assert runtime.broker.expected_peer_uids["chatgpt:johnny-work"] == candidate_uid
+    finally:
+        runtime.close()

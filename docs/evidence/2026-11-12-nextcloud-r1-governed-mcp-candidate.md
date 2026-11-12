@@ -22,3 +22,6 @@
 
 - security_followup: transfer now requires independently observed source SHA-256 evidence before it can atomically publish the off-host archive
 - identity_followup: mutating MCP enablement is deployment-blocked until Johnny Work frontend isolation is proven against same-uid cross-socket access, with separate Unix identities as the fallback
+
+- identity_hardening: governed Johnny Work socket now requires a dedicated non-root Unix peer UID distinct from the broker UID and rejects mismatched peers before request parsing
+- deployment_acl_gate: deployment must grant only the dedicated Johnny Work UID the minimum socket ACL required for connection; repository candidate does not mutate OS users or ACLs

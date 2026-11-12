@@ -44,6 +44,8 @@ The repository does not contain or mint the credential. Credential provisioning/
 - mutation remains deny-all without a real authorization verifier;
 - MCP capability is absent unless runtime composition explicitly injects the handler;
 - Eimy and Johnny Moderator do not receive the handler by default;
+- the governed Johnny Work broker socket requires an explicit OS peer UID and rejects other Unix peers before request parsing;
+- the governed frontend UID must be non-root and distinct from the broker UID;
 - deployment and production restore remain separately authorized actions.
 
 ## Alternatives rejected
@@ -60,11 +62,16 @@ The design adds a second fixed governed execution target and a small target-spec
 
 ## Additional deployment trust gates
 
-The repository candidate does not claim that a path-specific Unix socket alone is sufficient
-authentication between mutually untrusted local processes running as the same OS uid. Before a
-mutating handler is enabled, deployment must prove the Johnny Work frontend has an identity boundary
-that another frontend cannot cross. Separate Unix service identities are the preferred fail-closed
-fallback if peer identity cannot otherwise be proven.
+A path-specific Unix socket alone is not sufficient authentication for a mutating capability.
+The candidate therefore adds an OS peer-credential gate to the broker. When the Nextcloud R1 handler
+is composed, the runtime requires an explicit positive non-root Johnny Work UID that differs from
+the broker UID. Every connection on that governed socket is rejected before request parsing unless
+the kernel-reported peer UID matches.
+
+Deployment must run the Johnny Work frontend under that dedicated Unix identity and grant only that
+identity the minimum filesystem/ACL permission needed to connect to its socket. Eimy, Johnny
+Moderator, and the broker identity must not share that UID. If the host cannot provide trustworthy
+Unix peer credentials or a narrow socket ACL, governed mutation remains BLOCKED.
 
 The source checksum is also external evidence: deployment must obtain the SHA-256 from the exact
 source archive independently before transfer and place only that non-secret digest into the fixed
