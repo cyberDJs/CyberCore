@@ -435,4 +435,3 @@ def test_nextcloud_r1_rejects_unbound_success_receipt() -> None:
     assert receipt.status is ExecutionStatus.FAILED
     assert receipt.exit_code == 65
     assert receipt.mutation_possible is True
-
