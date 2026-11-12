@@ -39,7 +39,9 @@ class BrokerRoomBackend:
         *,
         timeout_seconds: float | None = None,
     ) -> object:
-        effective_timeout = self.timeout_seconds if timeout_seconds is None else float(timeout_seconds)
+        effective_timeout = (
+            self.timeout_seconds if timeout_seconds is None else float(timeout_seconds)
+        )
         if effective_timeout <= 0 or effective_timeout > 3600:
             raise ValueError("broker call timeout is outside the bounded range")
         request = (
