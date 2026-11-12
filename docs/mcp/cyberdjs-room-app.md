@@ -206,3 +206,19 @@ Broadcast wake targets all configured AI participants except the event author.
 
 Repository support does not authorize public MCP exposure, Slack credential creation, firewall
 changes, A/B slot writes, or production promotion. Those remain separate deployment actions.
+
+
+## Conditional governed tools
+
+The Room MCP remains communication-only by default. A governed backend tool appears in an identity's
+MCP tool list only when the broker runtime explicitly injects that exact handler for that identity.
+
+The issue #113 candidate introduces one optional handler, `nextcloud.r1.offhost`, rendered as
+`cyberdjs.room.nextcloud_r1`. Its arguments contain only action and exact governance bindings.
+Hostnames, users, filesystem paths, SSH options and executable text are not caller-controlled.
+
+The intended composition is Johnny Work only. Johnny Moderator and Eimy do not inherit the
+capability merely because they share the same broker. Repository support does not activate the
+handler, install the execution bridge, provision a credential or grant mutation authority.
+
+See ADR-0015 for the proposed Nextcloud R1 execution boundary.

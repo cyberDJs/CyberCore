@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
 import os
@@ -37,6 +38,8 @@ PARTICIPANT_ROLES = {
     "chatgpt:eimy": "participant",
 }
 _MAX_REQUEST_BYTES = 64 * 1024
+ToolHandler = Callable[[Mapping[str, Any]], Mapping[str, Any]]
+ToolHandlersByIdentity = Mapping[str, Mapping[str, ToolHandler]]
 
 
 class RoomBackend(Protocol):
@@ -122,6 +125,7 @@ def _dispatch(
             "actor_type": actor.actor_type,
             "display_name": actor.display_name,
             "authorized_rooms": list(actor.room_ids),
+            "allowed_tools": sorted(getattr(backend, "allowed_tools", frozenset())),
         }
     if method == "post_event":
         with ledger_lock:
@@ -149,6 +153,17 @@ def _dispatch(
     if method == "runtime_status":
         with ledger_lock:
             return dict(backend.get_runtime_status())
+    if method == "invoke_tool":
+        invoke = getattr(backend, "invoke_tool", None)
+        if not callable(invoke):
+            raise PermissionError("broker backend does not expose governed tools")
+        with ledger_lock:
+            return dict(
+                invoke(
+                    tool_name=args["tool_name"],
+                    arguments=args.get("arguments") or {},
+                )
+            )
     raise ValueError("unsupported broker method")
 
 
@@ -230,10 +245,16 @@ def build_cyberdjs_room_broker_runtime(
     socket_dir: str | Path,
     room_id: str = "cyberdjs-main",
     slack_webhook_url: str | None = None,
+    tool_handlers_by_identity: ToolHandlersByIdentity | None = None,
 ) -> CyberDJSRoomBrokerRuntime:
     room_id = room_id.strip()
     if not room_id:
         raise ValueError("room_id must not be empty")
+
+    configured_handlers = dict(tool_handlers_by_identity or {})
+    unknown_identities = set(configured_handlers) - ALLOWED_CHATGPT_IDENTITIES
+    if unknown_identities:
+        raise ValueError("tool handlers include an unknown ChatGPT identity")
 
     base = build_local_runtime(log_path)
     sinks: dict[str, Any] = {}
@@ -273,6 +294,7 @@ def build_cyberdjs_room_broker_runtime(
             coordinator=coordinator,
             actor=actor,
             runtime_status=runtime_status,
+            tool_handlers=configured_handlers.get(identity),
         )
 
     socket_root = Path(socket_dir)

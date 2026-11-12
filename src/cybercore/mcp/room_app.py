@@ -5,10 +5,12 @@ from typing import Any, Mapping, Protocol
 from mcp.server import MCPServer
 
 from cybercore.communication.contracts import TrustedActor
+from cybercore.mcp.nextcloud_r1_tool import TOOL_NAME as NEXTCLOUD_R1_HANDLER_NAME
 from cybercore.mcp.server import READ_ONLY_ANNOTATIONS, _bounded_text, _invoke
 
 ROOM_SERVER_NAME = "CyberDJs Room"
 ROOM_SERVER_VERSION = "0.1.0"
+NEXTCLOUD_R1_MCP_TOOL = "cyberdjs.room.nextcloud_r1"
 
 
 class RoomAppBackend(Protocol):
@@ -56,13 +58,41 @@ ROOM_TOOLS = (
 )
 
 
-def room_capability_manifest(*, actor_id: str, wake_enabled: bool) -> dict[str, object]:
+def _allowed_backend_tools(communication: RoomAppBackend) -> frozenset[str]:
+    return frozenset(getattr(communication, "allowed_tools", frozenset()))
+
+
+def _invoke_optional_tool(
+    communication: RoomAppBackend,
+    *,
+    tool_name: str,
+    arguments: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    invoke = getattr(communication, "invoke_tool", None)
+    if not callable(invoke):
+        raise PermissionError("governed backend tool is unavailable")
+    result = invoke(tool_name=tool_name, arguments=arguments)
+    if not isinstance(result, Mapping):
+        raise RuntimeError("governed backend returned a malformed result")
+    return result
+
+
+def room_capability_manifest(
+    *,
+    actor_id: str,
+    wake_enabled: bool,
+    governed_tools: tuple[str, ...] = (),
+) -> dict[str, object]:
+    tools = list(ROOM_TOOLS)
+    if NEXTCLOUD_R1_HANDLER_NAME in governed_tools:
+        tools.append(NEXTCLOUD_R1_MCP_TOOL)
     return {
         "server": ROOM_SERVER_NAME,
         "version": ROOM_SERVER_VERSION,
         "mode": "shared_cyberhive_room",
         "actor_id": actor_id,
-        "tools": list(ROOM_TOOLS),
+        "tools": tools,
+        "governed_backend_tools": list(governed_tools),
         "wake": {
             "event_driven": True,
             "slack_adapter_enabled": wake_enabled,
@@ -77,6 +107,7 @@ def build_room_app_server(
     wake_enabled: bool = False,
 ) -> MCPServer:
     server = MCPServer(ROOM_SERVER_NAME)
+    allowed_backend_tools = _allowed_backend_tools(communication)
 
     @server.tool(name="cyberdjs.room.capabilities", annotations=READ_ONLY_ANNOTATIONS)
     async def capabilities() -> dict[str, object]:
@@ -88,6 +119,7 @@ def build_room_app_server(
                 **room_capability_manifest(
                     actor_id=communication.actor.actor_id,
                     wake_enabled=wake_enabled,
+                    governed_tools=tuple(sorted(allowed_backend_tools)),
                 ),
             },
         )
@@ -183,5 +215,36 @@ def build_room_app_server(
                 "runtime": dict(communication.get_runtime_status()),
             },
         )
+
+    if NEXTCLOUD_R1_HANDLER_NAME in allowed_backend_tools:
+
+        @server.tool(name=NEXTCLOUD_R1_MCP_TOOL)
+        async def nextcloud_r1(
+            action: str,
+            operation_id: str,
+            plan_id: str,
+            plan_revision: str,
+            authorization_reference: str,
+        ) -> dict[str, object]:
+            return await _invoke(
+                NEXTCLOUD_R1_MCP_TOOL,
+                lambda rid: {
+                    "ok": True,
+                    "request_id": rid,
+                    "execution": dict(
+                        _invoke_optional_tool(
+                            communication,
+                            tool_name=NEXTCLOUD_R1_HANDLER_NAME,
+                            arguments={
+                                "action": action,
+                                "operation_id": operation_id,
+                                "plan_id": plan_id,
+                                "plan_revision": plan_revision,
+                                "authorization_reference": authorization_reference,
+                            },
+                        )
+                    ),
+                },
+            )
 
     return server

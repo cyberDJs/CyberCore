@@ -1,0 +1,28 @@
+[Unit]
+Description=CyberCore governed Nextcloud R1 off-host transfer
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/usr/local/libexec/cybercore-exec-nextcloud-r1/transfer.py
+
+[Service]
+Type=oneshot
+User=cybercore-exec
+Group=cybercore-exec
+ExecStart=/usr/bin/python3 /usr/local/libexec/cybercore-exec-nextcloud-r1/transfer.py
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=162.250.126.107
+ReadOnlyPaths=/var/lib/cybercore-exec-nextcloud-r1/credentials
+ReadWritePaths=/var/lib/cybercore-exec-nextcloud-r1/state /var/backups/cybercore/nextcloud-r1-113/2026-10-13
+TimeoutStartSec=6h

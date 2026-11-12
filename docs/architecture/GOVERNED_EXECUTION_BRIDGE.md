@@ -199,3 +199,33 @@ WB-0038E, WB-0038G and WB-0038H are repository-only. They do not create credenti
 Polkit on a target, deploy the subsystem, run A6 backups, mutate a VPS, or grant
 production authority. Any deployment requires a separate target-bound plan, a real server-side
 authorization verifier, fresh verification, and explicit authorization.
+
+
+## Issue #113 candidate target
+
+ADR-0015 proposes a second fixed governed-execution target for the Nextcloud R1 recovery proof:
+
+```text
+target_id: cyberskills-vps
+hostname: 162.35.186.106
+ssh_user: cybercore-exec
+subsystem: cybercore-exec
+```
+
+This is a repository-only candidate, not an expansion of deployed authority. The only proposed
+target-specific operations are:
+
+```text
+nextcloud.r1.offhost.transfer
+nextcloud.r1.offhost.status
+nextcloud.r1.offhost.verify
+```
+
+The transfer operation starts one fixed static systemd unit asynchronously. Source host, source
+archive, destination directory, network policy and helper argv are compiled into the candidate.
+No MCP caller can provide arbitrary shell text, hostnames, paths or SSH options. The dedicated
+transfer credential is explicitly outside the repository and must be separately provisioned,
+restricted and revoked under a deployment approval.
+
+The original Vikunja target and operation family remain target-bound and cannot invoke the
+Nextcloud operation family.

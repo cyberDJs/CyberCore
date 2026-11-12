@@ -22,7 +22,7 @@ class ExecutionBlockedError(RuntimeError):
 
 
 RunCallable = Callable[..., subprocess.CompletedProcess[bytes]]
-TRANSPORT_TIMEOUT_SECONDS = 180
+TRANSPORT_TIMEOUT_SECONDS = 360
 _INVENTORY_RECEIPT_KEYS = frozenset(
     {
         "operation_id",

@@ -27,6 +27,9 @@ class BrokerRoomBackend:
             display_name=str(identity["display_name"]),
             room_ids=tuple(str(item) for item in identity.get("authorized_rooms") or ()),
         )
+        self.allowed_tools = frozenset(
+            str(item) for item in identity.get("allowed_tools") or ()
+        )
 
     def _call(self, method: str, args: Mapping[str, Any]) -> object:
         request = (
@@ -122,4 +125,18 @@ class BrokerRoomBackend:
         result = self._call("runtime_status", {})
         if not isinstance(result, dict):
             raise RuntimeError("broker returned malformed runtime status")
+        return result
+
+    def invoke_tool(
+        self,
+        *,
+        tool_name: str,
+        arguments: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        result = self._call(
+            "invoke_tool",
+            {"tool_name": tool_name, "arguments": dict(arguments)},
+        )
+        if not isinstance(result, dict):
+            raise RuntimeError("broker returned malformed tool result")
         return result

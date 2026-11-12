@@ -1,0 +1,19 @@
+// Candidate policy for CyberCore #113. Not deployed by this PR.
+// Only the fixed static Nextcloud R1 transfer wrapper is startable.
+polkit.addRule(function(action, subject) {
+    if (subject.user !== "cybercore-exec") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (action.id !== "org.freedesktop.systemd1.manage-units") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    var unit = action.lookup("unit");
+    var verb = action.lookup("verb");
+    if (verb !== "start") {
+        return polkit.Result.NOT_HANDLED;
+    }
+    if (unit === "cybercore-nextcloud-r1-transfer.service") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});
