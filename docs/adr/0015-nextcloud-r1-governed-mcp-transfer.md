@@ -27,7 +27,8 @@ The MCP surface is conditional and identity-bound:
 - action is one of `transfer`, `status`, `verify`;
 - callers cannot choose hostnames, paths, users, ports, commands or SSH options.
 
-The execution target is fixed to `cyberskills-vps` (`162.35.186.106`). The transfer operation starts one preinstalled static unit asynchronously. The unit executes a fixed Python helper as `cybercore-exec`, reads a dedicated transfer credential from a fixed private path, performs a fixed SCP/SFTP pull, validates size and gzip integrity, atomically publishes the archive, and writes a non-secret receipt. Verification independently re-hashes the off-host copy and checks required archive component markers.
+The execution target is fixed to `cyberskills-vps` (`162.35.186.106`). The transfer operation starts one preinstalled static unit asynchronously. The unit executes a fixed Python helper as `cybercore-exec`, reads a dedicated transfer credential from a fixed private path, performs a fixed SCP/SFTP pull, validates size and gzip integrity, requires a separately observed fixed source SHA-256 and compares
+the transferred bytes against it before atomic publication, then writes a non-secret receipt. Verification independently re-hashes the off-host copy and checks required archive component markers.
 
 The repository does not contain or mint the credential. Credential provisioning/revocation remains a separately approved deployment step and must use a dedicated source identity, not an existing production key.
 
@@ -55,3 +56,17 @@ The repository does not contain or mint the credential. Credential provisioning/
 ## Consequences
 
 The design adds a second fixed governed execution target and a small target-specific deployment candidate. It does not deploy anything. A future deployment still needs a real authorization verifier, restricted credential provisioning, exact-host verification, and independent post-deployment tests.
+
+
+## Additional deployment trust gates
+
+The repository candidate does not claim that a path-specific Unix socket alone is sufficient
+authentication between mutually untrusted local processes running as the same OS uid. Before a
+mutating handler is enabled, deployment must prove the Johnny Work frontend has an identity boundary
+that another frontend cannot cross. Separate Unix service identities are the preferred fail-closed
+fallback if peer identity cannot otherwise be proven.
+
+The source checksum is also external evidence: deployment must obtain the SHA-256 from the exact
+source archive independently before transfer and place only that non-secret digest into the fixed
+`source_archive.sha256` file. Target-only hashing is insufficient evidence of source-to-target
+identity.

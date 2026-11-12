@@ -18,6 +18,8 @@ from cybercore.execution.nextcloud_r1_transfer import (
     EXPECTED_SIZE_BYTES,
     SOURCE_ARCHIVE,
     SOURCE_HOST,
+    SOURCE_SHA256,
+    _read_expected_sha256,
     _sftp_argv,
     _sftp_batch,
 )
@@ -169,3 +171,20 @@ def test_deploy_candidate_is_static_sandboxed_and_secret_free() -> None:
         assert "bash -c" not in text
         assert "sh -c" not in text
         assert "NOPASSWD" not in text
+
+
+def test_source_checksum_evidence_is_fixed_and_fail_closed(tmp_path, monkeypatch) -> None:
+    checksum_file = tmp_path / "source_archive.sha256"
+    monkeypatch.setattr(
+        "cybercore.execution.nextcloud_r1_transfer.SOURCE_SHA256",
+        checksum_file,
+    )
+    checksum_file.write_text("a" * 64 + "\n", encoding="ascii")
+    checksum_file.chmod(0o600)
+    assert _read_expected_sha256() == "a" * 64
+
+    checksum_file.write_text("not-a-digest\n", encoding="ascii")
+    with pytest.raises(RuntimeError, match="not a SHA-256"):
+        _read_expected_sha256()
+
+    assert SOURCE_SHA256.name == "source_archive.sha256"

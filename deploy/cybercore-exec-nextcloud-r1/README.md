@@ -35,11 +35,18 @@ Before deployment, a separate approved credential-provisioning step must create 
 
 `/var/lib/cybercore-exec-nextcloud-r1/credentials/source_ed25519`
 
-and a pinned source host-key file at:
+a pinned source host-key file at:
 
 `/var/lib/cybercore-exec-nextcloud-r1/credentials/known_hosts`
 
-Both files must be owned by `cybercore-exec`, mode `0600`.
+and a pre-transfer source checksum evidence file:
+
+`/var/lib/cybercore-exec-nextcloud-r1/credentials/source_archive.sha256`
+
+All three files must be owned by `cybercore-exec`, mode `0600`. The checksum file is not a secret,
+but it must be produced from an independently observed SHA-256 of the exact fixed source archive
+before transfer. The transfer fails closed if it is absent, malformed, or does not match the
+off-host bytes.
 
 The source-side public key should be constrained to file transfer only (for example an OpenSSH `restrict,command="internal-sftp"` authorized-key restriction) and the deployment must verify that the shared-hosting SSH implementation actually enforces the restriction. If it cannot be proved, deployment is BLOCKED.
 
@@ -57,8 +64,10 @@ A separate deployment approval must:
 6. install the static systemd unit and the narrow Polkit rule;
 7. install the target-bound sshd snippet;
 8. provision the dedicated restricted source credential through an approved secret channel;
-9. validate sshd and Polkit before reload;
-10. independently verify the tool remains unavailable to identities that were not explicitly given the handler.
+9. independently compute the exact source archive SHA-256 and provision `source_archive.sha256`;
+10. validate sshd and Polkit before reload;
+11. independently verify the tool remains unavailable to identities that were not explicitly given the handler;
+12. verify the tunnel frontend identity boundary: a process that is not Johnny Work must not be able to reach the mutating handler merely by sharing the same local OS uid. If that cannot be proven, deploy under separate Unix identities or keep mutation disabled.
 
 ## Rollback / credential revocation
 
