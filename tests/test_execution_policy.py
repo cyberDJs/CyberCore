@@ -1,5 +1,5 @@
 from cybercore.execution.models import ExecutionTarget, GovernedAction
-from cybercore.execution.policy import VIKUNJA_TARGET, evaluate_action
+from cybercore.execution.policy import NEXTCLOUD_R1_TARGET, VIKUNJA_TARGET, evaluate_action
 
 
 def _action(operation: str = "vikunja.backup.run", **overrides: object) -> GovernedAction:
