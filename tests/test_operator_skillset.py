@@ -65,6 +65,35 @@ def test_security_waits_for_debug_regression_evidence() -> None:
     assert "regression_evidence" in nodes["security"]["inputs"]
 
 
+def test_internal_inputs_are_produced_by_declared_ancestors() -> None:
+    nodes = _contract()["spec"]["nodes"]
+    external_inputs = {
+        "project_scope",
+        "live_repo_refs",
+        "authorization_scope",
+        "security_boundaries",
+    }
+
+    def ancestors(name: str) -> set[str]:
+        result: set[str] = set()
+        for dependency in nodes[name].get("needs", []):
+            result.add(dependency)
+            result.update(ancestors(dependency))
+        return result
+
+    for name, node in nodes.items():
+        available = set(external_inputs)
+        for dependency in ancestors(name):
+            available.update(nodes[dependency].get("outputs", []))
+        missing = set(node.get("inputs", [])) - available
+        assert not missing, f"{name} has unproduced inputs: {sorted(missing)}"
+
+
+def test_release_consumes_security_residual_risk() -> None:
+    release_inputs = set(_contract()["spec"]["nodes"]["release"]["inputs"])
+    assert {"security_verdict", "residual_risk"} <= release_inputs
+
+
 def test_protected_actions_are_explicitly_separated() -> None:
     gates = _contract()["spec"]["gates"]
     assert gates["canonical_merge"]["approval"] == "explicit_identity_bound_user_approval"

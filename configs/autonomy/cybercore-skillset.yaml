@@ -17,7 +17,7 @@ spec:
       capability: github-repo-auditor
       needs: [portfolio]
       inputs: [canonical_lane, live_repo_refs]
-      outputs: [authoritative_repo_snapshot, ci_review_evidence, risk_findings]
+      outputs: [authoritative_repo_snapshot, ci_review_evidence, review_findings, risk_findings]
     govern:
       capability: caser
       needs: [audit]
@@ -33,7 +33,7 @@ spec:
         - canonical_lane
         - parallel_work
         - drift_status
-      outputs: [pr_branch_actions, workflow_evidence, updated_exact_head]
+      outputs: [pr_branch_actions, workflow_evidence, failing_gates, updated_exact_head]
     debug:
       capability: systematic-debugging-and-root-cause-engineer
       needs: [github]
@@ -47,7 +47,7 @@ spec:
     release:
       capability: release-change-manager
       needs: [portfolio, audit, govern, github, debug, security]
-      inputs: [updated_exact_head, workflow_evidence, security_verdict, pending_gates]
+      inputs: [updated_exact_head, workflow_evidence, security_verdict, residual_risk, pending_gates]
       outputs: [go_no_go, merge_readiness, post_change_verification_plan]
   gates:
     canonical_merge:
