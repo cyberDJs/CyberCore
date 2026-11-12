@@ -1,0 +1,84 @@
+apiVersion: capability.cyberdjs.org/v1alpha1
+kind: Skillset
+metadata:
+  name: cybercore-governed-autonomy-ux
+  version: 0.2.0
+spec:
+  goal: "Safe bounded CyberCore engineering with evidence-first progress and low-noise operator reports"
+  mode: strict_skillset
+  selection_source: capability-router
+  execution_status: proposal_only
+  nodes:
+    portfolio:
+      capability: cyberdjs-portfolio-index
+      inputs: [project_scope, live_repo_refs]
+      outputs: [canonical_lane, parallel_work, cleanup_candidates, drift_status]
+    audit:
+      capability: github-repo-auditor
+      needs: [portfolio]
+      inputs: [canonical_lane, live_repo_refs]
+      outputs: [authoritative_repo_snapshot, ci_review_evidence, risk_findings]
+    govern:
+      capability: caser
+      needs: [audit]
+      inputs: [authoritative_repo_snapshot, authorization_scope, risk_findings]
+      outputs: [bounded_plan, action_receipts, exact_head, pending_gates]
+    github:
+      capability: cyberdjs-github-workflow
+      needs: [govern]
+      inputs: [bounded_plan, exact_head, authorization_scope]
+      outputs: [pr_branch_actions, workflow_evidence, updated_exact_head]
+    debug:
+      capability: systematic-debugging-and-root-cause-engineer
+      needs: [github]
+      inputs: [updated_exact_head, failing_gates, review_findings]
+      outputs: [root_cause, minimal_fix, regression_evidence]
+    security:
+      capability: adversary-lens
+      needs: [github]
+      inputs: [updated_exact_head, security_boundaries, regression_evidence]
+      outputs: [independent_security_findings, residual_risk, security_verdict]
+    release:
+      capability: release-change-manager
+      needs: [portfolio, audit, govern, github, debug, security]
+      inputs: [updated_exact_head, workflow_evidence, security_verdict, pending_gates]
+      outputs: [go_no_go, merge_readiness, post_change_verification_plan]
+  gates:
+    canonical_merge:
+      before: "release:merge"
+      approval: explicit_identity_bound_user_approval
+      require:
+        - exact_head
+        - current_main
+        - no_parallel_canonical_writer
+        - required_checks
+        - independent_review
+        - security_verdict_when_security_relevant
+        - branch_protection
+    staging_mutation:
+      before: "release:staging_write"
+      approval: explicit_environment_bound_user_approval
+    production_mutation:
+      before: "release:production_write"
+      approval: separate_production_MOP_and_explicit_authorization
+      default: denied
+    secrets:
+      before: "any:secret_read_write_or_disclosure"
+      approval: separate_explicit_authorization
+      default: denied
+  completion:
+    require: [exact_identity_verified, user_impact_reported, residual_risk_recorded, post_change_effect_verified]
+  failure:
+    on_drift: REPLAN_REQUIRED
+    on_unverified_source: BLOCKED
+    on_unavailable_check: UNKNOWN_not_PASS
+    on_verification_failure: STOP_AND_REPAIR_WITH_BOUNDED_RETRIES
+    max_repair_attempts_per_root_cause: 3
+  extensions:
+    execution_note: "Skill orchestration contract only. This YAML is not a scheduler or an authority grant."
+    github_connector: "Provider data must be independently checked; PR runs cannot attest main push runs."
+    notifications: "Material changes only; no secret-bearing fields or unverified causal claims."
+    artifacts:
+      operator_contract: docs/operations/cybercore-autonomy-ux-contract-v1.md
+      runbook: docs/operations/cybercore-seven-skill-autonomy-v1.md
+      presentation_module: src/cybercore/operator_reporting.py
