@@ -309,3 +309,34 @@ def test_policy_blocks_before_ssh() -> None:
     with pytest.raises(ExecutionBlockedError):
         execute_action(action, VIKUNJA_TARGET, run=fake_run)
     assert called is False
+
+
+def test_nextcloud_r1_transport_uses_fixed_target_and_no_remote_command() -> None:
+    argv = build_transport_argv(NEXTCLOUD_R1_TARGET)
+    assert argv[0] == "ssh"
+    assert "-s" in argv
+    assert argv[-1] == "cybercore-exec"
+    assert "162.35.186.106" in " ".join(argv)
+    assert "bash" not in argv
+    assert "sh" not in argv
+
+
+def test_nextcloud_r1_client_policy_blocks_wrong_target_before_ssh() -> None:
+    called = False
+    action = GovernedAction(
+        operation_id="NC-R1-113",
+        operation="nextcloud.r1.offhost.transfer",
+        target_id=NEXTCLOUD_R1_TARGET.id,
+        plan_id="#113",
+        plan_revision="draft-1",
+        authorization_reference="APPROVE-113",
+    )
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        nonlocal called
+        called = True
+        return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
+
+    with pytest.raises(ExecutionBlockedError):
+        execute_action(action, VIKUNJA_TARGET, run=fake_run)
+    assert called is False
