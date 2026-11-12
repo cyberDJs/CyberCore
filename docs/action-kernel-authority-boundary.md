@@ -149,3 +149,44 @@ make process-local clocks an authenticated time source or replace
 durable cross-process replay protection. Verify exact-HEAD CI,
 CodeQL, CyberHIVE contract and independent security review before
 any separate merge decision.
+
+### Sticky issued-clock authority fence (isolated follow-up)
+
+A rejected nonfinite/regressed monotonic observation permanently revokes that
+ActionKernel instance; recovering the observed counter cannot renew authority.
+The bridge's process-owned replay guard additionally serializes kernel-issued
+monotonic checks across invocations, retains a process-wide high-water, and
+latches invalid issued-clock samples before claim. Thus retrying an unclaimed
+receipt after its clock appears to recover cannot dispatch. A normal per-receipt
+deadline expiry does not poison other receipts, but it still rejects the expired
+receipt. An observed rollback invalidates all future issued-receipt bridge
+attempts in that process. Restarting a process is not a substitute for trusted
+time or durable replay protection, and the protection cannot detect an
+unobserved clock correction. The reference remains synthetic/read-only.
+
+Evidence: sticky kernel regression/nonfinite recovery tests, bridge entry
+retry/nonfinite recovery tests, and cross-receipt high-water regression. Review
+the fail-closed impact on liveness and the sampling lock's serialization
+before promotion. The existing source branches and main remain untouched.
+
+
+Reconciliation with merged PR #157 keeps its kernel clock latch implementation
+and regression intact; this repair adds bridge-issued clock failure fencing and
+retains the additional kernel nonfinite recovery coverage.
+
+### Every bridge monotonic observation uses one sticky process authority
+
+Budget anchors and elapsed-budget checks, issued-deadline checks, and replay
+pruning now sample their production monotonic aliases under the same process
+guard lock and share a high-water and permanent failure state. A nonfinite,
+regressing, malformed or failed clock observation cannot be hidden by a later
+plausible reading, even if it occurs before a durable replay claim. Budget
+arithmetic therefore never consumes an unchecked NaN/infinity. Replacing the
+caller-provided durable guard does not reset the bridge-owned clock fence.
+
+An otherwise valid observation past one receipt's absolute deadline rejects
+that receipt without poisoning later valid grants. Clock failure deliberately
+revokes process bridge authority; this availability tradeoff has no automatic
+reset. Delayed synchronous effects still cannot be cancelled or undone by
+these result-acceptance checks. Initial UTC trust and durable shared replay
+storage remain separate requirements.
