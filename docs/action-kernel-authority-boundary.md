@@ -190,3 +190,24 @@ revokes process bridge authority; this availability tradeoff has no automatic
 reset. Delayed synchronous effects still cannot be cancelled or undone by
 these result-acceptance checks. Initial UTC trust and durable shared replay
 storage remain separate requirements.
+
+### Kernel provider failures cannot restore clock authority
+
+The kernel trusted-time boundary latches failure across provider exceptions,
+malformed PID/monotonic/UTC observations, timezone failures and projection
+overflow, in addition to regressed/nonfinite monotonic values. Sampling,
+validation and projection remain serialized by its existing lock; high-water
+state is committed only after the complete observation succeeds. A plausible
+later value, the same task or a fresh task cannot clear the per-instance fence.
+Failures use the existing PermissionError authority contract with the original
+exception chained for diagnosis. KeyboardInterrupt/SystemExit are not caught.
+
+This closes the independent review's inherited conditional P2 under injected
+provider continuity loss plus stale UTC/monotonic recovery. It is not evidence
+that normal OS monotonic clocks exhibit that fault. Raw UTC audit/provenance
+metadata retains its raw wall-time values and does not advance the authority
+high-water. Its provider failures or malformed timestamps also latch the same
+kernel fence: an earlier metadata read must not hide continuity loss from the
+next authorization. Sampling uses the same lock without adding monotonic reads
+or projecting metadata time. Ordinary policy denial and normal expiry remain;
+an expired grant with otherwise valid clocks does not invalidate the kernel.
