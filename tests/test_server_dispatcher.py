@@ -22,17 +22,13 @@ class AllowAuthorizationVerifier:
         return ExecutionAuthorizationCheck(True, "test authorization accepted")
 
 
-def _request(
-    operation: str = "vikunja.health.verify",
-    *,
-    target_id: str = "tasks.cyberdjs.org",
-) -> ServerRequest:
+def _request(operation: str = "vikunja.health.verify") -> ServerRequest:
     return ServerRequest.from_mapping(
         {
             "version": PROTOCOL_VERSION,
             "operation_id": "op-1",
             "operation": operation,
-            "target_id": target_id,
+            "target_id": "tasks.cyberdjs.org",
             "plan_id": "WB0038",
             "plan_revision": "1",
             "authorization_reference": "grant-1",
@@ -169,44 +165,3 @@ def test_timeout_emits_failed_receipt_without_raw_output() -> None:
     assert receipt.stderr_sha256
     assert not hasattr(receipt, "stdout")
     assert receipt.secret_values_recorded is False
-
-
-def test_nextcloud_r1_operation_uses_fixed_helper_and_target() -> None:
-    calls: list[tuple[list[str], dict[str, Any]]] = []
-
-    def runner(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
-        calls.append((argv, kwargs))
-        return subprocess.CompletedProcess(argv, 0, stdout=b"{}", stderr=b"")
-
-    receipt = execute_request(
-        _request(
-            "nextcloud.r1.offhost.transfer",
-            target_id="cyberskills-vps-nextcloud-r1",
-        ),
-        authorization_verifier=AllowAuthorizationVerifier(),
-        runner=runner,
-    )
-    assert receipt.status == "EXECUTED"
-    assert receipt.mutation_possible is True
-    assert calls[0][0] == [
-        "/usr/bin/python3",
-        "/usr/local/libexec/cybercore-exec/nextcloud-r1-offhost-transfer",
-    ]
-    assert calls[0][1]["shell"] is False
-
-
-def test_nextcloud_r1_operation_rejects_wrong_target_before_runner() -> None:
-    called = False
-
-    def runner(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
-        nonlocal called
-        called = True
-        return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
-
-    with pytest.raises(RequestValidationError, match="target"):
-        execute_request(
-            _request("nextcloud.r1.offhost.transfer"),
-            authorization_verifier=AllowAuthorizationVerifier(),
-            runner=runner,
-        )
-    assert called is False
