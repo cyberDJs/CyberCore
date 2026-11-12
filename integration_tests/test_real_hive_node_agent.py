@@ -83,6 +83,7 @@ def test_real_hive_rejects_denied_authority_without_dispatch() -> None:
     )
     denied = kernel.execute(task, trusted_actor="chatgpt:unauthorized")
     assert denied.status == "DENIED"
+    assert denied.reason == "ACTOR_DENIED"
 
     registry = NodeAgentRegistry()
     agent = LocalNodeAgent(NodeDescriptor(id=task.target_id))
