@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cybercore.execution.models import ExecutionReceipt, ExecutionStatus
+from cybercore.execution.models import ExecutionReceipt, ExecutionStatus, GovernedAction
 from cybercore.execution.nextcloud_r1_rollback import rollback_local
 from cybercore.execution.policy import NEXTCLOUD_R1_TARGET, evaluate_action
 from cybercore.execution.server.operations import resolve_operation
@@ -31,23 +31,16 @@ def _request() -> ServerRequest:
 
 def test_rollback_operation_is_mutating_and_fixed_to_static_unit() -> None:
     request = _request()
-    decision = evaluate_action(
-        action=type(
-            "Action",
-            (),
-            {
-                "target_id": request.target_id,
-                "operation": request.operation,
-                "operation_id": request.operation_id,
-                "plan_id": request.plan_id,
-                "plan_revision": request.plan_revision,
-                "authorization_reference": request.authorization_reference,
-                "arguments": {},
-                "has_bound_plan": True,
-            },
-        )(),
-        target=NEXTCLOUD_R1_TARGET,
+    action = GovernedAction(
+        operation_id=request.operation_id,
+        operation=request.operation,
+        target_id=request.target_id,
+        plan_id=request.plan_id,
+        plan_revision=request.plan_revision,
+        authorization_reference=request.authorization_reference,
+        arguments={},
     )
+    decision = evaluate_action(action, NEXTCLOUD_R1_TARGET)
     assert decision.allowed is True
     assert decision.mutating is True
     assert resolve_operation(request).argv == (
