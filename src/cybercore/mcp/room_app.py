@@ -45,6 +45,8 @@ class RoomAppBackend(Protocol):
 
     def get_runtime_status(self) -> Mapping[str, Any]: ...
 
+    def invoke_tool(self, *, tool_name: str, arguments: Mapping[str, Any]) -> Mapping[str, Any]: ...
+
 
 ROOM_TOOLS = (
     "cyberdjs.room.capabilities",
@@ -53,6 +55,7 @@ ROOM_TOOLS = (
     "cyberdjs.room.read",
     "cyberdjs.room.wait",
     "cyberdjs.room.status",
+    "cyberdjs.room.nextcloud_r1_offhost_transfer",
 )
 
 
@@ -181,6 +184,35 @@ def build_room_app_server(
                 "ok": True,
                 "request_id": rid,
                 "runtime": dict(communication.get_runtime_status()),
+            },
+        )
+
+    @server.tool(name="cyberdjs.room.nextcloud_r1_offhost_transfer")
+    async def nextcloud_r1_offhost_transfer(
+        operation_id: str,
+        plan_id: str,
+        plan_revision: str,
+        authorization_reference: str,
+    ) -> dict[str, object]:
+        return await _invoke(
+            "cyberdjs.room.nextcloud_r1_offhost_transfer",
+            lambda rid: {
+                "ok": True,
+                "request_id": rid,
+                "receipt": dict(
+                    communication.invoke_tool(
+                        tool_name=NEXTCLOUD_R1_TOOL,
+                        arguments={
+                            "operation_id": _bounded_text(operation_id, name="operation_id"),
+                            "plan_id": _bounded_text(plan_id, name="plan_id"),
+                            "plan_revision": _bounded_text(plan_revision, name="plan_revision"),
+                            "authorization_reference": _bounded_text(
+                                authorization_reference,
+                                name="authorization_reference",
+                            ),
+                        },
+                    )
+                ),
             },
         )
 
