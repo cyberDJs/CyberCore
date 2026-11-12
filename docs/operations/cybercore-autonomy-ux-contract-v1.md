@@ -31,11 +31,11 @@ Use plain language alongside the engineering term. Link PR/commit/check runs; ne
 
 | Class | Default | Examples | Stop/approval |
 |---|---|---|---|
-| A0 Observe | autonomous | read current HEAD/base, compare drift, inspect logs, reviews, workflow status and docs | none |
+| A0 Observe | autonomous only for sanitized non-secret evidence | read current HEAD/base, compare drift, inspect public/sanitized logs, reviews, workflow status and docs | secret-value access, credential-bearing logs or disclosure are A4; never ingest secret bytes |
 | A1 Prepare | autonomous in user-approved scope | root-cause analysis, synthetic tests, isolated plans, evidence, draft proposal | do not pretend preparation is execution |
 | A2 Scoped repair | only within already approved work, permissions and budgets | minimal fix in non-canonical branch, add tests, run checks, open Draft PR, document results | re-check HEAD before *every* write; no scope expansion |
-| A3 Promotion | explicit operator authorization | merge PR, branch protection changes, staging/prod apply, external write with operational impact | exact SHA + independent checks + human approval |
-| A4 Protected | no standing approval | secrets/ACL/credential mutation, deletion, force push, production deployment | stop; separate informed authorization |
+| A3 Promotion | explicit operator authorization | merge PR, branch protection changes, scoped staging apply or external operational write | exact SHA, independent checks and action-bound human approval; production deployment is NEVER A3 |
+| A4 Protected | no standing approval | secret access/reading/disclosure, credentials/ACL mutation, deletion, force push, ANY production deployment | STOP; separate informed authorization. Production deployment is unavailable in current v0 authority, even after ordinary A3 approval; needs a separately reviewed production MOP, backup/restore proof and effect verification |
 
 Approval is **scope- and identity-bound**, not inferred from "pokračuj" after a protected gate. Existing security and CASER policies take precedence. An autonomous monitor is **read-only** unless a separate explicitly authorized action is in scope. A Draft PR is not a release.
 
@@ -43,7 +43,7 @@ Approval is **scope- and identity-bound**, not inferred from "pokračuj" after a
 
 1. **Reality refresh.** Establish latest `main`, relevant PR HEAD/base, current branch state, active parallel work and trustworthy CI/review evidence; deduplicate existing efforts.
 2. **Pick one highest-value next step.** Prefer removal of an actual failing gate over more review-request comments or speculative new PRs.
-3. **Dual preflight** for writes: scope, authority, expected diff, rollback, drift, ownership/locks, test path and independent verifier.
+3. **Dual preflight** for writes: scope, authority, expected diff, rollback, drift, ownership/locks, test path and independent verifier. A detected HEAD/base/SoT change means `REPLAN_REQUIRED`: abort the write, reconcile competing ownership and refresh the plan plus any identity-bound approval. A stale preflight cannot be reused. GitHub content-blob SHA guards updates; read-before-write alone does not create an atomic cross-worker lease.
 4. **Do a bounded chunk.** Prefer a complete, reviewable repair or verification result instead of fragmented "done one line" updates. Maximum three failed repair attempts per confirmed cause.
 5. **Exact-head gate**: Python test matrix, Ruff/quality, package, CodeQL, real pinned CyberHIVE contract where applicable, independent code/security review and unresolved thread checks. These are distinct statuses.
 6. **Effect check.** Confirm the actual new branch SHA and PR state from a second read. After merges, verify `main` SHA and **main-push** checks separately; CI connector returning PR-only runs cannot prove main-push success.
@@ -56,7 +56,7 @@ Approval is **scope- and identity-bound**, not inferred from "pokračuj" after a
 **Periodic observation:** existing ChatGPT automation "CyberCore živý checkpoint" checks hourly (Europe/Prague) and alerts **only for a material change**. Its existence is a scheduler, not a permanent agent process, and cannot guarantee an instant notification at event time. In-chat progress is emitted when material evidence is found; avoid repetitive generic updates. Do not duplicate existing CyberHIVE weekly digest.
 
 **Severity routing:**
-- **Urgent:** security P1, production risk, data loss, unexpected mutation — notify with exact evidence and preserve/stop writes; no unilateral live mitigation.
+- **Urgent:** security P1, production risk, data loss, unexpected mutation, secret access request — notify with sanitized exact evidence and preserve/stop writes; no unilateral live mitigation or sensitive log retrieval.
 - **Actionable:** red CI, CodeQL alerts, merge conflict, review P2, drift — apply authorized scoped fix or report bounded blocker.
 - **FYI:** green check, ordinary code-review receipts or state unchanged — aggregate, don't spam.
 
