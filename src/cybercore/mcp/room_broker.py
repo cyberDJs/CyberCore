@@ -73,6 +73,8 @@ class RoomBackend(Protocol):
 
     def get_runtime_status(self) -> Mapping[str, Any]: ...
 
+    def invoke_tool(self, *, tool_name: str, arguments: Mapping[str, Any]) -> Mapping[str, Any]: ...
+
 
 class _IdentityUnixServer(socketserver.ThreadingUnixStreamServer):
     daemon_threads = True
@@ -149,6 +151,14 @@ def _dispatch(
     if method == "runtime_status":
         with ledger_lock:
             return dict(backend.get_runtime_status())
+    if method == "invoke_tool":
+        with ledger_lock:
+            return dict(
+                backend.invoke_tool(
+                    tool_name=args["tool_name"],
+                    arguments=args.get("arguments") or {},
+                )
+            )
     raise ValueError("unsupported broker method")
 
 
@@ -230,12 +240,21 @@ def build_cyberdjs_room_broker_runtime(
     socket_dir: str | Path,
     room_id: str = "cyberdjs-main",
     slack_webhook_url: str | None = None,
+    tool_handlers_by_identity: Mapping[
+        str,
+        Mapping[str, Callable[[Mapping[str, Any]], Mapping[str, Any]]],
+    ]
+    | None = None,
 ) -> CyberDJSRoomBrokerRuntime:
     room_id = room_id.strip()
     if not room_id:
         raise ValueError("room_id must not be empty")
 
     base = build_local_runtime(log_path)
+    if tool_handlers_by_identity is not None:
+        unknown_identities = frozenset(tool_handlers_by_identity) - ALLOWED_CHATGPT_IDENTITIES
+        if unknown_identities:
+            raise ValueError("tool handlers contain an unknown ChatGPT identity")
     sinks: dict[str, Any] = {}
     if slack_webhook_url:
         sink = SlackIncomingWebhookWakeSink(slack_webhook_url)
@@ -273,6 +292,11 @@ def build_cyberdjs_room_broker_runtime(
             coordinator=coordinator,
             actor=actor,
             runtime_status=runtime_status,
+            tool_handlers=(
+                tool_handlers_by_identity.get(identity, {})
+                if tool_handlers_by_identity is not None
+                else {}
+            ),
         )
 
     socket_root = Path(socket_dir)
