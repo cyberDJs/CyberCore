@@ -41,7 +41,7 @@ The repository does not contain or mint the credential. Credential provisioning/
 - strict host-key checking;
 - transfer identity is dedicated and restricted;
 - raw authorization reference is never returned in receipts;
-- mutation remains deny-all without a real authorization verifier;
+- mutation remains deny-all without two valid short-lived exact approval manifests (client and server);
 - MCP capability is absent unless runtime composition explicitly injects the handler;
 - Eimy and Johnny Moderator do not receive the handler by default;
 - the governed Johnny Work broker socket requires an explicit OS peer UID and rejects other Unix peers before request parsing;
@@ -57,7 +57,11 @@ The repository does not contain or mint the credential. Credential provisioning/
 
 ## Consequences
 
-The design adds a second fixed governed execution target and a small target-specific deployment candidate. It does not deploy anything. A future deployment still needs a real authorization verifier, restricted credential provisioning, exact-host verification, and independent post-deployment tests.
+The design adds a second fixed governed execution target, a short-lived file-bound exact approval
+verifier, and a small target-specific deployment candidate. It does not deploy anything. A future
+deployment still needs fresh approval provenance, matching root-owned manifests on both sides,
+restricted credential provisioning, exact-host verification, peer-UID/socket-ACL verification, and
+independent post-deployment tests.
 
 
 ## Additional deployment trust gates
@@ -77,3 +81,24 @@ The source checksum is also external evidence: deployment must obtain the SHA-25
 source archive independently before transfer and place only that non-secret digest into the fixed
 `source_archive.sha256` file. Target-only hashing is insufficient evidence of source-to-target
 identity.
+
+
+## Exact approval binding
+
+The #113 candidate implements a file-bound verifier rather than treating a non-empty approval
+reference as authority. The manifest stores only the SHA-256 of the raw approval reference and the
+exact governed tuple. The verifier rejects:
+
+- missing or extra schema fields;
+- wrong operation/target/plan/revision;
+- approval-reference digest mismatch;
+- symlinked or non-regular manifest files;
+- unexpected owner or group/world-writable file/directory;
+- non-UTC timestamps;
+- expired/not-yet-valid approvals;
+- validity windows longer than one hour.
+
+The server entrypoint selects this verifier only for the fixed `cyberskills-vps` target. The
+existing `tasks.cyberdjs.org` target retains deny-all behavior. Client composition uses the same
+verifier contract from the fixed Johnny Work approval path. The repository contains no live
+approval manifest, so this Draft PR itself grants no execution authority.

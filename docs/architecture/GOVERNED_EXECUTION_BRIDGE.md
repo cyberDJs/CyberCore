@@ -229,3 +229,15 @@ restricted and revoked under a deployment approval.
 
 The original Vikunja target and operation family remain target-bound and cannot invoke the
 Nextcloud operation family.
+
+
+### #113 authorization specialization
+
+The #113 candidate keeps the generic bridge deny-all by default but adds a concrete
+`FileBoundExecutionAuthorizationVerifier` for the fixed Nextcloud target. A live approval is not
+embedded in the repository. Deployment must materialize matching root-owned short-lived manifests
+on the Johnny Work/client side and CyberSkills/server side after an explicit exact approval.
+
+The verifier binds SHA-256 of the authorization reference to operation ID, operation, target, plan
+ID and plan revision, with a maximum one-hour UTC validity window. The server dispatcher chooses
+this verifier only for `cyberskills-vps`; the original tasks/Vikunja target remains deny-all.
