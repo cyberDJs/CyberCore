@@ -31,14 +31,12 @@ def test_source_exporter_is_forced_command_only_and_self_revoking() -> None:
     text = SOURCE.read_text()
     assert (
         'ARCHIVE = Path("/home/eimyherr/softaculous_backups/'
-        'nextcloud.586_28528.2026-10-07_18-30-01.tar.gz")'
-        in text
+        'nextcloud.586_28528.2026-10-07_18-30-01.tar.gz")' in text
     )
     assert 'KEY_MARKER = "cc-r1-113-temp"' in text
     assert (
         'EXPECTED_FORCED_COMMAND = "/home/eimyherr/.local/libexec/'
-        'cybercore-nextcloud-r1-source-export"'
-        in text
+        'cybercore-nextcloud-r1-source-export"' in text
     )
     assert 'os.environ.get("SSH_ORIGINAL_COMMAND", "")' in text
     assert 'mode == "metadata"' in text
