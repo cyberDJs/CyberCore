@@ -19,3 +19,6 @@
 - production_restore: NOT AUTHORIZED
 - independent_verification: pending exact-HEAD CI/CodeQL and review
 - effect_verification: runtime effect intentionally not claimed because no deployment occurs
+
+- security_followup: transfer now requires independently observed source SHA-256 evidence before it can atomically publish the off-host archive
+- identity_followup: mutating MCP enablement is deployment-blocked until Johnny Work frontend isolation is proven against same-uid cross-socket access, with separate Unix identities as the fallback

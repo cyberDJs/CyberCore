@@ -36,6 +36,7 @@ def _load_receipt() -> dict[str, object]:
         "archive_name",
         "size_bytes",
         "sha256",
+        "source_checksum_verified",
         "completed_at",
         "credential_kind",
         "secret_values_recorded",
@@ -46,6 +47,8 @@ def _load_receipt() -> dict[str, object]:
         raise RuntimeError("transfer receipt identity does not match issue #113")
     if raw["archive_name"] != ARCHIVE_NAME or raw["size_bytes"] != EXPECTED_SIZE_BYTES:
         raise RuntimeError("transfer receipt does not match the fixed archive")
+    if raw["source_checksum_verified"] is not True:
+        raise RuntimeError("transfer receipt does not prove source checksum comparison")
     if raw["secret_values_recorded"] is not False:
         raise RuntimeError("transfer receipt unexpectedly records secret material")
     return raw
