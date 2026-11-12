@@ -120,26 +120,45 @@ def _stream_archive(expected_size: int, expected_digest: str) -> tuple[int, str]
             list(_ssh_argv("stream")),
             shell=False,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
         if process.stdout is None:
             raise TransferError("source stream stdout is unavailable")
+        deadline = time.monotonic() + STREAM_TIMEOUT_SECONDS
         while True:
-            chunk = process.stdout.read(CHUNK_BYTES)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                process.kill()
+                process.wait()
+                raise TransferError("source stream timed out")
+            readable, _, _ = select.select(
+                [process.stdout.fileno()],
+                [],
+                [],
+                min(remaining, 5.0),
+            )
+            if not readable:
+                if process.poll() is not None:
+                    break
+                continue
+            chunk = os.read(process.stdout.fileno(), CHUNK_BYTES)
             if not chunk:
                 break
-            os.write(fd, chunk)
+            view = memoryview(chunk)
+            while view:
+                consumed = os.write(fd, view)
+                view = view[consumed:]
             digest.update(chunk)
             written += len(chunk)
             if written > expected_size:
                 raise TransferError("source stream exceeded declared size")
         os.fsync(fd)
         try:
-            return_code = process.wait(timeout=STREAM_TIMEOUT_SECONDS)
+            return_code = process.wait(timeout=15)
         except subprocess.TimeoutExpired as exc:
             process.kill()
             process.wait()
-            raise TransferError("source stream timed out") from exc
+            raise TransferError("source stream did not exit after EOF") from exc
         if return_code != 0:
             raise TransferError("source stream failed or source key revocation failed")
         actual_digest = digest.hexdigest()
@@ -163,6 +182,8 @@ def _remove_target_credential() -> None:
             continue
         if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
             raise TransferError("credential path is not a regular file")
+        if info.st_uid != os.geteuid():
+            raise TransferError("credential path has unexpected owner")
         path.unlink()
 
 
