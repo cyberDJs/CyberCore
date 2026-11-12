@@ -1461,3 +1461,49 @@ def test_consolidated_bridge_rejects_monotonic_regression_after_dispatch(monkeyp
         )
     key = f"{task.actor}:{task.task_id}:{task.correlation_id}"
     assert durable.claim_once(key) is False
+
+def test_replay_monotonic_sample_occurs_under_guard_lock(monkeypatch) -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=3)
+    samples = []
+
+    def sample() -> float:
+        # Sampling outside this lock can invert high-water under thread preemption.
+        assert guard._lock.locked()
+        samples.append(100.0)
+        return 100.0
+
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", sample)
+    assert guard.claim_once("locked", expires_at=now + timedelta(minutes=2), now=lambda: now)
+    assert samples == [100.0]
+
+
+def test_concurrent_valid_claims_do_not_create_false_monotonic_fence(monkeypatch) -> None:
+    now = datetime.now(timezone.utc)
+    guard = hive_bridge._ExpiringProcessReplayGuard(max_entries=4)
+    start = Barrier(3)
+    samples = [100.0]
+
+    def sample() -> float:
+        assert guard._lock.locked()
+        samples[0] += 1.0
+        return samples[0]
+
+    monkeypatch.setattr(hive_bridge, "_replay_monotonic", sample)
+
+    def claim(key: str) -> bool:
+        start.wait()
+        return guard.claim_once(
+            key, expires_at=now + timedelta(minutes=2), now=lambda: now
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(claim, "concurrent-a")
+        second = pool.submit(claim, "concurrent-b")
+        start.wait()
+        assert [first.result(), second.result()] == [True, True]
+
+    assert guard.claim_once(
+        "concurrent-c", expires_at=now + timedelta(minutes=2), now=lambda: now
+    )
+    assert not guard._monotonic_rollback_detected
