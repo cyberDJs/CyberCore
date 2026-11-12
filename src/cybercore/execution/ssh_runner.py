@@ -14,6 +14,7 @@ from cybercore.execution.models import ExecutionReceipt, ExecutionTarget, Govern
 from cybercore.execution.policy import evaluate_action
 from cybercore.execution.receipt import build_receipt, utc_now
 from cybercore.execution.server.inventory import validate_inventory_payload
+from cybercore.execution.server.operations import MAX_SERVER_OPERATION_TIMEOUT_SECONDS
 from cybercore.execution.server.protocol import PROTOCOL_VERSION
 
 
@@ -22,8 +23,8 @@ class ExecutionBlockedError(RuntimeError):
 
 
 RunCallable = Callable[..., subprocess.CompletedProcess[bytes]]
-TRANSPORT_TIMEOUT_SECONDS = 180
-_INVENTORY_RECEIPT_KEYS = frozenset(
+TRANSPORT_TIMEOUT_SECONDS = MAX_SERVER_OPERATION_TIMEOUT_SECONDS + 30
+_SERVER_RECEIPT_KEYS = frozenset(
     {
         "operation_id",
         "operation",
@@ -38,7 +39,6 @@ _INVENTORY_RECEIPT_KEYS = frozenset(
         "stderr_sha256",
         "status",
         "mutation_possible",
-        "result",
         "secret_values_recorded",
     }
 )
@@ -106,22 +106,28 @@ def _require_server_receipt_timestamp(value: object, label: str) -> datetime:
     return parsed
 
 
-def _inventory_result_from_server_response(
+def _server_result_from_response(
     action: GovernedAction,
     stdout: bytes,
-) -> dict[str, object]:
+    *,
+    expected_mutating: bool,
+) -> dict[str, object] | None:
     try:
         payload = json.loads(stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError("server response is not valid inventory JSON") from exc
+        raise ValueError("server response is not valid JSON") from exc
     if not isinstance(payload, dict):
         raise ValueError("server response is not an object")
-    if frozenset(payload) != _INVENTORY_RECEIPT_KEYS:
+
+    expected_keys = _SERVER_RECEIPT_KEYS
+    if action.operation == "system.inventory":
+        expected_keys = expected_keys | {"result"}
+    if frozenset(payload) != expected_keys:
         raise ValueError("server response fields do not match the exact receipt schema")
 
     exit_code = payload["exit_code"]
     if isinstance(exit_code, bool) or not isinstance(exit_code, int) or exit_code != 0:
-        raise ValueError("server response exit_code is inconsistent with successful inventory")
+        raise ValueError("server response exit_code is inconsistent with successful execution")
 
     started_at = _require_server_receipt_timestamp(payload["started_at"], "started_at")
     completed_at = _require_server_receipt_timestamp(payload["completed_at"], "completed_at")
@@ -146,13 +152,16 @@ def _inventory_result_from_server_response(
             action.authorization_reference.encode("utf-8")
         ).hexdigest(),
         "status": "EXECUTED",
-        "mutation_possible": False,
+        "mutation_possible": expected_mutating,
         "secret_values_recorded": False,
     }
     for key, expected_value in expected.items():
         if payload.get(key) != expected_value:
             raise ValueError(f"server response binding mismatch: {key}")
-    return validate_inventory_payload(payload.get("result"))
+
+    if action.operation == "system.inventory":
+        return validate_inventory_payload(payload.get("result"))
+    return None
 
 
 def execute_action(
@@ -210,12 +219,16 @@ def execute_action(
     stderr = completed.stderr if isinstance(completed.stderr, bytes) else b""
     exit_code = int(completed.returncode)
     result = None
-    if action.operation == "system.inventory" and exit_code == 0:
+    if exit_code == 0:
         try:
-            result = _inventory_result_from_server_response(action, stdout)
+            result = _server_result_from_response(
+                action,
+                stdout,
+                expected_mutating=decision.mutating,
+            )
         except ValueError:
             exit_code = 65
-            stderr += b"\ncybercore-exec structured inventory response failed validation"
+            stderr += b"\ncybercore-exec structured server receipt failed validation"
 
     return build_receipt(
         action,
