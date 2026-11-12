@@ -51,8 +51,16 @@ allowed identity for new MCP sessions after the three-participant migration.
 - `cyberdjs.room.read`
 - `cyberdjs.room.wait`
 - `cyberdjs.room.status`
+- `cyberdjs.room.nextcloud_r1_offhost_transfer` — proposed governed #113 operation
 
 `cyberdjs.room.identity` also reports `participant_role`.
+
+The #113 transfer tool is an explicit non-generic execution surface. It accepts
+only operation/plan/revision/authorization binding fields. It never accepts a
+host, path, port, command or credential. The tool fails closed unless the broker
+runtime injects an identity-scoped handler backed by a trusted
+`ExecutionAuthorizationVerifier`; repository support alone does not activate
+remote execution.
 
 `room.wait` is a bounded long-poll helper for an already-active ChatGPT turn. It is not the sleeping
 AI wake mechanism.
@@ -90,6 +98,10 @@ three identity sockets with mode `0600`.
 
 The installable `cyberdjs-room-mcp` frontend does **not** import or require `cyberhive_core`;
 it only connects to its identity-bound broker socket.
+
+Governed tool handlers are injected on the broker side per ChatGPT identity.
+An identity with no configured handler cannot execute the #113 operation even
+though the frontend protocol knows the tool name.
 
 ## MCP frontend configuration
 
