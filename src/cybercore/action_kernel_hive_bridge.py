@@ -65,27 +65,51 @@ class _ExpiringProcessReplayGuard:
         self._max_seen_monotonic: float | None = None
         self._monotonic_rollback_detected = False
         # Issued-receipt checks must survive failed bridge-entry retries.
-        self._issued_monotonic_high_water: float | None = None
         self._issued_clock_failed = False
         self._lock = Lock()
 
-    def check_issued_clock(self, *, floor: float, deadline: float, previous: float) -> float:
+    def _sample_clock_locked(
+        self, clock: Callable[[], float], *, floor: float, previous: float
+    ) -> float:
+        # Every production alias observes the same clock domain. Callers hold
+        # this lock before sampling, including budget and replay pruning reads.
+        if self._issued_clock_failed or self._monotonic_rollback_detected:
+            raise PermissionError("Task monotonic authorization expired or regressed")
+        try:
+            sample = clock()
+            valid = (
+                not isinstance(sample, bool)
+                and isinstance(sample, (int, float))
+                and isfinite(sample)
+                and sample >= floor
+                and sample >= previous
+                and (self._max_seen_monotonic is None or sample >= self._max_seen_monotonic)
+            )
+        except Exception as exc:
+            self._issued_clock_failed = True
+            self._monotonic_rollback_detected = True
+            raise PermissionError("Task monotonic clock unavailable") from exc
+        if not valid:
+            self._issued_clock_failed = True
+            self._monotonic_rollback_detected = True
+            raise PermissionError("Task monotonic authorization expired or regressed")
+        self._max_seen_monotonic = sample
+        return sample
+
+    def check_issued_clock(
+        self,
+        *,
+        floor: float,
+        deadline: float,
+        previous: float,
+        clock: Callable[[], float] | None = None,
+    ) -> float:
         # Shared process guard: rejecting a clock regression cannot be undone
         # by retrying an unclaimed receipt after the clock appears to recover.
         with self._lock:
-            if self._issued_clock_failed:
-                raise PermissionError("Task monotonic authorization expired or regressed")
-            sample = _issued_monotonic()
-            if (
-                not isfinite(sample)
-                or sample < floor
-                or sample < previous
-                or self._issued_monotonic_high_water is not None
-                and sample < self._issued_monotonic_high_water
-            ):
-                self._issued_clock_failed = True
-                raise PermissionError("Task monotonic authorization expired or regressed")
-            self._issued_monotonic_high_water = sample
+            sample = self._sample_clock_locked(
+                _issued_monotonic if clock is None else clock, floor=floor, previous=previous
+            )
             if sample >= deadline:
                 raise PermissionError("Task monotonic authorization expired or regressed")
             return sample
@@ -114,17 +138,12 @@ class _ExpiringProcessReplayGuard:
             # Sample under the same lock as replay pruning and UTC sampling.
             # Once a regression is detected, fail closed for the lifetime of
             # the process guard; capacity/pruning cannot restore authority.
-            if self._monotonic_rollback_detected:
-                raise PermissionError("Process replay guard monotonic rollback detected")
-            process_now = _replay_monotonic()
-            if (
-                not isfinite(process_now)
-                or self._max_seen_monotonic is not None
-                and process_now < self._max_seen_monotonic
-            ):
-                self._monotonic_rollback_detected = True
-                raise PermissionError("Process replay guard monotonic rollback detected")
-            self._max_seen_monotonic = process_now
+            try:
+                process_now = self._sample_clock_locked(
+                    _replay_monotonic, floor=float("-inf"), previous=float("-inf")
+                )
+            except PermissionError as exc:
+                raise PermissionError("Process replay guard monotonic rollback detected") from exc
             # UTC jumps are not proof that a claimed authorization elapsed.
             # Retain every claim for at least the maximum trusted lifetime
             # on an independent monotonic clock before pruning by UTC.
@@ -288,7 +307,7 @@ def run_local_hive_dry_run(
     # kernel deadline is never restarted after audit, replay claim or dispatch.
     last_issued_sample = floor
 
-    def assert_issued_monotonic(stage: str) -> None:
+    def assert_issued_monotonic(stage: str, *, clock: Callable[[], float] | None = None) -> float:
         nonlocal last_issued_sample
         if issued_pid != getpid():
             raise PermissionError(f"Task authorization process changed {stage}")
@@ -296,12 +315,13 @@ def run_local_hive_dry_run(
         # the legacy bridge wall-clock budget remains independently testable.
         try:
             last_issued_sample = _PROCESS_REPLAY_GUARD.check_issued_clock(
-                floor=floor, deadline=issued_deadline, previous=last_issued_sample
+                floor=floor, deadline=issued_deadline, previous=last_issued_sample, clock=clock
             )
         except PermissionError as exc:
             raise PermissionError(
                 f"Task monotonic authorization expired or regressed {stage}"
             ) from exc
+        return last_issued_sample
 
     assert_issued_monotonic("at bridge entry")
 
@@ -309,10 +329,12 @@ def run_local_hive_dry_run(
     # Bracket the monotonic anchor with UTC checks. Use the later UTC sample
     # so a rollback between samples cannot inflate the remaining interval.
     # The earlier monotonic bound includes sampling overhead conservatively.
-    sampling_started = monotonic()
+    sampling_started = assert_issued_monotonic("during initial sampling", clock=monotonic)
     utc_initial = _assert_not_expired(task)
     utc_before = _assert_not_expired(task)
-    authorization_started = monotonic()
+    authorization_started = assert_issued_monotonic(
+        "during authorization sampling", clock=monotonic
+    )
     utc_after = _assert_not_expired(task)
     # A pre-anchor pause followed by UTC rollback is invisible to monotonic
     # elapsed time; reject decreasing UTC samples instead of granting slack.
@@ -351,7 +373,10 @@ def run_local_hive_dry_run(
     # boundary so shaping/import/request construction cannot extend validity.
     _assert_not_expired(task)
     assert_issued_monotonic("before replay claim")
-    if monotonic() - authorization_started >= remaining_seconds:
+    if (
+        assert_issued_monotonic("before replay claim", clock=monotonic) - authorization_started
+        >= remaining_seconds
+    ):
         raise PermissionError("Task authorization expired before replay claim")
 
     key = f"{trusted_actor}:{task.task_id}:{task.correlation_id}"
@@ -361,7 +386,10 @@ def run_local_hive_dry_run(
     # Claims remain consumed when it expires; do not dispatch or restart it.
     _assert_not_expired(task)
     assert_issued_monotonic("during replay claim")
-    if monotonic() - authorization_started >= remaining_seconds:
+    if (
+        assert_issued_monotonic("during replay claim", clock=monotonic) - authorization_started
+        >= remaining_seconds
+    ):
         raise PermissionError("Task authorization expired during replay claim")
 
     # Both claims intentionally remain consumed after this boundary, including
@@ -375,7 +403,10 @@ def run_local_hive_dry_run(
     _assert_not_expired(task)
     assert_issued_monotonic("during dispatch")
     # A backward wall-clock correction must not extend in-flight authorization.
-    if monotonic() - authorization_started >= remaining_seconds:
+    if (
+        assert_issued_monotonic("during dispatch", clock=monotonic) - authorization_started
+        >= remaining_seconds
+    ):
         raise PermissionError("Task authorization expired during dispatch")
 
     if (

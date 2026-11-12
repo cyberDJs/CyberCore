@@ -173,3 +173,20 @@ before promotion. The existing source branches and main remain untouched.
 Reconciliation with merged PR #157 keeps its kernel clock latch implementation
 and regression intact; this repair adds bridge-issued clock failure fencing and
 retains the additional kernel nonfinite recovery coverage.
+
+### Every bridge monotonic observation uses one sticky process authority
+
+Budget anchors and elapsed-budget checks, issued-deadline checks, and replay
+pruning now sample their production monotonic aliases under the same process
+guard lock and share a high-water and permanent failure state. A nonfinite,
+regressing, malformed or failed clock observation cannot be hidden by a later
+plausible reading, even if it occurs before a durable replay claim. Budget
+arithmetic therefore never consumes an unchecked NaN/infinity. Replacing the
+caller-provided durable guard does not reset the bridge-owned clock fence.
+
+An otherwise valid observation past one receipt's absolute deadline rejects
+that receipt without poisoning later valid grants. Clock failure deliberately
+revokes process bridge authority; this availability tradeoff has no automatic
+reset. Delayed synchronous effects still cannot be cancelled or undone by
+these result-acceptance checks. Initial UTC trust and durable shared replay
+storage remain separate requirements.
