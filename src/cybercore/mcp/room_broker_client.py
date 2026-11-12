@@ -123,3 +123,15 @@ class BrokerRoomBackend:
         if not isinstance(result, dict):
             raise RuntimeError("broker returned malformed runtime status")
         return result
+
+    def invoke_tool(self, *, tool_name: str, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
+        result = self._call(
+            "invoke_tool",
+            {
+                "tool_name": tool_name,
+                "arguments": dict(arguments),
+            },
+        )
+        if not isinstance(result, dict):
+            raise RuntimeError("broker returned malformed tool result")
+        return result
