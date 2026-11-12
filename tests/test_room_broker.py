@@ -59,6 +59,15 @@ class FakeBackend:
             "writer_model": "single-broker",
         }
 
+    def invoke_tool(self, *, tool_name, arguments):
+        if tool_name != "governed.nextcloud_r1_offhost_transfer":
+            raise PermissionError("tool is not allowlisted")
+        return {
+            "tool_name": tool_name,
+            "operation_id": arguments["operation_id"],
+            "secret_values_recorded": False,
+        }
+
 
 def test_broker_socket_fixes_identity_and_keeps_one_runtime_owner(tmp_path: Path):
     johnny = FakeBackend("chatgpt:johnny-work")
@@ -93,6 +102,17 @@ def test_broker_socket_fixes_identity_and_keeps_one_runtime_owner(tmp_path: Path
         assert len(johnny.posts) == 1
         assert len(eimy.posts) == 0
         assert johnny_client.get_runtime_status()["writer_model"] == "single-broker"
+        tool_result = johnny_client.invoke_tool(
+            tool_name="governed.nextcloud_r1_offhost_transfer",
+            arguments={
+                "operation_id": "NC-R1-113",
+                "plan_id": "#113",
+                "plan_revision": "draft-1",
+                "authorization_reference": "APPROVE-113",
+            },
+        )
+        assert tool_result["operation_id"] == "NC-R1-113"
+        assert tool_result["secret_values_recorded"] is False
     finally:
         broker.stop()
 
