@@ -47,7 +47,7 @@ def _matching_key_line(line: str) -> bool:
     )
 
 
-def _revoke_key() -> None:
+def _revoke_key(*, allow_absent: bool = False) -> None:
     info = AUTHORIZED_KEYS.lstat()
     if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
         raise SourceExportError("authorized_keys is not a regular file")
@@ -55,6 +55,8 @@ def _revoke_key() -> None:
         raise SourceExportError("authorized_keys owner mismatch")
     lines = AUTHORIZED_KEYS.read_text(encoding="utf-8").splitlines(keepends=True)
     matching = [line for line in lines if _matching_key_line(line)]
+    if not matching and allow_absent:
+        return
     if len(matching) != 1:
         raise SourceExportError("temporary key marker is not unique")
     remaining = [line for line in lines if not _matching_key_line(line)]
@@ -120,7 +122,7 @@ def main() -> int:
         if mode == "stream":
             return _stream()
         if mode == "revoke":
-            _revoke_key()
+            _revoke_key(allow_absent=True)
             return 0
         return 2
     except (OSError, SourceExportError):
