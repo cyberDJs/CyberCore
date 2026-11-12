@@ -21,9 +21,7 @@ from cybercore.wake.gateway import WakeAwareEventGateway
 from cybercore.wake.slack import SlackIncomingWebhookWakeSink
 
 JOHNNY_WORK_IDENTITY = "chatgpt:johnny-work"
-ALLOWED_CHATGPT_IDENTITIES = frozenset(
-    {JOHNNY_WORK_IDENTITY, "chatgpt:johnny-mod", "chatgpt:eimy"}
-)
+ALLOWED_CHATGPT_IDENTITIES = frozenset({JOHNNY_WORK_IDENTITY, "chatgpt:johnny-mod", "chatgpt:eimy"})
 DEFAULT_DISPLAY_NAMES = {
     "chatgpt:johnny-work": "Johnny Work AI",
     "chatgpt:johnny-mod": "Johnny Moderator",
