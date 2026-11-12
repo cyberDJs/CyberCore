@@ -15,12 +15,14 @@ from cybercore.communication.contracts import TrustedActor
 from cybercore.communication.room_coordinator import RoomCoordinator
 from cybercore.cyberhive_runtime import LocalMultiAgentRuntime, build_local_runtime
 from cybercore.mcp.backend import RoomCommunicationBackend
+from cybercore.mcp.nextcloud_r1_tool import TOOL_NAME as NEXTCLOUD_R1_HANDLER_NAME
 from cybercore.wake.dispatcher import WakeDispatcher
 from cybercore.wake.gateway import WakeAwareEventGateway
 from cybercore.wake.slack import SlackIncomingWebhookWakeSink
 
+JOHNNY_WORK_IDENTITY = "chatgpt:johnny-work"
 ALLOWED_CHATGPT_IDENTITIES = frozenset(
-    {"chatgpt:johnny-work", "chatgpt:johnny-mod", "chatgpt:eimy"}
+    {JOHNNY_WORK_IDENTITY, "chatgpt:johnny-mod", "chatgpt:eimy"}
 )
 DEFAULT_DISPLAY_NAMES = {
     "chatgpt:johnny-work": "Johnny Work AI",
@@ -154,13 +156,19 @@ def _dispatch(
         with ledger_lock:
             return dict(backend.get_runtime_status())
     if method == "invoke_tool":
+        tool_name = args.get("tool_name")
+        arguments = args.get("arguments")
+        if not isinstance(tool_name, str) or not tool_name.strip():
+            raise ValueError("broker governed tool name must be a non-empty string")
+        if not isinstance(arguments, dict):
+            raise ValueError("broker governed tool arguments must be an object")
         invoke = getattr(backend, "invoke_tool", None)
         if not callable(invoke):
             raise PermissionError("broker backend does not expose governed tools")
         with ledger_lock:
             result = invoke(
-                tool_name=args["tool_name"],
-                arguments=args.get("arguments") or {},
+                tool_name=tool_name,
+                arguments=arguments,
             )
         if not isinstance(result, Mapping):
             raise RuntimeError("broker governed tool returned a malformed result")
@@ -256,6 +264,9 @@ def build_cyberdjs_room_broker_runtime(
     unknown_identities = set(configured_handlers) - ALLOWED_CHATGPT_IDENTITIES
     if unknown_identities:
         raise ValueError("tool handlers include an unknown ChatGPT identity")
+    for identity, handlers in configured_handlers.items():
+        if NEXTCLOUD_R1_HANDLER_NAME in handlers and identity != JOHNNY_WORK_IDENTITY:
+            raise ValueError("Nextcloud R1 governed handler is restricted to Johnny Work identity")
 
     base = build_local_runtime(log_path)
     sinks: dict[str, Any] = {}

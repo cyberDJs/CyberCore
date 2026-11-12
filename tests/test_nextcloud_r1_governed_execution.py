@@ -43,6 +43,8 @@ def test_policy_binds_nextcloud_operations_to_only_cyberskills_target() -> None:
 
     assert evaluate_action(_action("nextcloud.r1.offhost.verify"), NEXTCLOUD_R1_TARGET).allowed
     assert not evaluate_action(_action("nextcloud.r1.offhost.transfer"), VIKUNJA_TARGET).allowed
+    inventory = _action("system.inventory")
+    assert not evaluate_action(inventory, NEXTCLOUD_R1_TARGET).allowed
 
 
 def test_server_protocol_binds_request_to_configured_backup_target() -> None:

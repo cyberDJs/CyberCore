@@ -30,7 +30,7 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
             "/usr/bin/python3",
             "/usr/local/libexec/cybercore-exec/inventory.py",
         ),
-        target_ids=frozenset({TASKS_TARGET_ID, NEXTCLOUD_R1_TARGET_ID}),
+        target_ids=frozenset({TASKS_TARGET_ID}),
         mutating=False,
         timeout_seconds=20,
         result_kind="system_inventory",

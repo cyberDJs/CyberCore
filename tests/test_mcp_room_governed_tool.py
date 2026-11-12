@@ -8,6 +8,8 @@ from mcp import Client
 from cybercore.communication.contracts import TrustedActor
 from cybercore.mcp.nextcloud_r1_tool import TOOL_NAME as NEXTCLOUD_R1_HANDLER_NAME
 from cybercore.mcp.room_app import NEXTCLOUD_R1_MCP_TOOL, ROOM_TOOLS, build_room_app_server
+from cybercore.mcp.room_broker import build_cyberdjs_room_broker_runtime
+import pytest
 
 
 class GovernedBackend:
@@ -89,3 +91,15 @@ async def _exercise_enabled() -> None:
 
 def test_governed_tool_is_exposed_only_when_backend_explicitly_allows_it() -> None:
     asyncio.run(_exercise_enabled())
+
+
+def test_broker_rejects_nextcloud_r1_handler_for_non_johnny_identity(tmp_path) -> None:
+    handler = lambda arguments: {"ok": True}
+    with pytest.raises(ValueError, match="restricted to Johnny Work"):
+        build_cyberdjs_room_broker_runtime(
+            tmp_path / "room.jsonl",
+            socket_dir=tmp_path / "sockets",
+            tool_handlers_by_identity={
+                "chatgpt:eimy": {NEXTCLOUD_R1_HANDLER_NAME: handler},
+            },
+        )

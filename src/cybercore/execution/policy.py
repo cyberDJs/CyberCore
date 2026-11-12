@@ -23,7 +23,7 @@ _CANONICAL_TARGETS = {
 }
 
 _OPERATION_TARGET_IDS: dict[str, frozenset[str]] = {
-    "system.inventory": frozenset(_CANONICAL_TARGETS),
+    "system.inventory": frozenset({VIKUNJA_TARGET.id}),
     "vikunja.backup.install": frozenset({VIKUNJA_TARGET.id}),
     "vikunja.backup.run": frozenset({VIKUNJA_TARGET.id}),
     "vikunja.backup.status": frozenset({VIKUNJA_TARGET.id}),
