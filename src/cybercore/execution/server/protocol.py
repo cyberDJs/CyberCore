@@ -37,7 +37,12 @@ class ServerRequest:
     arguments: Mapping[str, str]
 
     @classmethod
-    def from_mapping(\n        cls,\n        value: Mapping[str, Any],\n        *,\n        expected_target_id: str = _TARGET_ID,\n    ) -> "ServerRequest":
+    def from_mapping(
+        cls,
+        value: Mapping[str, Any],
+        *,
+        expected_target_id: str = _TARGET_ID,
+    ) -> "ServerRequest":
         if frozenset(value) != _REQUIRED_KEYS:
             raise RequestValidationError("request fields do not match the exact protocol schema")
 
@@ -67,7 +72,9 @@ class ServerRequest:
             raise RequestValidationError("arguments must be an object")
         if arguments:
             raise RequestValidationError("free-form operation arguments are not supported")
-        if parsed["target_id"] != _TARGET_ID:
+        if not expected_target_id.strip():
+            raise RequestValidationError("expected server target must not be empty")
+        if parsed["target_id"] != expected_target_id:
             raise RequestValidationError("request target is not the canonical server target")
 
         return cls(version=version, arguments={}, **parsed)
