@@ -253,12 +253,12 @@ def main() -> int:
         return 1
     finally:
         if not committed:
-            if not source_stream_completed:
-                _revoke_source_key_best_effort()
-            try:
-                _remove_target_credential()
-            except (OSError, TransferError):
-                pass
+            source_revoked = source_stream_completed or _revoke_source_key_best_effort()
+            if source_revoked:
+                try:
+                    _remove_target_credential()
+                except (OSError, TransferError):
+                    pass
             try:
                 _cleanup_partial()
             except (OSError, TransferError):
