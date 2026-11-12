@@ -18,7 +18,7 @@ def test_target_transfer_is_fixed_shell_free_and_fail_closed() -> None:
     assert "os.O_EXCL" in text
     assert "os.replace(PARTIAL_ARCHIVE, TARGET_ARCHIVE)" in text
     assert "select.select(" in text
-    assert "STREAM_TIMEOUT_SECONDS = 1800" in text
+    assert "STREAM_TIMEOUT_SECONDS = 2400" in text
     assert "shell=False" in text
     assert "shell=True" not in text
     assert "bash -c" not in text
