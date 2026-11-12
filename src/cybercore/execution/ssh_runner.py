@@ -16,6 +16,8 @@ from cybercore.execution.receipt import build_receipt, utc_now
 from cybercore.execution.server.inventory import validate_inventory_payload
 from cybercore.execution.server.nextcloud_operations import (
     MAX_NEXTCLOUD_R1_OPERATION_TIMEOUT_SECONDS,
+    NEXTCLOUD_R1_TARGET_ID,
+    SUPPORTED_NEXTCLOUD_R1_OPERATIONS,
 )
 from cybercore.execution.server.operations import MAX_SERVER_OPERATION_TIMEOUT_SECONDS
 from cybercore.execution.server.protocol import PROTOCOL_VERSION
@@ -40,6 +42,24 @@ _SERVER_RECEIPT_KEYS = frozenset(
         "target_id",
         "plan_id",
         "plan_revision",
+        "authorization_reference_sha256",
+        "started_at",
+        "completed_at",
+        "exit_code",
+        "stdout_sha256",
+        "stderr_sha256",
+        "status",
+        "mutation_possible",
+        "secret_values_recorded",
+    }
+)
+_NEXTCLOUD_SAFE_RECEIPT_KEYS = frozenset(
+    {
+        "operation_id_sha256",
+        "operation",
+        "target_id",
+        "plan_id_sha256",
+        "plan_revision_sha256",
         "authorization_reference_sha256",
         "started_at",
         "completed_at",
@@ -115,6 +135,54 @@ def _require_server_receipt_timestamp(value: object, label: str) -> datetime:
     return parsed
 
 
+def _nextcloud_result_from_response(
+    action: GovernedAction,
+    payload: object,
+    *,
+    expected_mutating: bool,
+) -> None:
+    if not isinstance(payload, dict):
+        raise ValueError("server response is not an object")
+    if frozenset(payload) != _NEXTCLOUD_SAFE_RECEIPT_KEYS:
+        raise ValueError("Nextcloud server response fields do not match the exact receipt schema")
+
+    exit_code = payload["exit_code"]
+    if isinstance(exit_code, bool) or not isinstance(exit_code, int) or exit_code != 0:
+        raise ValueError("server response exit_code is inconsistent with successful execution")
+
+    started_at = _require_server_receipt_timestamp(payload["started_at"], "started_at")
+    completed_at = _require_server_receipt_timestamp(payload["completed_at"], "completed_at")
+    if completed_at < started_at:
+        raise ValueError("server response completed_at precedes started_at")
+
+    for key in (
+        "operation_id_sha256",
+        "plan_id_sha256",
+        "plan_revision_sha256",
+        "authorization_reference_sha256",
+        "stdout_sha256",
+        "stderr_sha256",
+    ):
+        _require_server_receipt_sha256(payload[key], key)
+
+    expected = {
+        "operation_id_sha256": hashlib.sha256(action.operation_id.encode("utf-8")).hexdigest(),
+        "operation": action.operation,
+        "target_id": NEXTCLOUD_R1_TARGET_ID,
+        "plan_id_sha256": hashlib.sha256(action.plan_id.encode("utf-8")).hexdigest(),
+        "plan_revision_sha256": hashlib.sha256(action.plan_revision.encode("utf-8")).hexdigest(),
+        "authorization_reference_sha256": hashlib.sha256(
+            action.authorization_reference.encode("utf-8")
+        ).hexdigest(),
+        "status": "EXECUTED",
+        "mutation_possible": expected_mutating,
+        "secret_values_recorded": False,
+    }
+    for key, expected_value in expected.items():
+        if payload.get(key) != expected_value:
+            raise ValueError(f"server response binding mismatch: {key}")
+
+
 def _server_result_from_response(
     action: GovernedAction,
     stdout: bytes,
@@ -125,6 +193,15 @@ def _server_result_from_response(
         payload = json.loads(stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("server response is not valid JSON") from exc
+
+    if action.operation in SUPPORTED_NEXTCLOUD_R1_OPERATIONS:
+        _nextcloud_result_from_response(
+            action,
+            payload,
+            expected_mutating=expected_mutating,
+        )
+        return None
+
     if not isinstance(payload, dict):
         raise ValueError("server response is not an object")
 
