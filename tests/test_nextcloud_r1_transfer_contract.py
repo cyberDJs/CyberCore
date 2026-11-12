@@ -87,10 +87,10 @@ def test_nextcloud_dispatcher_never_emits_raw_validation_exception() -> None:
     assert "_blocked(str(exc))" not in text
     assert "except RequestValidationError:" in text
     assert '_blocked("request validation failed")' in text
-    assert '"operation_id_sha256"' in text
-    assert '"plan_id_sha256"' in text
-    assert '"plan_revision_sha256"' in text
-    assert '"authorization_reference_sha256"' in text
-    assert '"operation_id": receipt.operation_id' not in text
-    assert '"plan_id": receipt.plan_id' not in text
-    assert '"plan_revision": receipt.plan_revision' not in text
+    assert '"authorization_verified": True' in text
+    assert '"plan_binding_verified": True' in text
+    assert '"request_schema_verified": True' in text
+    assert '"authorization_reference_sha256"' not in text
+    assert '"operation_id_sha256"' not in text
+    assert '"plan_id_sha256"' not in text
+    assert '"plan_revision_sha256"' not in text
