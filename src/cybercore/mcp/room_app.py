@@ -5,6 +5,10 @@ from typing import Any, Mapping, Protocol
 from mcp.server import MCPServer
 
 from cybercore.communication.contracts import TrustedActor
+from cybercore.mcp.governed_tools import (
+    NEXTCLOUD_R1_TOOL,
+    NEXTCLOUD_R1_TOOL_TIMEOUT_SECONDS,
+)
 from cybercore.mcp.server import READ_ONLY_ANNOTATIONS, _bounded_text, _invoke
 
 ROOM_SERVER_NAME = "CyberDJs Room"
