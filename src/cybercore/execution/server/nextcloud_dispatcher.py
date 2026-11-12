@@ -32,8 +32,8 @@ def main() -> int:
             operation_resolver=resolve_nextcloud_r1_operation,
         ).as_dict()
         exit_code = 0 if payload["status"] == "EXECUTED" else 1
-    except RequestValidationError as exc:
-        payload = _blocked(str(exc))
+    except RequestValidationError:
+        payload = _blocked("request validation failed")
         exit_code = 2
     except OSError:
         payload = _blocked("fixed Nextcloud R1 operation executable is unavailable")
