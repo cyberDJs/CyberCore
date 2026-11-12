@@ -33,6 +33,7 @@ SERVER_VERSION = "0.2.0"
 MAX_TEXT_INPUT = 16_384
 MAX_RESPONSE_BYTES = 262_144
 TOOL_TIMEOUT_SECONDS = 10.0
+MAX_TOOL_TIMEOUT_SECONDS = 3600.0
 AVAILABLE_TOOLS = (
     "cybercore.capabilities",
     "cybercore.status",
@@ -162,7 +163,14 @@ def _error_code(exc: Exception) -> str:
     return "internal_error"
 
 
-async def _invoke(tool: str, fn: ToolCallback) -> dict[str, object]:
+async def _invoke(
+    tool: str,
+    fn: ToolCallback,
+    *,
+    timeout_seconds: float = TOOL_TIMEOUT_SECONDS,
+) -> dict[str, object]:
+    if timeout_seconds <= 0 or timeout_seconds > MAX_TOOL_TIMEOUT_SECONDS:
+        raise ValueError("MCP tool timeout is outside the bounded range")
     request_id = _request_id()
     started = time.monotonic()
     status = "error"
@@ -170,7 +178,7 @@ async def _invoke(tool: str, fn: ToolCallback) -> dict[str, object]:
     try:
         result = await asyncio.wait_for(
             asyncio.to_thread(fn, request_id),
-            timeout=TOOL_TIMEOUT_SECONDS,
+            timeout=timeout_seconds,
         )
         status = "completed"
         result_label = "success" if result.get("ok") is not False else "negative"
