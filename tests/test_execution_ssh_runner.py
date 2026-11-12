@@ -6,7 +6,7 @@ import pytest
 
 from cybercore.execution.authorization import ExecutionAuthorizationCheck
 from cybercore.execution.models import ExecutionStatus, GovernedAction
-from cybercore.execution.policy import VIKUNJA_TARGET
+from cybercore.execution.policy import NEXTCLOUD_R1_TARGET, VIKUNJA_TARGET
 from cybercore.execution.server.operations import MAX_SERVER_OPERATION_TIMEOUT_SECONDS
 from cybercore.execution.server.protocol import PROTOCOL_VERSION, ServerRequest
 from cybercore.execution.ssh_runner import (
@@ -64,9 +64,13 @@ def _inventory_result() -> dict[str, object]:
     }
 
 
-def _server_inventory_receipt(action: GovernedAction) -> bytes:
-    result = _inventory_result()
-    payload = {
+def _server_receipt(
+    action: GovernedAction,
+    *,
+    mutation_possible: bool = False,
+    result: dict[str, object] | None = None,
+) -> bytes:
+    payload: dict[str, object] = {
         "operation_id": action.operation_id,
         "operation": action.operation,
         "target_id": action.target_id,
@@ -81,11 +85,16 @@ def _server_inventory_receipt(action: GovernedAction) -> bytes:
         "stdout_sha256": "1" * 64,
         "stderr_sha256": "2" * 64,
         "status": "EXECUTED",
-        "mutation_possible": False,
-        "result": result,
+        "mutation_possible": mutation_possible,
         "secret_values_recorded": False,
     }
+    if result is not None:
+        payload["result"] = result
     return (json.dumps(payload) + "\n").encode()
+
+
+def _server_inventory_receipt(action: GovernedAction) -> bytes:
+    return _server_receipt(action, result=_inventory_result())
 
 
 def test_transport_uses_ssh_subsystem_not_remote_shell() -> None:
@@ -103,7 +112,7 @@ def test_execute_uses_shell_false_and_server_compatible_structured_stdin() -> No
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
         observed["argv"] = argv
         observed.update(kwargs)
-        return subprocess.CompletedProcess(argv, 0, stdout=b"ok", stderr=b"")
+        return subprocess.CompletedProcess(argv, 0, stdout=_server_receipt(_action()), stderr=b"")
 
     receipt = execute_action(_action(), VIKUNJA_TARGET, run=fake_run)
     assert observed["shell"] is False
@@ -243,11 +252,18 @@ def test_mutating_operation_fails_closed_without_authorization_verifier() -> Non
 
 
 def test_mutating_operation_marks_mutation_possible_when_authorized() -> None:
+    action = _action("vikunja.backup.run")
+
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
-        return subprocess.CompletedProcess(argv, 0, stdout=b"ok", stderr=b"")
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=_server_receipt(action, mutation_possible=True),
+            stderr=b"",
+        )
 
     receipt = execute_action(
-        _action("vikunja.backup.run"),
+        action,
         VIKUNJA_TARGET,
         authorization_verifier=AllowAuthorizationVerifier(),
         run=fake_run,
@@ -340,3 +356,34 @@ def test_nextcloud_r1_client_policy_blocks_wrong_target_before_ssh() -> None:
     with pytest.raises(ExecutionBlockedError):
         execute_action(action, VIKUNJA_TARGET, run=fake_run)
     assert called is False
+
+
+def test_nextcloud_r1_rejects_unbound_success_receipt() -> None:
+    action = GovernedAction(
+        operation_id="NC-R1-113",
+        operation="nextcloud.r1.offhost.transfer",
+        target_id=NEXTCLOUD_R1_TARGET.id,
+        plan_id="#113",
+        plan_revision="draft-1",
+        authorization_reference="APPROVE-113",
+    )
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        payload = json.loads(_server_receipt(action, mutation_possible=True))
+        payload["plan_revision"] = "wrong"
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=(json.dumps(payload) + "\n").encode(),
+            stderr=b"",
+        )
+
+    receipt = execute_action(
+        action,
+        NEXTCLOUD_R1_TARGET,
+        authorization_verifier=AllowAuthorizationVerifier(),
+        run=fake_run,
+    )
+    assert receipt.status is ExecutionStatus.FAILED
+    assert receipt.exit_code == 65
+    assert receipt.mutation_possible is True
