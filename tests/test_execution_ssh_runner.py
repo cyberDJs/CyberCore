@@ -97,6 +97,28 @@ def _server_inventory_receipt(action: GovernedAction) -> bytes:
     return _server_receipt(action, result=_inventory_result())
 
 
+def _nextcloud_server_receipt(action: GovernedAction) -> bytes:
+    payload = {
+        "operation_id_sha256": hashlib.sha256(action.operation_id.encode("utf-8")).hexdigest(),
+        "operation": action.operation,
+        "target_id": NEXTCLOUD_R1_TARGET.id,
+        "plan_id_sha256": hashlib.sha256(action.plan_id.encode("utf-8")).hexdigest(),
+        "plan_revision_sha256": hashlib.sha256(action.plan_revision.encode("utf-8")).hexdigest(),
+        "authorization_reference_sha256": hashlib.sha256(
+            action.authorization_reference.encode("utf-8")
+        ).hexdigest(),
+        "started_at": "2026-11-12T00:00:00Z",
+        "completed_at": "2026-11-12T00:00:01Z",
+        "exit_code": 0,
+        "stdout_sha256": "1" * 64,
+        "stderr_sha256": "2" * 64,
+        "status": "EXECUTED",
+        "mutation_possible": True,
+        "secret_values_recorded": False,
+    }
+    return (json.dumps(payload) + "\n").encode()
+
+
 def test_transport_uses_ssh_subsystem_not_remote_shell() -> None:
     argv = build_transport_argv(VIKUNJA_TARGET)
     assert argv[0] == "ssh"
@@ -356,6 +378,35 @@ def test_nextcloud_r1_client_policy_blocks_wrong_target_before_ssh() -> None:
     with pytest.raises(ExecutionBlockedError):
         execute_action(action, VIKUNJA_TARGET, run=fake_run)
     assert called is False
+
+
+def test_nextcloud_r1_accepts_exact_hashed_server_receipt() -> None:
+    action = GovernedAction(
+        operation_id="NC-R1-113",
+        operation="nextcloud.r1.offhost.transfer",
+        target_id=NEXTCLOUD_R1_TARGET.id,
+        plan_id="#113",
+        plan_revision="draft-1",
+        authorization_reference="APPROVE-113",
+    )
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=_nextcloud_server_receipt(action),
+            stderr=b"",
+        )
+
+    receipt = execute_action(
+        action,
+        NEXTCLOUD_R1_TARGET,
+        authorization_verifier=AllowAuthorizationVerifier(),
+        run=fake_run,
+    )
+    assert receipt.status is ExecutionStatus.EXECUTED
+    assert receipt.exit_code == 0
+    assert receipt.mutation_possible is True
 
 
 def test_nextcloud_r1_rejects_unbound_success_receipt() -> None:
