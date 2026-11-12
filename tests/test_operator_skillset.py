@@ -66,9 +66,7 @@ def test_diagnosed_fix_returns_through_writer_and_fresh_verification() -> None:
     repair = nodes["repair"]
     assert repair["capability"] == "cyberdjs-github-workflow"
     assert {"debug", "portfolio"} <= set(repair["needs"])
-    assert {"minimal_fix", "regression_evidence", "updated_exact_head"} <= set(
-        repair["inputs"]
-    )
+    assert {"minimal_fix", "regression_evidence", "updated_exact_head"} <= set(repair["inputs"])
     assert {
         "verified_exact_head",
         "verified_workflow_evidence",
