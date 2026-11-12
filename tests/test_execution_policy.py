@@ -55,3 +55,39 @@ def test_rejects_extra_arguments() -> None:
 
 def test_rejects_missing_plan_binding() -> None:
     assert evaluate_action(_action(plan_revision=""), VIKUNJA_TARGET).allowed is False
+
+
+def test_accepts_exact_nextcloud_r1_transfer_target() -> None:
+    action = _action(
+        "nextcloud.r1.offhost.transfer",
+        target_id=NEXTCLOUD_R1_TARGET.id,
+        plan_id="#113",
+        plan_revision="draft-1",
+        authorization_reference="APPROVE-113",
+    )
+    decision = evaluate_action(action, NEXTCLOUD_R1_TARGET)
+    assert decision.allowed is True
+    assert decision.mutating is True
+
+
+def test_rejects_nextcloud_r1_transfer_on_tasks_target() -> None:
+    action = _action(
+        "nextcloud.r1.offhost.transfer",
+        target_id=NEXTCLOUD_R1_TARGET.id,
+        plan_id="#113",
+        plan_revision="draft-1",
+        authorization_reference="APPROVE-113",
+    )
+    assert evaluate_action(action, VIKUNJA_TARGET).allowed is False
+
+
+def test_rejects_nextcloud_r1_free_form_arguments() -> None:
+    action = _action(
+        "nextcloud.r1.offhost.transfer",
+        target_id=NEXTCLOUD_R1_TARGET.id,
+        plan_id="#113",
+        plan_revision="draft-1",
+        authorization_reference="APPROVE-113",
+        arguments={"path": "/tmp"},
+    )
+    assert evaluate_action(action, NEXTCLOUD_R1_TARGET).allowed is False
