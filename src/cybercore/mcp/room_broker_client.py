@@ -6,6 +6,10 @@ import socket
 from typing import Any, Mapping
 
 from cybercore.communication.contracts import TrustedActor
+from cybercore.mcp.governed_tools import (
+    NEXTCLOUD_R1_TOOL,
+    NEXTCLOUD_R1_TOOL_TIMEOUT_SECONDS,
+)
 
 _MAX_RESPONSE_BYTES = 1024 * 1024
 
@@ -28,7 +32,16 @@ class BrokerRoomBackend:
             room_ids=tuple(str(item) for item in identity.get("authorized_rooms") or ()),
         )
 
-    def _call(self, method: str, args: Mapping[str, Any]) -> object:
+    def _call(
+        self,
+        method: str,
+        args: Mapping[str, Any],
+        *,
+        timeout_seconds: float | None = None,
+    ) -> object:
+        effective_timeout = self.timeout_seconds if timeout_seconds is None else float(timeout_seconds)
+        if effective_timeout <= 0 or effective_timeout > 3600:
+            raise ValueError("broker call timeout is outside the bounded range")
         request = (
             json.dumps(
                 {"method": method, "args": dict(args)},
@@ -37,7 +50,7 @@ class BrokerRoomBackend:
             + b"\n"
         )
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-            client.settimeout(self.timeout_seconds)
+            client.settimeout(effective_timeout)
             client.connect(str(self.socket_path))
             client.sendall(request)
             with client.makefile("rb") as stream:
@@ -131,6 +144,11 @@ class BrokerRoomBackend:
                 "tool_name": tool_name,
                 "arguments": dict(arguments),
             },
+            timeout_seconds=(
+                NEXTCLOUD_R1_TOOL_TIMEOUT_SECONDS
+                if tool_name == NEXTCLOUD_R1_TOOL
+                else self.timeout_seconds
+            ),
         )
         if not isinstance(result, dict):
             raise RuntimeError("broker returned malformed tool result")
