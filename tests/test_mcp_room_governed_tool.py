@@ -18,9 +18,7 @@ class GovernedBackend:
             "Johnny Work AI",
             ("cyberdjs-main",),
         )
-        self.allowed_tools = (
-            frozenset({NEXTCLOUD_R1_HANDLER_NAME}) if enabled else frozenset()
-        )
+        self.allowed_tools = frozenset({NEXTCLOUD_R1_HANDLER_NAME}) if enabled else frozenset()
         self.calls: list[tuple[str, dict[str, object]]] = []
 
     def post_event(self, **kwargs):

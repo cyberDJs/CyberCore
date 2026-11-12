@@ -27,9 +27,7 @@ class BrokerRoomBackend:
             display_name=str(identity["display_name"]),
             room_ids=tuple(str(item) for item in identity.get("authorized_rooms") or ()),
         )
-        self.allowed_tools = frozenset(
-            str(item) for item in identity.get("allowed_tools") or ()
-        )
+        self.allowed_tools = frozenset(str(item) for item in identity.get("allowed_tools") or ())
 
     def _call(self, method: str, args: Mapping[str, Any]) -> object:
         request = (

@@ -7,7 +7,11 @@ from pathlib import Path
 from cybercore.execution.models import ExecutionReceipt, ExecutionStatus, GovernedAction
 from cybercore.execution.policy import NEXTCLOUD_R1_TARGET, VIKUNJA_TARGET, evaluate_action
 from cybercore.execution.server.operations import resolve_operation
-from cybercore.execution.server.protocol import PROTOCOL_VERSION, RequestValidationError, ServerRequest
+from cybercore.execution.server.protocol import (
+    PROTOCOL_VERSION,
+    RequestValidationError,
+    ServerRequest,
+)
 from cybercore.mcp.nextcloud_r1_tool import build_nextcloud_r1_handler
 from cybercore.execution.nextcloud_r1_transfer import (
     ARCHIVE_NAME,
