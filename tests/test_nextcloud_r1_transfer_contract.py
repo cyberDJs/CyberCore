@@ -84,6 +84,6 @@ def test_nextcloud_target_subsystem_is_physically_bound_and_forwarding_disabled(
 
 def test_nextcloud_dispatcher_never_emits_raw_validation_exception() -> None:
     text = NEXTCLOUD_DISPATCHER.read_text()
-    assert '_blocked(str(exc))' not in text
-    assert 'except RequestValidationError:' in text
+    assert "_blocked(str(exc))" not in text
+    assert "except RequestValidationError:" in text
     assert '_blocked("request validation failed")' in text
