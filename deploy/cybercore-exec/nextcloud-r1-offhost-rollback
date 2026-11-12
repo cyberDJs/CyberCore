@@ -67,14 +67,22 @@ def _unlink_regular(path: Path) -> bool:
 
 def main() -> int:
     source_revoked = _ssh_revoke()
-    private_removed = _unlink_regular(PRIVATE_KEY)
-    public_removed = _unlink_regular(Path(f"{PRIVATE_KEY}.pub"))
     partial_removed = _unlink_regular(PARTIAL_ARCHIVE)
+    private_removed = False
+    public_removed = False
+    status = "ROLLBACK_COMPLETE"
+    exit_code = 0
+    if source_revoked:
+        private_removed = _unlink_regular(PRIVATE_KEY)
+        public_removed = _unlink_regular(Path(f"{PRIVATE_KEY}.pub"))
+    elif PRIVATE_KEY.exists():
+        status = "ROLLBACK_BLOCKED_SOURCE_REVOKE"
+        exit_code = 1
     print(
         json.dumps(
             {
-                "status": "ROLLBACK_COMPLETE",
-                "source_revoke_attempted": source_revoked,
+                "status": status,
+                "source_revoked_or_already_absent": source_revoked,
                 "target_private_key_removed": private_removed,
                 "target_public_key_removed": public_removed,
                 "partial_removed": partial_removed,
@@ -84,7 +92,7 @@ def main() -> int:
             separators=(",", ":"),
         )
     )
-    return 0
+    return exit_code
 
 
 if __name__ == "__main__":
