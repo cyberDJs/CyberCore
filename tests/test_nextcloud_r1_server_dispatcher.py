@@ -109,7 +109,5 @@ def test_nextcloud_protocol_rejects_tasks_target_on_nextcloud_server() -> None:
 
 
 def test_nextcloud_resolver_rejects_unknown_operation() -> None:
-    request = _request("nextcloud.r1.offhost.transfer")
-    object.__setattr__(request, "operation", "host.shell")
     with pytest.raises(RequestValidationError, match="not supported"):
-        resolve_nextcloud_r1_operation(request)
+        resolve_nextcloud_r1_operation(_request("host.shell"))
