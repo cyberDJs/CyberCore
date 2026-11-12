@@ -8,7 +8,7 @@ from cybercore.communication.contracts import TrustedActor
 from cybercore.mcp.server import READ_ONLY_ANNOTATIONS, _bounded_text, _invoke
 
 ROOM_SERVER_NAME = "CyberDJs Room"
-ROOM_SERVER_VERSION = "0.1.0"
+ROOM_SERVER_VERSION = "0.2.0"
 
 
 class RoomAppBackend(Protocol):
