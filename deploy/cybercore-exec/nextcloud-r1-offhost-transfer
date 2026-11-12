@@ -1,0 +1,248 @@
+#!/usr/bin/python3
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import stat
+import subprocess
+import sys
+
+SOURCE_HOST = "162.250.126.107"
+SOURCE_USER = "eimyherr"
+SOURCE_ARCHIVE_NAME = "nextcloud.586_28528.2026-10-07_18-30-01.tar.gz"
+TARGET_ROOT = Path("/var/backups/cybercore/nextcloud-r1-113/2026-10-13")
+TARGET_ARCHIVE = TARGET_ROOT / SOURCE_ARCHIVE_NAME
+PARTIAL_ARCHIVE = TARGET_ROOT / f".{SOURCE_ARCHIVE_NAME}.partial"
+CREDENTIAL_ROOT = Path("/etc/cybercore-exec/nextcloud-r1-113")
+PRIVATE_KEY = CREDENTIAL_ROOT / "id_ed25519"
+KNOWN_HOSTS = CREDENTIAL_ROOT / "known_hosts"
+SSH = "/usr/bin/ssh"
+CHUNK_BYTES = 1024 * 1024
+METADATA_TIMEOUT_SECONDS = 900
+STREAM_TIMEOUT_SECONDS = 1800
+EXPECTED_METADATA_KEYS = frozenset({"archive", "size", "sha256"})
+
+
+class TransferError(RuntimeError):
+    pass
+
+
+def _require_private_regular(path: Path, mode: int) -> None:
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        raise TransferError(f"required file is not a regular file: {path}")
+    if stat.S_IMODE(info.st_mode) != mode:
+        raise TransferError(f"required file has unexpected mode: {path}")
+    if info.st_uid != os.geteuid():
+        raise TransferError(f"required file has unexpected owner: {path}")
+
+
+def _require_target_root() -> None:
+    info = TARGET_ROOT.lstat()
+    if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        raise TransferError("target root is not a trusted directory")
+    if stat.S_IMODE(info.st_mode) != 0o700:
+        raise TransferError("target root must be mode 0700")
+    if info.st_uid != os.geteuid():
+        raise TransferError("target root must be owned by the execution identity")
+    if TARGET_ARCHIVE.exists():
+        raise TransferError("final archive already exists; refusing overwrite")
+    if PARTIAL_ARCHIVE.exists():
+        raise TransferError("partial archive already exists; run governed rollback first")
+
+
+def _ssh_argv(mode: str) -> tuple[str, ...]:
+    if mode not in {"metadata", "stream", "revoke"}:
+        raise TransferError("unsupported source-export mode")
+    return (
+        SSH,
+        "-i",
+        str(PRIVATE_KEY),
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "IdentitiesOnly=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        f"UserKnownHostsFile={KNOWN_HOSTS}",
+        "-o",
+        "ConnectTimeout=15",
+        f"{SOURCE_USER}@{SOURCE_HOST}",
+        mode,
+    )
+
+
+def _source_metadata() -> dict[str, object]:
+    completed = subprocess.run(
+        list(_ssh_argv("metadata")),
+        shell=False,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=METADATA_TIMEOUT_SECONDS,
+    )
+    if completed.returncode != 0:
+        raise TransferError("source metadata request failed")
+    try:
+        payload = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise TransferError("source metadata is not valid JSON") from exc
+    if not isinstance(payload, dict) or frozenset(payload) != EXPECTED_METADATA_KEYS:
+        raise TransferError("source metadata schema mismatch")
+    if payload.get("archive") != SOURCE_ARCHIVE_NAME:
+        raise TransferError("source archive identity mismatch")
+    size = payload.get("size")
+    digest = payload.get("sha256")
+    if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+        raise TransferError("source archive size is invalid")
+    if (
+        not isinstance(digest, str)
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise TransferError("source archive digest is invalid")
+    return payload
+
+
+def _stream_archive(expected_size: int, expected_digest: str) -> tuple[int, str]:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(PARTIAL_ARCHIVE, flags, 0o600)
+    digest = hashlib.sha256()
+    written = 0
+    process: subprocess.Popen[bytes] | None = None
+    try:
+        process = subprocess.Popen(
+            list(_ssh_argv("stream")),
+            shell=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if process.stdout is None:
+            raise TransferError("source stream stdout is unavailable")
+        while True:
+            chunk = process.stdout.read(CHUNK_BYTES)
+            if not chunk:
+                break
+            os.write(fd, chunk)
+            digest.update(chunk)
+            written += len(chunk)
+            if written > expected_size:
+                raise TransferError("source stream exceeded declared size")
+        os.fsync(fd)
+        try:
+            return_code = process.wait(timeout=STREAM_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            process.kill()
+            process.wait()
+            raise TransferError("source stream timed out") from exc
+        if return_code != 0:
+            raise TransferError("source stream failed or source key revocation failed")
+        actual_digest = digest.hexdigest()
+        if written != expected_size:
+            raise TransferError("transferred archive size mismatch")
+        if actual_digest != expected_digest:
+            raise TransferError("transferred archive digest mismatch")
+        return written, actual_digest
+    finally:
+        os.close(fd)
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.wait()
+
+
+def _remove_target_credential() -> None:
+    for path in (PRIVATE_KEY, Path(f"{PRIVATE_KEY}.pub")):
+        try:
+            info = path.lstat()
+        except FileNotFoundError:
+            continue
+        if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+            raise TransferError("credential path is not a regular file")
+        path.unlink()
+
+
+def _revoke_source_key_best_effort() -> bool:
+    if not PRIVATE_KEY.exists():
+        return False
+    try:
+        completed = subprocess.run(
+            list(_ssh_argv("revoke")),
+            shell=False,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return completed.returncode == 0
+
+
+def _cleanup_partial() -> None:
+    try:
+        info = PARTIAL_ARCHIVE.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        raise TransferError("partial archive path is not a regular file")
+    PARTIAL_ARCHIVE.unlink()
+
+
+def main() -> int:
+    committed = False
+    source_stream_completed = False
+    try:
+        _require_target_root()
+        _require_private_regular(PRIVATE_KEY, 0o600)
+        _require_private_regular(KNOWN_HOSTS, 0o600)
+        metadata = _source_metadata()
+        size = int(metadata["size"])
+        expected_digest = str(metadata["sha256"])
+        written, actual_digest = _stream_archive(size, expected_digest)
+        source_stream_completed = True
+        os.replace(PARTIAL_ARCHIVE, TARGET_ARCHIVE)
+        directory_fd = os.open(TARGET_ROOT, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        _remove_target_credential()
+        committed = True
+        print(
+            json.dumps(
+                {
+                    "status": "TRANSFER_VERIFIED",
+                    "archive": SOURCE_ARCHIVE_NAME,
+                    "size": written,
+                    "sha256": actual_digest,
+                    "source_key_revoked": True,
+                    "target_private_key_removed": True,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+        return 0
+    except (OSError, TransferError, subprocess.SubprocessError):
+        return 1
+    finally:
+        if not committed:
+            if not source_stream_completed:
+                _revoke_source_key_best_effort()
+            try:
+                _remove_target_credential()
+            except (OSError, TransferError):
+                pass
+            try:
+                _cleanup_partial()
+            except (OSError, TransferError):
+                pass
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
