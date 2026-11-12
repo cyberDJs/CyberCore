@@ -5,6 +5,9 @@ TARGET = ROOT / "deploy" / "cybercore-exec" / "nextcloud-r1-offhost-transfer"
 ROLLBACK = ROOT / "deploy" / "cybercore-exec" / "nextcloud-r1-offhost-rollback"
 SOURCE = ROOT / "deploy" / "nextcloud-r1-source" / "nextcloud-r1-source-export"
 NEXTCLOUD_DEPLOY = ROOT / "deploy" / "cybercore-exec-nextcloud-r1"
+NEXTCLOUD_DISPATCHER = (
+    ROOT / "src" / "cybercore" / "execution" / "server" / "nextcloud_dispatcher.py"
+)
 
 
 def test_target_transfer_is_fixed_shell_free_and_fail_closed() -> None:
@@ -77,3 +80,10 @@ def test_nextcloud_target_subsystem_is_physically_bound_and_forwarding_disabled(
     assert "AllowTcpForwarding no" in text
     assert "AllowAgentForwarding no" in text
     assert text.rstrip().endswith("Match all")
+
+
+def test_nextcloud_dispatcher_never_emits_raw_validation_exception() -> None:
+    text = NEXTCLOUD_DISPATCHER.read_text()
+    assert '_blocked(str(exc))' not in text
+    assert 'except RequestValidationError:' in text
+    assert '_blocked("request validation failed")' in text
