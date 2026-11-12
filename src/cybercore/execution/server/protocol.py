@@ -6,7 +6,6 @@ from typing import Any, Mapping
 
 PROTOCOL_VERSION = 1
 MAX_REQUEST_BYTES = 16_384
-_TARGET_ID = "tasks.cyberdjs.org"
 _REQUIRED_KEYS = frozenset(
     {
         "version",
@@ -67,9 +66,10 @@ class ServerRequest:
             raise RequestValidationError("arguments must be an object")
         if arguments:
             raise RequestValidationError("free-form operation arguments are not supported")
-        if parsed["target_id"] != _TARGET_ID:
-            raise RequestValidationError("request target is not the canonical server target")
 
+        # Operation-specific target binding happens in resolve_operation().
+        # This keeps the wire schema multi-target without allowing caller-selected
+        # hosts, users, paths, or arbitrary commands.
         return cls(version=version, arguments={}, **parsed)
 
 
