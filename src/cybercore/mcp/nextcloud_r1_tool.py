@@ -14,9 +14,7 @@ from cybercore.execution.ssh_runner import execute_action
 
 
 TOOL_NAME = "nextcloud.r1.offhost"
-NEXTCLOUD_R1_CLIENT_APPROVAL_PATH = Path(
-    "/etc/cyberdjs-room/approvals/nextcloud-r1.json"
-)
+NEXTCLOUD_R1_CLIENT_APPROVAL_PATH = Path("/etc/cyberdjs-room/approvals/nextcloud-r1.json")
 _ALLOWED_KEYS = frozenset(
     {
         "action",
@@ -94,7 +92,6 @@ def build_nextcloud_r1_handler(
         return _receipt_payload(receipt)
 
     return handler
-
 
 
 def build_bound_nextcloud_r1_handler(

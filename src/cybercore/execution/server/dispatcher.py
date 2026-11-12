@@ -53,18 +53,14 @@ else:
 
 
 RunCallable = Callable[..., subprocess.CompletedProcess[bytes]]
-NEXTCLOUD_R1_SERVER_APPROVAL_PATH = Path(
-    "/etc/cybercore-exec/approvals/nextcloud-r1.json"
-)
+NEXTCLOUD_R1_SERVER_APPROVAL_PATH = Path("/etc/cybercore-exec/approvals/nextcloud-r1.json")
 
 
 def _authorization_verifier_for_target(
     target_id: str,
 ) -> ExecutionAuthorizationVerifier:
     if target_id == "cyberskills-vps":
-        return FileBoundExecutionAuthorizationVerifier(
-            NEXTCLOUD_R1_SERVER_APPROVAL_PATH
-        )
+        return FileBoundExecutionAuthorizationVerifier(NEXTCLOUD_R1_SERVER_APPROVAL_PATH)
     return DenyAllExecutionAuthorizationVerifier()
 
 

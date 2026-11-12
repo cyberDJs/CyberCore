@@ -175,7 +175,6 @@ def test_timeout_emits_failed_receipt_without_raw_output() -> None:
     assert receipt.secret_values_recorded is False
 
 
-
 def test_server_entrypoint_selects_file_bound_verifier_only_for_nextcloud_target() -> None:
     nextcloud = _authorization_verifier_for_target("cyberskills-vps")
     assert isinstance(nextcloud, FileBoundExecutionAuthorizationVerifier)
