@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from cybercore.execution.authorization import ExecutionAuthorizationCheck
-from cybercore.execution.server.dispatcher import execute_request
+from cybercore.execution.server.nextcloud_dispatcher import execute_nextcloud_request
 from cybercore.execution.server.nextcloud_operations import (
     NEXTCLOUD_R1_TARGET_ID,
     SUPPORTED_NEXTCLOUD_R1_OPERATIONS,
@@ -58,14 +58,17 @@ def test_nextcloud_dispatcher_uses_fixed_helper_and_shell_false() -> None:
         calls.append((argv, kwargs))
         return subprocess.CompletedProcess(argv, 0, stdout=b"{}", stderr=b"")
 
-    receipt = execute_request(
+    receipt = execute_nextcloud_request(
         _request(),
         authorization_verifier=AllowAuthorizationVerifier(),
         runner=runner,
-        operation_resolver=resolve_nextcloud_r1_operation,
     )
-    assert receipt.status == "EXECUTED"
-    assert receipt.mutation_possible is True
+    assert receipt["status"] == "EXECUTED"
+    assert receipt["mutation_possible"] is True
+    assert receipt["authorization_verified"] is True
+    assert "authorization_reference" not in receipt
+    assert "operation_id" not in receipt
+    assert "plan_id" not in receipt
     assert calls[0][0] == [
         "/usr/bin/python3",
         "/usr/local/libexec/cybercore-exec/nextcloud-r1-offhost-transfer",
@@ -83,10 +86,9 @@ def test_nextcloud_dispatcher_fails_closed_without_authorization() -> None:
         return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
 
     with pytest.raises(RequestValidationError, match="lacks verified authorization"):
-        execute_request(
+        execute_nextcloud_request(
             _request(),
             runner=runner,
-            operation_resolver=resolve_nextcloud_r1_operation,
         )
     assert called is False
 
