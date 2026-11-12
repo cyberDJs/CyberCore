@@ -55,12 +55,11 @@ _SERVER_RECEIPT_KEYS = frozenset(
 )
 _NEXTCLOUD_SAFE_RECEIPT_KEYS = frozenset(
     {
-        "operation_id_sha256",
         "operation",
         "target_id",
-        "plan_id_sha256",
-        "plan_revision_sha256",
-        "authorization_reference_sha256",
+        "request_schema_verified",
+        "plan_binding_verified",
+        "authorization_verified",
         "started_at",
         "completed_at",
         "exit_code",
@@ -155,25 +154,15 @@ def _nextcloud_result_from_response(
     if completed_at < started_at:
         raise ValueError("server response completed_at precedes started_at")
 
-    for key in (
-        "operation_id_sha256",
-        "plan_id_sha256",
-        "plan_revision_sha256",
-        "authorization_reference_sha256",
-        "stdout_sha256",
-        "stderr_sha256",
-    ):
-        _require_server_receipt_sha256(payload[key], key)
+    _require_server_receipt_sha256(payload["stdout_sha256"], "stdout_sha256")
+    _require_server_receipt_sha256(payload["stderr_sha256"], "stderr_sha256")
 
     expected = {
-        "operation_id_sha256": hashlib.sha256(action.operation_id.encode("utf-8")).hexdigest(),
         "operation": action.operation,
         "target_id": NEXTCLOUD_R1_TARGET_ID,
-        "plan_id_sha256": hashlib.sha256(action.plan_id.encode("utf-8")).hexdigest(),
-        "plan_revision_sha256": hashlib.sha256(action.plan_revision.encode("utf-8")).hexdigest(),
-        "authorization_reference_sha256": hashlib.sha256(
-            action.authorization_reference.encode("utf-8")
-        ).hexdigest(),
+        "request_schema_verified": True,
+        "plan_binding_verified": True,
+        "authorization_verified": True,
         "status": "EXECUTED",
         "mutation_possible": expected_mutating,
         "secret_values_recorded": False,
