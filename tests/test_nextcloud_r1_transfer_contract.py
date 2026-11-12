@@ -4,6 +4,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGET = ROOT / "deploy" / "cybercore-exec" / "nextcloud-r1-offhost-transfer"
 ROLLBACK = ROOT / "deploy" / "cybercore-exec" / "nextcloud-r1-offhost-rollback"
 SOURCE = ROOT / "deploy" / "nextcloud-r1-source" / "nextcloud-r1-source-export"
+NEXTCLOUD_DEPLOY = ROOT / "deploy" / "cybercore-exec-nextcloud-r1"
 
 
 def test_target_transfer_is_fixed_shell_free_and_fail_closed() -> None:
@@ -55,3 +56,19 @@ def test_rollback_never_deletes_verified_archive() -> None:
     assert "TARGET_ROOT / ARCHIVE_NAME).unlink" not in text
     assert "shell=False" in text
     assert "shell=True" not in text
+
+
+def test_nextcloud_target_subsystem_is_physically_bound_and_forwarding_disabled() -> None:
+    text = (NEXTCLOUD_DEPLOY / "cybercore-exec.subsystem.conf").read_text()
+    assert (
+        "Subsystem cybercore-exec /usr/bin/python3 "
+        "/usr/local/libexec/cybercore-exec/nextcloud_dispatcher.py"
+    ) in text
+    assert (
+        "ForceCommand /usr/bin/python3 "
+        "/usr/local/libexec/cybercore-exec/nextcloud_dispatcher.py"
+    ) in text
+    assert "PermitTTY no" in text
+    assert "AllowTcpForwarding no" in text
+    assert "AllowAgentForwarding no" in text
+    assert text.rstrip().endswith("Match all")
