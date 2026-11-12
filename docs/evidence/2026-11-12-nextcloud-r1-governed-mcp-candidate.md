@@ -29,3 +29,5 @@
 - approval_hardening: added root-owned file-bound exact approval verifier; raw approval is represented only by SHA-256, exact tuple binding and <=1h UTC validity
 - server_authority_scope: cyberskills-vps selects the file-bound verifier; existing tasks.cyberdjs.org remains deny-all
 - live_authority: NOT PRESENT; repository contains no production approval manifest
+
+- rollback_hardening: added separately authorized fixed local containment; active transfer conflicts are stopped, local partial/credential artifacts are removed, final archive/transfer receipt are preserved, and remote source-key cleanup remains explicitly required

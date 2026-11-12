@@ -29,6 +29,7 @@ _OPERATION_TARGET_IDS: dict[str, frozenset[str]] = {
     "vikunja.backup.status": frozenset({VIKUNJA_TARGET.id}),
     "vikunja.health.verify": frozenset({VIKUNJA_TARGET.id}),
     "nextcloud.r1.offhost.transfer": frozenset({NEXTCLOUD_R1_TARGET.id}),
+    "nextcloud.r1.offhost.rollback": frozenset({NEXTCLOUD_R1_TARGET.id}),
     "nextcloud.r1.offhost.status": frozenset({NEXTCLOUD_R1_TARGET.id}),
     "nextcloud.r1.offhost.verify": frozenset({NEXTCLOUD_R1_TARGET.id}),
 }
@@ -40,6 +41,7 @@ _MUTATING_OPERATIONS = frozenset(
         "vikunja.backup.install",
         "vikunja.backup.run",
         "nextcloud.r1.offhost.transfer",
+        "nextcloud.r1.offhost.rollback",
     }
 )
 

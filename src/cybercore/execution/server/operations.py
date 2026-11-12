@@ -91,6 +91,17 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
         mutating=True,
         timeout_seconds=15,
     ),
+    "nextcloud.r1.offhost.rollback": OperationSpec(
+        name="nextcloud.r1.offhost.rollback",
+        argv=(
+            "/usr/bin/systemctl",
+            "start",
+            "cybercore-nextcloud-r1-rollback.service",
+        ),
+        target_ids=frozenset({NEXTCLOUD_R1_TARGET_ID}),
+        mutating=True,
+        timeout_seconds=60,
+    ),
     "nextcloud.r1.offhost.status": OperationSpec(
         name="nextcloud.r1.offhost.status",
         argv=(

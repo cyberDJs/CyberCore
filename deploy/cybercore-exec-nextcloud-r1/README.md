@@ -22,6 +22,7 @@ The target-side `cybercore-exec` subsystem is configured with the exact target i
 Supported operations are:
 
 - `nextcloud.r1.offhost.transfer` — mutating; starts the fixed static systemd service with `--no-block`;
+- `nextcloud.r1.offhost.rollback` — mutating local containment; stops the conflicting transfer unit, removes only fixed local partial/credential artifacts, and never deletes the verified final archive;
 - `nextcloud.r1.offhost.status` — read-only systemd state;
 - `nextcloud.r1.offhost.verify` — read-only checksum/gzip/tar component verification.
 
@@ -100,7 +101,8 @@ A separate deployment approval must:
 2. install the common governed dispatcher/authorization/protocol/operations artifacts;
 3. install `nextcloud_r1_transfer.py` as `/usr/local/libexec/cybercore-exec-nextcloud-r1/transfer.py`;
 4. install `nextcloud_r1_verify.py` as `/usr/local/libexec/cybercore-exec-nextcloud-r1/verify.py`;
-5. create credential/state/backup directories as `cybercore-exec:cybercore-exec`, mode `0700`;
+5. install `nextcloud_r1_rollback.py` as `/usr/local/libexec/cybercore-exec-nextcloud-r1/rollback.py` and the fixed rollback unit;
+6. create credential/state/backup directories as `cybercore-exec:cybercore-exec`, mode `0700`;
 6. install the static systemd unit and the narrow Polkit rule;
 7. install the target-bound sshd snippet;
 8. provision the dedicated restricted source credential through an approved secret channel;
@@ -131,3 +133,17 @@ Rollback is fail-closed and requires separate deployment authority. Order:
 11. verify no temporary approval, credential or transfer process remains.
 
 Rollback never deletes the only known-good backup as a cleanup side effect.
+
+
+### Governed local rollback operation
+
+`nextcloud.r1.offhost.rollback` is a separately authorized **local containment** action. Starting
+its static unit conflicts with the transfer unit, so systemd stops an active transfer before the
+rollback helper runs. The helper rejects symlinks and unexpected owners, removes only the fixed
+local `.partial` plus dedicated key/known-hosts/source-checksum artifacts, and preserves the final
+archive and transfer receipt.
+
+The rollback receipt always records
+`remote_authorized_key_cleanup_required=true`. Source-side `authorized_keys` cleanup and proof
+that the temporary public key can no longer authenticate remain a separate deployment closeout
+gate. The candidate therefore never reports remote revocation that it did not actually prove.

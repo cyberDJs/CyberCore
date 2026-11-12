@@ -39,6 +39,7 @@ def test_operation_surface_is_exact() -> None:
         "vikunja.backup.status",
         "vikunja.health.verify",
         "nextcloud.r1.offhost.transfer",
+        "nextcloud.r1.offhost.rollback",
         "nextcloud.r1.offhost.status",
         "nextcloud.r1.offhost.verify",
     }

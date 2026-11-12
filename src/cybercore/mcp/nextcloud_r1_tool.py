@@ -26,6 +26,7 @@ _ALLOWED_KEYS = frozenset(
 )
 _ACTION_TO_OPERATION = {
     "transfer": "nextcloud.r1.offhost.transfer",
+    "rollback": "nextcloud.r1.offhost.rollback",
     "status": "nextcloud.r1.offhost.status",
     "verify": "nextcloud.r1.offhost.verify",
 }
@@ -73,7 +74,7 @@ def build_nextcloud_r1_handler(
         try:
             operation = _ACTION_TO_OPERATION[action_name]
         except KeyError as exc:
-            raise ValueError("action must be one of: transfer, status, verify") from exc
+            raise ValueError("action must be one of: transfer, rollback, status, verify") from exc
 
         action = GovernedAction(
             operation_id=_required_string(arguments, "operation_id"),

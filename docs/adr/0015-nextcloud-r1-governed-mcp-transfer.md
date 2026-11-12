@@ -102,3 +102,14 @@ The server entrypoint selects this verifier only for the fixed `cyberskills-vps`
 existing `tasks.cyberdjs.org` target retains deny-all behavior. Client composition uses the same
 verifier contract from the fixed Johnny Work approval path. The repository contains no live
 approval manifest, so this Draft PR itself grants no execution authority.
+
+
+## Rollback operation boundary
+
+The operation family includes `nextcloud.r1.offhost.rollback` as a fixed local containment action.
+It starts a sandboxed static systemd unit that conflicts with the transfer unit, removes only known
+local partial/credential artifacts, preserves the final archive and transfer receipt, and emits a
+non-secret receipt.
+
+It deliberately does not issue a source-host revoke command. Remote public-key cleanup remains an
+explicit deployment closeout requirement and is surfaced as unresolved in the rollback receipt.
