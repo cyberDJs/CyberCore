@@ -94,7 +94,9 @@ def test_governed_tool_is_exposed_only_when_backend_explicitly_allows_it() -> No
 
 
 def test_broker_rejects_nextcloud_r1_handler_for_non_johnny_identity(tmp_path) -> None:
-    handler = lambda arguments: {"ok": True}
+    def handler(arguments):
+        return {"ok": True}
+
     with pytest.raises(ValueError, match="restricted to Johnny Work"):
         build_cyberdjs_room_broker_runtime(
             tmp_path / "room.jsonl",
