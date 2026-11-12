@@ -37,12 +37,15 @@ class BrokerRoomBackend:
             ).encode("utf-8")
             + b"\n"
         )
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-            client.settimeout(self.timeout_seconds)
-            client.connect(str(self.socket_path))
-            client.sendall(request)
-            with client.makefile("rb") as stream:
-                line = stream.readline(_MAX_RESPONSE_BYTES + 1)
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.settimeout(self.timeout_seconds)
+                client.connect(str(self.socket_path))
+                client.sendall(request)
+                with client.makefile("rb") as stream:
+                    line = stream.readline(_MAX_RESPONSE_BYTES + 1)
+        except OSError as exc:
+            raise RuntimeError("broker connection failed or was rejected") from exc
         if not line or len(line) > _MAX_RESPONSE_BYTES:
             raise RuntimeError("broker returned no valid response")
         response = json.loads(line)

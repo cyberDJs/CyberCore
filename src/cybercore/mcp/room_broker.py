@@ -283,6 +283,32 @@ class CyberDJSRoomBrokerRuntime:
         self.dispatcher.stop(timeout_seconds=2.0)
 
 
+def _validate_governed_identity_policy(
+    configured_handlers: Mapping[str, Mapping[str, ToolHandler]],
+    configured_peer_uids: Mapping[str, int],
+    *,
+    broker_uid: int,
+) -> None:
+    unknown_identities = set(configured_handlers) - ALLOWED_CHATGPT_IDENTITIES
+    if unknown_identities:
+        raise ValueError("tool handlers include an unknown ChatGPT identity")
+    if set(configured_peer_uids) - ALLOWED_CHATGPT_IDENTITIES:
+        raise ValueError("peer UID policy contains an unknown ChatGPT identity")
+
+    for identity, handlers in configured_handlers.items():
+        if NEXTCLOUD_R1_HANDLER_NAME not in handlers:
+            continue
+        if identity != JOHNNY_WORK_IDENTITY:
+            raise ValueError("Nextcloud R1 governed handler is restricted to Johnny Work identity")
+        peer_uid = configured_peer_uids.get(identity)
+        if peer_uid is None:
+            raise ValueError("Nextcloud R1 governed handler requires a Johnny Work peer UID")
+        if isinstance(peer_uid, bool) or not isinstance(peer_uid, int) or peer_uid <= 0:
+            raise ValueError("Johnny Work peer UID must be a positive non-root integer")
+        if peer_uid == broker_uid:
+            raise ValueError("Johnny Work governed frontend must use a distinct Unix identity")
+
+
 def build_cyberdjs_room_broker_runtime(
     log_path: str | Path,
     *,
@@ -298,23 +324,11 @@ def build_cyberdjs_room_broker_runtime(
 
     configured_handlers = dict(tool_handlers_by_identity or {})
     configured_peer_uids = dict(peer_uids_by_identity or {})
-    unknown_identities = set(configured_handlers) - ALLOWED_CHATGPT_IDENTITIES
-    if unknown_identities:
-        raise ValueError("tool handlers include an unknown ChatGPT identity")
-    if set(configured_peer_uids) - ALLOWED_CHATGPT_IDENTITIES:
-        raise ValueError("peer UID policy contains an unknown ChatGPT identity")
-    for identity, handlers in configured_handlers.items():
-        if NEXTCLOUD_R1_HANDLER_NAME not in handlers:
-            continue
-        if identity != JOHNNY_WORK_IDENTITY:
-            raise ValueError("Nextcloud R1 governed handler is restricted to Johnny Work identity")
-        peer_uid = configured_peer_uids.get(identity)
-        if peer_uid is None:
-            raise ValueError("Nextcloud R1 governed handler requires a Johnny Work peer UID")
-        if isinstance(peer_uid, bool) or not isinstance(peer_uid, int) or peer_uid <= 0:
-            raise ValueError("Johnny Work peer UID must be a positive non-root integer")
-        if peer_uid == os.geteuid():
-            raise ValueError("Johnny Work governed frontend must use a distinct Unix identity")
+    _validate_governed_identity_policy(
+        configured_handlers,
+        configured_peer_uids,
+        broker_uid=os.geteuid(),
+    )
 
     base = build_local_runtime(log_path)
     sinks: dict[str, Any] = {}

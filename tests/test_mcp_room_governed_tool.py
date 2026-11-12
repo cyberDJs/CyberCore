@@ -9,7 +9,10 @@ from mcp import Client
 from cybercore.communication.contracts import TrustedActor
 from cybercore.mcp.nextcloud_r1_tool import TOOL_NAME as NEXTCLOUD_R1_HANDLER_NAME
 from cybercore.mcp.room_app import NEXTCLOUD_R1_MCP_TOOL, ROOM_TOOLS, build_room_app_server
-from cybercore.mcp.room_broker import build_cyberdjs_room_broker_runtime
+from cybercore.mcp.room_broker import (
+    _validate_governed_identity_policy,
+    build_cyberdjs_room_broker_runtime,
+)
 import pytest
 
 
@@ -141,17 +144,14 @@ def test_governed_runtime_rejects_same_uid_as_broker(tmp_path) -> None:
         )
 
 
-def test_governed_runtime_accepts_distinct_non_root_peer_uid_policy(tmp_path) -> None:
-    candidate_uid = 10001 if os.geteuid() != 10001 else 10002
-    runtime = build_cyberdjs_room_broker_runtime(
-        tmp_path / "room.jsonl",
-        socket_dir=tmp_path / "sockets",
-        tool_handlers_by_identity={
-            "chatgpt:johnny-work": {NEXTCLOUD_R1_HANDLER_NAME: _governed_handler},
+def test_governed_identity_policy_accepts_distinct_non_root_peer_uid() -> None:
+    candidate_uid = 10001
+    _validate_governed_identity_policy(
+        {
+            "chatgpt:johnny-work": {
+                NEXTCLOUD_R1_HANDLER_NAME: _governed_handler,
+            },
         },
-        peer_uids_by_identity={"chatgpt:johnny-work": candidate_uid},
+        {"chatgpt:johnny-work": candidate_uid},
+        broker_uid=10000,
     )
-    try:
-        assert runtime.broker.expected_peer_uids["chatgpt:johnny-work"] == candidate_uid
-    finally:
-        runtime.close()

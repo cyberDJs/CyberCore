@@ -216,7 +216,7 @@ def test_broker_peer_uid_gate_rejects_mismatched_uid(tmp_path: Path) -> None:
         try:
             BrokerRoomBackend(socket_path)
         except RuntimeError as exc:
-            assert "no valid response" in str(exc)
+            assert "failed or was rejected" in str(exc)
         else:
             raise AssertionError("mismatched Unix peer UID must fail closed")
     finally:
