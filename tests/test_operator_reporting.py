@@ -38,6 +38,18 @@ def test_repeated_or_nonmaterial_events_generate_no_report() -> None:
     assert format_operator_update(sample(event_kind="no_change")) is None
 
 
+def test_code_review_finding_is_material_even_when_not_security_labeled() -> None:
+    text = format_operator_update(
+        sample(
+            event_kind="review_finding",
+            what="Code review našel P2 v orchestration graphu",
+            why="Writer neměl explicitní drift preflight",
+        )
+    )
+    assert text is not None
+    assert "Code review našel P2" in text
+
+
 def test_explicit_approval_renders_as_human_gate_not_an_action() -> None:
     text = format_operator_update(
         sample(event_kind="approval_required", approval_required=True, state="BLOCKED")

@@ -25,8 +25,14 @@ spec:
       outputs: [bounded_plan, action_receipts, exact_head, pending_gates]
     github:
       capability: cyberdjs-github-workflow
-      needs: [govern]
-      inputs: [bounded_plan, exact_head, authorization_scope]
+      needs: [govern, portfolio]
+      inputs:
+        - bounded_plan
+        - exact_head
+        - authorization_scope
+        - canonical_lane
+        - parallel_work
+        - drift_status
       outputs: [pr_branch_actions, workflow_evidence, updated_exact_head]
     debug:
       capability: systematic-debugging-and-root-cause-engineer
@@ -35,7 +41,7 @@ spec:
       outputs: [root_cause, minimal_fix, regression_evidence]
     security:
       capability: adversary-lens
-      needs: [github]
+      needs: [debug]
       inputs: [updated_exact_head, security_boundaries, regression_evidence]
       outputs: [independent_security_findings, residual_risk, security_verdict]
     release:

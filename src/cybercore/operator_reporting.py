@@ -16,6 +16,7 @@ _MATERIAL_EVENTS = frozenset(
         "checks_failed",
         "checks_recovered",
         "security_finding",
+        "review_finding",
         "source_drift",
         "merge_conflict",
         "merged",

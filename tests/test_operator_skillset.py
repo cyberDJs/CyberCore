@@ -52,6 +52,19 @@ def test_dependencies_are_valid_and_acyclic() -> None:
     assert len(visited) == 7
 
 
+def test_writer_consumes_drift_and_parallel_ownership_before_writes() -> None:
+    nodes = _contract()["spec"]["nodes"]
+    writer = nodes["github"]
+    assert "portfolio" in writer["needs"]
+    assert {"canonical_lane", "parallel_work", "drift_status"} <= set(writer["inputs"])
+
+
+def test_security_waits_for_debug_regression_evidence() -> None:
+    nodes = _contract()["spec"]["nodes"]
+    assert "debug" in nodes["security"]["needs"]
+    assert "regression_evidence" in nodes["security"]["inputs"]
+
+
 def test_protected_actions_are_explicitly_separated() -> None:
     gates = _contract()["spec"]["gates"]
     assert gates["canonical_merge"]["approval"] == "explicit_identity_bound_user_approval"
