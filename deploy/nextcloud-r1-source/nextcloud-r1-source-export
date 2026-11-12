@@ -1,0 +1,129 @@
+#!/usr/bin/python3
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import stat
+import sys
+
+ARCHIVE = Path("/home/eimyherr/softaculous_backups/nextcloud.586_28528.2026-10-07_18-30-01.tar.gz")
+AUTHORIZED_KEYS = Path("/home/eimyherr/.ssh/authorized_keys")
+KEY_MARKER = "cc-r1-113-temp"
+EXPECTED_FORCED_COMMAND = "/home/eimyherr/.local/libexec/cybercore-nextcloud-r1-source-export"
+CHUNK_BYTES = 1024 * 1024
+
+
+class SourceExportError(RuntimeError):
+    pass
+
+
+def _require_archive() -> os.stat_result:
+    info = ARCHIVE.lstat()
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        raise SourceExportError("archive is not a regular file")
+    if info.st_uid != os.geteuid():
+        raise SourceExportError("archive owner mismatch")
+    return info
+
+
+def _sha256() -> str:
+    digest = hashlib.sha256()
+    with ARCHIVE.open("rb", buffering=0) as handle:
+        while True:
+            chunk = handle.read(CHUNK_BYTES)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _matching_key_line(line: str) -> bool:
+    return (
+        f'command="{EXPECTED_FORCED_COMMAND}"' in line
+        and KEY_MARKER in line
+        and "ssh-ed25519" in line
+    )
+
+
+def _revoke_key() -> None:
+    info = AUTHORIZED_KEYS.lstat()
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        raise SourceExportError("authorized_keys is not a regular file")
+    if info.st_uid != os.geteuid():
+        raise SourceExportError("authorized_keys owner mismatch")
+    lines = AUTHORIZED_KEYS.read_text(encoding="utf-8").splitlines(keepends=True)
+    matching = [line for line in lines if _matching_key_line(line)]
+    if len(matching) != 1:
+        raise SourceExportError("temporary key marker is not unique")
+    remaining = [line for line in lines if not _matching_key_line(line)]
+    temporary = AUTHORIZED_KEYS.with_name(".authorized_keys.cc-r1-113.tmp")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(temporary, flags, 0o600)
+    try:
+        payload = "".join(remaining).encode("utf-8")
+        os.write(fd, payload)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(temporary, AUTHORIZED_KEYS)
+    directory_fd = os.open(AUTHORIZED_KEYS.parent, os.O_RDONLY)
+    try:
+        os.fsync(directory_fd)
+    finally:
+        os.close(directory_fd)
+
+
+def _metadata() -> int:
+    info = _require_archive()
+    print(
+        json.dumps(
+            {
+                "archive": ARCHIVE.name,
+                "size": info.st_size,
+                "sha256": _sha256(),
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    return 0
+
+
+def _stream() -> int:
+    _require_archive()
+    out = sys.stdout.buffer
+    try:
+        with ARCHIVE.open("rb", buffering=0) as handle:
+            while True:
+                chunk = handle.read(CHUNK_BYTES)
+                if not chunk:
+                    break
+                out.write(chunk)
+        out.flush()
+    except BrokenPipeError:
+        return 1
+    _revoke_key()
+    return 0
+
+
+def main() -> int:
+    mode = os.environ.get("SSH_ORIGINAL_COMMAND", "")
+    try:
+        if mode == "metadata":
+            return _metadata()
+        if mode == "stream":
+            return _stream()
+        if mode == "revoke":
+            _revoke_key()
+            return 0
+        return 2
+    except (OSError, SourceExportError):
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
