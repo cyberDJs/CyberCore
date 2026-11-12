@@ -214,6 +214,7 @@ def build_room_app_server(
                     )
                 ),
             },
+            timeout_seconds=NEXTCLOUD_R1_TOOL_TIMEOUT_SECONDS,
         )
 
     return server
