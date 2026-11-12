@@ -87,7 +87,7 @@ _OPERATION_SPECS: Mapping[str, OperationSpec] = {
             "/usr/local/libexec/cybercore-exec/nextcloud-r1-offhost-transfer",
         ),
         mutating=True,
-        timeout_seconds=1800,
+        timeout_seconds=3300,
     ),
     "nextcloud.r1.offhost.rollback": OperationSpec(
         name="nextcloud.r1.offhost.rollback",
