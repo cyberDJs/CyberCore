@@ -3,9 +3,7 @@ from pathlib import Path
 import yaml
 
 
-CONTRACT = (
-    Path(__file__).resolve().parents[1] / "configs/autonomy/cybercore-skillset.yaml"
-)
+CONTRACT = Path(__file__).resolve().parents[1] / "configs/autonomy/cybercore-skillset.yaml"
 SELECTED = {
     "caser",
     "caser-sourcer",
