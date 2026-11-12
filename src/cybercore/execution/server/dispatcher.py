@@ -81,8 +81,9 @@ def execute_request(
     *,
     authorization_verifier: ExecutionAuthorizationVerifier | None = None,
     runner: RunCallable = subprocess.run,
+    operation_resolver: Callable[[ServerRequest], Any] = resolve_operation,
 ) -> ServerReceipt:
-    spec = resolve_operation(request)
+    spec = operation_resolver(request)
     if spec.mutating:
         verifier = authorization_verifier or DenyAllExecutionAuthorizationVerifier()
         authorization = verifier.verify(
@@ -144,7 +145,11 @@ def _blocked(reason: str) -> dict[str, object]:
     }
 
 
-def _load_request(raw: bytes) -> ServerRequest:
+def _load_request(
+    raw: bytes,
+    *,
+    expected_target_id: str = "tasks.cyberdjs.org",
+) -> ServerRequest:
     if len(raw) > MAX_REQUEST_BYTES:
         raise RequestValidationError("request exceeds the maximum encoded size")
     try:
@@ -153,7 +158,7 @@ def _load_request(raw: bytes) -> ServerRequest:
         raise RequestValidationError("request is not valid UTF-8 JSON") from exc
     if not isinstance(value, dict):
         raise RequestValidationError("request root must be an object")
-    return ServerRequest.from_mapping(value)
+    return ServerRequest.from_mapping(value, expected_target_id=expected_target_id)
 
 
 def main() -> int:
