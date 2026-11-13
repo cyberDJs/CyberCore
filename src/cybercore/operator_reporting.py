@@ -56,6 +56,8 @@ def format_operator_update(event: OperatorUpdate) -> str | None:
     """Render one meaningful event; never infer approval or CI PASS."""
     if type(event) is not OperatorUpdate:
         raise ValueError("INVALID_EVENT")
+    if type(event.changed) is not bool:
+        raise ValueError("INVALID_CHANGED_FLAG")
     if event.event_kind not in _MATERIAL_EVENTS or not event.changed:
         return None
     if _SHA.fullmatch(event.sha) is None:
