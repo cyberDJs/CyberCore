@@ -15,16 +15,20 @@ if __package__ in {None, ""}:
         from authorization import (  # type: ignore[import-not-found]
             DenyAllExecutionAuthorizationVerifier,
             ExecutionAuthorizationVerifier,
+            FileBoundExecutionAuthorizationVerifier,
         )
     except ImportError:
         sys.path.insert(0, str(server_dir.parents[2]))
         from cybercore.execution.authorization import (
             DenyAllExecutionAuthorizationVerifier,
             ExecutionAuthorizationVerifier,
+            FileBoundExecutionAuthorizationVerifier,
         )
     from inventory import validate_inventory_payload  # type: ignore[import-not-found]
     from operations import resolve_operation  # type: ignore[import-not-found]
     from protocol import (  # type: ignore[import-not-found]
+        ALLOWED_TARGET_IDS,
+        DEFAULT_TARGET_ID,
         MAX_REQUEST_BYTES,
         RequestValidationError,
         ServerReceipt,
@@ -34,10 +38,13 @@ else:
     from cybercore.execution.authorization import (
         DenyAllExecutionAuthorizationVerifier,
         ExecutionAuthorizationVerifier,
+        FileBoundExecutionAuthorizationVerifier,
     )
     from cybercore.execution.server.inventory import validate_inventory_payload
     from cybercore.execution.server.operations import resolve_operation
     from cybercore.execution.server.protocol import (
+        ALLOWED_TARGET_IDS,
+        DEFAULT_TARGET_ID,
         MAX_REQUEST_BYTES,
         RequestValidationError,
         ServerReceipt,
@@ -46,6 +53,15 @@ else:
 
 
 RunCallable = Callable[..., subprocess.CompletedProcess[bytes]]
+NEXTCLOUD_R1_SERVER_APPROVAL_PATH = Path("/etc/cybercore-exec/approvals/nextcloud-r1.json")
+
+
+def _authorization_verifier_for_target(
+    target_id: str,
+) -> ExecutionAuthorizationVerifier:
+    if target_id == "cyberskills-vps":
+        return FileBoundExecutionAuthorizationVerifier(NEXTCLOUD_R1_SERVER_APPROVAL_PATH)
+    return DenyAllExecutionAuthorizationVerifier()
 
 
 def _utc_now() -> str:
@@ -144,7 +160,11 @@ def _blocked(reason: str) -> dict[str, object]:
     }
 
 
-def _load_request(raw: bytes) -> ServerRequest:
+def _load_request(
+    raw: bytes,
+    *,
+    expected_target_id: str = DEFAULT_TARGET_ID,
+) -> ServerRequest:
     if len(raw) > MAX_REQUEST_BYTES:
         raise RequestValidationError("request exceeds the maximum encoded size")
     try:
@@ -153,14 +173,28 @@ def _load_request(raw: bytes) -> ServerRequest:
         raise RequestValidationError("request is not valid UTF-8 JSON") from exc
     if not isinstance(value, dict):
         raise RequestValidationError("request root must be an object")
-    return ServerRequest.from_mapping(value)
+    return ServerRequest.from_mapping(value, expected_target_id=expected_target_id)
 
 
-def main() -> int:
+def _configured_target_id(argv: list[str]) -> str:
+    if len(argv) != 2:
+        raise RequestValidationError("dispatcher requires exactly one configured target id")
+    target_id = argv[1].strip()
+    if target_id not in ALLOWED_TARGET_IDS:
+        raise RequestValidationError("dispatcher target is not an allowed canonical target")
+    return target_id
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv if argv is None else argv)
     raw = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1)
     try:
-        request = _load_request(raw)
-        payload = execute_request(request).as_dict()
+        target_id = _configured_target_id(args)
+        request = _load_request(raw, expected_target_id=target_id)
+        payload = execute_request(
+            request,
+            authorization_verifier=_authorization_verifier_for_target(target_id),
+        ).as_dict()
         exit_code = 0 if payload["status"] == "EXECUTED" else 1
     except RequestValidationError as exc:
         payload = _blocked(str(exc))

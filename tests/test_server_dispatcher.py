@@ -7,8 +7,16 @@ from typing import Any
 
 import pytest
 
-from cybercore.execution.authorization import ExecutionAuthorizationCheck
-from cybercore.execution.server.dispatcher import execute_request
+from cybercore.execution.authorization import (
+    DenyAllExecutionAuthorizationVerifier,
+    ExecutionAuthorizationCheck,
+    FileBoundExecutionAuthorizationVerifier,
+)
+from cybercore.execution.server.dispatcher import (
+    NEXTCLOUD_R1_SERVER_APPROVAL_PATH,
+    _authorization_verifier_for_target,
+    execute_request,
+)
 from cybercore.execution.server.operations import resolve_operation
 from cybercore.execution.server.protocol import (
     PROTOCOL_VERSION,
@@ -165,3 +173,12 @@ def test_timeout_emits_failed_receipt_without_raw_output() -> None:
     assert receipt.stderr_sha256
     assert not hasattr(receipt, "stdout")
     assert receipt.secret_values_recorded is False
+
+
+def test_server_entrypoint_selects_file_bound_verifier_only_for_nextcloud_target() -> None:
+    nextcloud = _authorization_verifier_for_target("cyberskills-vps")
+    assert isinstance(nextcloud, FileBoundExecutionAuthorizationVerifier)
+    assert nextcloud.path == NEXTCLOUD_R1_SERVER_APPROVAL_PATH
+
+    tasks = _authorization_verifier_for_target("tasks.cyberdjs.org")
+    assert isinstance(tasks, DenyAllExecutionAuthorizationVerifier)

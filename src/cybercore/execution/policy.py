@@ -11,23 +11,42 @@ VIKUNJA_TARGET = ExecutionTarget(
     ssh_user="cybercore-exec",
 )
 
-SUPPORTED_OPERATIONS = frozenset(
+NEXTCLOUD_R1_TARGET = ExecutionTarget(
+    id="cyberskills-vps",
+    hostname="162.35.186.106",
+    ssh_user="cybercore-exec",
+)
+
+_CANONICAL_TARGETS = {
+    VIKUNJA_TARGET.id: VIKUNJA_TARGET,
+    NEXTCLOUD_R1_TARGET.id: NEXTCLOUD_R1_TARGET,
+}
+
+_OPERATION_TARGET_IDS: dict[str, frozenset[str]] = {
+    "system.inventory": frozenset({VIKUNJA_TARGET.id}),
+    "vikunja.backup.install": frozenset({VIKUNJA_TARGET.id}),
+    "vikunja.backup.run": frozenset({VIKUNJA_TARGET.id}),
+    "vikunja.backup.status": frozenset({VIKUNJA_TARGET.id}),
+    "vikunja.health.verify": frozenset({VIKUNJA_TARGET.id}),
+    "nextcloud.r1.offhost.transfer": frozenset({NEXTCLOUD_R1_TARGET.id}),
+    "nextcloud.r1.offhost.rollback": frozenset({NEXTCLOUD_R1_TARGET.id}),
+    "nextcloud.r1.offhost.status": frozenset({NEXTCLOUD_R1_TARGET.id}),
+    "nextcloud.r1.offhost.verify": frozenset({NEXTCLOUD_R1_TARGET.id}),
+}
+
+SUPPORTED_OPERATIONS = frozenset(_OPERATION_TARGET_IDS)
+
+_MUTATING_OPERATIONS = frozenset(
     {
-        "system.inventory",
         "vikunja.backup.install",
         "vikunja.backup.run",
-        "vikunja.backup.status",
-        "vikunja.health.verify",
+        "nextcloud.r1.offhost.transfer",
+        "nextcloud.r1.offhost.rollback",
     }
 )
 
-_MUTATING_OPERATIONS = frozenset({"vikunja.backup.install", "vikunja.backup.run"})
 _ALLOWED_ARGUMENTS: dict[str, frozenset[str]] = {
-    "system.inventory": frozenset(),
-    "vikunja.backup.install": frozenset(),
-    "vikunja.backup.run": frozenset(),
-    "vikunja.backup.status": frozenset(),
-    "vikunja.health.verify": frozenset(),
+    operation: frozenset() for operation in SUPPORTED_OPERATIONS
 }
 
 
@@ -38,13 +57,20 @@ class PolicyDecision:
     mutating: bool = False
 
 
+def canonical_target(target_id: str) -> ExecutionTarget | None:
+    return _CANONICAL_TARGETS.get(target_id)
+
+
 def evaluate_action(action: GovernedAction, target: ExecutionTarget) -> PolicyDecision:
-    if target != VIKUNJA_TARGET:
-        return PolicyDecision(False, "execution target is not the canonical WB-0037 target")
+    canonical = canonical_target(target.id)
+    if canonical is None or target != canonical:
+        return PolicyDecision(False, "execution target is not a canonical governed target")
     if action.target_id != target.id:
         return PolicyDecision(False, "action target does not match execution target")
     if action.operation not in SUPPORTED_OPERATIONS:
-        return PolicyDecision(False, "operation is not supported by WB-0037 V1")
+        return PolicyDecision(False, "operation is not supported by governed execution")
+    if target.id not in _OPERATION_TARGET_IDS[action.operation]:
+        return PolicyDecision(False, "operation is not allowed for the selected target")
     if not action.operation_id.strip():
         return PolicyDecision(False, "operation_id is required")
     if not action.has_bound_plan:

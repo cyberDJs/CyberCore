@@ -6,7 +6,8 @@ from typing import Any, Mapping
 
 PROTOCOL_VERSION = 1
 MAX_REQUEST_BYTES = 16_384
-_TARGET_ID = "tasks.cyberdjs.org"
+DEFAULT_TARGET_ID = "tasks.cyberdjs.org"
+ALLOWED_TARGET_IDS = frozenset({"tasks.cyberdjs.org", "cyberskills-vps"})
 _REQUIRED_KEYS = frozenset(
     {
         "version",
@@ -37,9 +38,17 @@ class ServerRequest:
     arguments: Mapping[str, str]
 
     @classmethod
-    def from_mapping(cls, value: Mapping[str, Any]) -> "ServerRequest":
+    def from_mapping(
+        cls,
+        value: Mapping[str, Any],
+        *,
+        expected_target_id: str = DEFAULT_TARGET_ID,
+    ) -> "ServerRequest":
         if frozenset(value) != _REQUIRED_KEYS:
             raise RequestValidationError("request fields do not match the exact protocol schema")
+
+        if expected_target_id not in ALLOWED_TARGET_IDS:
+            raise RequestValidationError("dispatcher target is not an allowed canonical target")
 
         version = value["version"]
         if isinstance(version, bool) or not isinstance(version, int):
@@ -67,8 +76,8 @@ class ServerRequest:
             raise RequestValidationError("arguments must be an object")
         if arguments:
             raise RequestValidationError("free-form operation arguments are not supported")
-        if parsed["target_id"] != _TARGET_ID:
-            raise RequestValidationError("request target is not the canonical server target")
+        if parsed["target_id"] != expected_target_id:
+            raise RequestValidationError("request target is not the configured server target")
 
         return cls(version=version, arguments={}, **parsed)
 
