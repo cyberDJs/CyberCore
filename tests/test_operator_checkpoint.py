@@ -35,9 +35,7 @@ def test_first_material_event_includes_report_and_digest() -> None:
 
 def test_same_delivered_event_is_suppressed() -> None:
     first = checkpoint_operator_update(event())
-    second = checkpoint_operator_update(
-        event(), last_delivered_fingerprint=first.fingerprint
-    )
+    second = checkpoint_operator_update(event(), last_delivered_fingerprint=first.fingerprint)
     assert second.reason == "UNCHANGED"
     assert second.report is None
     assert second.fingerprint == first.fingerprint
@@ -56,9 +54,7 @@ def test_changed_impact_or_security_finding_is_not_suppressed() -> None:
 
 def test_non_material_event_does_not_replace_last_delivered_checkpoint() -> None:
     prior = checkpoint_operator_update(event()).fingerprint
-    decision = checkpoint_operator_update(
-        event(changed=False), last_delivered_fingerprint=prior
-    )
+    decision = checkpoint_operator_update(event(changed=False), last_delivered_fingerprint=prior)
     assert decision.reason == "NON_MATERIAL"
     assert decision.fingerprint is None
     assert decision.report is None
@@ -68,7 +64,8 @@ def test_non_material_event_does_not_replace_last_delivered_checkpoint() -> None
 def test_invalid_prior_fingerprint_is_rejected(invalid: object) -> None:
     with pytest.raises(ValueError, match="INVALID_CHECKPOINT"):
         checkpoint_operator_update(
-            event(), last_delivered_fingerprint=invalid  # type: ignore[arg-type]
+            event(),
+            last_delivered_fingerprint=invalid,  # type: ignore[arg-type]
         )
 
 
