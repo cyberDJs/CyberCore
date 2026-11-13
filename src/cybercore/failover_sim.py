@@ -12,7 +12,7 @@ import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 
 class SimulatedCrash(RuntimeError):
@@ -25,6 +25,10 @@ class UnsafeEffect(RuntimeError):
 
 class AuditUnavailable(RuntimeError):
     """A durable local journal update was not possible."""
+
+
+class AuthorizationDenied(UnsafeEffect):
+    """Effect-boundary authorization was revoked or invalid."""
 
 
 @dataclass
@@ -62,6 +66,16 @@ class Verdict:
     policy_hash: str
     expires: int
     valid: bool = True
+
+
+@dataclass(frozen=True)
+class EffectAuthorization:
+    """Immutable audit evidence sampled at the actual fake write boundary."""
+
+    capability_id: str
+    lease_id: str
+    lease_epoch: int
+    verdict: str
 
 
 @dataclass(frozen=True)
@@ -245,7 +259,7 @@ class Journal:
     def in_flight(self, target: str, excluding: str) -> bool:
         row = self.conn.execute(
             """SELECT 1 FROM operations WHERE target=? AND operation_id != ?
-            AND state IN ('PREPARED', 'EXECUTING', 'VERIFYING', 'UNKNOWN', 'RECOVERING')
+            AND state IN ('PREPARED', 'EXECUTING', 'VERIFYING', 'UNKNOWN', 'RECOVERING', 'RECOVERY_UNKNOWN')
             LIMIT 1""",
             (target, excluding),
         ).fetchone()
@@ -302,13 +316,28 @@ class FakeProvider:
             raise UnsafeEffect("fake provider observation unavailable")
         return self.health[target], self.generation[target], self.receipts.get(key)
 
-    def mutate(self, target: str, action: str, epoch: int, key: str) -> str:
+    def mutate(
+        self,
+        target: str,
+        action: str,
+        epoch: int,
+        key: str,
+        authorize: Callable[[], EffectAuthorization] | None = None,
+    ) -> str:
         if not self.validate_target(target) or action not in {"restart", "restore"}:
             raise UnsafeEffect("non-fake target or unsupported effect")
         if not self.fencing or epoch != self.epochs[target]:
             raise UnsafeEffect("effect-boundary fencing rejected")
         if self.idempotency and key in self.receipts:
             return self.receipts[key][3]
+        # No external callback, lookup, or scheduling point occurs between
+        # authorization and the inert in-memory mutation below. The coordinator
+        # must supply a callback for all of its writes; raw provider calls remain
+        # possible only for isolated fencing/idempotency fault tests.
+        if authorize is not None:
+            evidence = authorize()
+            if evidence.lease_epoch != epoch or epoch != self.epochs[target]:
+                raise AuthorizationDenied("effect lease changed during authorization")
         self.generation[target] += 1
         self.health[target] = not (self.fail_restart if action == "restart" else self.fail_restore)
         op_id = f"fake-effect-{len(self.effects) + 1}"
@@ -397,10 +426,12 @@ class Simulator:
             req.human_approval != "Jan Kočí" or req.operation_id not in self.human_approvals
         ):
             return False, "explicit scoped Jan approval missing", "", "", 0, ""
+        # The lease lookup is the last injected/external read: read mutable
+        # capability and verdict *after* it so lookup hooks cannot stale them.
+        lease = self.journal.current_lease(req.target)
         cap = self.capabilities.get((req.actor, req.target, req.action))
         if cap is None or cap.expires <= self.clock.now or cap.policy_hash != req.policy_hash:
             return False, "capability missing, expired or wrong policy", "", "", 0, ""
-        lease = self.journal.current_lease(req.target)
         if (
             lease is None
             or lease.holder != req.actor
@@ -427,6 +458,41 @@ class Simulator:
             )
         return True, "", cap.capability_id, lease.lease_id, lease.epoch, "ALLOW"
 
+    def _authorize_effect(
+        self, req: Request, captured: list[EffectAuthorization]
+    ) -> Callable[[], EffectAuthorization]:
+        def authorize() -> EffectAuthorization:
+            ok, reason, cap_id, lease_id, epoch, verdict = self.gates(req)
+            if not ok:
+                raise AuthorizationDenied(reason)
+            evidence = EffectAuthorization(cap_id, lease_id, epoch, verdict)
+            captured.append(evidence)
+            return evidence
+
+        return authorize
+
+    def _recovery_authority(self, operation_id: str) -> EffectAuthorization:
+        for event in reversed(self.journal.events(operation_id)):
+            # Evidence from the original effect (which may itself be restore)
+            # cannot authorize the distinct compensating effect.
+            if event["state"] == "RECOVERING":
+                break
+            if (
+                event["state"] in {"VERIFYING", "RECOVERY_UNKNOWN"}
+                and str(event.get("capability_id", "")).endswith("-restore")
+                and event.get("voodoo") == "ALLOW"
+            ):
+                epoch = event["lease_epoch"]
+                if not isinstance(epoch, int) or isinstance(epoch, bool) or epoch <= 0:
+                    raise AuditUnavailable("invalid durable restore lease epoch")
+                return EffectAuthorization(
+                    str(event["capability_id"]),
+                    str(event["lease_id"]),
+                    epoch,
+                    str(event["voodoo"]),
+                )
+        raise AuditUnavailable("missing durable restore authorization evidence")
+
     def _transition(
         self,
         req: Request,
@@ -435,8 +501,17 @@ class Simulator:
         reason: str = "",
         provider_op: str | None = None,
         changed: bool | None = None,
+        authority: EffectAuthorization | None = None,
     ) -> None:
-        _ok, _why, cap_id, lease_id, epoch, verdict = self.gates(req)
+        if authority is None:
+            _ok, _why, cap_id, lease_id, epoch, verdict = self.gates(req)
+        else:
+            cap_id, lease_id, epoch, verdict = (
+                authority.capability_id,
+                authority.lease_id,
+                authority.lease_epoch,
+                authority.verdict,
+            )
         self.journal.transition(
             req.operation_id,
             self.clock.now,
@@ -449,7 +524,13 @@ class Simulator:
             changed=changed,
             reason=reason,
         )
-        if state in {"STOPPED", "UNKNOWN", "RECOVERY_FAILED", "RECOVERY_BLOCKED"}:
+        if state in {
+            "STOPPED",
+            "UNKNOWN",
+            "RECOVERY_UNKNOWN",
+            "RECOVERY_FAILED",
+            "RECOVERY_BLOCKED",
+        }:
             self.alerts.append(f"{req.operation_id}:{state}:{reason}")
 
     def run(self, req: Request, *, crash: str | None = None) -> str:
@@ -480,18 +561,35 @@ class Simulator:
             self._transition(req, "UNKNOWN", reason="lost lease")
             return "UNKNOWN"
         try:
-            receipt = self.provider.mutate(req.target, req.action, lease.epoch, req.operation_id)
+            captured: list[EffectAuthorization] = []
+            receipt = self.provider.mutate(
+                req.target,
+                req.action,
+                lease.epoch,
+                req.operation_id,
+                self._authorize_effect(req, captured),
+            )
         except UnsafeEffect as exc:
             self._transition(req, "STOPPED", reason=str(exc))
             return "STOPPED"
         if crash == "after_effect":
             raise SimulatedCrash("Kato stopped after effect before acknowledgement")
-        self._transition(req, "VERIFYING", provider_op=receipt, changed=True)
-        health, _, _ = self.provider.observe(req.target, req.operation_id)
+        effect_auth = captured[-1]
+        self._transition(req, "VERIFYING", provider_op=receipt, changed=True, authority=effect_auth)
+        try:
+            health, _, _ = self.provider.observe(req.target, req.operation_id)
+        except UnsafeEffect as exc:
+            self._transition(
+                req,
+                "UNKNOWN",
+                reason=f"post-effect observation failed: {exc}",
+                authority=effect_auth,
+            )
+            return "UNKNOWN"
         if health:
-            self._transition(req, "SUCCEEDED")
+            self._transition(req, "SUCCEEDED", authority=effect_auth)
             return "SUCCEEDED"
-        self._transition(req, "UNKNOWN", reason="health failed after effect")
+        self._transition(req, "UNKNOWN", reason="health failed after effect", authority=effect_auth)
         return "UNKNOWN"
 
     def reconcile(self, req: Request, *, retry: bool = False) -> str:
@@ -505,6 +603,42 @@ class Simulator:
             for field in ("actor", "target", "action", "tier", "policy_hash", "correlation_id")
         ):
             raise UnsafeEffect("reconciliation request conflicts with durable intent")
+        # A crash or failed journal write may leave restore at RECOVERING or
+        # VERIFYING before RECOVERY_UNKNOWN can be committed. Durable phase
+        # history must route all such resumes to restore, never the restart.
+        recovering = row["state"] in {"RECOVERING", "RECOVERY_UNKNOWN"} or (
+            row["state"] == "VERIFYING"
+            and any(
+                event["state"] == "RECOVERING" for event in self.journal.events(req.operation_id)
+            )
+        )
+        if recovering:
+            authority = self._recovery_authority(req.operation_id)
+            try:
+                healthy, _, restore_receipt = self.provider.observe(
+                    req.target, f"{req.operation_id}:restore"
+                )
+            except UnsafeEffect as exc:
+                self._transition(req, "RECOVERY_UNKNOWN", reason=str(exc), authority=authority)
+                return "RECOVERY_UNKNOWN"
+            if restore_receipt is None:
+                self._transition(
+                    req,
+                    "RECOVERY_UNKNOWN",
+                    reason="restore receipt not verifiable",
+                    authority=authority,
+                )
+                return "RECOVERY_UNKNOWN"
+            self._transition(
+                req,
+                "VERIFYING",
+                provider_op=restore_receipt[3],
+                changed=True,
+                authority=authority,
+            )
+            state = "SUCCEEDED" if healthy else "RECOVERY_FAILED"
+            self._transition(req, state, authority=authority)
+            return state
         try:
             healthy, _generation, receipt = self.provider.observe(req.target, req.operation_id)
         except UnsafeEffect as exc:
@@ -526,16 +660,52 @@ class Simulator:
             self._transition(req, "STOPPED", reason=reason)
             return "STOPPED"
         self._transition(req, "EXECUTING", reason="safe idempotent re-dispatch")
+        # A durable checkpoint does not preserve authorization; fail closed on
+        # revocation, expiry, or takeover before any replayed effect.
+        ok, reason, *_ = self.gates(req)
+        if not ok:
+            self._transition(req, "STOPPED", reason=reason)
+            return "STOPPED"
         lease = self.journal.current_lease(req.target)
         if lease is None:
             self._transition(req, "UNKNOWN", reason="lease vanished")
             return "UNKNOWN"
-        receipt_id = self.provider.mutate(req.target, req.action, lease.epoch, req.operation_id)
-        self._transition(req, "VERIFYING", provider_op=receipt_id, changed=True)
-        healthy, _, _ = self.provider.observe(req.target, req.operation_id)
+        captured: list[EffectAuthorization] = []
+        try:
+            receipt_id = self.provider.mutate(
+                req.target,
+                req.action,
+                lease.epoch,
+                req.operation_id,
+                self._authorize_effect(req, captured),
+            )
+        except UnsafeEffect as exc:
+            self._transition(req, "STOPPED", reason=str(exc))
+            return "STOPPED"
+        effect_auth = captured[-1]
+        self._transition(
+            req,
+            "VERIFYING",
+            provider_op=receipt_id,
+            changed=True,
+            authority=effect_auth,
+        )
+        try:
+            healthy, _, _ = self.provider.observe(req.target, req.operation_id)
+        except UnsafeEffect as exc:
+            self._transition(
+                req,
+                "UNKNOWN",
+                reason=f"post-retry observation failed: {exc}",
+                authority=effect_auth,
+            )
+            return "UNKNOWN"
         state = "SUCCEEDED" if healthy else "UNKNOWN"
         self._transition(
-            req, state, reason="provider health verified" if healthy else "effect unhealthy"
+            req,
+            state,
+            reason="provider health verified" if healthy else "effect unhealthy",
+            authority=effect_auth,
         )
         return state
 
@@ -548,6 +718,11 @@ class Simulator:
             for field in ("actor", "target", "action", "tier", "policy_hash", "correlation_id")
         ):
             raise UnsafeEffect("compensation request conflicts with durable intent")
+        if row["state"] == "RECOVERING":
+            # Do not replay an uncertain restore or invent its authorization.
+            # Reconciliation requires durable effect-boundary evidence; without
+            # it AuditUnavailable preserves the unresolved phase and write fence.
+            return self.reconcile(req)
         restore_req = Request(
             req.operation_id,
             req.actor,
@@ -563,27 +738,58 @@ class Simulator:
         )
         ok, reason, *_ = self.gates(restore_req)
         if not ok:
-            self._transition(req, "RECOVERY_BLOCKED", reason=reason)
+            self._transition(restore_req, "RECOVERY_BLOCKED", reason=reason)
             return "RECOVERY_BLOCKED"
-        self._transition(req, "RECOVERING", reason="approved distinct restore effect")
+        self._transition(restore_req, "RECOVERING", reason="approved distinct restore effect")
+        # VOODOO and scoped restore authority must still be valid at the
+        # compensation effect boundary, not just before journaling.
+        ok, reason, *_ = self.gates(restore_req)
+        if not ok:
+            self._transition(restore_req, "RECOVERY_BLOCKED", reason=reason)
+            return "RECOVERY_BLOCKED"
         lease = self.journal.current_lease(req.target)
         if lease is None:
-            self._transition(req, "RECOVERY_BLOCKED", reason="lease missing")
+            self._transition(restore_req, "RECOVERY_BLOCKED", reason="lease missing")
             return "RECOVERY_BLOCKED"
         try:
+            captured: list[EffectAuthorization] = []
             provider_op = self.provider.mutate(
-                req.target, "restore", lease.epoch, f"{req.operation_id}:restore"
+                req.target,
+                "restore",
+                lease.epoch,
+                f"{req.operation_id}:restore",
+                self._authorize_effect(restore_req, captured),
             )
+        except AuthorizationDenied as exc:
+            self._transition(restore_req, "RECOVERY_BLOCKED", reason=str(exc))
+            return "RECOVERY_BLOCKED"
         except UnsafeEffect as exc:
-            self._transition(req, "RECOVERY_FAILED", reason=str(exc))
+            self._transition(restore_req, "RECOVERY_FAILED", reason=str(exc))
             return "RECOVERY_FAILED"
-        self._transition(req, "VERIFYING", provider_op=provider_op, changed=True)
-        healthy, _, _ = self.provider.observe(req.target, f"{req.operation_id}:restore")
+        effect_auth = captured[-1]
+        self._transition(
+            restore_req,
+            "VERIFYING",
+            provider_op=provider_op,
+            changed=True,
+            authority=effect_auth,
+        )
+        try:
+            healthy, _, _ = self.provider.observe(req.target, f"{req.operation_id}:restore")
+        except UnsafeEffect as exc:
+            self._transition(
+                restore_req,
+                "RECOVERY_UNKNOWN",
+                reason=f"post-restore observation failed: {exc}",
+                authority=effect_auth,
+            )
+            return "RECOVERY_UNKNOWN"
         state = "SUCCEEDED" if healthy else "RECOVERY_FAILED"
         self._transition(
-            req,
+            restore_req,
             state,
             reason="restored health verified" if healthy else "compensation health check failed",
+            authority=effect_auth,
         )
         return state
 
