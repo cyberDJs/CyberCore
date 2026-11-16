@@ -85,9 +85,7 @@ def test_different_full_text_after_display_cutoff_is_not_suppressed() -> None:
     original = event(impact="A" * 240 + "first")
     modified = event(impact="A" * 240 + "second")
     prior = checkpoint_operator_update(original)
-    later = checkpoint_operator_update(
-        modified, last_delivered_fingerprint=prior.fingerprint
-    )
+    later = checkpoint_operator_update(modified, last_delivered_fingerprint=prior.fingerprint)
     assert prior.report == later.report
     assert later.reason == "MATERIAL_CHANGE"
     assert later.fingerprint != prior.fingerprint
@@ -97,9 +95,7 @@ def test_different_full_sha_after_display_prefix_is_not_suppressed() -> None:
     original = event(sha="a" * 40)
     modified = event(sha="a" * 12 + "b" * 28)
     prior = checkpoint_operator_update(original)
-    later = checkpoint_operator_update(
-        modified, last_delivered_fingerprint=prior.fingerprint
-    )
+    later = checkpoint_operator_update(modified, last_delivered_fingerprint=prior.fingerprint)
     assert prior.report == later.report
     assert later.reason == "MATERIAL_CHANGE"
     assert later.fingerprint != prior.fingerprint
@@ -117,9 +113,7 @@ def test_different_full_sha_after_display_prefix_is_not_suppressed() -> None:
         ({"event_kind": None}, "INVALID_EVENT_KIND"),
     ),
 )
-def test_invalid_nonmaterial_event_fails_closed(
-    bad_fields: dict[str, object], reason: str
-) -> None:
+def test_invalid_nonmaterial_event_fails_closed(bad_fields: dict[str, object], reason: str) -> None:
     with pytest.raises(ValueError, match=reason):
         checkpoint_operator_update(event(changed=False, **bad_fields))
 
