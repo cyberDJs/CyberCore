@@ -35,17 +35,9 @@ class ShadowLocalSpeechRuntime(LocalSpeechRuntime):
         vad = self.provider.vad.evaluate(frame)
         self._barge_shadow.observe(vad.state, frame_sequence=frame.sequence)
 
-    def _drain_microphone_input(self, reason: str) -> None:
-        try:
-            while True:
-                incoming = self.audio_input.read_frame_if_available()
-                if incoming is None:
-                    return
-                self._observe_barge_in_shadow(incoming)
-        except Exception:
-            if self.realtime.state is not RealtimeState.CANCELLED:
-                self.realtime.cancel(f"microphone input failed while {reason}")
-            raise
+    def _observe_speaking_barge_in(self, frame: AudioFrame) -> bool:
+        self._observe_barge_in_shadow(frame)
+        return False
 
     def speak(self, text: str) -> bool:
         self._barge_shadow.reset()

@@ -105,6 +105,16 @@ class SherpaVadAdapter:
         if callable(empty) and callable(pop):
             while not empty():
                 pop()
+
+        if detected:
+            samples = pcm_s16le_to_floats(frame.payload)
+            rms = (sum(sample * sample for sample in samples) / max(1, len(samples))) ** 0.5
+            if rms < 0.001:
+                return VadResult(
+                    state=VadState.SILENCE,
+                    reason="sherpa silero-vad rejected near-silent speech",
+                )
+
         return VadResult(
             state=VadState.SPEECH if detected else VadState.SILENCE,
             reason="sherpa silero-vad",
