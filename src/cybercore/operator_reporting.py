@@ -66,9 +66,8 @@ def format_operator_update(event: OperatorUpdate) -> str | None:
         raise ValueError("INVALID_STATE")
     if type(event.approval_required) is not bool:
         raise ValueError("INVALID_APPROVAL_FLAG")
-    if (
-        type(event.evidence_url) is not str
-        or not event.evidence_url.startswith("https://github.com/cyberDJs/CyberCore/")
+    if type(event.evidence_url) is not str or not event.evidence_url.startswith(
+        "https://github.com/cyberDJs/CyberCore/"
     ):
         raise ValueError("INVALID_EVIDENCE_URL")
     # Validate every display field before any NON_MATERIAL early return.
