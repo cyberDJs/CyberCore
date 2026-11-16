@@ -15,7 +15,7 @@ The operator should receive one concise Czech status report when an already-veri
 - `NON_MATERIAL`: no text and no replacement checkpoint.
 - malformed event, evidence URL, status, SHA, approval flag, changed flag or previous fingerprint: fail closed (`ValueError`).
 
-The fingerprint is an identity of the rendered text **not** an authenticated security receipt. This module does not fetch GitHub, send to Slack/Zulip/ChatGPT, authenticate provider data, persist state, grant permissions, or call a model. A sha256 digest is not a durable event ledger or a privacy guarantee. Avoid secret-bearing content before calling this module; it is *not* a secret scanner.
+The fingerprint is an identity of the complete, ordered event fields (JSON canonical list with UTF-8 SHA-256), **not** of the truncated human-readable report and **not** an authenticated security receipt. It includes the entire 40-character SHA and full sanitized text; changing content beyond display truncation still produces a new fingerprint. This module does not fetch GitHub, send to Slack/Zulip/ChatGPT, authenticate provider data, persist state, grant permissions, or call a model. A sha256 digest is not a durable event ledger or a privacy guarantee. Avoid secret-bearing content before calling this module; it is *not* a secret scanner.
 
 ## Required external integration gates (future, separately approved)
 
@@ -29,10 +29,10 @@ The fingerprint is an identity of the rendered text **not** an authenticated sec
 
 ## Acceptance / safety tests
 
-- identical material text with previously delivered digest is suppressed;
+- identical complete material event with previously delivered digest is suppressed; changes after 240-character display cutoff or after 12-character displayed SHA prefix are not suppressed;
 - change to impact produces a new fingerprint;
 - non-material messages do not advance checkpoint;
-- invalid/missing evidence and malformed checkpoint/flags fail closed;
+- invalid/missing evidence and malformed checkpoint/flags fail closed, including non-material and unknown-event cases (validate before filtering);
 - Python 3.11–3.14, Ruff, Pyright, CodeQL and pinned real CyberHIVE unchanged; independent review required.
 
 ## Rollback and impact
