@@ -56,16 +56,31 @@ def format_operator_update(event: OperatorUpdate) -> str | None:
     """Render one meaningful event; never infer approval or CI PASS."""
     if type(event) is not OperatorUpdate:
         raise ValueError("INVALID_EVENT")
-    if event.event_kind not in _MATERIAL_EVENTS or not event.changed:
-        return None
-    if _SHA.fullmatch(event.sha) is None:
+    if type(event.changed) is not bool:
+        raise ValueError("INVALID_CHANGED_FLAG")
+    if type(event.event_kind) is not str:
+        raise ValueError("INVALID_EVENT_KIND")
+    if type(event.sha) is not str or _SHA.fullmatch(event.sha) is None:
         raise ValueError("INVALID_SHA")
-    if event.state not in _STATES:
+    if type(event.state) is not str or event.state not in _STATES:
         raise ValueError("INVALID_STATE")
     if type(event.approval_required) is not bool:
         raise ValueError("INVALID_APPROVAL_FLAG")
-    if not event.evidence_url.startswith("https://github.com/cyberDJs/CyberCore/"):
+    if type(event.evidence_url) is not str or not event.evidence_url.startswith(
+        "https://github.com/cyberDJs/CyberCore/"
+    ):
         raise ValueError("INVALID_EVIDENCE_URL")
+    # Validate every display field before any NON_MATERIAL early return.
+    for field in (
+        event.subject,
+        event.what,
+        event.why,
+        event.impact,
+        event.next_action,
+    ):
+        _brief(field)
+    if event.event_kind not in _MATERIAL_EVENTS or not event.changed:
+        return None
     return "\n".join(
         (
             f"{_brief(event.subject)} — {event.state} · {event.sha[:12]}",
