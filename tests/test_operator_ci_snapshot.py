@@ -28,6 +28,7 @@ JOBS = (
 def make(**kwargs: object):
     args = dict(
         pr_number=165,
+        provider_pr_number=165,
         expected_sha=SHA,
         provider_head_sha=SHA,
         workflows=RUNS,
@@ -55,7 +56,10 @@ def test_structurally_consistent_ci_is_unknown_never_pass() -> None:
         ({"provider_head_sha": "b" * 40}, "HEAD_DRIFT"),
         ({"workflows": RUNS[:-1]}, "MISSING_WORKFLOW"),
         ({"jobs": JOBS[:-1]}, "MISSING_JOB"),
-        ({"jobs": JOBS[:2] + (replace(JOBS[2], conclusion="failure"),) + JOBS[3:]}, "JOB_NOT_SUCCESSFUL"),
+        (
+            {"jobs": JOBS[:2] + (replace(JOBS[2], conclusion="failure"),) + JOBS[3:]},
+            "JOB_NOT_SUCCESSFUL",
+        ),
     ),
 )
 def test_bad_or_stale_ci_is_blocked(changes: dict[str, object], reason: str) -> None:
@@ -76,7 +80,8 @@ def test_repeating_same_cautious_report_is_suppressed() -> None:
 def test_new_pr_identity_changes_checkpoint() -> None:
     first = checkpoint_operator_update(make())
     updated = checkpoint_operator_update(
-        make(pr_number=166), last_delivered_fingerprint=first.fingerprint
+        make(pr_number=166, provider_pr_number=166),
+        last_delivered_fingerprint=first.fingerprint,
     )
     assert updated.reason == "MATERIAL_CHANGE"
     assert updated.fingerprint != first.fingerprint
@@ -96,6 +101,8 @@ def test_new_head_cannot_reuse_old_consistent_snapshot() -> None:
         ({"pr_number": True}, "INVALID_PR_NUMBER"),
         ({"pr_number": 0}, "INVALID_PR_NUMBER"),
         ({"pr_number": "165"}, "INVALID_PR_NUMBER"),
+        ({"provider_pr_number": 164}, "PR_IDENTITY_DRIFT"),
+        ({"provider_pr_number": True}, "PR_IDENTITY_DRIFT"),
         ({"expected_sha": "not-sha"}, "INVALID_SHA"),
         ({"changed": "false"}, "INVALID_CHANGED_FLAG"),
     ),
@@ -122,4 +129,6 @@ def test_caller_cannot_supply_detached_cached_reconciliation() -> None:
     from cybercore.caser41_github_snapshot import Reconciliation
 
     with pytest.raises(TypeError):
-        make(snapshot=Reconciliation("CONSISTENT_ONLY", "PROVIDER_ORIGIN_AND_PAGINATION_UNVERIFIED"))
+        make(
+            snapshot=Reconciliation("CONSISTENT_ONLY", "PROVIDER_ORIGIN_AND_PAGINATION_UNVERIFIED")
+        )
