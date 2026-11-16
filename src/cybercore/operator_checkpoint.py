@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
+import json
 import re
 
 from cybercore.operator_reporting import OperatorUpdate, format_operator_update
@@ -40,7 +41,26 @@ def checkpoint_operator_update(
     report = format_operator_update(update)
     if report is None:
         return CheckpointDecision(None, None, "NON_MATERIAL")
-    fingerprint = sha256(report.encode("utf-8")).hexdigest()
+    # Hash complete, ordered validated inputs, not the 240-character display
+    # or shortened SHA. The fingerprint is an identity, not authentication.
+    canonical = json.dumps(
+        [
+            update.event_kind,
+            update.subject,
+            update.sha,
+            update.state,
+            update.what,
+            update.why,
+            update.impact,
+            update.next_action,
+            update.evidence_url,
+            update.approval_required,
+            update.changed,
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    fingerprint = sha256(canonical.encode("utf-8")).hexdigest()
     if fingerprint == last_delivered_fingerprint:
         return CheckpointDecision(None, fingerprint, "UNCHANGED")
     return CheckpointDecision(report, fingerprint, "MATERIAL_CHANGE")
