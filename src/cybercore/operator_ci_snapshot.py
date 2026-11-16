@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from cybercore.caser41_github_snapshot import Reconciliation
+from cybercore.caser41_github_snapshot import reconcile_github_snapshot
 from cybercore.operator_reporting import OperatorUpdate
 
 _SHA = re.compile(r"[0-9a-f]{40}", re.ASCII)
@@ -40,18 +40,31 @@ def ci_snapshot_operator_update(
     *,
     pr_number: int,
     expected_sha: str,
-    snapshot: Reconciliation,
+    provider_head_sha: str,
+    workflows: object,
+    jobs: object,
     changed: bool,
 ) -> OperatorUpdate:
-    """Build a sanitized status candidate. Does not authenticate supplied evidence."""
+    """Reconcile CI observations inside PR/SHA-bound report construction.
+
+    Caller must acquire complete, authenticated records for *this* PR and
+    verify stable HEAD before/after acquisition. This function cannot verify
+    provider provenance or pagination, and never emits a verified CI PASS.
+    """
     if type(pr_number) is not int or not 1 <= pr_number <= 1_000_000_000:
         raise ValueError("INVALID_PR_NUMBER")
     if type(expected_sha) is not str or _SHA.fullmatch(expected_sha) is None:
         raise ValueError("INVALID_SHA")
     if type(changed) is not bool:
         raise ValueError("INVALID_CHANGED_FLAG")
-    if type(snapshot) is not Reconciliation:
-        raise ValueError("INVALID_RECONCILIATION")
+    # Do not accept a reusable Reconciliation detached from its input identity.
+    # Run the structural reconciliation within the expected HEAD context.
+    snapshot = reconcile_github_snapshot(
+        expected_sha=expected_sha,
+        provider_head_sha=provider_head_sha,
+        workflows=workflows,
+        jobs=jobs,
+    )
     if snapshot.status == "CONSISTENT_ONLY":
         if snapshot.reason != "PROVIDER_ORIGIN_AND_PAGINATION_UNVERIFIED":
             raise ValueError("INVALID_RECONCILIATION")
