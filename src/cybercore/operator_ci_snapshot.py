@@ -40,6 +40,7 @@ def ci_snapshot_operator_update(
     *,
     pr_number: int,
     expected_sha: str,
+    provider_pr_number: int,
     provider_head_sha: str,
     workflows: object,
     jobs: object,
@@ -47,7 +48,7 @@ def ci_snapshot_operator_update(
 ) -> OperatorUpdate:
     """Reconcile CI observations inside PR/SHA-bound report construction.
 
-    Caller must acquire complete, authenticated records for *this* PR and
+    Caller must independently acquire the observed PR identity and complete, authenticated records for *this* PR, and
     verify stable HEAD before/after acquisition. This function cannot verify
     provider provenance or pagination, and never emits a verified CI PASS.
     """
@@ -55,6 +56,8 @@ def ci_snapshot_operator_update(
         raise ValueError("INVALID_PR_NUMBER")
     if type(expected_sha) is not str or _SHA.fullmatch(expected_sha) is None:
         raise ValueError("INVALID_SHA")
+    if type(provider_pr_number) is not int or provider_pr_number != pr_number:
+        raise ValueError("PR_IDENTITY_DRIFT")
     if type(changed) is not bool:
         raise ValueError("INVALID_CHANGED_FLAG")
     # Do not accept a reusable Reconciliation detached from its input identity.
