@@ -38,15 +38,21 @@ def test_operation_surface_is_exact() -> None:
         "vikunja.backup.run",
         "vikunja.backup.status",
         "vikunja.health.verify",
+        "nextcloud.r1.offhost.transfer",
+        "nextcloud.r1.offhost.rollback",
+        "nextcloud.r1.offhost.status",
+        "nextcloud.r1.offhost.verify",
     }
 
 
 def test_sshd_snippet_forces_dispatcher_and_resets_match_scope() -> None:
     text = (DEPLOY / "cybercore-exec.subsystem.conf").read_text()
     assert (
-        "Subsystem cybercore-exec /usr/bin/python3 /usr/local/libexec/cybercore-exec/dispatcher.py"
+        "Subsystem cybercore-exec /usr/bin/python3 /usr/local/libexec/cybercore-exec/dispatcher.py tasks.cyberdjs.org"
     ) in text
-    assert ("ForceCommand /usr/bin/python3 /usr/local/libexec/cybercore-exec/dispatcher.py") in text
+    assert (
+        "ForceCommand /usr/bin/python3 /usr/local/libexec/cybercore-exec/dispatcher.py tasks.cyberdjs.org"
+    ) in text
     assert "PermitTTY no" in text
     assert "AllowTcpForwarding no" in text
     assert text.rstrip().endswith("Match all")

@@ -27,6 +27,7 @@ class BrokerRoomBackend:
             display_name=str(identity["display_name"]),
             room_ids=tuple(str(item) for item in identity.get("authorized_rooms") or ()),
         )
+        self.allowed_tools = frozenset(str(item) for item in identity.get("allowed_tools") or ())
 
     def _call(self, method: str, args: Mapping[str, Any]) -> object:
         request = (
@@ -36,12 +37,15 @@ class BrokerRoomBackend:
             ).encode("utf-8")
             + b"\n"
         )
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-            client.settimeout(self.timeout_seconds)
-            client.connect(str(self.socket_path))
-            client.sendall(request)
-            with client.makefile("rb") as stream:
-                line = stream.readline(_MAX_RESPONSE_BYTES + 1)
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.settimeout(self.timeout_seconds)
+                client.connect(str(self.socket_path))
+                client.sendall(request)
+                with client.makefile("rb") as stream:
+                    line = stream.readline(_MAX_RESPONSE_BYTES + 1)
+        except OSError as exc:
+            raise RuntimeError("broker connection failed or was rejected") from exc
         if not line or len(line) > _MAX_RESPONSE_BYTES:
             raise RuntimeError("broker returned no valid response")
         response = json.loads(line)
@@ -122,4 +126,18 @@ class BrokerRoomBackend:
         result = self._call("runtime_status", {})
         if not isinstance(result, dict):
             raise RuntimeError("broker returned malformed runtime status")
+        return result
+
+    def invoke_tool(
+        self,
+        *,
+        tool_name: str,
+        arguments: Mapping[str, Any],
+    ) -> Mapping[str, Any]:
+        result = self._call(
+            "invoke_tool",
+            {"tool_name": tool_name, "arguments": dict(arguments)},
+        )
+        if not isinstance(result, dict):
+            raise RuntimeError("broker returned malformed tool result")
         return result

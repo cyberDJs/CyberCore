@@ -1,0 +1,26 @@
+[Unit]
+Description=CyberCore governed Nextcloud R1 local containment rollback
+Conflicts=cybercore-nextcloud-r1-transfer.service
+After=cybercore-nextcloud-r1-transfer.service
+ConditionPathExists=/usr/local/libexec/cybercore-exec-nextcloud-r1/rollback.py
+
+[Service]
+Type=oneshot
+User=cybercore-exec
+Group=cybercore-exec
+ExecStart=/usr/bin/python3 /usr/local/libexec/cybercore-exec-nextcloud-r1/rollback.py
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_UNIX
+IPAddressDeny=any
+ReadWritePaths=/var/lib/cybercore-exec-nextcloud-r1/credentials /var/lib/cybercore-exec-nextcloud-r1/state /var/backups/cybercore/nextcloud-r1-113/2026-10-13
+TimeoutStartSec=60

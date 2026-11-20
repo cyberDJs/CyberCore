@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import threading
 import time
@@ -184,5 +185,39 @@ def test_broker_exposes_three_distinct_identity_bound_sockets(tmp_path: Path):
             BrokerRoomBackend(sockets["chatgpt:johnny-mod"]).actor.actor_id == "chatgpt:johnny-mod"
         )
         assert BrokerRoomBackend(sockets["chatgpt:eimy"]).actor.actor_id == "chatgpt:eimy"
+    finally:
+        broker.stop()
+
+
+def test_broker_peer_uid_gate_accepts_matching_uid(tmp_path: Path) -> None:
+    socket_path = tmp_path / "johnny-work.sock"
+    broker = RoomBroker(
+        {"chatgpt:johnny-work": FakeBackend("chatgpt:johnny-work")},
+        {"chatgpt:johnny-work": socket_path},
+        expected_peer_uids={"chatgpt:johnny-work": os.geteuid()},
+    )
+    broker.start()
+    try:
+        client = BrokerRoomBackend(socket_path)
+        assert client.actor.actor_id == "chatgpt:johnny-work"
+    finally:
+        broker.stop()
+
+
+def test_broker_peer_uid_gate_rejects_mismatched_uid(tmp_path: Path) -> None:
+    socket_path = tmp_path / "johnny-work.sock"
+    broker = RoomBroker(
+        {"chatgpt:johnny-work": FakeBackend("chatgpt:johnny-work")},
+        {"chatgpt:johnny-work": socket_path},
+        expected_peer_uids={"chatgpt:johnny-work": os.geteuid() + 1},
+    )
+    broker.start()
+    try:
+        try:
+            BrokerRoomBackend(socket_path)
+        except RuntimeError as exc:
+            assert "failed or was rejected" in str(exc)
+        else:
+            raise AssertionError("mismatched Unix peer UID must fail closed")
     finally:
         broker.stop()
