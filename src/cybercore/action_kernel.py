@@ -548,47 +548,74 @@ class ActionKernel:
         return True
 
     def _now(self) -> datetime:
-        return self._clock()
+        # Metadata keeps raw UTC semantics and does not advance authority.
+        # A failure from this same trusted provider must still revoke it.
+        with self._clock_observation_lock:
+            try:
+                now = self._clock()
+                if not isinstance(now, datetime) or now.utcoffset() is None:
+                    raise PermissionError("Invalid trusted UTC metadata observation")
+                return now
+            except Exception as exc:
+                self._clock_authority_invalid = True
+                raise PermissionError(
+                    "Action Kernel process-local clock authority unavailable or invalid"
+                ) from exc
 
     def _trusted_time(self) -> tuple[datetime, float]:
-        # Check and advance the high-water in acquisition order, not in the
-        # order threads happened to sample time before acquiring a lock.
+        # Sample and validate under one lock. Once clock continuity is lost,
+        # neither a later plausible sample nor a fresh task can restore it.
         with self._clock_observation_lock:
             if self._clock_authority_invalid:
                 raise PermissionError(
                     "Action Kernel process-local clock authority unavailable or invalid"
                 )
-            current_process_id = self._process_id()
-            current_monotonic = self._monotonic()
-            current_wall = self._clock()
-            if (
-                current_process_id != self._clock_floor_process_id
-                or isinstance(current_process_id, bool)
-                or not isinstance(current_process_id, int)
-                or not isfinite(current_monotonic)
-                or current_monotonic < self._monotonic_high_water
-                or current_wall.tzinfo is None
-            ):
+            try:
+                current_process_id = self._process_id()
+                current_monotonic = self._monotonic()
+                current_wall = self._clock()
+                if (
+                    current_process_id != self._clock_floor_process_id
+                    or isinstance(current_process_id, bool)
+                    or not isinstance(current_process_id, int)
+                    or isinstance(current_monotonic, bool)
+                    or not isinstance(current_monotonic, (int, float))
+                    or not isfinite(current_monotonic)
+                    or current_monotonic < self._monotonic_high_water
+                    or not isinstance(current_wall, datetime)
+                    or current_wall.utcoffset() is None
+                ):
+                    raise PermissionError("Invalid trusted clock observation")
+
+                utc_high_water = self._utc_high_water
+                utc_high_water_monotonic = self._utc_high_water_monotonic
+                projected_utc_peak = utc_high_water + timedelta(
+                    seconds=current_monotonic - utc_high_water_monotonic
+                )
+                # Compare against the projected peak: a later raw UTC value
+                # must not reduce elapsed trusted time or restart a grant.
+                if current_wall > projected_utc_peak:
+                    utc_high_water = current_wall
+                    utc_high_water_monotonic = current_monotonic
+                    projected_utc_peak = current_wall
+
+                projected_floor = self._clock_floor_utc + timedelta(
+                    seconds=current_monotonic - self._clock_floor_monotonic
+                )
+                trusted_now = max(current_wall, projected_utc_peak, projected_floor)
+            except Exception as exc:
+                # Includes callback failures, malformed values and projection/
+                # timezone errors. None proves continuity after recovery.
                 self._clock_authority_invalid = True
                 raise PermissionError(
                     "Action Kernel process-local clock authority unavailable or invalid"
-                )
-            self._monotonic_high_water = current_monotonic
-            projected_utc_peak = self._utc_high_water + timedelta(
-                seconds=current_monotonic - self._utc_high_water_monotonic
-            )
-            # Compare against the projected peak, NOT its original UTC
-            # value: a later clock correction above the raw old peak but
-            # below its elapsed-time projection must not reduce authority.
-            if current_wall > projected_utc_peak:
-                self._utc_high_water = current_wall
-                self._utc_high_water_monotonic = current_monotonic
-                projected_utc_peak = current_wall
+                ) from exc
 
-            projected_floor = self._clock_floor_utc + timedelta(
-                seconds=current_monotonic - self._clock_floor_monotonic
-            )
-            return max(current_wall, projected_utc_peak, projected_floor), current_monotonic
+            # Commit state only after the complete observation is valid.
+            self._monotonic_high_water = current_monotonic
+            self._utc_high_water = utc_high_water
+            self._utc_high_water_monotonic = utc_high_water_monotonic
+            return trusted_now, current_monotonic
 
     def _task_id_is_reserved(self, task_id: str) -> bool:
         with self._task_id_lock:
