@@ -20,11 +20,11 @@ def main() -> int:
         return 2
     try:
         result = fetch_vps_inventory(key)
-    except InterServerInventoryError:
-        print(
-            "InterServer inventory blocked: provider query failed or response invalid",
-            file=sys.stderr,
-        )
+    except InterServerInventoryError as exc:
+        diagnostic = f"InterServer inventory blocked: {exc.category}"
+        if exc.category == "http_error" and exc.http_status is not None:
+            diagnostic += f" (HTTP {exc.http_status})"
+        print(diagnostic, file=sys.stderr)
         return 1
     print(json.dumps(result, sort_keys=True))
     return 0
