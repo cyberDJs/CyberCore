@@ -22,7 +22,18 @@ STATUSES = frozenset({"active", "pending", "pending-setup", "suspended", "cancel
 
 
 class InterServerInventoryError(ValueError):
-    """Safe error with no provider response text or secret values."""
+    """Safe error carrying a fixed diagnostic category and optional HTTP status."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        category: str = "schema_invalid",
+        http_status: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.category = category
+        self.http_status = http_status
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -82,7 +93,7 @@ def fetch_vps_inventory(
     Injectable opener supports network-free unit tests.
     """
     if not api_key or not api_key.strip():
-        raise InterServerInventoryError("API key unavailable")
+        raise InterServerInventoryError("API key unavailable", category="key_missing")
     request = urllib.request.Request(
         VPS_LIST_URL,
         headers={"X-API-KEY": api_key, "Accept": "application/json"},
@@ -92,15 +103,36 @@ def fetch_vps_inventory(
         opener = urllib.request.build_opener(_NoRedirect()).open
     try:
         with opener(request, timeout=10) as response:
-            if response.getcode() != 200:
-                raise InterServerInventoryError("VPS inventory request failed")
+            http_status = response.getcode()
+            if http_status != 200:
+                raise InterServerInventoryError(
+                    "VPS inventory HTTP response not successful",
+                    category="http_error",
+                    http_status=http_status if type(http_status) is int and 100 <= http_status <= 599 else None,
+                )
             content = response.read(MAX_RESPONSE_BYTES + 1)
-    except (urllib.error.URLError, OSError, TimeoutError):
-        raise InterServerInventoryError("VPS inventory request failed") from None
+    except urllib.error.HTTPError as exc:
+        raise InterServerInventoryError(
+            "VPS inventory HTTP request rejected",
+            category="http_error",
+            http_status=exc.code if type(exc.code) is int and 100 <= exc.code <= 599 else None,
+        ) from None
+    except (TimeoutError,):
+        raise InterServerInventoryError(
+            "VPS inventory request timed out", category="timeout"
+        ) from None
+    except (urllib.error.URLError, OSError):
+        raise InterServerInventoryError(
+            "VPS inventory network request failed", category="network_error"
+        ) from None
     if len(content) > MAX_RESPONSE_BYTES:
-        raise InterServerInventoryError("VPS inventory response too large")
+        raise InterServerInventoryError(
+            "VPS inventory response too large", category="response_too_large"
+        )
     try:
         parsed = json.loads(content)
     except (ValueError, UnicodeError):
-        raise InterServerInventoryError("invalid VPS inventory JSON") from None
+        raise InterServerInventoryError(
+            "invalid VPS inventory JSON", category="invalid_json"
+        ) from None
     return summarize_provider_rows(parsed)
