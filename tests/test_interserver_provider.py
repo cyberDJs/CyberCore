@@ -114,3 +114,71 @@ def test_rejects_large_response() -> None:
 
     with pytest.raises(InterServerInventoryError, match="too large"):
         fetch_vps_inventory("secret", opener=opener)
+
+
+def test_http_status_is_numeric_and_provider_text_is_never_in_diagnostic() -> None:
+    def opener(_request: object, timeout: int) -> FakeResponse:
+        raise urllib.error.HTTPError(
+            "https://my.interserver.net/apiv2/vps?secret=hidden",
+            403,
+            "secret leaked by upstream",
+            {},
+            None,
+        )
+
+    with pytest.raises(InterServerInventoryError) as error:
+        fetch_vps_inventory("very-secret", opener=opener)
+    assert error.value.category == "http_error"
+    assert error.value.http_status == 403
+    assert "very-secret" not in str(error.value)
+    assert "hidden" not in str(error.value)
+    assert "secret leaked by upstream" not in str(error.value)
+
+
+def test_unexpected_response_http_status_is_classified() -> None:
+    def opener(_request: object, timeout: int) -> FakeResponse:
+        return FakeResponse(b"private error body", code=503)
+
+    with pytest.raises(InterServerInventoryError) as error:
+        fetch_vps_inventory("secret", opener=opener)
+    assert error.value.category == "http_error"
+    assert error.value.http_status == 503
+
+
+def test_invalid_json_has_safe_category() -> None:
+    def opener(_request: object, timeout: int) -> FakeResponse:
+        return FakeResponse(b"not JSON: secret response")
+
+    with pytest.raises(InterServerInventoryError) as error:
+        fetch_vps_inventory("secret", opener=opener)
+    assert error.value.category == "invalid_json"
+
+
+def test_schema_error_has_safe_category() -> None:
+    def opener(_request: object, timeout: int) -> FakeResponse:
+        return FakeResponse(b'{"private": "hidden"}')
+
+    with pytest.raises(InterServerInventoryError) as error:
+        fetch_vps_inventory("secret", opener=opener)
+    assert error.value.category == "schema_invalid"
+    assert "hidden" not in str(error.value)
+
+
+def test_network_error_has_safe_category() -> None:
+    def opener(_request: object, timeout: int) -> FakeResponse:
+        raise urllib.error.URLError("private endpoint details")
+
+    with pytest.raises(InterServerInventoryError) as error:
+        fetch_vps_inventory("secret", opener=opener)
+    assert error.value.category == "network_error"
+    assert "private endpoint details" not in str(error.value)
+
+
+def test_timeout_has_safe_category() -> None:
+    def opener(_request: object, timeout: int) -> FakeResponse:
+        raise TimeoutError("private timeout details")
+
+    with pytest.raises(InterServerInventoryError) as error:
+        fetch_vps_inventory("secret", opener=opener)
+    assert error.value.category == "timeout"
+    assert "private timeout details" not in str(error.value)
