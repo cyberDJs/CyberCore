@@ -39,3 +39,22 @@ confusing historical CyberCore targets with currently billed VPS instances.
 - Mocked tests green, endpoint contract reviewed, no secret leaks in logs.
 - Actual VPS count stated only after a successful authorized read-only call.
 - No privilege elevation, credential rotation or production changes.
+
+## 2026-11-22: safe failure diagnostics
+
+An authorized manual workflow run (`45013721930`) reached the inventory
+request but failed with a generic provider-query error. The previous handler
+deliberately hid upstream details, so the cause could not be distinguished.
+
+The follow-up patch provides only fixed diagnostic categories:
+`key_missing`, `http_error`, `network_error`, `timeout`,
+`response_too_large`, `invalid_json`, `schema_invalid`.
+For `http_error`, a validated numeric status (100–599) may be shown.
+Never log exception text, raw HTTP bodies, response headers, URLs or API key.
+The previous run's root cause remains unknown until a **new, separately
+authorized** read-only run with the reviewed patch.
+
+The CLI exit remains nonzero on any failure; invalid output never becomes
+an empty inventory. Merging this diagnostic patch does not trigger the manual
+workflow. Confirm CI/security checks before merge and request a fresh
+authorization for a new live invocation.
