@@ -72,7 +72,8 @@ def test_request_uses_allowlisted_endpoint_and_secret_header() -> None:
         None,
         {},
         [{"vps_id": 1, "vps_status": "active"}],
-        [{"vps_id": 1, "vps_status": "unexpected", "repeat_invoices_cost": 6}],
+        [{"vps_id": 1, "vps_status": "", "repeat_invoices_cost": 6}],
+        [{"vps_id": 1, "vps_status": None, "repeat_invoices_cost": 6}],
         [{"vps_id": 1, "vps_status": "active", "repeat_invoices_cost": "-1"}],
         [{"vps_id": 1, "vps_status": "active", "repeat_invoices_cost": "NaN"}],
         [
@@ -191,7 +192,7 @@ def test_timeout_has_safe_category() -> None:
         ([1], "schema_row"),
         ([{"vps_status": "active", "repeat_invoices_cost": "2"}], "schema_id"),
         (
-            [{"vps_id": 1, "vps_status": "private-status", "repeat_invoices_cost": "2"}],
+            [{"vps_id": 1, "vps_status": None, "repeat_invoices_cost": "2"}],
             "schema_status",
         ),
         ([{"vps_id": 1, "vps_status": "active"}], "schema_cost_missing"),
@@ -215,3 +216,30 @@ def test_schema_diagnostics_are_fixed_and_do_not_expose_values(
     assert error.value.category == expected_category
     assert "private" not in str(error.value)
     assert "private" not in error.value.category
+
+
+def test_unknown_provider_status_is_separate_never_active_or_exposed() -> None:
+    result = summarize_provider_rows(
+        [
+            {"vps_id": 1, "vps_status": "active", "repeat_invoices_cost": "3.00"},
+            {
+                "vps_id": 2,
+                "vps_status": "unpublished-private-state",
+                "repeat_invoices_cost": "7.00",
+            },
+        ]
+    )
+    assert result["total_vps"] == 2
+    assert result["by_status"] == {"active": 1, "unknown": 1}
+    assert result["unknown_status_count"] == 1
+    assert result["status_mapping_complete"] is False
+    assert result["listed_recurring_cost_by_status"] == {"active": "3.00", "unknown": "7.00"}
+    assert "unpublished-private-state" not in repr(result)
+
+
+def test_known_status_mapping_is_complete() -> None:
+    result = summarize_provider_rows(
+        [{"vps_id": 10, "vps_status": "pending", "repeat_invoices_cost": "1.00"}]
+    )
+    assert result["unknown_status_count"] == 0
+    assert result["status_mapping_complete"] is True

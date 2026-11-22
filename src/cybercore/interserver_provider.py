@@ -63,8 +63,10 @@ def summarize_provider_rows(payload: object) -> dict[str, object]:
             )
         seen_ids.add(identifier)
         status = item.get("vps_status")
-        if not isinstance(status, str) or status not in STATUSES:
-            raise InterServerInventoryError("unexpected VPS status", category="schema_status")
+        if not isinstance(status, str) or not status.strip():
+            raise InterServerInventoryError("invalid VPS status", category="schema_status")
+        # Unknown provider values stay visible as an aggregate, never as active.
+        status = status if status in STATUSES else "unknown"
         if "repeat_invoices_cost" not in item:
             raise InterServerInventoryError(
                 "missing recurring VPS cost", category="schema_cost_missing"
@@ -87,6 +89,8 @@ def summarize_provider_rows(payload: object) -> dict[str, object]:
         "total_vps": len(payload),
         "by_status": {s: statuses[s] for s in sorted(statuses)},
         "listed_recurring_cost_by_status": {s: format(totals[s], "f") for s in sorted(totals)},
+        "unknown_status_count": statuses["unknown"],
+        "status_mapping_complete": statuses["unknown"] == 0,
         "cost_currency": "UNVERIFIED",
         "billing_verified": False,
     }
