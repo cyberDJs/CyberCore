@@ -72,3 +72,25 @@ credential material are logged. The validator remains fail-closed, and
 this is diagnostic instrumentation rather than evidence that a specific
 InterServer response format is correct. A new live run requires
 independent authorization and a reviewed merge.
+
+## 2026-11-22: unknown-status aggregation candidate (not deployed)
+
+Authorized manual run `45016274142` returned `schema_status`. The original
+provider value is unknown because the read-only workflow deliberately never
+logs raw response data. The status allowlist must therefore **not** be extended
+with guessed new status labels.
+
+This candidate maps any **nonempty, string-valued** but unrecognized
+`vps_status` to the aggregate bucket `unknown`. It does not map that row
+to `active`, `suspended`, or `canceled`. It emits
+`unknown_status_count` and `status_mapping_complete=false` when such a
+bucket occurs. It never outputs raw provider status values or VPS IDs.
+Missing, non-string and empty statuses remain `schema_status` errors;
+duplicate/invalid IDs, invalid costs and response-shape errors still fail
+closed. Cost totals remain **listed, currency unverified and billing
+unverified**, including for the unknown bucket.
+
+A successful future inventory can report total returned rows and known
+status breakdown, but cannot claim that unknown-state VPS are active or
+billable. Neither the draft PR nor its merge will run the live workflow;
+a separate reviewed authorization is required.
