@@ -190,9 +190,21 @@ def test_timeout_has_safe_category() -> None:
         ({}, "schema_envelope"),
         ([1], "schema_row"),
         ([{"vps_status": "active", "repeat_invoices_cost": "2"}], "schema_id"),
-        ([{"vps_id": 1, "vps_status": "private-status", "repeat_invoices_cost": "2"}], "schema_status"),
+        (
+            [{"vps_id": 1, "vps_status": "private-status", "repeat_invoices_cost": "2"}],
+            "schema_status",
+        ),
         ([{"vps_id": 1, "vps_status": "active"}], "schema_cost_missing"),
-        ([{"vps_id": 1, "vps_status": "active", "repeat_invoices_cost": "private-value"}], "schema_cost_invalid"),
+        (
+            [
+                {
+                    "vps_id": 1,
+                    "vps_status": "active",
+                    "repeat_invoices_cost": "private-value",
+                }
+            ],
+            "schema_cost_invalid",
+        ),
     ],
 )
 def test_schema_diagnostics_are_fixed_and_do_not_expose_values(
