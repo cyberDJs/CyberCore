@@ -46,29 +46,39 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 def summarize_provider_rows(payload: object) -> dict[str, object]:
     """Validate canonical InterServer VpsRow fields and return only aggregates."""
     if not isinstance(payload, list) or len(payload) > 10000:
-        raise InterServerInventoryError("invalid VPS listing shape")
+        raise InterServerInventoryError("invalid VPS listing shape", category="schema_envelope")
     statuses: Counter[str] = Counter()
     totals: dict[str, Decimal] = {}
     seen_ids: set[str] = set()
     for item in payload:
         if not isinstance(item, Mapping):
-            raise InterServerInventoryError("invalid VPS row")
+            raise InterServerInventoryError("invalid VPS row", category="schema_row")
         identifier = item.get("vps_id")
         if isinstance(identifier, bool) or not isinstance(identifier, (int, str)):
-            raise InterServerInventoryError("invalid VPS identifier")
+            raise InterServerInventoryError("invalid VPS identifier", category="schema_id")
         identifier = str(identifier)
         if not identifier.isdecimal() or identifier in seen_ids:
-            raise InterServerInventoryError("invalid or duplicate VPS identifier")
+            raise InterServerInventoryError(
+                "invalid or duplicate VPS identifier", category="schema_id"
+            )
         seen_ids.add(identifier)
         status = item.get("vps_status")
         if not isinstance(status, str) or status not in STATUSES:
-            raise InterServerInventoryError("unexpected VPS status")
+            raise InterServerInventoryError("unexpected VPS status", category="schema_status")
+        if "repeat_invoices_cost" not in item:
+            raise InterServerInventoryError(
+                "missing recurring VPS cost", category="schema_cost_missing"
+            )
         try:
             cost = Decimal(str(item["repeat_invoices_cost"]))
         except (KeyError, InvalidOperation, TypeError, ValueError):
-            raise InterServerInventoryError("invalid recurring VPS cost") from None
+            raise InterServerInventoryError(
+                "invalid recurring VPS cost", category="schema_cost_invalid"
+            ) from None
         if not cost.is_finite() or cost < 0:
-            raise InterServerInventoryError("invalid recurring VPS cost")
+            raise InterServerInventoryError(
+                "invalid recurring VPS cost", category="schema_cost_invalid"
+            )
         statuses[status] += 1
         totals[status] = totals.get(status, Decimal("0")) + cost
 

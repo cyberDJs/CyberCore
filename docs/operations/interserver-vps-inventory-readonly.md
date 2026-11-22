@@ -58,3 +58,17 @@ The CLI exit remains nonzero on any failure; invalid output never becomes
 an empty inventory. Merging this diagnostic patch does not trigger the manual
 workflow. Confirm CI/security checks before merge and request a fresh
 authorization for a new live invocation.
+
+## 2026-11-22: targeted schema mismatch diagnostics
+
+Manual live run 45014654775 reached a valid JSON response but stopped with
+`schema_invalid`. The raw response was deliberately not persisted.
+This patch replaces the generic schema label with fixed, non-sensitive
+categories: `schema_envelope`, `schema_row`, `schema_id`,
+`schema_status`, `schema_cost_missing`, `schema_cost_invalid`.
+
+No identifiers, unexpected status values, amounts, response bodies, or
+credential material are logged. The validator remains fail-closed, and
+this is diagnostic instrumentation rather than evidence that a specific
+InterServer response format is correct. A new live run requires
+independent authorization and a reviewed merge.

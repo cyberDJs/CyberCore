@@ -160,7 +160,7 @@ def test_schema_error_has_safe_category() -> None:
 
     with pytest.raises(InterServerInventoryError) as error:
         fetch_vps_inventory("secret", opener=opener)
-    assert error.value.category == "schema_invalid"
+    assert error.value.category == "schema_envelope"
     assert "hidden" not in str(error.value)
 
 
@@ -182,3 +182,36 @@ def test_timeout_has_safe_category() -> None:
         fetch_vps_inventory("secret", opener=opener)
     assert error.value.category == "timeout"
     assert "private timeout details" not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected_category"),
+    [
+        ({}, "schema_envelope"),
+        ([1], "schema_row"),
+        ([{"vps_status": "active", "repeat_invoices_cost": "2"}], "schema_id"),
+        (
+            [{"vps_id": 1, "vps_status": "private-status", "repeat_invoices_cost": "2"}],
+            "schema_status",
+        ),
+        ([{"vps_id": 1, "vps_status": "active"}], "schema_cost_missing"),
+        (
+            [
+                {
+                    "vps_id": 1,
+                    "vps_status": "active",
+                    "repeat_invoices_cost": "private-value",
+                }
+            ],
+            "schema_cost_invalid",
+        ),
+    ],
+)
+def test_schema_diagnostics_are_fixed_and_do_not_expose_values(
+    payload: object, expected_category: str
+) -> None:
+    with pytest.raises(InterServerInventoryError) as error:
+        summarize_provider_rows(payload)
+    assert error.value.category == expected_category
+    assert "private" not in str(error.value)
+    assert "private" not in error.value.category
