@@ -108,7 +108,9 @@ def fetch_vps_inventory(
                 raise InterServerInventoryError(
                     "VPS inventory HTTP response not successful",
                     category="http_error",
-                    http_status=http_status if type(http_status) is int and 100 <= http_status <= 599 else None,
+                    http_status=http_status
+                    if type(http_status) is int and 100 <= http_status <= 599
+                    else None,
                 )
             content = response.read(MAX_RESPONSE_BYTES + 1)
     except urllib.error.HTTPError as exc:
