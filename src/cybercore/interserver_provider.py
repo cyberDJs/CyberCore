@@ -58,7 +58,9 @@ def summarize_provider_rows(payload: object) -> dict[str, object]:
             raise InterServerInventoryError("invalid VPS identifier", category="schema_id")
         identifier = str(identifier)
         if not identifier.isdecimal() or identifier in seen_ids:
-            raise InterServerInventoryError("invalid or duplicate VPS identifier", category="schema_id")
+            raise InterServerInventoryError(
+                "invalid or duplicate VPS identifier", category="schema_id"
+            )
         seen_ids.add(identifier)
         status = item.get("vps_status")
         if not isinstance(status, str) or status not in STATUSES:
