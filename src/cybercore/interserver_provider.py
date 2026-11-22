@@ -18,7 +18,7 @@ from typing import Any
 
 VPS_LIST_URL = "https://my.interserver.net/apiv2/vps"
 MAX_RESPONSE_BYTES = 1024 * 1024
-STATUSES = frozenset({"active", "pending", "suspended", "cancelled"})
+STATUSES = frozenset({"active", "pending", "pending-setup", "suspended", "cancelled", "canceled"})
 
 
 class InterServerInventoryError(ValueError):
@@ -52,7 +52,7 @@ def summarize_provider_rows(payload: object) -> dict[str, object]:
             raise InterServerInventoryError("unexpected VPS status")
         try:
             cost = Decimal(str(item["repeat_invoices_cost"]))
-        except (KeyError, InvalidOperation, TypeError, ValueError) as exc:
+        except (KeyError, InvalidOperation, TypeError, ValueError):
             raise InterServerInventoryError("invalid recurring VPS cost") from None
         if not cost.is_finite() or cost < 0:
             raise InterServerInventoryError("invalid recurring VPS cost")
@@ -95,7 +95,7 @@ def fetch_vps_inventory(
             if response.getcode() != 200:
                 raise InterServerInventoryError("VPS inventory request failed")
             content = response.read(MAX_RESPONSE_BYTES + 1)
-    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+    except (urllib.error.URLError, OSError, TimeoutError):
         raise InterServerInventoryError("VPS inventory request failed") from None
     if len(content) > MAX_RESPONSE_BYTES:
         raise InterServerInventoryError("VPS inventory response too large")
