@@ -160,7 +160,7 @@ def test_schema_error_has_safe_category() -> None:
 
     with pytest.raises(InterServerInventoryError) as error:
         fetch_vps_inventory("secret", opener=opener)
-    assert error.value.category == "schema_invalid"
+    assert error.value.category == "schema_envelope"
     assert "hidden" not in str(error.value)
 
 
