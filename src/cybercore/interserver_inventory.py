@@ -8,14 +8,15 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping, Sequence
-from typing import Any
 
 
 class InventoryFormatError(ValueError):
     """Provider response does not match an approved inventory schema."""
 
 
-_ALLOWED_STATUS = frozenset({"active", "running", "stopped", "suspended", "pending", "cancelled", "terminated", "unknown"})
+_ALLOWED_STATUS = frozenset(
+    {"active", "running", "stopped", "suspended", "pending", "cancelled", "terminated", "unknown"}
+)
 
 
 def summarize_vps_inventory(payload: object) -> dict[str, object]:
