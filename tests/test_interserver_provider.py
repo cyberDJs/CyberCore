@@ -222,7 +222,11 @@ def test_unknown_provider_status_is_separate_never_active_or_exposed() -> None:
     result = summarize_provider_rows(
         [
             {"vps_id": 1, "vps_status": "active", "repeat_invoices_cost": "3.00"},
-            {"vps_id": 2, "vps_status": "unpublished-private-state", "repeat_invoices_cost": "7.00"},
+            {
+                "vps_id": 2,
+                "vps_status": "unpublished-private-state",
+                "repeat_invoices_cost": "7.00",
+            },
         ]
     )
     assert result["total_vps"] == 2
