@@ -26,7 +26,9 @@ class InterServerInventoryError(ValueError):
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, request: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
+    def redirect_request(
+        self, request: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
+    ) -> None:
         return None
 
 
@@ -63,9 +65,7 @@ def summarize_provider_rows(payload: object) -> dict[str, object]:
         "source": "interserver",
         "total_vps": len(payload),
         "by_status": {s: statuses[s] for s in sorted(statuses)},
-        "listed_recurring_cost_by_status": {
-            s: format(totals[s], "f") for s in sorted(totals)
-        },
+        "listed_recurring_cost_by_status": {s: format(totals[s], "f") for s in sorted(totals)},
         "cost_currency": "UNVERIFIED",
         "billing_verified": False,
     }
