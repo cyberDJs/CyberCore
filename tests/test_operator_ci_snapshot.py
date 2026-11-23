@@ -117,12 +117,36 @@ def test_bad_provider_shape_never_promoted_to_success() -> None:
         assert update.state == "BLOCKED"
 
 
-def test_nonmaterial_event_is_still_reconciled_and_bound() -> None:
-    valid = make(changed=False)
-    assert format_operator_update(valid) is None
-    stale = make(changed=False, provider_head_sha="b" * 40)
-    assert stale.state == "BLOCKED"
-    assert format_operator_update(stale) is None
+def test_caller_changed_false_cannot_silence_critical_evidence() -> None:
+    unknown = make(changed=False)
+    assert unknown.state == "UNKNOWN"
+    assert unknown.changed is True
+    assert "UNKNOWN" in (format_operator_update(unknown) or "")
+    blocked_cases = (
+        {"provider_head_sha": "b" * 40},
+        {"workflows": RUNS[:-1]},
+        {"jobs": JOBS[:-1]},
+        {"jobs": JOBS[:2] + (replace(JOBS[2], conclusion="failure"),) + JOBS[3:]},
+    )
+    for case in blocked_cases:
+        blocked = make(changed=False, **case)
+        assert blocked.state == "BLOCKED"
+        assert blocked.changed is True
+        assert "BLOCKED" in (format_operator_update(blocked) or "")
+
+
+def test_critical_report_is_suppressed_only_after_checkpoint_ack() -> None:
+    blocked = make(changed=False, provider_head_sha="b" * 40)
+    first = checkpoint_operator_update(blocked)
+    assert first.reason == "MATERIAL_CHANGE"
+    assert first.report is not None
+    assert "BLOCKED" in first.report
+    assert first.fingerprint is not None
+    retry_without_ack = checkpoint_operator_update(blocked)
+    assert retry_without_ack.reason == "MATERIAL_CHANGE"
+    after_ack = checkpoint_operator_update(blocked, last_delivered_fingerprint=first.fingerprint)
+    assert after_ack.reason == "UNCHANGED"
+    assert after_ack.report is None
 
 
 def test_caller_cannot_supply_detached_cached_reconciliation() -> None:
