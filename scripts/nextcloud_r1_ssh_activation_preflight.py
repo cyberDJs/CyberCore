@@ -7,7 +7,6 @@ reloads or starts sshd, polkit, systemd, a transfer, or a restore.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -55,8 +54,10 @@ def evaluate(primary: str, subsystem: str, tail: str) -> list[str]:
         failures.append("tail restriction set is incomplete or changed")
     if any(line.startswith("Subsystem cybercore-exec ") for line in main):
         failures.append("CyberCore Subsystem already present in main config")
-    if "Include " + SSHD_INCLUDE not in main[:main.index("Subsystem sftp /usr/lib/openssh/sftp-server")] if "Subsystem sftp /usr/lib/openssh/sftp-server" in main else False:
-        failures.append("Include order changed")
+    if (main.index(f"Include {SSHD_INCLUDE}") > main.index("Subsystem sftp /usr/lib/openssh/sftp-server")
+            if f"Include {SSHD_INCLUDE}" in main and "Subsystem sftp /usr/lib/openssh/sftp-server" in main
+            else False):
+        failures.append("early Include order changed")
     if any("Match all" in line for line in inc + match):
         failures.append("Match all is forbidden in phase-B activation candidate")
     return failures
