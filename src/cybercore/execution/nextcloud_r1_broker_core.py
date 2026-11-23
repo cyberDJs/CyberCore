@@ -63,7 +63,7 @@ class Rejected(ValueError):
 
 
 def _sync_dir(path: Path) -> None:
-    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
         os.fsync(fd)
     finally:
@@ -81,9 +81,22 @@ def _root_private_dir(path: Path, *, owner_uid: int) -> None:
         raise Rejected("unsafe broker state directory")
 
 
+def _write_all(fd: int, raw: bytes) -> None:
+    offset = 0
+    while offset < len(raw):
+        written = os.write(fd, raw[offset:])
+        if written <= 0:
+            raise OSError("short write while persisting broker state")
+        offset += written
+
+
 def _write_once(path: Path, payload: dict[str, object], *, owner_uid: int) -> None:
     raw = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    fd = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+        0o600,
+    )
     try:
         info = os.fstat(fd)
         if (
@@ -93,7 +106,7 @@ def _write_once(path: Path, payload: dict[str, object], *, owner_uid: int) -> No
             or info.st_nlink != 1
         ):
             raise Rejected("unsafe transaction receipt inode")
-        os.write(fd, raw)
+        _write_all(fd, raw)
         os.fsync(fd)
     finally:
         os.close(fd)
@@ -101,7 +114,7 @@ def _write_once(path: Path, payload: dict[str, object], *, owner_uid: int) -> No
 
 
 def _lock(path: Path, *, owner_uid: int) -> int:
-    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
     try:
         info = os.fstat(fd)
         if (

@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import fcntl
+import json
 import os
 from pathlib import Path
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
+from cybercore.execution import nextcloud_r1_broker_core as broker_core
 from cybercore.execution.nextcloud_r1_broker_core import (
     Request,
     Rejected,
     broker_once,
     ALLOWED,
 )
+from cybercore.execution.server import operations as server_operations
 
 
 @dataclass
@@ -143,6 +148,69 @@ class BrokerCoreTests(unittest.TestCase):
         self.invoke(request(operation_id="op-2"))
         self.assertEqual(self.verifier.calls, 2)
         self.assertEqual(len(self.dispatched), 2)
+
+    def test_state_writes_retry_partial_os_write_until_complete(self):
+        real_write = os.write
+
+        def partial_write(fd, raw):
+            return real_write(fd, raw[: max(1, min(7, len(raw)))])
+
+        with patch(
+            "cybercore.execution.nextcloud_r1_broker_core.os.write",
+            side_effect=partial_write,
+        ):
+            result = self.invoke()
+        self.assertEqual(result["status"], "DISPATCHED")
+        prepared = next(self.state.glob("*.prepared.json"))
+        outcome = next(self.state.glob("*.result.json"))
+        self.assertEqual(json.loads(prepared.read_text())["state"], "PREPARED")
+        self.assertEqual(json.loads(outcome.read_text())["state"], "DISPATCHED")
+
+    def test_lock_descriptor_is_close_on_exec(self):
+        fd = broker_core._lock(self.state / "broker.lock", owner_uid=self.uid)
+        try:
+            flags = fcntl.fcntl(fd, fcntl.F_GETFD)
+            self.assertTrue(flags & fcntl.FD_CLOEXEC)
+        finally:
+            os.close(fd)
+
+    def test_fixed_argv_matches_canonical_server_operation_specs(self):
+        for operation, argv in ALLOWED.items():
+            self.assertEqual(argv, server_operations._OPERATION_SPECS[operation].argv)
+
+    def test_concurrent_duplicate_dispatches_at_most_once(self):
+        entered = threading.Event()
+        release = threading.Event()
+        results = []
+        errors = []
+
+        def runner(argv):
+            self.dispatched.append(argv)
+            entered.set()
+            release.wait(timeout=2)
+            return 0
+
+        def invoke():
+            try:
+                results.append(self.invoke(runner=runner))
+            except Exception as exc:
+                errors.append(exc)
+
+        first = threading.Thread(target=invoke)
+        second = threading.Thread(target=invoke)
+        first.start()
+        self.assertTrue(entered.wait(timeout=2))
+        second.start()
+        release.set()
+        first.join(timeout=2)
+        second.join(timeout=2)
+
+        self.assertEqual(len(self.dispatched), 1)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["status"], "DISPATCHED")
+        self.assertEqual(len(errors), 1)
+        self.assertIsInstance(errors[0], Rejected)
+        self.assertIn("already been prepared", str(errors[0]))
 
     def test_rollback_fixed_argv(self):
         outcome = self.invoke(request("nextcloud.r1.offhost.rollback"))
