@@ -209,7 +209,11 @@ def collect_pr_ci(
             raise EvidenceAcquisitionError("DUPLICATE_WORKFLOW")
         seen_names.add(name)
         _positive(run.get("run_attempt"))
-        workflows.append(Workflow(run_id, name, _string(run.get("status")), _optional_string(run.get("conclusion"))))
+        workflows.append(
+            Workflow(
+                run_id, name, _string(run.get("status")), _optional_string(run.get("conclusion"))
+            )
+        )
         entries = _pages(
             reader,
             f"{_API}/actions/runs/{run_id}/jobs",
