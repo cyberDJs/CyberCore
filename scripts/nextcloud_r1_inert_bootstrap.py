@@ -16,6 +16,7 @@ from pathlib import Path
 import stat
 import subprocess
 import sys
+from typing import Any
 import tempfile
 
 TARGET = "cyberskills-vps"
@@ -85,7 +86,7 @@ def snapshot(root: Path) -> dict[str, bytes]:
     return found
 
 
-def expected_manifest(files: dict[str, bytes]) -> dict[str, object]:
+def expected_manifest(files: dict[str, bytes]) -> dict[str, Any]:
     return {
         "schema_version": 1, "issue": 113, "target": TARGET,
         "source_commit": SOURCE_SHA,
@@ -144,7 +145,7 @@ def require_fresh_approval(action: str) -> str:
     return record["approval_id"]
 
 
-def atomic_stage(files: dict[str, bytes], manifest: dict[str, object]) -> None:
+def atomic_stage(files: dict[str, bytes], manifest: dict[str, Any]) -> None:
     if os.geteuid() != 0:
         fail("apply requires root via an independent administrator-controlled console")
     safe_parent()
@@ -173,7 +174,7 @@ def atomic_stage(files: dict[str, bytes], manifest: dict[str, object]) -> None:
                       "activation_performed": False}, sort_keys=True))
 
 
-def inspect_release(manifest: dict[str, object]) -> None:
+def inspect_release(manifest: dict[str, Any]) -> None:
     safe_parent()
     info = RELEASE.lstat()
     if (not stat.S_ISDIR(info.st_mode) or info.st_uid != OWNER_UID
@@ -214,7 +215,7 @@ def inspect_release(manifest: dict[str, object]) -> None:
         fail("release manifest drift")
 
 
-def rollback(manifest: dict[str, object]) -> None:
+def rollback(manifest: dict[str, Any]) -> None:
     if os.geteuid() != 0:
         fail("rollback requires root")
     inspect_release(manifest)
