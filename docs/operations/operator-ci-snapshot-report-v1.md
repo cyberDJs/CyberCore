@@ -1,6 +1,6 @@
-# CyberCore operator CI snapshot → report boundary (candidate)
+# CyberCore operator CI snapshot → report boundary (merged library)
 
-**Status:** isolated Draft PR; no live GitHub collector, scheduler, delivery pipeline, database, production change or additional authority.
+**Status:** adapter merged in PR #165 (`main@3f9ba40ed2c51570538c6bc65d3d1bbf7de4382f`). A separate WB-165-02 read-only collector is being prepared as a Draft PR; no scheduler, delivery pipeline, database, production change or additional authority.
 
 ## Why
 
@@ -30,4 +30,4 @@ No A3/A4 action can be authorized by this status adapter; merge/deploy require t
 
 Unit tests exercise structural-only UNKNOWN, known BLOCKED reasons, drift, malformed shapes, rejection of detached cached verdicts, mismatched observed PR/HEAD identity, deduplication and distinct PR identity. Existing full CI matrix, CodeQL and real pinned CyberHIVE contract must pass on exact HEAD; obtain independent code/security review before any merge.
 
-**User effect now:** none in live notifications; library-only integration improves correctness of future status reports. **Rollback:** do not import module / close Draft PR, preserving evidence. No existing runtime entrypoint or production configuration changed.
+**User effect now:** none in live notifications; library-only integration improves correctness of future status reports. **Rollback for WB-165-02:** do not import the new collector / close its Draft PR, preserving evidence. No existing runtime entrypoint or production configuration changed.
