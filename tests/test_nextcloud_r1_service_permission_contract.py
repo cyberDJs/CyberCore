@@ -7,7 +7,9 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "nextcloud_r1_service_permission_contract.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[1] / "scripts" / "nextcloud_r1_service_permission_contract.py"
+)
 
 
 def load():
@@ -45,20 +47,14 @@ class PermissionContractTests(unittest.TestCase):
         )
 
     def test_unprivileged_user_cannot_write_manifest(self):
-        manifest = next(
-            n for n in self.m.PLAN if n.name.endswith("/nextcloud-r1.json")
-        )
+        manifest = next(n for n in self.m.PLAN if n.name.endswith("/nextcloud-r1.json"))
         self.assertFalse(
             self.m.can(manifest, self.m.SERVICE_UID, frozenset({self.m.SERVICE_GID}), 2)
         )
 
     def test_outsider_cannot_read_manifest(self):
-        manifest = next(
-            n for n in self.m.PLAN if n.name.endswith("/nextcloud-r1.json")
-        )
-        self.assertFalse(
-            self.m.can(manifest, self.m.OTHER_UID, frozenset({self.m.OTHER_GID}), 4)
-        )
+        manifest = next(n for n in self.m.PLAN if n.name.endswith("/nextcloud-r1.json"))
+        self.assertFalse(self.m.can(manifest, self.m.OTHER_UID, frozenset({self.m.OTHER_GID}), 4))
 
     def test_deny_group_writable_approval_directory(self):
         nodes = self.replaced("/etc/cybercore-exec/approvals", mode=0o770)
@@ -66,9 +62,7 @@ class PermissionContractTests(unittest.TestCase):
             self.m.validate(nodes)
 
     def test_deny_world_readable_manifest(self):
-        nodes = self.replaced(
-            "/etc/cybercore-exec/approvals/nextcloud-r1.json", mode=0o644
-        )
+        nodes = self.replaced("/etc/cybercore-exec/approvals/nextcloud-r1.json", mode=0o644)
         with self.assertRaisesRegex(ValueError, "contract drift"):
             self.m.validate(nodes)
 
