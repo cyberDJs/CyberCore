@@ -32,7 +32,7 @@ class CodeOnlyTransactionTests(unittest.TestCase):
         return {name: f"pinned:{name}".encode() for name in self.m.TARGETS}
 
     def patches(self):
-        def test_safe_node(path, *, directory, mode):
+        def test_safe_node(path, *, directory, mode, group_gid=None):
             info = path.lstat()
             if directory != stat.S_ISDIR(info.st_mode):
                 raise ValueError("unexpected node type")
@@ -45,6 +45,8 @@ class CodeOnlyTransactionTests(unittest.TestCase):
             mock.patch.object(self.m, "safe_node", side_effect=test_safe_node),
             mock.patch.object(self.m, "snapshot", return_value=self.blobs()),
             mock.patch.object(self.m, "exact_approval", return_value="test-approval"),
+            mock.patch.object(self.m, "service_gid", return_value=1234),
+            mock.patch.object(self.m.os, "chown"),
         )
 
     def test_apply_verify_rollback_no_activation(self):
@@ -133,6 +135,21 @@ class CodeOnlyTransactionTests(unittest.TestCase):
                 result = self.m.reconcile(parent=parent, receipt=receipt, journal=journal)
                 self.assertEqual(result["status"], "CODE_ONLY_INTENT_RECONCILED")
                 self.assertFalse(journal.exists())
+
+    def test_missing_service_identity_fails_before_write(self):
+        with tempfile.TemporaryDirectory() as d:
+            parent = Path(d)
+            receipt = parent / "receipt.json"
+            journal = parent / "intent.json"
+            with mock.patch.object(self.m.os, "geteuid", return_value=0):
+                with mock.patch.object(self.m, "safe_root_parent"):
+                    with mock.patch.object(
+                        self.m, "service_gid", side_effect=ValueError("identity absent")
+                    ):
+                        with self.assertRaisesRegex(ValueError, "identity absent"):
+                            self.m.apply(parent=parent, receipt=receipt, journal=journal)
+            self.assertFalse(receipt.exists())
+            self.assertFalse(journal.exists())
 
     def test_no_root_no_apply(self):
         with mock.patch.object(self.m.os, "geteuid", return_value=1000):
