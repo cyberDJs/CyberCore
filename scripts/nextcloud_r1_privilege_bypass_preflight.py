@@ -61,6 +61,16 @@ def assess(policy: str, operations: str) -> dict[str, object]:
     }
 
 
+def exit_code(result: dict[str, object]) -> int:
+    """Fail closed unless a future runtime verifier emits an explicit PASS."""
+    status = str(result.get("status", ""))
+    if status == "RUNTIME_VERIFIED_PASS":
+        return 0
+    if status.startswith("BLOCKED"):
+        return 2
+    return 3
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--policy", type=Path, default=POLICY)
@@ -80,7 +90,7 @@ def main() -> int:
             "activation_performed": False,
         }
     print(json.dumps(result, sort_keys=True))
-    return 2 if str(result["status"]).startswith("BLOCKED") else 0
+    return exit_code(result)
 
 
 if __name__ == "__main__":
