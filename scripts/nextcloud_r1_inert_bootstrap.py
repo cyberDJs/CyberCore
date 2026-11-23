@@ -74,7 +74,14 @@ def snapshot(root: Path) -> dict[str, bytes]:
         info = p.lstat()
         if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
             fail(f"nonregular source: {source}")
-        found[relative] = p.read_bytes()
+        checked_out = p.read_bytes()
+        committed = subprocess.run(
+            ["git", "-C", str(root), "show", f"{SOURCE_SHA}:{source}"],
+            capture_output=True, timeout=15, check=True,
+        ).stdout
+        if checked_out != committed:
+            fail(f"source differs from the committed tree: {source}")
+        found[relative] = committed
     return found
 
 
