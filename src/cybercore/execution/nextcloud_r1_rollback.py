@@ -6,7 +6,10 @@ import os
 from pathlib import Path
 import stat
 
-from cybercore.execution.nextcloud_r1_transfer import (
+# The systemd unit installs this module as standalone rollback.py beside transfer.py.
+# Keep package imports for normal unit tests and standalone imports for the fixed unit.
+if __package__ in {None, ""}:
+    from transfer import (
     BACKUP_ROOT,
     CREDENTIAL_ROOT,
     FINAL_ARCHIVE,
@@ -19,6 +22,22 @@ from cybercore.execution.nextcloud_r1_transfer import (
     _fsync_directory,
     _require_private_directory,
 )
+
+else:
+    from cybercore.execution.nextcloud_r1_transfer import (
+        BACKUP_ROOT,
+        CREDENTIAL_ROOT,
+        FINAL_ARCHIVE,
+        KNOWN_HOSTS,
+        PARTIAL_ARCHIVE,
+        PRIVATE_KEY,
+        RECEIPT as TRANSFER_RECEIPT,
+        SOURCE_SHA256,
+        STATE_ROOT,
+        _fsync_directory,
+        _require_private_directory,
+    )
+    
 
 
 PUBLIC_KEY = CREDENTIAL_ROOT / "source_ed25519.pub"
