@@ -25,6 +25,8 @@ class Node:
     uid: int
     gid: int
     directory: bool
+    acl_uid: int | None = None
+    acl_permissions: int = 0
 
 
 # Fixed topology is a design contract, not a declaration of live filesystem state.
@@ -39,22 +41,26 @@ PLAN: Final = (
         False,
     ),
     Node("/usr/local/libexec", 0o755, ROOT_UID, ROOT_UID, True),
-    Node("/usr/local/libexec/cybercore-exec", 0o750, ROOT_UID, SERVICE_GID, True),
-    Node("/usr/local/libexec/cybercore-exec/dispatcher.py", 0o640, ROOT_UID, SERVICE_GID, False),
+    Node("/usr/local/libexec/cybercore-exec", 0o750, ROOT_UID, ROOT_UID, True, SERVICE_UID, 5),
+    Node("/usr/local/libexec/cybercore-exec/dispatcher.py", 0o640, ROOT_UID, ROOT_UID, False, SERVICE_UID, 4),
     Node(
         "/usr/local/libexec/cybercore-exec/authorization.py",
         0o640,
         ROOT_UID,
-        SERVICE_GID,
+        ROOT_UID,
         False,
+        SERVICE_UID,
+        4,
     ),
-    Node("/usr/local/libexec/cybercore-exec-nextcloud-r1", 0o750, ROOT_UID, SERVICE_GID, True),
+    Node("/usr/local/libexec/cybercore-exec-nextcloud-r1", 0o750, ROOT_UID, ROOT_UID, True, SERVICE_UID, 5),
     Node(
         "/usr/local/libexec/cybercore-exec-nextcloud-r1/transfer.py",
         0o640,
         ROOT_UID,
-        SERVICE_GID,
+        ROOT_UID,
         False,
+        SERVICE_UID,
+        4,
     ),
 )
 
@@ -62,6 +68,8 @@ PLAN: Final = (
 def can(node: Node, uid: int, gids: frozenset[int], permission: int) -> bool:
     if uid == ROOT_UID:
         return True
+    if node.acl_uid == uid:
+        return bool(node.acl_permissions & permission)
     shift = 6 if node.uid == uid else 3 if node.gid in gids else 0
     return bool((node.mode >> shift) & permission)
 
@@ -73,11 +81,14 @@ def validate(nodes: tuple[Node, ...] = PLAN) -> dict[str, object]:
         raise ValueError("unexpected, missing, or duplicate permission path")
     for path, expected_node in expected.items():
         node = present[path]
-        if (node.uid, node.gid, node.mode, node.directory) != (
+        if (node.uid, node.gid, node.mode, node.directory, node.acl_uid,
+                node.acl_permissions) != (
             expected_node.uid,
             expected_node.gid,
             expected_node.mode,
             expected_node.directory,
+            expected_node.acl_uid,
+            expected_node.acl_permissions,
         ):
             raise ValueError(f"permission contract drift: {path}")
         if node.mode & 0o022:
