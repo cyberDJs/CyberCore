@@ -9,7 +9,10 @@ import unittest
 
 from cybercore.execution.nextcloud_r1_broker_core import Rejected
 from cybercore.execution.nextcloud_r1_peercred_transport import (
-    MAX_REQUEST_BYTES, handle_connection, kernel_peer_uid, read_request,
+    MAX_REQUEST_BYTES,
+    handle_connection,
+    kernel_peer_uid,
+    read_request,
 )
 
 
