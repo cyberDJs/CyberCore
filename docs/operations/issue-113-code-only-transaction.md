@@ -10,11 +10,13 @@ The 12-file inert release is root-only (`0700` release, `0600` contents). A nonr
 
 `python3 scripts/nextcloud_r1_code_transaction.py plan` — static plan, no root required.
 
-`python3 scripts/nextcloud_r1_code_transaction.py apply` — root required, **explicit exact-source code-only approval file required**, checked for root 0600, UTC timestamp and TTL <= 1 hour. Reads pinned Stage-A SHA, copies eight verified files into two previously absent destinations. Writes root-only transaction receipt. On partial failure, compensates only paths newly created by its invocation.
+`python3 scripts/nextcloud_r1_code_transaction.py apply` — root required, **explicit exact-source code-only approval file required**, checked for root 0600, UTC timestamp and TTL <= 1 hour. Reads pinned Stage-A SHA, copies eight verified files into two previously absent destinations. Writes root-only transaction receipt. Writes a durable root-only intent journal before the first directory rename; on ordinary exceptions compensates only paths newly created by its invocation. A power interruption leaves the intent in place and blocks new apply/verify/rollback until separately authorized reconciliation.
 
 `python3 scripts/nextcloud_r1_code_transaction.py verify` — root-only, compares active files against root receipt and rejects added/missing files, mode drift and content drift.
 
 `python3 scripts/nextcloud_r1_code_transaction.py rollback` — root-only, requires **separate** root-created `code-only-rollback` approval; refuses to delete anything unless hashes/modes and exact file set still match the receipt.
+
+\`python3 scripts/nextcloud_r1_code_transaction.py reconcile\` — independent \`code-only-reconcile\` approval required. On a power-interrupted installation with no committed receipt, removes only fully verified exact-digest directory remnants and clears the intent journal. Any unexpected file or drift blocks for manual forensic review.
 
 ## Exact live boundaries
 
@@ -28,6 +30,6 @@ The 12-file inert release is root-only (`0700` release, `0600` contents). A nonr
 
 Independent security review must evaluate transaction race/TOCTOU behavior, malicious symlink handling, SHA trust, root-owned parent path checks, approval creation, interrupted power recovery and rollback semantics. CI checks and at least one isolated nonroot fixture test are required; **do not execute apply on the production VPS or merge without a separately approved exact HEAD**.
 
-An interruption after a successful directory rename but before writing the receipt may leave a partial code-only installation; operator must inspect and reconcile those paths manually rather than blindly delete. This is not yet an atomic full infrastructure activation mechanism. SSH access, systemd and Polkit still need their own separately verified activation transaction and interactive recovery channel. SFTP source fingerprint, restricted key and 13.26GB archive SHA remain unavailable; no transfer or restore is authorized.
+An interruption after a successful directory rename but before writing the receipt can leave a partial code-only installation; durable intent and a separately approved exact-file reconciliation path now fail closed. The two destination renames are not a single atomic filesystem transaction and still require independent review, crash injection tests and operator rollback rehearsal before production eligibility. SSH access, systemd and Polkit still need their own separately verified activation transaction and interactive recovery channel. SFTP source fingerprint, restricted key and 13.26GB archive SHA remain unavailable; no transfer or restore is authorized.
 
-The next improvement should address power-loss recovery with a durable root-only intent journal and explicit fail-closed reconciliation before promoting this code-only installer to live use.
+The next improvement should test real kill/power-loss boundaries and independent source file identity, including fsync of parent directories, before promoting this code-only installer to live use.
