@@ -1,6 +1,6 @@
 # CyberCore #113 — Phase-B code-only transaction (draft)
 
-This is a **narrow first executable transaction**, not activation. It copies exactly eight previously root-verified Stage-A Python modules into new root-owned, service-group-readable `/usr/local/libexec` directories. It never creates users, SSH/Polkit/systemd files, services, credentials, outbound connections, backup archives or restores.
+This is a **narrow first executable transaction**, not activation. It copies exactly eight previously root-verified Stage-A Python modules into new root-owned, named-service-UID-ACL-readable `/usr/local/libexec` directories. It never creates users, SSH/Polkit/systemd files, services, credentials, outbound connections, backup archives or restores.
 
 ## Why split this phase
 
@@ -21,7 +21,7 @@ The 12-file inert release is root-only (`0700` release, `0600` contents). A nonr
 ## Exact live boundaries
 
 - Stage-A source: `/opt/cybercore-113/releases/1cbe25ffd941738c4cc0b157914daa74a95885a6`; the source SHA is a compile-time constant.
-- Destinations: `/usr/local/libexec/cybercore-exec` and `/usr/local/libexec/cybercore-exec-nextcloud-r1`; exact group-restricted modes 0750 directories and 0640 files owned by root:cybercore-exec; parent must already exist and be root-owned, non-group/world writable; **any destination collision blocks installation**.
+- Destinations: `/usr/local/libexec/cybercore-exec` and `/usr/local/libexec/cybercore-exec-nextcloud-r1`; root:root with exact named `cybercore-exec` UID ACL (`r-x` on directories, `r--` on files), no group/other access; effective stat modes appear 0750 and 0640 because of the ACL mask; parent must already exist and be root-owned, non-group/world writable; **any destination collision blocks installation**.
 - Root activation approval (separate from the eventual service-readable authorization namespace): `/etc/cybercore-113-activation/code-only.json` with root-only directory 0700 and file 0600; exact keys `issue`, `source_commit`, `action`, `approval_id`, `issued_at`, `expires_at`. Approval for apply has action `code-only-install`; rollback has `code-only-rollback`. The actual operator has to create the manifest using separate approved procedure. This proposal grants no approval itself.
 - Receipt: `/var/lib/cybercore-113-code-only.json` root 0600 with exact file digests.
 - Output `activation_performed=false` is literal: no SSH reload or service execution.
