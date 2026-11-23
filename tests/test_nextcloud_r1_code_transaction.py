@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 import importlib.util
 from pathlib import Path
 import stat
@@ -50,12 +51,21 @@ class CodeOnlyTransactionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             parent = Path(d)
             receipt = parent / "receipt.json"
-            with self.patches()[0], self.patches()[1], self.patches()[2], self.patches()[3], self.patches()[4]:
-                applied = self.m.apply(parent=parent, receipt=receipt, journal=parent / "intent.json")
+            with ExitStack() as stack:
+                for patch in self.patches():
+                    stack.enter_context(patch)
+                applied = self.m.apply(
+                    parent=parent, receipt=receipt, journal=parent / "intent.json"
+                )
                 self.assertEqual(applied["status"], "CODE_ONLY_INSTALLED")
                 self.assertFalse(applied["activation_performed"])
-                self.assertEqual(self.m.verify(parent=parent, receipt=receipt, journal=parent / "intent.json")["status"], "CODE_ONLY_VERIFIED")
-                rolled = self.m.rollback(parent=parent, receipt=receipt, journal=parent / "intent.json")
+                self.assertEqual(
+                    self.m.verify(parent=parent, receipt=receipt, journal=parent / "intent.json")["status"],
+                    "CODE_ONLY_VERIFIED",
+                )
+                rolled = self.m.rollback(
+                    parent=parent, receipt=receipt, journal=parent / "intent.json"
+                )
                 self.assertEqual(rolled["status"], "CODE_ONLY_ROLLED_BACK")
                 self.assertFalse(receipt.exists())
                 for directory in self.m.DIRECTORIES:
@@ -68,16 +78,22 @@ class CodeOnlyTransactionTests(unittest.TestCase):
             collision.mkdir()
             marker = collision / "existing"
             marker.write_text("must survive")
-            with self.patches()[0], self.patches()[1], self.patches()[2], self.patches()[3], self.patches()[4]:
+            with ExitStack() as stack:
+                for patch in self.patches():
+                    stack.enter_context(patch)
                 with self.assertRaisesRegex(ValueError, "collision"):
-                    self.m.apply(parent=parent, receipt=parent / "receipt.json", journal=parent / "intent.json")
+                    self.m.apply(
+                        parent=parent, receipt=parent / "receipt.json", journal=parent / "intent.json"
+                    )
             self.assertEqual(marker.read_text(), "must survive")
 
     def test_reject_mutated_deployment_before_rollback(self):
         with tempfile.TemporaryDirectory() as d:
             parent = Path(d)
             receipt = parent / "receipt.json"
-            with self.patches()[0], self.patches()[1], self.patches()[2], self.patches()[3], self.patches()[4]:
+            with ExitStack() as stack:
+                for patch in self.patches():
+                    stack.enter_context(patch)
                 self.m.apply(parent=parent, receipt=receipt, journal=parent / "intent.json")
                 file = parent / "cybercore-exec" / "dispatcher.py"
                 file.write_text("changed")
@@ -91,16 +107,23 @@ class CodeOnlyTransactionTests(unittest.TestCase):
             parent = Path(d)
             receipt = parent / "receipt.json"
             journal = parent / "intent.json"
-            with self.patches()[0], self.patches()[1], self.patches()[2], self.patches()[3], self.patches()[4]:
+            with ExitStack() as stack:
+                for patch in self.patches():
+                    stack.enter_context(patch)
                 hashes = {
                     relative: self.m.sha(self.blobs()[original])
                     for original, relative in self.m.TARGETS.items()
                 }
-                self.m.write_root_json(journal, {
-                    "issue": 113, "source_commit": self.m.SOURCE_SHA,
-                    "status": "CODE_ONLY_IN_PROGRESS", "file_sha256": hashes,
-                    "approval_id": "test-approval"
-                })
+                self.m.write_root_json(
+                    journal,
+                    {
+                        "issue": 113,
+                        "source_commit": self.m.SOURCE_SHA,
+                        "status": "CODE_ONLY_IN_PROGRESS",
+                        "file_sha256": hashes,
+                        "approval_id": "test-approval",
+                    },
+                )
                 with self.assertRaisesRegex(ValueError, "pending intent"):
                     self.m.apply(parent=parent, receipt=receipt, journal=journal)
                 result = self.m.reconcile(parent=parent, receipt=receipt, journal=journal)
