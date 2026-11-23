@@ -169,6 +169,15 @@ def receipt_read(path: Path) -> dict[str, object]:
     return data
 
 
+def fsync_directory(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) |
+                 getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def write_root_json(path: Path, payload: dict[str, object]) -> None:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
                  getattr(os, "O_NOFOLLOW", 0), 0o600)
@@ -176,6 +185,7 @@ def write_root_json(path: Path, payload: dict[str, object]) -> None:
         json.dump(payload, handle, sort_keys=True)
         handle.flush()
         os.fsync(handle.fileno())
+    fsync_directory(path.parent)
 
 
 def intent_read(path: Path) -> dict[str, object]:
@@ -233,6 +243,7 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
                     raise ValueError("destination appeared during transaction")
                 os.rename(tmp, final)
                 installed.append(final)
+                fsync_directory(parent)
             finally:
                 if tmp.exists():
                     shutil.rmtree(tmp)
@@ -242,6 +253,7 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
                    "approval_id": approval_id}
         write_root_json(receipt, payload)
         journal.unlink()
+        fsync_directory(journal.parent)
         return {"status": "CODE_ONLY_INSTALLED", "activation_performed": False,
                 "file_count": len(hashes)}
     except Exception:
@@ -249,8 +261,10 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
         for created in reversed(installed):
             if created.exists():
                 shutil.rmtree(created)
+        fsync_directory(parent)
         if not receipt.exists():
             journal.unlink(missing_ok=True)
+            fsync_directory(journal.parent)
         raise
 
 
@@ -285,6 +299,8 @@ def rollback(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
             item.unlink()
         path.rmdir()
     receipt.unlink()
+    fsync_directory(parent)
+    fsync_directory(receipt.parent)
     return {"status": "CODE_ONLY_ROLLED_BACK", "activation_performed": False}
 
 
@@ -321,6 +337,8 @@ def reconcile(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
                 item.unlink()
             path.rmdir()
     journal.unlink()
+    fsync_directory(parent)
+    fsync_directory(journal.parent)
     return {"status": "CODE_ONLY_INTENT_RECONCILED",
             "activation_performed": False}
 
