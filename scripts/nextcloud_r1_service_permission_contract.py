@@ -39,21 +39,21 @@ PLAN: Final = (
         False,
     ),
     Node("/usr/local/libexec", 0o755, ROOT_UID, ROOT_UID, True),
-    Node("/usr/local/libexec/cybercore-exec", 0o755, ROOT_UID, ROOT_UID, True),
-    Node("/usr/local/libexec/cybercore-exec/dispatcher.py", 0o644, ROOT_UID, ROOT_UID, False),
+    Node("/usr/local/libexec/cybercore-exec", 0o750, ROOT_UID, SERVICE_GID, True),
+    Node("/usr/local/libexec/cybercore-exec/dispatcher.py", 0o640, ROOT_UID, SERVICE_GID, False),
     Node(
         "/usr/local/libexec/cybercore-exec/authorization.py",
-        0o644,
+        0o640,
         ROOT_UID,
-        ROOT_UID,
+        SERVICE_GID,
         False,
     ),
-    Node("/usr/local/libexec/cybercore-exec-nextcloud-r1", 0o755, ROOT_UID, ROOT_UID, True),
+    Node("/usr/local/libexec/cybercore-exec-nextcloud-r1", 0o750, ROOT_UID, SERVICE_GID, True),
     Node(
         "/usr/local/libexec/cybercore-exec-nextcloud-r1/transfer.py",
-        0o644,
+        0o640,
         ROOT_UID,
-        ROOT_UID,
+        SERVICE_GID,
         False,
     ),
 )
@@ -109,6 +109,12 @@ def validate(nodes: tuple[Node, ...] = PLAN) -> dict[str, object]:
             raise ValueError(f"service cannot import code: {name}")
         if can(node, SERVICE_UID, service_groups, stat.S_IWOTH):
             raise ValueError(f"service can modify code: {name}")
+    for name in (
+        "/usr/local/libexec/cybercore-exec",
+        "/usr/local/libexec/cybercore-exec-nextcloud-r1",
+    ):
+        if can(present[name], OTHER_UID, outsiders, stat.S_IXOTH):
+            raise ValueError(f"outsider can traverse code directory: {name}")
     return {
         "status": "PROPOSED_PERMISSION_CONTRACT_VERIFIED",
         "issue": 113,
