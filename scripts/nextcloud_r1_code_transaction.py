@@ -16,6 +16,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 import stat
 import tempfile
 
@@ -42,14 +43,14 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def service_gid() -> int:
+def service_uid() -> int:
     account = pwd.getpwnam("cybercore-exec")
     group = grp.getgrnam("cybercore-exec")
     if account.pw_uid == 0 or account.pw_gid != group.gr_gid:
         raise ValueError("service account/group identity mismatch")
     if account.pw_shell not in ("/usr/sbin/nologin", "/sbin/nologin", "/bin/false"):
         raise ValueError("service account must be noninteractive")
-    return group.gr_gid
+    return account.pw_uid
 
 
 def safe_node(path: Path, *, directory: bool, mode: int,
@@ -60,6 +61,33 @@ def safe_node(path: Path, *, directory: bool, mode: int,
         raise ValueError(f"unsafe owner or mode: {path}")
     if directory != stat.S_ISDIR(info.st_mode):
         raise ValueError(f"unsafe file type: {path}")
+
+
+def exact_user_acl(path: Path, uid: int, *, directory: bool) -> None:
+    result = subprocess.run(
+        ["/usr/bin/getfacl", "-n", "-c", str(path)],
+        capture_output=True, text=True, check=True, timeout=10,
+    )
+    permissions = "r-x" if directory else "r--"
+    expected = {
+        "user::rwx" if directory else "user::rw-",
+        f"user:{uid}:{permissions}",
+        "group::---",
+        f"mask::{permissions}",
+        "other::---",
+    }
+    lines = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    if lines != expected:
+        raise ValueError("unexpected effective named-user ACL")
+
+
+def grant_user_acl(path: Path, uid: int, *, directory: bool) -> None:
+    rights = "r-x" if directory else "r--"
+    subprocess.run(
+        ["/usr/bin/setfacl", "-m", f"u:{uid}:{rights}", str(path)],
+        check=True, capture_output=True, timeout=10,
+    )
+    exact_user_acl(path, uid, directory=directory)
 
 
 def safe_root_parent(path: Path) -> None:
@@ -141,18 +169,20 @@ def make_layout(raw: dict[str, bytes], destination_parent: Path) -> dict[str, st
 
 
 def verify_layout(parent: Path, hashes: dict[str, str]) -> None:
-    gid = service_gid()
+    uid = service_uid()
     if set(hashes) != set(TARGETS.values()):
         raise ValueError("receipt file map differs from reviewed paths")
     for directory in DIRECTORIES:
         path = parent / directory
-        safe_node(path, directory=True, mode=0o750, group_gid=gid)
+        safe_node(path, directory=True, mode=0o750, group_gid=0)
+        exact_user_acl(path, uid, directory=True)
         allowed = {Path(name).name for name in hashes if Path(name).parent.name == directory}
         if {p.name for p in path.iterdir()} != allowed:
             raise ValueError("active directory has unreviewed contents")
     for name in TARGETS.values():
         path = parent / name
-        safe_node(path, directory=False, mode=0o640, group_gid=gid)
+        safe_node(path, directory=False, mode=0o640, group_gid=0)
+        exact_user_acl(path, uid, directory=False)
         if sha(path.read_bytes()) != hashes[name]:
             raise ValueError("active file differs from recorded SHA")
 
@@ -209,7 +239,7 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
     safe_root_parent(parent)
     if receipt.exists() or receipt.is_symlink() or journal.exists() or journal.is_symlink():
         raise ValueError("receipt or pending intent exists; refuse overwrite")
-    gid = service_gid()
+    uid = service_uid()
     raw = snapshot(source)
     hashes = make_layout(raw, parent)
     approval_id = exact_approval(approval)
@@ -222,7 +252,7 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
         for directory in DIRECTORIES:
             tmp = Path(tempfile.mkdtemp(prefix=".cybercore-113-", dir=parent))
             try:
-                os.chown(tmp, 0, gid)
+                os.chown(tmp, 0, 0)
                 os.chmod(tmp, 0o700)
                 for original, relative in TARGETS.items():
                     rel = Path(relative)
@@ -235,9 +265,10 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
                         handle.write(raw[original])
                         handle.flush()
                         os.fsync(handle.fileno())
-                    os.chown(dest, 0, gid)
-                    os.chmod(dest, 0o640)
-                os.chmod(tmp, 0o750)
+                    os.chown(dest, 0, 0)
+                    os.chmod(dest, 0o600)
+                    grant_user_acl(dest, uid, directory=False)
+                grant_user_acl(tmp, uid, directory=True)
                 final = parent / directory
                 if final.exists() or final.is_symlink():
                     raise ValueError("destination appeared during transaction")
@@ -312,7 +343,7 @@ def reconcile(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
     if receipt.exists() or receipt.is_symlink():
         raise ValueError("committed receipt exists; use independent rollback")
     intent = intent_read(journal)
-    gid = service_gid()
+    uid = service_uid()
     exact_approval(approval, action="code-only-reconcile")
     hashes = intent["file_sha256"]
     assert isinstance(hashes, dict)
@@ -327,7 +358,8 @@ def reconcile(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
             raise ValueError("interrupted directory contents differ; manual review")
         for relative in expected:
             file = parent / relative
-            safe_node(file, directory=False, mode=0o640, group_gid=gid)
+            safe_node(file, directory=False, mode=0o640, group_gid=0)
+            exact_user_acl(file, uid, directory=False)
             if sha(file.read_bytes()) != hashes[relative]:
                 raise ValueError("interrupted code hash drift; manual review")
     for directory in DIRECTORIES:
