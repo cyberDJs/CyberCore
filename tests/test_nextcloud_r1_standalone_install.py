@@ -3,6 +3,7 @@
 The systemd unit launches rollback.py from a flat libexec directory, without
 CyberCore installed in the target interpreter's site-packages.
 """
+
 from __future__ import annotations
 
 import os
@@ -26,10 +27,14 @@ class NextcloudR1StandaloneRollbackTest(unittest.TestCase):
             shutil.copyfile(EXECUTION / "nextcloud_r1_rollback.py", target / "rollback.py")
             # -I excludes PYTHONPATH and user site packages. No rollback main().
             result = subprocess.run(
-                [sys.executable, "-I", "-c",
-                 "import sys; sys.path.insert(0, sys.argv[1]); "
-                 "import rollback; assert rollback.PRIVATE_KEY.name == 'source_ed25519'",
-                 str(target)],
+                [
+                    sys.executable,
+                    "-I",
+                    "-c",
+                    "import sys; sys.path.insert(0, sys.argv[1]); "
+                    "import rollback; assert rollback.PRIVATE_KEY.name == 'source_ed25519'",
+                    str(target),
+                ],
                 cwd=target,
                 capture_output=True,
                 text=True,
