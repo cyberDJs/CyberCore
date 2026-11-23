@@ -81,7 +81,7 @@ def main() -> int:
     rc, out = cmd("systemctl", "list-unit-files", "--no-legend",
                   "cybercore-nextcloud-r1-transfer.service",
                   "cybercore-nextcloud-r1-rollback.service")
-    checks["units_absent"] = rc == 0 and not out
+    checks["units_absent"] = rc == 0 and (not out or out == "0 unit files listed.")
     rc, _ = cmd("sshd", "-t")
     # Non-root sshd -t may fail to open host private keys: UNKNOWN is not PASS.
     checks["sshd_syntax_read_only"] = "PASS" if rc == 0 else "REQUIRES_ROOT_CONSOLE_CHECK"
