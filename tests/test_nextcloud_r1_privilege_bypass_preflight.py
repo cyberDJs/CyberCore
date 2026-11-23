@@ -7,7 +7,9 @@ from pathlib import Path
 import sys
 import unittest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "nextcloud_r1_privilege_bypass_preflight.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[1] / "scripts" / "nextcloud_r1_privilege_bypass_preflight.py"
+)
 
 
 def load():
