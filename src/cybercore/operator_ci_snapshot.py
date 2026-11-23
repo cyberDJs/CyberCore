@@ -60,6 +60,8 @@ def ci_snapshot_operator_update(
         raise ValueError("PR_IDENTITY_DRIFT")
     if type(changed) is not bool:
         raise ValueError("INVALID_CHANGED_FLAG")
+    # Caller materiality is not authoritative for safety-critical CI evidence.
+    # The checkpoint layer suppresses duplicates after it sees the report.
     # Do not accept a reusable Reconciliation detached from its input identity.
     # Run the structural reconciliation within the expected HEAD context.
     snapshot = reconcile_github_snapshot(
@@ -100,5 +102,7 @@ def ci_snapshot_operator_update(
         next_action=action,
         evidence_url=f"https://github.com/cyberDJs/CyberCore/pull/{pr_number}",
         approval_required=False,
-        changed=changed,
+        # Neither BLOCKED nor critical UNKNOWN may be silenced by a stale
+        # caller-provided changed=False; deduplicate by content fingerprint.
+        changed=True,
     )
