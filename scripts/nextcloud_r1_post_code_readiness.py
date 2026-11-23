@@ -73,6 +73,8 @@ def inspect_acl(path: Path, uid: int, *, directory: bool) -> str | None:
 
 
 def assess() -> dict[str, object]:
+    if os.geteuid() != 0:
+        raise ValueError("root read-only inspection required for private code and receipt")
     problems: list[str] = []
     hostname = socket.getfqdn()
     if hostname != HOST:
@@ -128,7 +130,7 @@ def assess() -> dict[str, object]:
         "issue": 113,
         "status": "POST_CODE_READY_FOR_SEPARATE_ACTIVATION_DESIGN" if not problems else "BLOCKED",
         "hostname": hostname,
-        "verified_metadata_and_acl_files": sum(MODULES.values(), frozenset()).__len__() if not problems else None,
+        "verified_metadata_and_acl_files": sum(len(names) for names in MODULES.values()) if not problems else None,
         "problems": sorted(problems),
         "missing_runtime_directories": missing_runtime,
         "activation_paths_present": installed,
@@ -139,7 +141,11 @@ def assess() -> dict[str, object]:
 
 
 def main() -> int:
-    result = assess()
+    try:
+        result = assess()
+    except (OSError, ValueError) as exc:
+        result = {"status": "BLOCKED", "issue": 113, "reason": str(exc),
+                  "activation_performed": False, "mutations_performed": False}
     print(json.dumps(result, sort_keys=True))
     return 0 if result["status"] != "BLOCKED" else 2
 
