@@ -22,6 +22,7 @@ SOURCE = Path("/opt/cybercore-113/releases") / SOURCE_SHA
 DEST_PARENT = Path("/usr/local/libexec")
 APPROVAL = Path("/etc/cybercore-exec/approvals/code-only-113.json")
 RECEIPT = Path("/var/lib/cybercore-113-code-only.json")
+JOURNAL = Path("/var/lib/cybercore-113-code-intent.json")
 TARGETS = {
     "libexec/authorization.py": "cybercore-exec/authorization.py",
     "libexec/dispatcher.py": "cybercore-exec/dispatcher.py",
@@ -153,16 +154,43 @@ def receipt_read(path: Path) -> dict[str, object]:
     return data
 
 
+def write_root_json(path: Path, payload: dict[str, object]) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                 getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "w") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def intent_read(path: Path) -> dict[str, object]:
+    safe_node(path, directory=False, mode=0o600)
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict) or set(data) != {
+        "issue", "source_commit", "status", "file_sha256", "approval_id"
+    } or data["issue"] != 113 or data["source_commit"] != SOURCE_SHA or (
+        data["status"] != "CODE_ONLY_IN_PROGRESS"
+        or not isinstance(data["file_sha256"], dict)
+        or set(data["file_sha256"]) != set(TARGETS.values())
+    ):
+        raise ValueError("unexpected transaction intent journal")
+    return data
+
+
 def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = APPROVAL,
-          receipt: Path = RECEIPT) -> dict[str, object]:
+          receipt: Path = RECEIPT, journal: Path = JOURNAL) -> dict[str, object]:
     if os.geteuid() != 0:
         raise ValueError("root console required")
     safe_root_parent(parent)
-    if receipt.exists() or receipt.is_symlink():
-        raise ValueError("transaction already recorded; refuse overwrite")
+    if receipt.exists() or receipt.is_symlink() or journal.exists() or journal.is_symlink():
+        raise ValueError("receipt or pending intent exists; refuse overwrite")
     raw = snapshot(source)
     hashes = make_layout(raw, parent)
     approval_id = exact_approval(approval)
+    intent = {"issue": 113, "source_commit": SOURCE_SHA,
+              "status": "CODE_ONLY_IN_PROGRESS", "file_sha256": hashes,
+              "approval_id": approval_id}
+    write_root_json(journal, intent)
     installed: list[Path] = []
     try:
         for directory in DIRECTORIES:
@@ -194,12 +222,8 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
         payload = {"issue": 113, "source_commit": SOURCE_SHA,
                    "status": "CODE_ONLY_INSTALLED", "file_sha256": hashes,
                    "approval_id": approval_id}
-        fd = os.open(receipt, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
-                     getattr(os, "O_NOFOLLOW", 0), 0o600)
-        with os.fdopen(fd, "w") as handle:
-            json.dump(payload, handle, sort_keys=True)
-            handle.flush()
-            os.fsync(handle.fileno())
+        write_root_json(receipt, payload)
+        journal.unlink()
         return {"status": "CODE_ONLY_INSTALLED", "activation_performed": False,
                 "file_count": len(hashes)}
     except Exception:
@@ -207,12 +231,17 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
         for created in reversed(installed):
             if created.exists():
                 shutil.rmtree(created)
+        if not receipt.exists():
+            journal.unlink(missing_ok=True)
         raise
 
 
-def verify(parent: Path = DEST_PARENT, receipt: Path = RECEIPT) -> dict[str, object]:
+def verify(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
+           journal: Path = JOURNAL) -> dict[str, object]:
     if os.geteuid() != 0:
         raise ValueError("root required")
+    if journal.exists() or journal.is_symlink():
+        raise ValueError("pending intent journal blocks verification")
     data = receipt_read(receipt)
     hashes = data["file_sha256"]
     assert isinstance(hashes, dict)
@@ -222,9 +251,11 @@ def verify(parent: Path = DEST_PARENT, receipt: Path = RECEIPT) -> dict[str, obj
 
 
 def rollback(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
-             approval: Path = APPROVAL) -> dict[str, object]:
+             approval: Path = APPROVAL, journal: Path = JOURNAL) -> dict[str, object]:
     if os.geteuid() != 0:
         raise ValueError("root required")
+    if journal.exists() or journal.is_symlink():
+        raise ValueError("pending intent journal requires separate reconciliation")
     exact_approval(approval, action="code-only-rollback")  # independent rollback authorization
     data = receipt_read(receipt)
     hashes = data["file_sha256"]
@@ -239,9 +270,48 @@ def rollback(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
     return {"status": "CODE_ONLY_ROLLED_BACK", "activation_performed": False}
 
 
+def reconcile(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
+              approval: Path = APPROVAL, journal: Path = JOURNAL) -> dict[str, object]:
+    """Remove only exact verified remnants from a power-interrupted installation."""
+    if os.geteuid() != 0:
+        raise ValueError("root required")
+    if receipt.exists() or receipt.is_symlink():
+        raise ValueError("committed receipt exists; use independent rollback")
+    intent = intent_read(journal)
+    exact_approval(approval, action="code-only-reconcile")
+    hashes = intent["file_sha256"]
+    assert isinstance(hashes, dict)
+    for directory in DIRECTORIES:
+        path = parent / directory
+        if not path.exists() and not path.is_symlink():
+            continue
+        safe_node(path, directory=True, mode=0o755)
+        expected = {
+            name: hashes[name] for name in hashes
+            if Path(name).parent.name == directory
+        }
+        items = {item.name for item in path.iterdir()}
+        if items != {Path(name).name for name in expected}:
+            raise ValueError("interrupted directory contents differ; manual review")
+        for relative, digest in expected.items():
+            file = parent / relative
+            safe_node(file, directory=False, mode=0o644)
+            if sha(file.read_bytes()) != digest:
+                raise ValueError("interrupted code hash drift; manual review")
+    for directory in DIRECTORIES:
+        path = parent / directory
+        if path.exists():
+            for item in path.iterdir():
+                item.unlink()
+            path.rmdir()
+    journal.unlink()
+    return {"status": "CODE_ONLY_INTENT_RECONCILED",
+            "activation_performed": False}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("plan", "apply", "verify", "rollback"))
+    parser.add_argument("action", choices=("plan", "apply", "verify", "rollback", "reconcile"))
     args = parser.parse_args()
     try:
         if args.action == "plan":
@@ -251,8 +321,10 @@ def main() -> int:
             data = apply()
         elif args.action == "verify":
             data = verify()
-        else:
+        elif args.action == "rollback":
             data = rollback()
+        else:
+            data = reconcile()
     except (ValueError, OSError, RuntimeError, TypeError, json.JSONDecodeError) as exc:
         data = {"status": "BLOCKED", "reason": str(exc), "activation_performed": False}
     print(json.dumps(data, sort_keys=True))
