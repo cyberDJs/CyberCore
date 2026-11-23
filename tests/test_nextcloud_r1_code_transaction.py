@@ -36,7 +36,8 @@ class CodeOnlyTransactionTests(unittest.TestCase):
             info = path.lstat()
             if directory != stat.S_ISDIR(info.st_mode):
                 raise ValueError("unexpected node type")
-            if stat.S_IMODE(info.st_mode) != mode:
+            fixture_mode = 0o700 if directory and mode == 0o750 else 0o600 if mode == 0o640 else mode
+            if stat.S_IMODE(info.st_mode) != fixture_mode:
                 raise ValueError("unexpected node mode")
 
         return (
@@ -45,8 +46,10 @@ class CodeOnlyTransactionTests(unittest.TestCase):
             mock.patch.object(self.m, "safe_node", side_effect=test_safe_node),
             mock.patch.object(self.m, "snapshot", return_value=self.blobs()),
             mock.patch.object(self.m, "exact_approval", return_value="test-approval"),
-            mock.patch.object(self.m, "service_gid", return_value=1234),
+            mock.patch.object(self.m, "service_uid", return_value=1234),
             mock.patch.object(self.m.os, "chown"),
+            mock.patch.object(self.m, "grant_user_acl"),
+            mock.patch.object(self.m, "exact_user_acl"),
         )
 
     def test_apply_verify_rollback_no_activation(self):
@@ -144,7 +147,7 @@ class CodeOnlyTransactionTests(unittest.TestCase):
             with mock.patch.object(self.m.os, "geteuid", return_value=0):
                 with mock.patch.object(self.m, "safe_root_parent"):
                     with mock.patch.object(
-                        self.m, "service_gid", side_effect=ValueError("identity absent")
+                        self.m, "service_uid", side_effect=ValueError("identity absent")
                     ):
                         with self.assertRaisesRegex(ValueError, "identity absent"):
                             self.m.apply(parent=parent, receipt=receipt, journal=journal)
