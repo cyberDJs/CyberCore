@@ -902,3 +902,196 @@ def test_invalid_monotonic_observation_latches_kernel_fail_closed() -> None:
             ),
             trusted_actor=ACTOR,
         )
+
+
+@pytest.mark.parametrize(
+    "bad_sample",
+    [
+        "raise_os",
+        "raise_runtime",
+        None,
+        "not-a-number",
+        True,
+        float("nan"),
+        float("inf"),
+        -float("inf"),
+        1e100,
+    ],
+)
+def test_trusted_monotonic_fault_cannot_recover_authority(bad_sample) -> None:
+    base = datetime(2026, 11, 12, tzinfo=timezone.utc)
+    failed = [False]
+
+    def monotonic_sample():
+        if not failed[0]:
+            return 100.0
+        if bad_sample == "raise_os":
+            raise OSError("injected clock failure")
+        if bad_sample == "raise_runtime":
+            raise RuntimeError("injected clock failure")
+        return bad_sample
+
+    k = kernel(clock=lambda: base, monotonic_clock=monotonic_sample)
+    req = task(requested_at=base, expires_at=base + timedelta(milliseconds=20))
+    failed[0] = True
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(req, trusted_actor=ACTOR)
+    assert k._clock_authority_invalid
+    assert req.task_id not in k._used
+    failed[0] = False
+    for retry in (
+        req,
+        task(
+            task_id="new-after-clock-fault",
+            requested_at=base,
+            expires_at=base + timedelta(milliseconds=20),
+        ),
+    ):
+        with pytest.raises(PermissionError, match="clock authority unavailable"):
+            k.execute(retry, trusted_actor=ACTOR)
+
+
+@pytest.mark.parametrize("provider", ["pid", "monotonic", "utc"])
+def test_each_trusted_provider_exception_latches_before_recovery(provider) -> None:
+    base = datetime(2026, 11, 12, tzinfo=timezone.utc)
+    failed = [False]
+
+    def sample(name, value):
+        if failed[0] and provider == name:
+            raise OSError("injected provider failure")
+        return value
+
+    k = kernel(
+        clock=lambda: sample("utc", base),
+        monotonic_clock=lambda: sample("monotonic", 100.0),
+        process_id_provider=lambda: sample("pid", 4242),
+    )
+    failed[0] = True
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k._trusted_time()
+    assert k._clock_authority_invalid
+    failed[0] = False
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(
+            task(requested_at=base, expires_at=base + timedelta(seconds=20)), trusted_actor=ACTOR
+        )
+
+
+@pytest.mark.parametrize("stage", ["policy", "execution", "evidence"])
+def test_authorization_sampling_fault_at_each_audit_boundary_stays_sticky(stage) -> None:
+    base = datetime(2026, 11, 12, tzinfo=timezone.utc)
+    failed = [False]
+
+    def sink(event):
+        if event.stage == stage:
+            failed[0] = True
+
+    def sample():
+        if failed[0]:
+            raise OSError("clock continuity lost")
+        return 100.0
+
+    k = kernel(clock=lambda: base, monotonic_clock=sample, evidence_sink=sink)
+    req = task(requested_at=base, expires_at=base + timedelta(seconds=20))
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(req, trusted_actor=ACTOR)
+    assert k._clock_authority_invalid
+    assert (req.task_id in k._used) == (stage != "policy")
+    failed[0] = False
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(req, trusted_actor=ACTOR)
+
+
+def test_normal_expiration_does_not_invalidate_kernel_clock_authority() -> None:
+    base = datetime(2026, 11, 12, tzinfo=timezone.utc)
+    mono = [100.0]
+    k = kernel(clock=lambda: base, monotonic_clock=lambda: mono[0])
+    mono[0] = 102.0
+    expired = k.execute(
+        task(task_id="expired-control", requested_at=base, expires_at=base + timedelta(seconds=1)),
+        trusted_actor=ACTOR,
+    )
+    assert expired.status == "DENIED"
+    assert expired.reason == "EXPIRED"
+    assert not k._clock_authority_invalid
+    valid = k.execute(
+        task(task_id="valid-control", requested_at=base, expires_at=base + timedelta(seconds=20)),
+        trusted_actor=ACTOR,
+    )
+    assert valid.status == "EXECUTED"
+
+
+@pytest.mark.parametrize("bad_pid", [None, True, 4242.0, "4242"])
+def test_malformed_trusted_pid_is_sticky(bad_pid) -> None:
+    base = datetime(2026, 11, 12, tzinfo=timezone.utc)
+    pid = [4242]
+    k = kernel(
+        clock=lambda: base, monotonic_clock=lambda: 100.0, process_id_provider=lambda: pid[0]
+    )
+    pid[0] = bad_pid
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k._trusted_time()
+    pid[0] = 4242
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(
+            task(requested_at=base, expires_at=base + timedelta(seconds=20)), trusted_actor=ACTOR
+        )
+
+
+@pytest.mark.parametrize("bad_utc", [None, "not-a-date", datetime(2026, 11, 12)])
+def test_malformed_trusted_utc_is_sticky(bad_utc) -> None:
+    base = datetime(2026, 11, 12, tzinfo=timezone.utc)
+    wall = [base]
+    k = kernel(clock=lambda: wall[0], monotonic_clock=lambda: 100.0)
+    wall[0] = bad_utc
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k._trusted_time()
+    wall[0] = base
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(
+            task(requested_at=base, expires_at=base + timedelta(seconds=20)), trusted_actor=ACTOR
+        )
+
+
+def test_valid_non_utc_timezone_remains_authorized() -> None:
+    base = datetime(2026, 11, 12, tzinfo=timezone(timedelta(hours=2)))
+    k = kernel(clock=lambda: base, monotonic_clock=lambda: 100.0)
+    result = k.execute(
+        task(requested_at=base, expires_at=base + timedelta(seconds=20)), trusted_actor=ACTOR
+    )
+    assert result.status == "EXECUTED"
+    assert not k._clock_authority_invalid
+
+
+@pytest.mark.parametrize("fault", ["raise", "none", "string", "naive"])
+def test_raw_metadata_clock_fault_cannot_restore_authority(fault) -> None:
+    base = datetime(2026, 11, 12, tzinfo=timezone.utc)
+    calls = 0
+
+    def clock():
+        nonlocal calls
+        calls += 1
+        # Construction is valid. The next read is request-audit metadata
+        # from the same trusted UTC provider, before policy authorization.
+        if calls == 2:
+            if fault == "raise":
+                raise OSError("metadata clock continuity lost")
+            return {"none": None, "string": "invalid", "naive": base.replace(tzinfo=None)}[fault]
+        return base
+
+    k = kernel(clock=clock, monotonic_clock=lambda: 100.0)
+    req = task(requested_at=base, expires_at=base + timedelta(seconds=20))
+    with pytest.raises(PermissionError, match="clock authority unavailable"):
+        k.execute(req, trusted_actor=ACTOR)
+    assert k._clock_authority_invalid
+    assert req.task_id not in k._used
+    for retry in (
+        req,
+        task(
+            task_id="new-after-metadata-fault",
+            requested_at=base,
+            expires_at=base + timedelta(seconds=20),
+        ),
+    ):
+        with pytest.raises(PermissionError, match="clock authority unavailable"):
+            k.execute(retry, trusted_actor=ACTOR)
