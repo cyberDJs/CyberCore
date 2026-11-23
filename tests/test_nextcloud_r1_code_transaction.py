@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 import importlib.util
+import os
+import shutil
 from pathlib import Path
 import stat
 import sys
@@ -153,6 +155,23 @@ class CodeOnlyTransactionTests(unittest.TestCase):
                             self.m.apply(parent=parent, receipt=receipt, journal=journal)
             self.assertFalse(receipt.exists())
             self.assertFalse(journal.exists())
+
+    def test_real_named_uid_acl_roundtrip_if_available(self):
+        if shutil.which("setfacl") is None or shutil.which("getfacl") is None:
+            self.skipTest("ACL tools not installed on this runner")
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp) / "restricted"
+            directory.mkdir(mode=0o700)
+            data = directory / "module.py"
+            data.write_text("code")
+            data.chmod(0o600)
+            uid = os.geteuid()
+            self.m.grant_user_acl(directory, uid, directory=True)
+            self.m.grant_user_acl(data, uid, directory=False)
+            self.m.exact_user_acl(directory, uid, directory=True)
+            self.m.exact_user_acl(data, uid, directory=False)
+            self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o750)
+            self.assertEqual(stat.S_IMODE(data.stat().st_mode), 0o640)
 
     def test_no_root_no_apply(self):
         with mock.patch.object(self.m.os, "geteuid", return_value=1000):
