@@ -36,16 +36,12 @@ class RootOfflineSSHPreflightTest(unittest.TestCase):
         cls.tail = (CANDIDATES / "sshd-match-tail.conf").read_text()
 
     def test_matching_templates_and_realistic_include(self):
-        self.module.check_layout(
-            self.primary, self.includes, self.subsystem, self.tail
-        )
+        self.module.check_layout(self.primary, self.includes, self.subsystem, self.tail)
 
     def test_reject_existing_match_inside_early_include(self):
         includes = {"50-cloud-init.conf": "Match User root\nPermitTTY yes\n"}
         with self.assertRaisesRegex(ValueError, "unreviewed nested"):
-            self.module.check_layout(
-                self.primary, includes, self.subsystem, self.tail
-            )
+            self.module.check_layout(self.primary, includes, self.subsystem, self.tail)
 
     def test_reject_duplicate_subsystem(self):
         with self.assertRaisesRegex(ValueError, "already installed"):
@@ -56,21 +52,19 @@ class RootOfflineSSHPreflightTest(unittest.TestCase):
     def test_reject_extra_include(self):
         with self.assertRaisesRegex(ValueError, "additional primary Include"):
             self.module.check_layout(
-                self.primary + "Include /another/*.conf\n",
-                self.includes, self.subsystem, self.tail
+                self.primary + "Include /another/*.conf\n", self.includes, self.subsystem, self.tail
             )
 
     def test_reject_modified_force_command(self):
         tail = self.tail.replace("cyberskills-vps", "tasks.cyberdjs.org")
         with self.assertRaisesRegex(ValueError, "deviates"):
-            self.module.check_layout(
-                self.primary, self.includes, self.subsystem, tail
-            )
+            self.module.check_layout(self.primary, self.includes, self.subsystem, tail)
 
     def test_reject_early_match_user(self):
         with self.assertRaisesRegex(ValueError, "not exact"):
             self.module.check_layout(
-                self.primary, self.includes,
+                self.primary,
+                self.includes,
                 self.subsystem + "Match User cybercore-exec\n",
                 self.tail,
             )
