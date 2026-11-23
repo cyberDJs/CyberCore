@@ -13,10 +13,16 @@ from typing import Callable
 from cybercore.execution.nextcloud_r1_broker_core import Rejected, Request
 
 MAX_REQUEST_BYTES = 4096
-_FIELDS = frozenset({
-    "operation_id", "operation", "target_id", "plan_id",
-    "plan_revision", "authorization_reference",
-})
+_FIELDS = frozenset(
+    {
+        "operation_id",
+        "operation",
+        "target_id",
+        "plan_id",
+        "plan_revision",
+        "authorization_reference",
+    }
+)
 
 
 def kernel_peer_uid(conn: socket.socket) -> int:
@@ -51,8 +57,7 @@ def read_request(conn: socket.socket) -> Request:
     if not isinstance(fields, dict) or fields.keys() != _FIELDS:
         raise Rejected("unexpected request schema")
     if any(
-        not isinstance(value, str) or not value or len(value) > 256
-        for value in fields.values()
+        not isinstance(value, str) or not value or len(value) > 256 for value in fields.values()
     ):
         raise Rejected("invalid request value")
     return Request(**fields)
@@ -70,11 +75,7 @@ def handle_connection(
     A future service must ensure its root-owned socket and authorization policy.
     """
     uid = kernel_peer_uid(conn)
-    if (
-        isinstance(expected_peer_uid, bool)
-        or expected_peer_uid <= 0
-        or uid != expected_peer_uid
-    ):
+    if isinstance(expected_peer_uid, bool) or expected_peer_uid <= 0 or uid != expected_peer_uid:
         raise Rejected("peer identity not permitted")
     request = read_request(conn)
     return dispatch(request, uid)
