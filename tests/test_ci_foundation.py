@@ -13,6 +13,7 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 REAL_HIVE_WORKFLOW_PATH = WORKFLOW_DIR / "action-kernel-real-hive.yml"
 CI_WORKFLOW_PATH = WORKFLOW_DIR / "ci.yml"
 CODEQL_WORKFLOW_PATH = WORKFLOW_DIR / "codeql.yml"
+INTERSERVER_INVENTORY_WORKFLOW_PATH = WORKFLOW_DIR / "interserver-vps-inventory.yml"
 STAGING_DRY_RUN_WORKFLOW_PATH = WORKFLOW_DIR / "staging-dry-run.yml"
 STAGING_READINESS_WORKFLOW_PATH = WORKFLOW_DIR / "staging-readiness-gate.yml"
 VERIFY_SCRIPT_PATH = REPO_ROOT / "scripts" / "verify.sh"
@@ -122,6 +123,7 @@ def test_all_workflows_parse_as_valid_yaml() -> None:
         REAL_HIVE_WORKFLOW_PATH,
         CI_WORKFLOW_PATH,
         CODEQL_WORKFLOW_PATH,
+        INTERSERVER_INVENTORY_WORKFLOW_PATH,
         STAGING_DRY_RUN_WORKFLOW_PATH,
         STAGING_READINESS_WORKFLOW_PATH,
     ]
@@ -159,6 +161,7 @@ def test_workflow_permissions_remain_minimal() -> None:
 
         if path in {
             CI_WORKFLOW_PATH,
+            INTERSERVER_INVENTORY_WORKFLOW_PATH,
             STAGING_DRY_RUN_WORKFLOW_PATH,
             STAGING_READINESS_WORKFLOW_PATH,
         }:
