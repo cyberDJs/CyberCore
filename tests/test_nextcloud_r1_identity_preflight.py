@@ -1,4 +1,5 @@
 """CyberCore #113 identity preflight: read-only and negative tests."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -26,8 +27,13 @@ class IdentityPreflightTests(unittest.TestCase):
         cls.m = load()
 
     def user(self, **overrides):
-        base = dict(pw_uid=995, pw_gid=995, pw_shell="/usr/sbin/nologin",
-                    pw_passwd="x", pw_dir="/nonexistent/cybercore-exec")
+        base = dict(
+            pw_uid=995,
+            pw_gid=995,
+            pw_shell="/usr/sbin/nologin",
+            pw_passwd="x",
+            pw_dir="/nonexistent/cybercore-exec",
+        )
         base.update(overrides)
         return SimpleNamespace(**base)
 
@@ -59,9 +65,7 @@ class IdentityPreflightTests(unittest.TestCase):
         self.assertTrue(any("shell" in v for v in violations))
 
     def test_reject_group_mismatch(self):
-        state, violations = self.m.evaluate_identity(
-            self.user(pw_gid=991), self.group(), {}
-        )
+        state, violations = self.m.evaluate_identity(self.user(pw_gid=991), self.group(), {})
         self.assertEqual(state, "BLOCKED")
         self.assertTrue(any("primary" in v for v in violations))
 
