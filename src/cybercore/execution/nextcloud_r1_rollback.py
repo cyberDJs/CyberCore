@@ -8,7 +8,7 @@ import stat
 
 # Deployed by systemd as standalone rollback.py beside transfer.py.
 if __package__ in {None, ""}:
-    from transfer import (
+    from transfer import (  # pyright: ignore[reportMissingImports]
         BACKUP_ROOT,
         CREDENTIAL_ROOT,
         FINAL_ARCHIVE,
