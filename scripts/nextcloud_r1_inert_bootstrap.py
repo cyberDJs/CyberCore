@@ -176,8 +176,9 @@ def atomic_stage(files: dict[str, bytes], manifest: dict[str, object]) -> None:
 def inspect_release(manifest: dict[str, object]) -> None:
     safe_parent()
     info = RELEASE.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != OWNER_UID:
-        fail("managed release directory identity mismatch")
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid != OWNER_UID
+            or stat.S_IMODE(info.st_mode) != 0o700):
+        fail("managed release directory identity/mode mismatch")
     for rel, expected in manifest["files"].items():
         path = RELEASE / rel
         info = path.lstat()
@@ -197,7 +198,8 @@ def inspect_release(manifest: dict[str, object]) -> None:
         rel = str(p.relative_to(RELEASE))
         metadata = p.lstat()
         if rel in allowed_directories:
-            if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != OWNER_UID:
+            if (not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != OWNER_UID
+                    or stat.S_IMODE(metadata.st_mode) != 0o700):
                 fail(f"unexpected managed directory: {rel}")
         elif rel in allowed_files:
             if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
