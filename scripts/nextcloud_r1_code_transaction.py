@@ -135,10 +135,10 @@ def verify_layout(parent: Path, hashes: dict[str, str]) -> None:
         allowed = {Path(name).name for name in hashes if Path(name).parent.name == directory}
         if {p.name for p in path.iterdir()} != allowed:
             raise ValueError("active directory has unreviewed contents")
-    for name, digest in hashes.items():
+    for name in TARGETS.values():
         path = parent / name
         safe_node(path, directory=False, mode=0o644)
-        if sha(path.read_bytes()) != digest:
+        if sha(path.read_bytes()) != hashes[name]:
             raise ValueError("active file differs from recorded SHA")
 
 
@@ -286,17 +286,14 @@ def reconcile(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
         if not path.exists() and not path.is_symlink():
             continue
         safe_node(path, directory=True, mode=0o755)
-        expected = {
-            name: hashes[name] for name in hashes
-            if Path(name).parent.name == directory
-        }
+        expected = {name for name in TARGETS.values() if Path(name).parent.name == directory}
         items = {item.name for item in path.iterdir()}
         if items != {Path(name).name for name in expected}:
             raise ValueError("interrupted directory contents differ; manual review")
-        for relative, digest in expected.items():
+        for relative in expected:
             file = parent / relative
             safe_node(file, directory=False, mode=0o644)
-            if sha(file.read_bytes()) != digest:
+            if sha(file.read_bytes()) != hashes[relative]:
                 raise ValueError("interrupted code hash drift; manual review")
     for directory in DIRECTORIES:
         path = parent / directory
