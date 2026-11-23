@@ -15,6 +15,10 @@ The script checks hostname, root-owned parents, absence of active target paths, 
 
 A partial account/group collision, unexpected permissions, wrong host or active deployment paths produces `BLOCKED` (exit 2). Existing locked identity produces `IDENTITY_PRESENT_RESTRICTED`, but still does not prove its effective Linux ACL/sudo/SSH authorization.
 
+## Live host finding (23 November 2026)
+
+Read-only checks on `vps3665015.trouble-free.net` observed the exact failure `required parent absent: /usr/local/libexec`. The parent `/usr/local` is root:root 0755 and `/usr/local/libexec` does not exist. Before any identity or code installation, a separately authorized root operator must create only this specific directory with `install -d -o root -g root -m 0755 /usr/local/libexec`, then immediately re-run the read-only preflight and verify `stat -c '%U:%G %a' /usr/local/libexec` yields `root:root 755`. This command is **proposed, not executed**. If the path unexpectedly appears or has unexpected owner/mode, stop and investigate instead of overwriting. The existing root-only Stage-A release remains unchanged.
+
 ## Future separately authorized root procedure (not executed by this PR)
 
 1. Require exact hostname, current release SHA and an interactive root console with tested recovery access.
