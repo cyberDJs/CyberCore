@@ -456,6 +456,8 @@ def handle_accepted_client(
             raise Rejected("broker requires SOCK_SEQPACKET")
         if os.geteuid() != config.trusted_owner_uid:
             raise Rejected("broker process does not match trusted owner")
+        if approval_store.config != config:
+            raise Rejected("approval store configuration does not match broker boundary")
 
         peer_uid = _peer_uid(client)
         if peer_uid != config.expected_peer_uid:

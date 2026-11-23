@@ -138,6 +138,15 @@ class BrokerBoundaryTests(unittest.TestCase):
         self.assertFalse(self.dispatched)
         self.assertFalse(list(self.state.glob("*.prepared.json")))
 
+    def test_mismatched_approval_store_configuration_is_denied(self):
+        self.write_manifest()
+        store_config = replace(self.config, plan_revision="other")
+        with self.store(config=store_config) as store:
+            response = self.invoke(store, config=self.config)
+        self.assertEqual(response, {"ok": False, "status": "DENIED"})
+        self.assertFalse(self.dispatched)
+        self.assertFalse(list(self.state.glob("*.prepared.json")))
+
     def test_stream_socket_is_denied(self):
         self.write_manifest()
         with self.store() as store:
