@@ -14,7 +14,7 @@
 
 - Only GitHub REST read endpoints are accessed. No GitHub API key or other credential is written to source/configuration.
 - The collector accepts only PR-linked `pull_request` workflow runs with matching HEAD, repository, and PR number; tests must not conflate unrelated main-push CI with PR-head checks.
-- Pagination is `per_page=100` and checked against `total_count` with a maximum of 20 runs/100 jobs. Larger histories fail closed and require a redesigned bounded collector.
+- Pagination is `per_page=25`, with multi-page total-count stability checks and checked against `total_count` with a maximum of 20 runs/100 jobs. Larger histories fail closed and require a redesigned bounded collector.
 - `filter=latest` excludes earlier workflow attempts: this draft **does not authenticate completeness across all run attempts**. Before any claim of audited historical attestation, extend acquisition to enumerate every attempt or explicitly limit claims to latest-attempt state; neither is authorized as PASS here.
 - A caller-supplied client may be fake or untrusted. The real HTTPS reader is the only authenticated transport candidate. No signed GitHub attestation is verified.
 - Any API error, bad shape, missing/duplicate workflow, changed HEAD, foreign run/job, truncated pagination, or size limit must fail closed. No automatic retries that silently change the observed HEAD.

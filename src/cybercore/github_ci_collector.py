@@ -22,6 +22,7 @@ _SHA = re.compile(r"[0-9a-f]{40}", re.ASCII)
 _ALLOWED = frozenset({"CI", "CodeQL", "Action Kernel real CyberHIVE contract"})
 _MAX_RUNS = 20
 _MAX_JOBS = 100
+_PAGE_SIZE = 25
 
 
 class EvidenceAcquisitionError(ValueError):
@@ -120,18 +121,23 @@ def _pages(
 ) -> list[dict[str, Any]]:
     """Require exact total_count, bounded pagination, and complete item count."""
     output: list[dict[str, Any]] = []
-    for page in range(1, (max_items + 99) // 100 + 1):
-        data = _obj(reader.get(endpoint, {**params, "per_page": 100, "page": page}))
+    expected_total: int | None = None
+    for page in range(1, (max_items + _PAGE_SIZE - 1) // _PAGE_SIZE + 1):
+        data = _obj(reader.get(endpoint, {**params, "per_page": _PAGE_SIZE, "page": page}))
         total = data.get("total_count")
         items = data.get(key)
         if type(total) is not int or total < 0 or total > max_items or type(items) is not list:
             raise EvidenceAcquisitionError("INCOMPLETE_PAGINATION")
-        if len(items) > 100 or len(output) + len(items) > total:
+        if expected_total is None:
+            expected_total = total
+        if total != expected_total:
+            raise EvidenceAcquisitionError("PAGINATION_DRIFT")
+        if len(items) > _PAGE_SIZE or len(output) + len(items) > total:
             raise EvidenceAcquisitionError("INCOMPLETE_PAGINATION")
         output.extend(_obj(item) for item in items)
         if len(output) == total:
             return output
-        if len(items) != 100:
+        if len(items) != _PAGE_SIZE:
             raise EvidenceAcquisitionError("INCOMPLETE_PAGINATION")
     raise EvidenceAcquisitionError("INCOMPLETE_PAGINATION")
 

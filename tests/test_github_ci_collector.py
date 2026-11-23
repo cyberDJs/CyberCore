@@ -52,12 +52,12 @@ class FakeReader(GitHubHTTPSReader):
         if path == f"{PREFIX}/actions/runs":
             items = self.run_data
             return {"total_count": len(items), "workflow_runs": deepcopy(
-                items[(params["page"] - 1) * 100:params["page"] * 100]
+                items[(params["page"] - 1) * params["per_page"]:params["page"] * params["per_page"]]
             )}
         for run_id, jobs in self.job_data.items():
             if path == f"{PREFIX}/actions/runs/{run_id}/jobs":
                 return {"total_count": len(jobs), "jobs": deepcopy(
-                    jobs[(params["page"] - 1) * 100:params["page"] * 100]
+                    jobs[(params["page"] - 1) * params["per_page"]:params["page"] * params["per_page"]]
                 )}
         raise AssertionError(path)
 
@@ -144,3 +144,34 @@ def test_reader_rejects_malformed_token_and_untrusted_endpoint():
     safe = GitHubHTTPSReader("placeholder-for-test")
     with pytest.raises(EvidenceAcquisitionError, match="INVALID_ENDPOINT"):
         safe.get("/repos/other/repo/pulls/165")
+
+
+def test_multi_page_jobs_are_exhaustively_collected():
+    reader = FakeReader()
+    for i in range(22):
+        reader.job_data[101].append({
+            "run_id": 101, "id": 11000 + i, "name": f"optional-{i}",
+            "status": "completed", "conclusion": "success",
+        })
+    result = collect_pr_ci(reader, pr_number=165, expected_sha=SHA)
+    assert len(result.jobs) == 30
+    pages = [params["page"] for path, params in reader.calls if path.endswith("/101/jobs")]
+    assert pages == [1, 2]
+
+
+def test_pagination_total_count_changing_between_pages_fails_closed():
+    reader = FakeReader()
+    for i in range(20):
+        reader.job_data[101].append({
+            "run_id": 101, "id": 12000 + i, "name": f"optional-{i}",
+            "status": "completed", "conclusion": "success",
+        })
+    original = reader.get
+    def inconsistent(path, params=None):
+        response = original(path, params)
+        if path.endswith("/101/jobs") and params["page"] == 2:
+            response["total_count"] += 1
+        return response
+    reader.get = inconsistent
+    with pytest.raises(EvidenceAcquisitionError, match="PAGINATION_DRIFT"):
+        collect_pr_ci(reader, pr_number=165, expected_sha=SHA)
