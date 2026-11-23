@@ -48,7 +48,8 @@ class BrokerCoreTests(unittest.TestCase):
 
     def invoke(self, req=None, *, peer_uid=995, expected_peer_uid=995, verifier=None, runner=None):
         return broker_once(
-            req or request(), peer_uid=peer_uid,
+            req or request(),
+            peer_uid=peer_uid,
             expected_peer_uid=expected_peer_uid,
             verifier=self.verifier if verifier is None else verifier,
             state_dir=self.state,
@@ -87,7 +88,9 @@ class BrokerCoreTests(unittest.TestCase):
         invalid = Request("id", "unrelated.command", "cyberskills-vps", "plan", "1", "ref")
         with self.assertRaisesRegex(Rejected, "unsupported"):
             self.invoke(invalid)
-        target = Request("id", "nextcloud.r1.offhost.rollback", "tasks.cyberdjs.org", "plan", "1", "ref")
+        target = Request(
+            "id", "nextcloud.r1.offhost.rollback", "tasks.cyberdjs.org", "plan", "1", "ref"
+        )
         with self.assertRaisesRegex(Rejected, "unsupported"):
             self.invoke(target)
         self.assertFalse(self.dispatched)
@@ -110,6 +113,7 @@ class BrokerCoreTests(unittest.TestCase):
     def test_dispatch_exception_is_nonretryable(self):
         def crash(_argv):
             raise RuntimeError("synthetic")
+
         result = self.invoke(runner=crash)
         self.assertEqual(result["status"], "DISPATCH_UNKNOWN")
         with self.assertRaisesRegex(Rejected, "already been prepared"):
