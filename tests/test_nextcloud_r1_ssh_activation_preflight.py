@@ -57,9 +57,7 @@ class SSHActivationLayoutTest(unittest.TestCase):
         self.assertTrue(self.mod.evaluate(self.main, self.subsystem, bad))
 
     def test_reject_match_all(self):
-        self.assertTrue(
-            self.mod.evaluate(self.main, self.subsystem, self.tail + "Match all\n")
-        )
+        self.assertTrue(self.mod.evaluate(self.main, self.subsystem, self.tail + "Match all\\n"))
 
     def test_reject_noncanonical_target(self):
         self.assertTrue(
