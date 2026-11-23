@@ -15,6 +15,11 @@ The pure `ci_snapshot_operator_update` adapter receives the requested PR number,
 
 The result can be passed to `format_operator_update` and `checkpoint_operator_update` as a material event **candidate**. It is not proof that the underlying GitHub data are authentic.
 
+## Critical report materiality / P2 regression
+
+The caller's `changed` boolean remains type-checked, but **never controls suppression** of this adapter's `BLOCKED` or `UNKNOWN / critical_evidence_missing` result. Both are safety-critical and yield an update with `changed=True`, even when the caller supplies `changed=False`. This prevents a stale or incorrect caller materiality flag from hiding a HEAD_DRIFT, missing workflow, failed job, or missing provenance. It does **not** prove that the event is new: `checkpoint_operator_update` fingerprints the resulting report and returns `UNCHANGED` only when the caller provides the fingerprint of an **acknowledged delivered** report. No ACK, no checkpoint advance; retries remain eligible for delivery. Persistence, transport, authentication, and alert delivery remain strictly outside this candidate.
+
+
 ## Required evidence and release gates
 
 An actual verified GitHub adapter would have to bind repository and PR identity through an authenticated source, read HEAD/base before and after acquisition, enumerate complete workflow job pagination and run attempts, authenticate provider identity and verify protections/reviews. This version rejects a differing observed PR number and checks that the supplied expected HEAD and observed provider HEAD agree *within the reconciliation call*, but it cannot attest that supplied workflows/jobs belong to the claimed PR; these identifiers must originate from authenticated caller evidence rather than an arbitrary self-declared number. The existing connector reports PR-triggered workflow runs only; **main-push CI is UNKNOWN without an independently observed main-push check**. A source-visible PASS is never inferred from structural-only data.
