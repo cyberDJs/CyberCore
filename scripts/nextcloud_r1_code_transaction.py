@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import hashlib
+import grp
+import pwd
 import json
 import os
 from pathlib import Path
@@ -40,9 +42,21 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def safe_node(path: Path, *, directory: bool, mode: int) -> None:
+def service_gid() -> int:
+    account = pwd.getpwnam("cybercore-exec")
+    group = grp.getgrnam("cybercore-exec")
+    if account.pw_uid == 0 or account.pw_gid != group.gr_gid:
+        raise ValueError("service account/group identity mismatch")
+    if account.pw_shell not in ("/usr/sbin/nologin", "/sbin/nologin", "/bin/false"):
+        raise ValueError("service account must be noninteractive")
+    return group.gr_gid
+
+
+def safe_node(path: Path, *, directory: bool, mode: int,
+              group_gid: int | None = None) -> None:
     info = path.lstat()
-    if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != mode:
+    if (info.st_uid != 0 or stat.S_IMODE(info.st_mode) != mode
+            or (group_gid is not None and info.st_gid != group_gid)):
         raise ValueError(f"unsafe owner or mode: {path}")
     if directory != stat.S_ISDIR(info.st_mode):
         raise ValueError(f"unsafe file type: {path}")
@@ -127,17 +141,18 @@ def make_layout(raw: dict[str, bytes], destination_parent: Path) -> dict[str, st
 
 
 def verify_layout(parent: Path, hashes: dict[str, str]) -> None:
+    gid = service_gid()
     if set(hashes) != set(TARGETS.values()):
         raise ValueError("receipt file map differs from reviewed paths")
     for directory in DIRECTORIES:
         path = parent / directory
-        safe_node(path, directory=True, mode=0o755)
+        safe_node(path, directory=True, mode=0o750, group_gid=gid)
         allowed = {Path(name).name for name in hashes if Path(name).parent.name == directory}
         if {p.name for p in path.iterdir()} != allowed:
             raise ValueError("active directory has unreviewed contents")
     for name in TARGETS.values():
         path = parent / name
-        safe_node(path, directory=False, mode=0o644)
+        safe_node(path, directory=False, mode=0o640, group_gid=gid)
         if sha(path.read_bytes()) != hashes[name]:
             raise ValueError("active file differs from recorded SHA")
 
@@ -184,6 +199,7 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
     safe_root_parent(parent)
     if receipt.exists() or receipt.is_symlink() or journal.exists() or journal.is_symlink():
         raise ValueError("receipt or pending intent exists; refuse overwrite")
+    gid = service_gid()
     raw = snapshot(source)
     hashes = make_layout(raw, parent)
     approval_id = exact_approval(approval)
@@ -196,6 +212,7 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
         for directory in DIRECTORIES:
             tmp = Path(tempfile.mkdtemp(prefix=".cybercore-113-", dir=parent))
             try:
+                os.chown(tmp, 0, gid)
                 os.chmod(tmp, 0o700)
                 for original, relative in TARGETS.items():
                     rel = Path(relative)
@@ -208,8 +225,9 @@ def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = AP
                         handle.write(raw[original])
                         handle.flush()
                         os.fsync(handle.fileno())
-                    os.chmod(dest, 0o644)
-                os.chmod(tmp, 0o755)
+                    os.chown(dest, 0, gid)
+                    os.chmod(dest, 0o640)
+                os.chmod(tmp, 0o750)
                 final = parent / directory
                 if final.exists() or final.is_symlink():
                     raise ValueError("destination appeared during transaction")
@@ -278,6 +296,7 @@ def reconcile(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
     if receipt.exists() or receipt.is_symlink():
         raise ValueError("committed receipt exists; use independent rollback")
     intent = intent_read(journal)
+    gid = service_gid()
     exact_approval(approval, action="code-only-reconcile")
     hashes = intent["file_sha256"]
     assert isinstance(hashes, dict)
@@ -292,7 +311,7 @@ def reconcile(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
             raise ValueError("interrupted directory contents differ; manual review")
         for relative in expected:
             file = parent / relative
-            safe_node(file, directory=False, mode=0o644)
+            safe_node(file, directory=False, mode=0o640, group_gid=gid)
             if sha(file.read_bytes()) != hashes[relative]:
                 raise ValueError("interrupted code hash drift; manual review")
     for directory in DIRECTORIES:
