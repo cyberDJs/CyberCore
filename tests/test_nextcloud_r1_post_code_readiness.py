@@ -1,4 +1,5 @@
 """Read-only post-code gate regression tests for issue #113."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -40,9 +41,11 @@ class PostCodeReadinessTests(unittest.TestCase):
         with (
             patch.object(self.m.os, "geteuid", return_value=0),
             patch.object(self.m.socket, "getfqdn", return_value=self.m.HOST),
-            patch.object(self.m.pwd, "getpwnam", return_value=SimpleNamespace(
-                pw_uid=995, pw_gid=987, pw_shell="/usr/sbin/nologin"
-            )),
+            patch.object(
+                self.m.pwd,
+                "getpwnam",
+                return_value=SimpleNamespace(pw_uid=995, pw_gid=987, pw_shell="/usr/sbin/nologin"),
+            ),
             patch.object(self.m.grp, "getgrnam", return_value=SimpleNamespace(gr_gid=987)),
             patch.object(self.m, "issue_if_unsafe_node", return_value=None),
             patch.object(self.m, "inspect_acl", return_value=None),
@@ -60,16 +63,22 @@ class PostCodeReadinessTests(unittest.TestCase):
         with (
             patch.object(self.m.os, "geteuid", return_value=0),
             patch.object(self.m.socket, "getfqdn", return_value=self.m.HOST),
-            patch.object(self.m.pwd, "getpwnam", return_value=SimpleNamespace(
-                pw_uid=995, pw_gid=987, pw_shell="/usr/sbin/nologin"
-            )),
+            patch.object(
+                self.m.pwd,
+                "getpwnam",
+                return_value=SimpleNamespace(pw_uid=995, pw_gid=987, pw_shell="/usr/sbin/nologin"),
+            ),
             patch.object(self.m.grp, "getgrnam", return_value=SimpleNamespace(gr_gid=987)),
             patch.object(self.m, "issue_if_unsafe_node", return_value=None),
             patch.object(self.m, "inspect_acl", return_value="acl_mismatch"),
-            patch.object(self.m.Path, "iterdir", autospec=True,
-                         side_effect=lambda path: [
-                             SimpleNamespace(name=n) for n in self.m.MODULES[path.name]
-                         ]),
+            patch.object(
+                self.m.Path,
+                "iterdir",
+                autospec=True,
+                side_effect=lambda path: [
+                    SimpleNamespace(name=n) for n in self.m.MODULES[path.name]
+                ],
+            ),
             patch.object(self.m.Path, "exists", return_value=False),
             patch.object(self.m.Path, "is_symlink", return_value=False),
         ):
@@ -81,18 +90,28 @@ class PostCodeReadinessTests(unittest.TestCase):
         with (
             patch.object(self.m.os, "geteuid", return_value=0),
             patch.object(self.m.socket, "getfqdn", return_value=self.m.HOST),
-            patch.object(self.m.pwd, "getpwnam", return_value=SimpleNamespace(
-                pw_uid=995, pw_gid=987, pw_shell="/usr/sbin/nologin"
-            )),
+            patch.object(
+                self.m.pwd,
+                "getpwnam",
+                return_value=SimpleNamespace(pw_uid=995, pw_gid=987, pw_shell="/usr/sbin/nologin"),
+            ),
             patch.object(self.m.grp, "getgrnam", return_value=SimpleNamespace(gr_gid=987)),
-            patch.object(self.m, "issue_if_unsafe_node",
-                         side_effect=lambda path, **kw: "missing:receipt"
-                         if path == self.m.RECEIPT else None),
+            patch.object(
+                self.m,
+                "issue_if_unsafe_node",
+                side_effect=lambda path, **kw: (
+                    "missing:receipt" if path == self.m.RECEIPT else None
+                ),
+            ),
             patch.object(self.m, "inspect_acl", return_value=None),
-            patch.object(self.m.Path, "iterdir", autospec=True,
-                         side_effect=lambda path: [
-                             SimpleNamespace(name=n) for n in self.m.MODULES[path.name]
-                         ]),
+            patch.object(
+                self.m.Path,
+                "iterdir",
+                autospec=True,
+                side_effect=lambda path: [
+                    SimpleNamespace(name=n) for n in self.m.MODULES[path.name]
+                ],
+            ),
             patch.object(self.m.Path, "exists", return_value=False),
             patch.object(self.m.Path, "is_symlink", return_value=False),
         ):
