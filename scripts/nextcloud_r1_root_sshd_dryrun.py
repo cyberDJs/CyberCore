@@ -100,7 +100,10 @@ def effective(sshd: str, config: Path, user: str, address: str) -> dict[str, str
             key, _, value = line.partition(" ")
             if not value:
                 raise ValueError("sshd -T produced invalid output")
-            settings[key] = (settings.get(key, "") + "\\n" + value).strip() if key == "subsystem" else value
+            if key == "subsystem":
+                settings[key] = (settings.get(key, "") + "\n" + value).strip()
+            else:
+                settings[key] = value
     return settings
 
 
