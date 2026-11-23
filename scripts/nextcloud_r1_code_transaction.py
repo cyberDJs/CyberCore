@@ -20,7 +20,7 @@ import tempfile
 SOURCE_SHA = "1cbe25ffd941738c4cc0b157914daa74a95885a6"
 SOURCE = Path("/opt/cybercore-113/releases") / SOURCE_SHA
 DEST_PARENT = Path("/usr/local/libexec")
-APPROVAL = Path("/etc/cybercore-exec/approvals/code-only-113.json")
+APPROVAL = Path("/etc/cybercore-113-activation/code-only.json")
 RECEIPT = Path("/var/lib/cybercore-113-code-only.json")
 JOURNAL = Path("/var/lib/cybercore-113-code-intent.json")
 TARGETS = {
