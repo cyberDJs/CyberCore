@@ -176,7 +176,7 @@ def inspect_release(manifest: dict[str, object]) -> None:
         info = path.lstat()
         if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
             fail(f"unsafe managed file: {rel}")
-        if info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
+        if info.st_uid != OWNER_UID or stat.S_IMODE(info.st_mode) != 0o600:
             fail(f"owner or mode drift: {rel}")
         if digest(path.read_bytes()) != expected:
             fail(f"managed file contents drift: {rel}")
