@@ -3,6 +3,7 @@
 No bind/listen daemon, no root service, no production runner and no entrypoint.
 Only an accepted AF_UNIX stream socket can be passed by a future trusted owner.
 """
+
 from __future__ import annotations
 
 import json
