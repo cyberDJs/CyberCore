@@ -40,6 +40,7 @@ FILES = {
 }
 MANIFEST = "stage-manifest.json"
 APPROVAL_PATH = Path("/etc/cybercore-exec/approvals/bootstrap-stage-113.json")
+APPROVAL_OWNER_UID = 0
 
 
 def digest(data: bytes) -> str:
@@ -102,11 +103,11 @@ def require_fresh_approval(action: str) -> str:
     """Root-owned, short-lived exact action-bound authorization gate."""
     parent = APPROVAL_PATH.parent.lstat()
     info = APPROVAL_PATH.lstat()
-    if not stat.S_ISDIR(parent.st_mode) or parent.st_uid != 0:
+    if not stat.S_ISDIR(parent.st_mode) or parent.st_uid != APPROVAL_OWNER_UID:
         fail("unsafe approval parent")
     if stat.S_IMODE(parent.st_mode) & 0o022:
         fail("approval parent is group/world writable")
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0:
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != APPROVAL_OWNER_UID:
         fail("approval file must be a root-owned regular file")
     if stat.S_IMODE(info.st_mode) != 0o600:
         fail("approval file must have mode 0600")
