@@ -20,7 +20,7 @@ Tests required: unapproved direct systemd transfer start DENY, direct rollback D
 
 ## Diagnostic gate
 
-scripts/nextcloud_r1_privilege_bypass_preflight.py is a conservative read-only static checker. Current bundled policy returns BLOCKED_DIRECT_UNIT_START with exit 2. A future no-match result is only STATIC_CANDIDATE_REQUIRES_RUNTIME_PROOF; it is never activation permission. This tool is not a complete JavaScript/Polkit parser.
+scripts/nextcloud_r1_privilege_bypass_preflight.py is a conservative read-only static checker. Current bundled policy returns BLOCKED_DIRECT_UNIT_START with exit 2. A future no-match result is only STATIC_CANDIDATE_REQUIRES_RUNTIME_PROOF; it is never activation permission and exits non-zero. Exit 0 is reserved for a future explicit RUNTIME_VERIFIED_PASS state that this static checker cannot currently produce. This tool is not a complete JavaScript/Polkit parser.
 
 ## Other blockers
 

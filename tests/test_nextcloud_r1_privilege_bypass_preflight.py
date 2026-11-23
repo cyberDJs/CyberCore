@@ -59,6 +59,13 @@ class PolkitBypassTests(unittest.TestCase):
         )
         self.assertFalse(result["runtime_denial_verified"])
         self.assertFalse(result["activation_approved"])
+        self.assertEqual(result["status"], "STATIC_CANDIDATE_REQUIRES_RUNTIME_PROOF")
+        self.assertNotEqual(self.m.exit_code(result), 0)
+
+    def test_only_explicit_runtime_verified_pass_may_exit_zero(self):
+        self.assertEqual(self.m.exit_code({"status": "RUNTIME_VERIFIED_PASS"}), 0)
+        self.assertEqual(self.m.exit_code({"status": "BLOCKED_DIRECT_UNIT_START"}), 2)
+        self.assertNotEqual(self.m.exit_code({"status": "UNKNOWN"}), 0)
 
 
 if __name__ == "__main__":
