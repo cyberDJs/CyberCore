@@ -78,10 +78,13 @@ def main() -> int:
 
     # No symlink traversal or secret reads. Presence itself is a collision gate.
     checks["managed_paths_absent"] = all(not os.path.lexists(p) for p in PROTECTED_PATHS)
-    rc, out = cmd("systemctl", "list-unit-files", "--no-legend",
-                  "cybercore-nextcloud-r1-transfer.service",
-                  "cybercore-nextcloud-r1-rollback.service")
-    checks["units_absent"] = rc == 0 and (not out or out == "0 unit files listed.")
+    rc, out = cmd("systemctl", "list-unit-files", "--no-legend")
+    managed_names = {"cybercore-nextcloud-r1-transfer.service",
+                     "cybercore-nextcloud-r1-rollback.service"}
+    checks["units_absent"] = rc == 0 and not any(
+        line.split() and line.split()[0] in managed_names
+        for line in out.splitlines()
+    )
     rc, _ = cmd("sshd", "-t")
     # Non-root sshd -t may fail to open host private keys: UNKNOWN is not PASS.
     checks["sshd_syntax_read_only"] = "PASS" if rc == 0 else "REQUIRES_ROOT_CONSOLE_CHECK"
