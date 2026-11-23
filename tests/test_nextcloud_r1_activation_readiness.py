@@ -94,7 +94,7 @@ class ActivationReadinessTests(unittest.TestCase):
             target.write_text("original")
             active = base / "active"
             active.symlink_to(target)
-            result = self.m.assess(root, (active,), root_uid=0, release_owner_uid=__import__('os').geteuid())
+            result = self.m.assess(root, (active,), root_uid=0, release_owner_uid=os.geteuid())
             self.assertEqual(result["status"], "BLOCKED")
             self.assertEqual(result["live_collisions"], [str(active)])
 
