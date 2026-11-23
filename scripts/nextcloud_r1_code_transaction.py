@@ -79,7 +79,7 @@ def snapshot(source: Path = SOURCE) -> dict[str, bytes]:
     return result
 
 
-def exact_approval(path: Path = APPROVAL) -> str:
+def exact_approval(path: Path = APPROVAL, *, action: str = "code-only-install") -> str:
     safe_node(path.parent, directory=True, mode=0o700)
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(path, flags)
@@ -96,7 +96,7 @@ def exact_approval(path: Path = APPROVAL) -> str:
     expected = {"issue", "source_commit", "action", "approval_id", "issued_at", "expires_at"}
     if not isinstance(data, dict) or set(data) != expected or (
         data["issue"] != 113 or data["source_commit"] != SOURCE_SHA
-        or data["action"] != "code-only-install"
+        or data["action"] != action
     ):
         raise ValueError("approval fields or exact binding mismatch")
     if not isinstance(data["approval_id"], str) or not data["approval_id"].strip():
@@ -225,7 +225,7 @@ def rollback(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
              approval: Path = APPROVAL) -> dict[str, object]:
     if os.geteuid() != 0:
         raise ValueError("root required")
-    exact_approval(approval)  # same short-lived approval; never anonymous deletion
+    exact_approval(approval, action="code-only-rollback")  # independent rollback authorization
     data = receipt_read(receipt)
     hashes = data["file_sha256"]
     assert isinstance(hashes, dict)
