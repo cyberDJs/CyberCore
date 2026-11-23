@@ -1,6 +1,6 @@
 # CyberCore #113 — direct Polkit unit-start bypass blocks runtime activation
 
-Status: security finding; no production deployment approval. Verified source at main 5219b73d234c3f5369ff8ec9e72e157dec6a2cc4.
+Status: security finding; no production deployment approval. Source evidence revalidated against main b6f0d686d32a7abf842063aea2fc9d7ec126acc7; the Polkit policy and governed-operation mapping blobs are unchanged from the original finding baseline.
 
 ## Source-level mechanism
 
