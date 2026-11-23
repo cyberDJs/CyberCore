@@ -11,10 +11,10 @@ The existing dispatcher executes as locked nonroot `cybercore-exec`. It must rea
 | `/etc/cybercore-exec` | root:root | 0755 | Non-writable traversal only |
 | `/etc/cybercore-exec/approvals` | root:cybercore-exec | 0750 | Group-traversable, not group-writable |
 | `/etc/cybercore-exec/approvals/nextcloud-r1.json` | root:cybercore-exec | 0640 | Exact-action root-created manifest |
-| `/usr/local/libexec/cybercore-exec` | root:root | 0755 | Trusted Python flat-import parent |
-| `/usr/local/libexec/cybercore-exec/*.py` | root:root | 0644 | Readable but unmodifiable to service UID |
-| `/usr/local/libexec/cybercore-exec-nextcloud-r1` | root:root | 0755 | Transfer/verify/rollback import parent |
-| `/usr/local/libexec/cybercore-exec-nextcloud-r1/*.py` | root:root | 0644 | Immutable service-readable code |
+| `/usr/local/libexec/cybercore-exec` | root:cybercore-exec | 0750 | Trusted Python flat-import parent |
+| `/usr/local/libexec/cybercore-exec/*.py` | root:cybercore-exec | 0640 | Group-readable but unmodifiable to service UID |
+| `/usr/local/libexec/cybercore-exec-nextcloud-r1` | root:cybercore-exec | 0750 | Transfer/verify/rollback import parent |
+| `/usr/local/libexec/cybercore-exec-nextcloud-r1/*.py` | root:cybercore-exec | 0640 | Immutable service-readable code |
 
 Real UID/GID **must be discovered on target after account creation**, never use synthetic model UID 996/GID 996. Group membership must be the minimum possible; no service account in sudo, wheel, adm, docker or other privileged groups. Any existing path, group or ownership collision stops installation.
 
