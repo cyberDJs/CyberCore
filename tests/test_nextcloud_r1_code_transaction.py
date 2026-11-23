@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 import importlib.util
+import json
 import os
 import shutil
 from pathlib import Path
@@ -142,6 +143,48 @@ class CodeOnlyTransactionTests(unittest.TestCase):
                 result = self.m.reconcile(parent=parent, receipt=receipt, journal=journal)
                 self.assertEqual(result["status"], "CODE_ONLY_INTENT_RECONCILED")
                 self.assertFalse(journal.exists())
+
+    def test_reconcile_verified_interrupted_directory(self):
+        """A committed directory copied from apply is removable after crash recovery."""
+        with tempfile.TemporaryDirectory() as d:
+            parent = Path(d)
+            receipt = parent / "receipt.json"
+            journal = parent / "intent.json"
+            with ExitStack() as stack:
+                for patch in self.patches():
+                    stack.enter_context(patch)
+                self.m.apply(parent=parent, receipt=receipt, journal=journal)
+                data = json.loads(receipt.read_text())
+                receipt.unlink()
+                data["status"] = "CODE_ONLY_IN_PROGRESS"
+                self.m.write_root_json(journal, data)
+                self.assertTrue((parent / "cybercore-exec" / "dispatcher.py").exists())
+                outcome = self.m.reconcile(parent=parent, receipt=receipt, journal=journal)
+                self.assertEqual(outcome["status"], "CODE_ONLY_INTENT_RECONCILED")
+                self.assertFalse(journal.exists())
+                self.assertFalse(receipt.exists())
+                for directory in self.m.DIRECTORIES:
+                    self.assertFalse((parent / directory).exists())
+
+    def test_reconcile_rejects_mutated_interrupted_directory(self):
+        with tempfile.TemporaryDirectory() as d:
+            parent = Path(d)
+            receipt = parent / "receipt.json"
+            journal = parent / "intent.json"
+            with ExitStack() as stack:
+                for patch in self.patches():
+                    stack.enter_context(patch)
+                self.m.apply(parent=parent, receipt=receipt, journal=journal)
+                data = json.loads(receipt.read_text())
+                receipt.unlink()
+                data["status"] = "CODE_ONLY_IN_PROGRESS"
+                self.m.write_root_json(journal, data)
+                corrupted = parent / "cybercore-exec" / "dispatcher.py"
+                corrupted.write_text("unexpected modification")
+                with self.assertRaisesRegex(ValueError, "hash drift"):
+                    self.m.reconcile(parent=parent, receipt=receipt, journal=journal)
+                self.assertTrue(corrupted.exists())
+                self.assertTrue(journal.exists())
 
     def test_missing_service_identity_fails_before_write(self):
         with tempfile.TemporaryDirectory() as d:
