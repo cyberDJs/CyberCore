@@ -35,7 +35,7 @@ class PostCodeReadinessTests(unittest.TestCase):
             return [SimpleNamespace(name=n) for n in self.m.MODULES[path.name]]
 
         def exists(path):
-            return path not in self.m.RUNTIME_PATHS
+            return False
 
         with (
             patch.object(self.m.os, "geteuid", return_value=0),
