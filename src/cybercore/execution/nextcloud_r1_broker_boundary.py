@@ -88,11 +88,7 @@ class BoundaryConfig:
             ("source_identity", self.source_identity),
         ):
             _require_string(value, name)
-        if (
-            not self.approval_leaf
-            or self.approval_leaf in {".", ".."}
-            or "/" in self.approval_leaf
-        ):
+        if not self.approval_leaf or self.approval_leaf in {".", ".."} or "/" in self.approval_leaf:
             raise ValueError("approval_leaf must be one fixed leaf name")
         if isinstance(self.max_ttl_ns, bool) or not isinstance(self.max_ttl_ns, int):
             raise ValueError("max_ttl_ns must be an integer")
@@ -487,7 +483,7 @@ def handle_accepted_client(
             monotonic_ns=approval_store.sample_monotonic_ns,
         )
         response = {
-            "ok": True,
+            "ok": result["status"] == "DISPATCHED",
             "status": result["status"],
             "operation_sha256": result["operation_sha256"],
         }

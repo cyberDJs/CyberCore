@@ -226,12 +226,32 @@ class BrokerBoundaryTests(unittest.TestCase):
         self.write_manifest()
         with self.store(monotonic=lambda: next(samples)) as store:
             response = self.invoke(store)
-        self.assertTrue(response["ok"])
+        self.assertFalse(response["ok"])
         self.assertEqual(response["status"], "AUTHORIZATION_EXPIRED")
         self.assertFalse(self.dispatched)
         self.assertTrue(list(self.state.glob("*.prepared.json")))
         outcome = json.loads(next(self.state.glob("*.result.json")).read_text())
         self.assertEqual(outcome["state"], "AUTHORIZATION_EXPIRED")
+
+    def test_dispatch_failure_and_unknown_are_not_reported_ok(self):
+        self.write_manifest()
+        with self.store() as store:
+            failed = self.invoke(store, runner=lambda _argv: 7)
+        self.assertFalse(failed["ok"])
+        self.assertEqual(failed["status"], "DISPATCH_FAILED")
+
+        for path in self.state.glob("*"):
+            path.unlink()
+        (self.approvals / "approval.json").unlink()
+        self.write_manifest(self.manifest(operation_id="op-113-2"))
+
+        def crash(_argv):
+            raise RuntimeError("synthetic runner failure")
+
+        with self.store() as store:
+            unknown = self.invoke(store, runner=crash)
+        self.assertFalse(unknown["ok"])
+        self.assertEqual(unknown["status"], "DISPATCH_UNKNOWN")
 
     def test_manifest_duplicate_key_is_denied(self):
         raw = (
