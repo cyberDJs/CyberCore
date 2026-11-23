@@ -351,7 +351,11 @@ def reconcile(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
         path = parent / directory
         if not path.exists() and not path.is_symlink():
             continue
-        safe_node(path, directory=True, mode=0o755)
+        # Successful renames preserve the named service-UID ACL from apply().
+        # An interrupted transaction must prove that exact directory ACL,
+        # not a permissive, ACL-free 0755 directory.
+        safe_node(path, directory=True, mode=0o750, group_gid=0)
+        exact_user_acl(path, uid, directory=True)
         expected = {name for name in TARGETS.values() if Path(name).parent.name == directory}
         items = {item.name for item in path.iterdir()}
         if items != {Path(name).name for name in expected}:
