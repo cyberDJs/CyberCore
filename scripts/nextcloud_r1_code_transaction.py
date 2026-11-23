@@ -1,0 +1,405 @@
+#!/usr/bin/env python3
+"""Issue #113: code-only root transaction; NEVER activates SSH/systemd/Polkit.
+
+This program stages exact pinned Stage-A code into immutable, root-owned
+service-readable paths. No identities, approvals or credentials are created.
+Activation is a separate change with separate authorization and review.
+"""
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import grp
+import pwd
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import stat
+import tempfile
+
+SOURCE_SHA = "1cbe25ffd941738c4cc0b157914daa74a95885a6"
+SOURCE = Path("/opt/cybercore-113/releases") / SOURCE_SHA
+DEST_PARENT = Path("/usr/local/libexec")
+APPROVAL = Path("/etc/cybercore-113-activation/code-only.json")
+RECEIPT = Path("/var/lib/cybercore-113-code-only.json")
+JOURNAL = Path("/var/lib/cybercore-113-code-intent.json")
+TARGETS = {
+    "libexec/authorization.py": "cybercore-exec/authorization.py",
+    "libexec/dispatcher.py": "cybercore-exec/dispatcher.py",
+    "libexec/inventory.py": "cybercore-exec/inventory.py",
+    "libexec/operations.py": "cybercore-exec/operations.py",
+    "libexec/protocol.py": "cybercore-exec/protocol.py",
+    "nextcloud/transfer.py": "cybercore-exec-nextcloud-r1/transfer.py",
+    "nextcloud/verify.py": "cybercore-exec-nextcloud-r1/verify.py",
+    "nextcloud/rollback.py": "cybercore-exec-nextcloud-r1/rollback.py",
+}
+DIRECTORIES = ("cybercore-exec", "cybercore-exec-nextcloud-r1")
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def service_uid() -> int:
+    account = pwd.getpwnam("cybercore-exec")
+    group = grp.getgrnam("cybercore-exec")
+    if account.pw_uid == 0 or account.pw_gid != group.gr_gid:
+        raise ValueError("service account/group identity mismatch")
+    if account.pw_shell not in ("/usr/sbin/nologin", "/sbin/nologin", "/bin/false"):
+        raise ValueError("service account must be noninteractive")
+    return account.pw_uid
+
+
+def safe_node(path: Path, *, directory: bool, mode: int,
+              group_gid: int | None = None) -> None:
+    info = path.lstat()
+    if (info.st_uid != 0 or stat.S_IMODE(info.st_mode) != mode
+            or (group_gid is not None and info.st_gid != group_gid)):
+        raise ValueError(f"unsafe owner or mode: {path}")
+    if directory != stat.S_ISDIR(info.st_mode):
+        raise ValueError(f"unsafe file type: {path}")
+
+
+def exact_user_acl(path: Path, uid: int, *, directory: bool) -> None:
+    result = subprocess.run(
+        ["/usr/bin/getfacl", "-n", "-c", str(path)],
+        capture_output=True, text=True, check=True, timeout=10,
+    )
+    permissions = "r-x" if directory else "r--"
+    expected = {
+        "user::rwx" if directory else "user::rw-",
+        f"user:{uid}:{permissions}",
+        "group::---",
+        f"mask::{permissions}",
+        "other::---",
+    }
+    lines = {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    if lines != expected:
+        raise ValueError("unexpected effective named-user ACL")
+
+
+def grant_user_acl(path: Path, uid: int, *, directory: bool) -> None:
+    rights = "r-x" if directory else "r--"
+    subprocess.run(
+        ["/usr/bin/setfacl", "-m", f"u:{uid}:{rights}", str(path)],
+        check=True, capture_output=True, timeout=10,
+    )
+    exact_user_acl(path, uid, directory=directory)
+
+
+def safe_root_parent(path: Path) -> None:
+    for parent in (Path("/"), Path("/usr"), Path("/usr/local"), path):
+        info = parent.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+            raise ValueError(f"untrusted installation parent: {parent}")
+
+
+def snapshot(source: Path = SOURCE) -> dict[str, bytes]:
+    safe_node(source, directory=True, mode=0o700)
+    safe_node(source / "stage-manifest.json", directory=False, mode=0o600)
+    manifest = json.loads((source / "stage-manifest.json").read_text())
+    if not isinstance(manifest, dict) or (
+        manifest.get("issue") != 113
+        or manifest.get("source_commit") != SOURCE_SHA
+        or manifest.get("target") != "cyberskills-vps"
+        or manifest.get("activation_performed") is not False
+    ):
+        raise ValueError("inert Stage-A manifest identity mismatch")
+    files = manifest.get("files")
+    if not isinstance(files, dict) or set(TARGETS) - set(files):
+        raise ValueError("required manifest files missing")
+    result = {}
+    for original in TARGETS:
+        path = source / original
+        safe_node(path, directory=False, mode=0o600)
+        raw = path.read_bytes()
+        if sha(raw) != files[original]:
+            raise ValueError(f"stage content hash mismatch: {original}")
+        result[original] = raw
+    return result
+
+
+def exact_approval(path: Path = APPROVAL, *, action: str = "code-only-install") -> str:
+    safe_node(path.parent, directory=True, mode=0o700)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(path, flags)
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o600:
+            raise ValueError("approval file owner/mode/type mismatch")
+        if info.st_size < 1 or info.st_size > 4096:
+            raise ValueError("approval file size invalid")
+        raw = os.read(fd, 4097)
+    finally:
+        os.close(fd)
+    data = json.loads(raw)
+    expected = {"issue", "source_commit", "action", "approval_id", "issued_at", "expires_at"}
+    if not isinstance(data, dict) or set(data) != expected or (
+        data["issue"] != 113 or data["source_commit"] != SOURCE_SHA
+        or data["action"] != action
+    ):
+        raise ValueError("approval fields or exact binding mismatch")
+    if not isinstance(data["approval_id"], str) or not data["approval_id"].strip():
+        raise ValueError("missing approval ID")
+    values = []
+    for key in ("issued_at", "expires_at"):
+        value = data[key]
+        if not isinstance(value, str) or not value.endswith("Z"):
+            raise ValueError("non UTC approval timestamp")
+        values.append(datetime.fromisoformat(value[:-1] + "+00:00"))
+    issued, expires = values
+    now = datetime.now(timezone.utc)
+    if not (issued <= now < expires and 0 < (expires - issued).total_seconds() <= 3600):
+        raise ValueError("approval expired, future dated or excessive TTL")
+    return data["approval_id"]
+
+
+def make_layout(raw: dict[str, bytes], destination_parent: Path) -> dict[str, str]:
+    paths: dict[str, str] = {}
+    for directory in DIRECTORIES:
+        directory_path = destination_parent / directory
+        if directory_path.exists() or directory_path.is_symlink():
+            raise ValueError(f"destination collision: {directory}")
+    for original, relative in TARGETS.items():
+        paths[relative] = sha(raw[original])
+    return paths
+
+
+def verify_layout(parent: Path, hashes: dict[str, str]) -> None:
+    uid = service_uid()
+    if set(hashes) != set(TARGETS.values()):
+        raise ValueError("receipt file map differs from reviewed paths")
+    for directory in DIRECTORIES:
+        path = parent / directory
+        safe_node(path, directory=True, mode=0o750, group_gid=0)
+        exact_user_acl(path, uid, directory=True)
+        allowed = {Path(name).name for name in hashes if Path(name).parent.name == directory}
+        if {p.name for p in path.iterdir()} != allowed:
+            raise ValueError("active directory has unreviewed contents")
+    for name in TARGETS.values():
+        path = parent / name
+        safe_node(path, directory=False, mode=0o640, group_gid=0)
+        exact_user_acl(path, uid, directory=False)
+        if sha(path.read_bytes()) != hashes[name]:
+            raise ValueError("active file differs from recorded SHA")
+
+
+def receipt_read(path: Path) -> dict[str, object]:
+    safe_node(path, directory=False, mode=0o600)
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict) or set(data) != {
+        "issue", "source_commit", "status", "file_sha256", "approval_id"
+    } or data["issue"] != 113 or data["source_commit"] != SOURCE_SHA:
+        raise ValueError("transaction receipt identity mismatch")
+    if data["status"] != "CODE_ONLY_INSTALLED" or not isinstance(data["file_sha256"], dict):
+        raise ValueError("unexpected receipt status/map")
+    return data
+
+
+def fsync_directory(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) |
+                 getattr(os, "O_NOFOLLOW", 0))
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def write_root_json(path: Path, payload: dict[str, object]) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                 getattr(os, "O_NOFOLLOW", 0), 0o600)
+    with os.fdopen(fd, "w") as handle:
+        json.dump(payload, handle, sort_keys=True)
+        handle.flush()
+        os.fsync(handle.fileno())
+    fsync_directory(path.parent)
+
+
+def intent_read(path: Path) -> dict[str, object]:
+    safe_node(path, directory=False, mode=0o600)
+    data = json.loads(path.read_text())
+    if not isinstance(data, dict) or set(data) != {
+        "issue", "source_commit", "status", "file_sha256", "approval_id"
+    } or data["issue"] != 113 or data["source_commit"] != SOURCE_SHA or (
+        data["status"] != "CODE_ONLY_IN_PROGRESS"
+        or not isinstance(data["file_sha256"], dict)
+        or set(data["file_sha256"]) != set(TARGETS.values())
+    ):
+        raise ValueError("unexpected transaction intent journal")
+    return data
+
+
+def apply(source: Path = SOURCE, parent: Path = DEST_PARENT, approval: Path = APPROVAL,
+          receipt: Path = RECEIPT, journal: Path = JOURNAL) -> dict[str, object]:
+    if os.geteuid() != 0:
+        raise ValueError("root console required")
+    safe_root_parent(parent)
+    if receipt.exists() or receipt.is_symlink() or journal.exists() or journal.is_symlink():
+        raise ValueError("receipt or pending intent exists; refuse overwrite")
+    uid = service_uid()
+    raw = snapshot(source)
+    hashes = make_layout(raw, parent)
+    approval_id = exact_approval(approval)
+    intent = {"issue": 113, "source_commit": SOURCE_SHA,
+              "status": "CODE_ONLY_IN_PROGRESS", "file_sha256": hashes,
+              "approval_id": approval_id}
+    write_root_json(journal, intent)
+    installed: list[Path] = []
+    try:
+        for directory in DIRECTORIES:
+            tmp = Path(tempfile.mkdtemp(prefix=".cybercore-113-", dir=parent))
+            try:
+                os.chown(tmp, 0, 0)
+                os.chmod(tmp, 0o700)
+                for original, relative in TARGETS.items():
+                    rel = Path(relative)
+                    if rel.parent.name != directory:
+                        continue
+                    dest = tmp / rel.name
+                    fd = os.open(dest, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                                 getattr(os, "O_NOFOLLOW", 0), 0o600)
+                    with os.fdopen(fd, "wb") as handle:
+                        handle.write(raw[original])
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    os.chown(dest, 0, 0)
+                    os.chmod(dest, 0o600)
+                    grant_user_acl(dest, uid, directory=False)
+                grant_user_acl(tmp, uid, directory=True)
+                final = parent / directory
+                if final.exists() or final.is_symlink():
+                    raise ValueError("destination appeared during transaction")
+                os.rename(tmp, final)
+                installed.append(final)
+                fsync_directory(parent)
+            finally:
+                if tmp.exists():
+                    shutil.rmtree(tmp)
+        verify_layout(parent, hashes)
+        payload = {"issue": 113, "source_commit": SOURCE_SHA,
+                   "status": "CODE_ONLY_INSTALLED", "file_sha256": hashes,
+                   "approval_id": approval_id}
+        write_root_json(receipt, payload)
+        journal.unlink()
+        fsync_directory(journal.parent)
+        return {"status": "CODE_ONLY_INSTALLED", "activation_performed": False,
+                "file_count": len(hashes)}
+    except Exception:
+        # Compensation only removes paths created by this exact invocation.
+        for created in reversed(installed):
+            if created.exists():
+                shutil.rmtree(created)
+        fsync_directory(parent)
+        if not receipt.exists():
+            journal.unlink(missing_ok=True)
+            fsync_directory(journal.parent)
+        raise
+
+
+def verify(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
+           journal: Path = JOURNAL) -> dict[str, object]:
+    if os.geteuid() != 0:
+        raise ValueError("root required")
+    if journal.exists() or journal.is_symlink():
+        raise ValueError("pending intent journal blocks verification")
+    data = receipt_read(receipt)
+    hashes = data["file_sha256"]
+    assert isinstance(hashes, dict)
+    verify_layout(parent, hashes)
+    return {"status": "CODE_ONLY_VERIFIED", "activation_performed": False,
+            "file_count": len(hashes)}
+
+
+def rollback(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
+             approval: Path = APPROVAL, journal: Path = JOURNAL) -> dict[str, object]:
+    if os.geteuid() != 0:
+        raise ValueError("root required")
+    if journal.exists() or journal.is_symlink():
+        raise ValueError("pending intent journal requires separate reconciliation")
+    exact_approval(approval, action="code-only-rollback")  # independent rollback authorization
+    data = receipt_read(receipt)
+    hashes = data["file_sha256"]
+    assert isinstance(hashes, dict)
+    verify_layout(parent, hashes)
+    for directory in DIRECTORIES:
+        path = parent / directory
+        for item in path.iterdir():
+            item.unlink()
+        path.rmdir()
+    receipt.unlink()
+    fsync_directory(parent)
+    fsync_directory(receipt.parent)
+    return {"status": "CODE_ONLY_ROLLED_BACK", "activation_performed": False}
+
+
+def reconcile(parent: Path = DEST_PARENT, receipt: Path = RECEIPT,
+              approval: Path = APPROVAL, journal: Path = JOURNAL) -> dict[str, object]:
+    """Remove only exact verified remnants from a power-interrupted installation."""
+    if os.geteuid() != 0:
+        raise ValueError("root required")
+    if receipt.exists() or receipt.is_symlink():
+        raise ValueError("committed receipt exists; use independent rollback")
+    intent = intent_read(journal)
+    uid = service_uid()
+    exact_approval(approval, action="code-only-reconcile")
+    hashes = intent["file_sha256"]
+    assert isinstance(hashes, dict)
+    for directory in DIRECTORIES:
+        path = parent / directory
+        if not path.exists() and not path.is_symlink():
+            continue
+        # Successful renames preserve the named service-UID ACL from apply().
+        # An interrupted transaction must prove that exact directory ACL,
+        # not a permissive, ACL-free 0755 directory.
+        safe_node(path, directory=True, mode=0o750, group_gid=0)
+        exact_user_acl(path, uid, directory=True)
+        expected = {name for name in TARGETS.values() if Path(name).parent.name == directory}
+        items = {item.name for item in path.iterdir()}
+        if items != {Path(name).name for name in expected}:
+            raise ValueError("interrupted directory contents differ; manual review")
+        for relative in expected:
+            file = parent / relative
+            safe_node(file, directory=False, mode=0o640, group_gid=0)
+            exact_user_acl(file, uid, directory=False)
+            if sha(file.read_bytes()) != hashes[relative]:
+                raise ValueError("interrupted code hash drift; manual review")
+    for directory in DIRECTORIES:
+        path = parent / directory
+        if path.exists():
+            for item in path.iterdir():
+                item.unlink()
+            path.rmdir()
+    journal.unlink()
+    fsync_directory(parent)
+    fsync_directory(journal.parent)
+    return {"status": "CODE_ONLY_INTENT_RECONCILED",
+            "activation_performed": False}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("action", choices=("plan", "apply", "verify", "rollback", "reconcile"))
+    args = parser.parse_args()
+    try:
+        if args.action == "plan":
+            data = {"status": "CODE_ONLY_PLAN", "issue": 113,
+                    "files": sorted(TARGETS.values()), "activation_performed": False}
+        elif args.action == "apply":
+            data = apply()
+        elif args.action == "verify":
+            data = verify()
+        elif args.action == "rollback":
+            data = rollback()
+        else:
+            data = reconcile()
+    except (ValueError, OSError, RuntimeError, TypeError, json.JSONDecodeError) as exc:
+        data = {"status": "BLOCKED", "reason": str(exc), "activation_performed": False}
+    print(json.dumps(data, sort_keys=True))
+    return 2 if data["status"] == "BLOCKED" else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

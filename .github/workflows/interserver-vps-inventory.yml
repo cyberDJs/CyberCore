@@ -1,0 +1,33 @@
+name: InterServer VPS inventory (manual read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: interserver-vps-inventory-manual
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    # Secrets are never exposed to PR workflows. Run from protected default branch
+    # only, with human GitHub Actions dispatch and manual review of the merged code.
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout reviewed CyberCore source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Configure Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.11'
+      - name: Read-only InterServer VPS inventory
+        env:
+          INTERSERVER_API_KEY: ${{ secrets.INTERSERVER_API_KEY }}
+          PYTHONPATH: src
+        run: python -m cybercore.interserver_inventory_cli

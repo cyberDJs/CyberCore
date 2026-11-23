@@ -6,19 +6,35 @@ import os
 from pathlib import Path
 import stat
 
-from cybercore.execution.nextcloud_r1_transfer import (
-    BACKUP_ROOT,
-    CREDENTIAL_ROOT,
-    FINAL_ARCHIVE,
-    KNOWN_HOSTS,
-    PARTIAL_ARCHIVE,
-    PRIVATE_KEY,
-    RECEIPT as TRANSFER_RECEIPT,
-    SOURCE_SHA256,
-    STATE_ROOT,
-    _fsync_directory,
-    _require_private_directory,
-)
+# Deployed by systemd as standalone rollback.py beside transfer.py.
+if __package__ in {None, ""}:
+    from transfer import (  # pyright: ignore[reportMissingImports]
+        BACKUP_ROOT,
+        CREDENTIAL_ROOT,
+        FINAL_ARCHIVE,
+        KNOWN_HOSTS,
+        PARTIAL_ARCHIVE,
+        PRIVATE_KEY,
+        RECEIPT as TRANSFER_RECEIPT,
+        SOURCE_SHA256,
+        STATE_ROOT,
+        _fsync_directory,
+        _require_private_directory,
+    )
+else:
+    from cybercore.execution.nextcloud_r1_transfer import (
+        BACKUP_ROOT,
+        CREDENTIAL_ROOT,
+        FINAL_ARCHIVE,
+        KNOWN_HOSTS,
+        PARTIAL_ARCHIVE,
+        PRIVATE_KEY,
+        RECEIPT as TRANSFER_RECEIPT,
+        SOURCE_SHA256,
+        STATE_ROOT,
+        _fsync_directory,
+        _require_private_directory,
+    )
 
 
 PUBLIC_KEY = CREDENTIAL_ROOT / "source_ed25519.pub"
