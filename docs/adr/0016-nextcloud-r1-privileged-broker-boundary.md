@@ -1,7 +1,7 @@
 # ADR-0016 candidate — CyberCore #113 privilege-boundary for off-host Nextcloud recovery
 
 Status: PROPOSED; architecture only. No deployment or authority grant.
-Source baseline: CyberCore main 3f9ba40ed2c51570538c6bc65d3d1bbf7de4382f (2026-11-23).
+Source baseline: CyberCore main b6f0d686d32a7abf842063aea2fc9d7ec126acc7 (2026-11-23).
 Dependent review: Draft PR #180 (the static detection of unsafe direct Polkit start) remains independent and is not merged by this design.
 
 ## Problem
@@ -13,8 +13,8 @@ Current candidate Polkit policy permits systemd manage-units/start by the low-pr
 1. Do not grant systemd manage-units to cybercore-exec in Polkit; reject any direct start/restart/stop of both fixed units by this account. Prefer no rule at all until a separately reviewed broker replaces the unit-start path.
 2. Use a root-owned local privilege broker with a fixed Unix domain socket. Peer identity is checked using kernel SO_PEERCRED (not caller-supplied UID, PATH, command or environment). Socket access is restricted to the named service UID by a root-owned parent and exact ACL, never to broad groups.
 3. The broker accepts exactly two action names: transfer and local-containment rollback. Status/verification are read-only, separate and do not require the broker. No arbitrary command, unit name, path, flags or shell input is accepted.
-4. The broker independently validates a root-created, short-lived exact-action approval manifest and a supplied authorization reference digest with constant-time comparison. Bind issue=113, target=cyberskills-vps, action, plan ID/revision, operation ID, source release/commit identity and expiration. Root must own manifest, receipt and all parents; reject symlinks, writable parents and unexpected files.
-5. Prevent replay: under a root-only flock lock acquire the action authorization, check a durable operation-ID consumption journal, persist a PREPARED record (fsync file and containing directory) before dispatch, execute only the fixed systemctl start operation, then persist SUCCEEDED or FAILED plus invocation receipt. An interrupted PREPARED operation must never run twice automatically. Recovery is a separately authorized reconcile using verified systemd state.
+4. The broker independently validates a root-created, short-lived exact-action approval manifest and a supplied authorization reference digest with constant-time comparison. Bind issue=113, target=cyberskills-vps, action, plan ID/revision, operation ID, source release/commit identity and expiration. Manifest access MUST be fd-based: open a preconfigured root-owned parent directory once, resolve only a fixed leaf name with `openat`/`dir_fd` plus `O_NOFOLLOW|O_CLOEXEC`, then validate the already-open fd with `fstat` before reading. Require a regular file owned by root, no group/world write bits, expected link count, bounded size and no unexpected file type. Hash and parse bytes read from that verified fd; do not authorize from a pathname that is re-opened after validation. Apply the same dirfd/no-symlink discipline to receipts and journal state.
+5. Prevent replay: under a root-only lock acquire the action authorization, check a durable operation-ID consumption journal, and persist PREPARED before dispatch. Journal writes MUST use the verified root-owned directory fd, create a fresh temporary regular file with `O_CREAT|O_EXCL|O_NOFOLLOW` and restrictive mode, fsync the file, atomically rename within the same directory, then fsync the directory. Never follow or replace attacker-controlled symlinks. Execute only the fixed systemctl start operation, then persist SUCCEEDED or FAILED plus invocation receipt with the same durable-write discipline. An interrupted PREPARED operation must never run twice automatically. Recovery is a separately authorized reconcile using verified systemd state.
 6. Broker invokes systemctl under its root identity only after gate success; systemd static units themselves continue to run as cybercore-exec and maintain sandbox restrictions. The privileged broker cannot execute user-supplied commands. Avoid shell=True, sudo wildcard matching and command interpolation.
 7. The broker may run as a fixed systemd socket/service pair, but start/enable these only in a separately approved transaction. Before activation, validate identities, socket ACL, root-owned code/content SHA, unit policy, Polkit effective denial, process privilege, and safe rollback. Record full unit and policy snapshots. Existing operator SSH and rescue console remain available.
 8. Keep source keys, host trust, remote archive hash and transfer activation in a separate credential/transfer authorization gate. Never start transfer with synthetic or missing source evidence.
@@ -28,7 +28,7 @@ Current candidate Polkit policy permits systemd manage-units/start by the low-pr
 | Wrong or missing approval, mismatched source, expired TTL | DENY, no unit-start side effect |
 | Wrong operation, unit, plan or target | DENY; fixed operation allowlist |
 | Replay or concurrent duplicate | At most one dispatch, including after crash/restart |
-| Partial write, journal symlink, path/owner drift | DENY and preserve evidence |
+| Partial write, manifest/journal symlink, path/owner/inode drift | DENY before dispatch; verified dirfd/open-fd evidence only |
 | Broker loses power in PREPARED | No automatic repeat; independent reconciliation gate |
 | Approved transfer or rollback | Exactly one dispatch with durable receipt and independent service state check |
 | Unauthorized rollback or cleanup | DENY; never delete verified final archive |
@@ -53,7 +53,7 @@ Rollback for stage D: disable/remove the broker socket, restore exact prior unit
 
 ## Open gates
 
-- Design still needs review of exact broker process and socket lifecycle, privilege separation and replay semantics.
+- Design still needs review of exact broker process/socket lifecycle, privilege separation, fd-based manifest/journal implementation and replay semantics.
 - No root implementation or live activation is included in this ADR.
 - Need documented ownership design for /var/backups/cybercore/nextcloud-r1-113/2026-10-13 currently root:root 0700; transfer User=cybercore-exec must not require broad chmod.
 - Missing /var/lib/cybercore-exec-nextcloud-r1/credentials and /state directories.
