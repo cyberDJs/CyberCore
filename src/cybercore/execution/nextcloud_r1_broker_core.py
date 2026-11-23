@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import time
 from typing import Callable, Protocol
 
 
@@ -142,6 +143,42 @@ def _key(request: Request) -> str:
     return hashlib.sha256(json.dumps(fields, separators=(",", ":")).encode()).hexdigest()
 
 
+def _sample_monotonic_ns(clock: Callable[[], int]) -> int:
+    try:
+        value = clock()
+    except Exception as exc:
+        raise Rejected("authorization monotonic clock unavailable") from exc
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise Rejected("authorization monotonic clock is invalid")
+    return value
+
+
+def _terminal_result(
+    outcome: Path,
+    *,
+    state: str,
+    key: str,
+    owner_uid: int,
+    approval_sha256: str | None,
+) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "state": state,
+        "issue": 113,
+        "operation_sha256": key,
+        "exit_code": 126,
+    }
+    if approval_sha256 is not None:
+        payload["approval_manifest_sha256"] = approval_sha256
+    _write_once(outcome, payload, owner_uid=owner_uid)
+    return {
+        "status": state,
+        "issue": 113,
+        "operation_sha256": key,
+        "unit_start_proven": False,
+        "transfer_performed": False,
+    }
+
+
 def broker_once(
     request: Request,
     *,
@@ -151,6 +188,7 @@ def broker_once(
     state_dir: Path,
     runner: Callable[[tuple[str, ...]], int],
     owner_uid: int = 0,
+    monotonic_ns: Callable[[], int] = time.monotonic_ns,
 ) -> dict[str, object]:
     """One-shot transition: deny -> PREPARED durable -> fixed runner -> result.
 
@@ -194,20 +232,57 @@ def broker_once(
         )
         if getattr(verdict, "authorized", False) is not True:
             raise Rejected("no valid exact action authorization")
-        _write_once(
-            prepared,
-            {
-                "state": "PREPARED",
-                "issue": 113,
-                "operation_sha256": key,
-                "operation": request.operation,
-                "target": TARGET,
-                "peer_uid": peer_uid,
-                "prepared_at": datetime.now(timezone.utc).isoformat(),
-            },
-            owner_uid=owner_uid,
-        )
+
+        deadline = getattr(verdict, "deadline_monotonic_ns", None)
+        if deadline is not None:
+            if isinstance(deadline, bool) or not isinstance(deadline, int) or deadline <= 0:
+                raise Rejected("authorization deadline is invalid")
+            if _sample_monotonic_ns(monotonic_ns) >= deadline:
+                raise Rejected("authorization expired before prepare")
+
+        approval_sha256 = getattr(verdict, "approval_sha256", None)
+        if approval_sha256 is not None:
+            if (
+                not isinstance(approval_sha256, str)
+                or len(approval_sha256) != 64
+                or any(character not in "0123456789abcdef" for character in approval_sha256)
+            ):
+                raise Rejected("approval manifest digest is invalid")
+
+        prepared_payload: dict[str, object] = {
+            "state": "PREPARED",
+            "issue": 113,
+            "operation_sha256": key,
+            "operation": request.operation,
+            "target": TARGET,
+            "peer_uid": peer_uid,
+            "prepared_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if approval_sha256 is not None:
+            prepared_payload["approval_manifest_sha256"] = approval_sha256
+        _write_once(prepared, prepared_payload, owner_uid=owner_uid)
+
         # Everything after PREPARED is non-retryable until independent reconcile.
+        if deadline is not None:
+            try:
+                current_monotonic = _sample_monotonic_ns(monotonic_ns)
+            except Rejected:
+                return _terminal_result(
+                    outcome,
+                    state="AUTHORIZATION_CLOCK_UNKNOWN",
+                    key=key,
+                    owner_uid=owner_uid,
+                    approval_sha256=approval_sha256,
+                )
+            if current_monotonic >= deadline:
+                return _terminal_result(
+                    outcome,
+                    state="AUTHORIZATION_EXPIRED",
+                    key=key,
+                    owner_uid=owner_uid,
+                    approval_sha256=approval_sha256,
+                )
+
         argv = ALLOWED[request.operation]
         try:
             rc = int(runner(argv))
@@ -215,16 +290,15 @@ def broker_once(
         except Exception:
             rc = 125
             state = "DISPATCH_UNKNOWN"
-        _write_once(
-            outcome,
-            {
-                "state": state,
-                "issue": 113,
-                "operation_sha256": key,
-                "exit_code": rc,
-            },
-            owner_uid=owner_uid,
-        )
+        outcome_payload: dict[str, object] = {
+            "state": state,
+            "issue": 113,
+            "operation_sha256": key,
+            "exit_code": rc,
+        }
+        if approval_sha256 is not None:
+            outcome_payload["approval_manifest_sha256"] = approval_sha256
+        _write_once(outcome, outcome_payload, owner_uid=owner_uid)
         return {
             "status": state,
             "issue": 113,
