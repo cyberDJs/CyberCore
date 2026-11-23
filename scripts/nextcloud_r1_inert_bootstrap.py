@@ -8,6 +8,7 @@ The installed release is inert until a separately reviewed activation plan.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -38,6 +39,7 @@ FILES = {
     "deploy/cybercore-exec-nextcloud-r1/cybercore-nextcloud-r1-rollback.service": "candidate/rollback.service",
 }
 MANIFEST = "stage-manifest.json"
+APPROVAL_PATH = Path("/etc/cybercore-exec/approvals/bootstrap-stage-113.json")
 
 
 def digest(data: bytes) -> str:
@@ -94,6 +96,44 @@ def safe_parent() -> None:
                 fail(f"unsafe parent: {path}")
             if stat.S_IMODE(mode.st_mode) & 0o022:
                 fail(f"writable parent: {path}")
+
+
+def require_fresh_approval(action: str) -> str:
+    """Root-owned, short-lived exact action-bound authorization gate."""
+    parent = APPROVAL_PATH.parent.lstat()
+    info = APPROVAL_PATH.lstat()
+    if not stat.S_ISDIR(parent.st_mode) or parent.st_uid != 0:
+        fail("unsafe approval parent")
+    if stat.S_IMODE(parent.st_mode) & 0o022:
+        fail("approval parent is group/world writable")
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0:
+        fail("approval file must be a root-owned regular file")
+    if stat.S_IMODE(info.st_mode) != 0o600:
+        fail("approval file must have mode 0600")
+    record = json.loads(APPROVAL_PATH.read_text(encoding="utf-8"))
+    required = {
+        "schema_version", "issue", "target", "source_commit",
+        "action", "approval_id", "issued_at", "expires_at",
+    }
+    if not isinstance(record, dict) or set(record) != required:
+        fail("approval manifest has unexpected fields")
+    if (record["schema_version"] != 1 or record["issue"] != 113
+            or record["target"] != TARGET or record["source_commit"] != SOURCE_SHA
+            or record["action"] != action):
+        fail("approval manifest does not bind the exact action")
+    if not isinstance(record["approval_id"], str) or not record["approval_id"].strip():
+        fail("approval ID is missing")
+    times = []
+    for field in ("issued_at", "expires_at"):
+        value = record[field]
+        if not isinstance(value, str) or not value.endswith("Z"):
+            fail("approval timestamps must be UTC Z")
+        times.append(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    start, expiry = times
+    now = datetime.now(timezone.utc)
+    if not (start <= now < expiry and 0 < (expiry-start).total_seconds() <= 3600):
+        fail("approval not currently valid or lifetime exceeds one hour")
+    return record["approval_id"]
 
 
 def atomic_stage(files: dict[str, bytes], manifest: dict[str, object]) -> None:
@@ -190,6 +230,8 @@ def main() -> int:
     args = parser.parse_args()
     files = snapshot(args.source_root.resolve(strict=True))
     manifest = expected_manifest(files)
+    if args.action in {"apply", "rollback"}:
+        require_fresh_approval("stage-inert" if args.action == "apply" else "rollback-inert")
     if args.action == "plan":
         print(json.dumps({"status": "PLAN_ONLY", **manifest,
                           "destination": str(RELEASE)}, sort_keys=True, indent=2))
