@@ -1,4 +1,5 @@
 """Isolated security regressions for #113 Phase-B activation readiness."""
+
 from __future__ import annotations
 
 import hashlib
