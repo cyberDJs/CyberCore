@@ -12,7 +12,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
 import stat
 import subprocess
 import sys
@@ -20,7 +19,9 @@ import tempfile
 
 TARGET = "cyberskills-vps"
 SOURCE_SHA = "1cbe25ffd941738c4cc0b157914daa74a95885a6"
-PREFIX = Path("/opt/cybercore-113/releases")
+BASE = Path("/opt/cybercore-113")
+PREFIX = BASE / "releases"
+OWNER_UID = 0
 RELEASE = PREFIX / SOURCE_SHA
 FILES = {
     "src/cybercore/execution/authorization.py": "libexec/authorization.py",
@@ -84,12 +85,12 @@ def expected_manifest(files: dict[str, bytes]) -> dict[str, object]:
 
 
 def safe_parent() -> None:
-    for path in (Path("/opt"), Path("/opt/cybercore-113"), PREFIX):
+    for path in (Path("/opt"), BASE, PREFIX):
         if path.is_symlink():
             fail(f"symlink parent blocked: {path}")
         if path.exists():
             mode = path.lstat()
-            if not stat.S_ISDIR(mode.st_mode) or mode.st_uid != 0:
+            if not stat.S_ISDIR(mode.st_mode) or mode.st_uid != OWNER_UID:
                 fail(f"unsafe parent: {path}")
             if stat.S_IMODE(mode.st_mode) & 0o022:
                 fail(f"writable parent: {path}")
@@ -101,7 +102,7 @@ def atomic_stage(files: dict[str, bytes], manifest: dict[str, object]) -> None:
     safe_parent()
     if RELEASE.exists() or RELEASE.is_symlink():
         fail("release already exists; do not overwrite")
-    Path("/opt/cybercore-113").mkdir(mode=0o700, exist_ok=True)
+    BASE.mkdir(mode=0o700, exist_ok=True)
     PREFIX.mkdir(mode=0o700, exist_ok=True)
     safe_parent()
     with tempfile.TemporaryDirectory(prefix=".candidate-", dir=PREFIX) as temp:
@@ -110,6 +111,7 @@ def atomic_stage(files: dict[str, bytes], manifest: dict[str, object]) -> None:
         for relative, data in files.items():
             dest = tmp / relative
             dest.parent.mkdir(parents=True, exist_ok=True)
+            os.chmod(dest.parent, 0o700)
             dest.write_bytes(data)
             os.chmod(dest, 0o600)
             if digest(dest.read_bytes()) != manifest["files"][relative]:
@@ -126,7 +128,7 @@ def atomic_stage(files: dict[str, bytes], manifest: dict[str, object]) -> None:
 def inspect_release(manifest: dict[str, object]) -> None:
     safe_parent()
     info = RELEASE.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0:
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != OWNER_UID:
         fail("managed release directory identity mismatch")
     for rel, expected in manifest["files"].items():
         path = RELEASE / rel
@@ -137,6 +139,26 @@ def inspect_release(manifest: dict[str, object]) -> None:
             fail(f"owner or mode drift: {rel}")
         if digest(path.read_bytes()) != expected:
             fail(f"managed file contents drift: {rel}")
+    allowed_files = set(manifest["files"]) | {MANIFEST}
+    allowed_directories = set()
+    for name in manifest["files"]:
+        for parent in Path(name).parents:
+            if parent != Path("."):
+                allowed_directories.add(str(parent))
+    for p in RELEASE.rglob("*"):
+        rel = str(p.relative_to(RELEASE))
+        metadata = p.lstat()
+        if rel in allowed_directories:
+            if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != OWNER_UID:
+                fail(f"unexpected managed directory: {rel}")
+        elif rel in allowed_files:
+            if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
+                fail(f"unexpected managed file: {rel}")
+        else:
+            fail(f"unexpected managed path: {rel}")
+    receipt_info = (RELEASE / MANIFEST).lstat()
+    if receipt_info.st_uid != OWNER_UID or stat.S_IMODE(receipt_info.st_mode) != 0o600:
+        fail("release manifest owner/mode drift")
     recorded = json.loads((RELEASE / MANIFEST).read_text())
     if recorded != manifest:
         fail("release manifest drift")
