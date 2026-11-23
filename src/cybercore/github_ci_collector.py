@@ -92,6 +92,18 @@ def _obj(value: Any) -> dict[str, Any]:
     return value
 
 
+def _string(value: Any) -> str:
+    if type(value) is not str or not value:
+        raise EvidenceAcquisitionError("INVALID_FIELD")
+    return value
+
+
+def _optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    return _string(value)
+
+
 def _positive(value: Any) -> int:
     if type(value) is not int or value <= 0:
         raise EvidenceAcquisitionError("INVALID_ID")
@@ -197,7 +209,7 @@ def collect_pr_ci(
             raise EvidenceAcquisitionError("DUPLICATE_WORKFLOW")
         seen_names.add(name)
         _positive(run.get("run_attempt"))
-        workflows.append(Workflow(run_id, name, run.get("status"), run.get("conclusion")))
+        workflows.append(Workflow(run_id, name, _string(run.get("status")), _optional_string(run.get("conclusion"))))
         entries = _pages(
             reader,
             f"{_API}/actions/runs/{run_id}/jobs",
@@ -212,9 +224,9 @@ def collect_pr_ci(
                 Job(
                     run_id,
                     _positive(entry.get("id")),
-                    entry.get("name"),
-                    entry.get("status"),
-                    entry.get("conclusion"),
+                    _string(entry.get("name")),
+                    _string(entry.get("status")),
+                    _optional_string(entry.get("conclusion")),
                 )
             )
             if len(jobs) > _MAX_JOBS:
