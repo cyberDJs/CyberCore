@@ -22,7 +22,7 @@ The 12-file inert release is root-only (`0700` release, `0600` contents). A nonr
 
 - Stage-A source: `/opt/cybercore-113/releases/1cbe25ffd941738c4cc0b157914daa74a95885a6`; the source SHA is a compile-time constant.
 - Destinations: `/usr/local/libexec/cybercore-exec` and `/usr/local/libexec/cybercore-exec-nextcloud-r1`; parent must already exist and be root-owned, non-group/world writable; **any destination collision blocks installation**.
-- Root approval: `/etc/cybercore-exec/approvals/code-only-113.json` with root-only directory 0700 and file 0600; exact keys `issue`, `source_commit`, `action`, `approval_id`, `issued_at`, `expires_at`. Approval for apply has action `code-only-install`; rollback has `code-only-rollback`. The actual operator has to create the manifest using separate approved procedure. This proposal grants no approval itself.
+- Root activation approval (separate from the eventual service-readable authorization namespace): `/etc/cybercore-113-activation/code-only.json` with root-only directory 0700 and file 0600; exact keys `issue`, `source_commit`, `action`, `approval_id`, `issued_at`, `expires_at`. Approval for apply has action `code-only-install`; rollback has `code-only-rollback`. The actual operator has to create the manifest using separate approved procedure. This proposal grants no approval itself.
 - Receipt: `/var/lib/cybercore-113-code-only.json` root 0600 with exact file digests.
 - Output `activation_performed=false` is literal: no SSH reload or service execution.
 
