@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -32,6 +33,7 @@ class ActivationReadinessTests(unittest.TestCase):
         for rel in self.m.EXPECTED_FILES:
             dest = root / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.parent.chmod(0o700)
             dest.write_bytes(rel.encode())
             dest.chmod(0o600)
             files[rel] = hashlib.sha256(dest.read_bytes()).hexdigest()
@@ -51,7 +53,7 @@ class ActivationReadinessTests(unittest.TestCase):
     def test_valid_exact_release(self):
         with tempfile.TemporaryDirectory() as temp:
             root = self.fixture(Path(temp))
-            result = self.m.assess(root, (), root_uid=0)
+            result = self.m.assess(root, (), root_uid=0, release_owner_uid=os.geteuid())
             self.assertEqual(result["status"], "READY_FOR_SEPARATE_ACTIVATION_DESIGN")
             self.assertEqual(result["release_files_verified"], 12)
             self.assertFalse(result["activation_performed"])
@@ -92,7 +94,7 @@ class ActivationReadinessTests(unittest.TestCase):
             target.write_text("original")
             active = base / "active"
             active.symlink_to(target)
-            result = self.m.assess(root, (active,), root_uid=0)
+            result = self.m.assess(root, (active,), root_uid=0, release_owner_uid=__import__('os').geteuid())
             self.assertEqual(result["status"], "BLOCKED")
             self.assertEqual(result["live_collisions"], [str(active)])
 
