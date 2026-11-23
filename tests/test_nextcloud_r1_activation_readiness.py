@@ -67,14 +67,14 @@ class ActivationReadinessTests(unittest.TestCase):
             root = self.fixture(Path(temp))
             (root / "libexec/dispatcher.py").write_text("modified")
             with self.assertRaisesRegex(ValueError, "hash mismatch"):
-                self.m.assess(root, (), root_uid=0)
+                self.m.assess(root, (), root_uid=0, release_owner_uid=os.geteuid())
 
     def test_reject_extra_file(self):
         with tempfile.TemporaryDirectory() as temp:
             root = self.fixture(Path(temp))
             (root / "unexpected").write_text("unexpected")
             with self.assertRaisesRegex(ValueError, "unrecognized files"):
-                self.m.assess(root, (), root_uid=0)
+                self.m.assess(root, (), root_uid=0, release_owner_uid=os.geteuid())
 
     def test_reject_manifest_identity_drift(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -84,7 +84,7 @@ class ActivationReadinessTests(unittest.TestCase):
             data["source_commit"] = "0" * 40
             path.write_text(json.dumps(data))
             with self.assertRaisesRegex(ValueError, "identity mismatch"):
-                self.m.assess(root, (), root_uid=0)
+                self.m.assess(root, (), root_uid=0, release_owner_uid=os.geteuid())
 
     def test_reject_symlinked_active_path(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -104,7 +104,7 @@ class ActivationReadinessTests(unittest.TestCase):
             root = self.fixture(base)
             active = base / "active"
             active.write_text("not ours")
-            result = self.m.assess(root, (active,), root_uid=0)
+            result = self.m.assess(root, (active,), root_uid=0, release_owner_uid=os.geteuid())
             self.assertEqual(result["status"], "BLOCKED")
 
 
