@@ -6,7 +6,6 @@ Only an accepted AF_UNIX stream socket can be passed by a future trusted owner.
 from __future__ import annotations
 
 import json
-import os
 import socket
 import struct
 from typing import Callable
@@ -51,8 +50,10 @@ def read_request(conn: socket.socket) -> Request:
         raise Rejected("invalid JSON request") from exc
     if not isinstance(fields, dict) or fields.keys() != _FIELDS:
         raise Rejected("unexpected request schema")
-    if any(not isinstance(value, str) or not value or len(value) > 256
-           for value in fields.values()):
+    if any(
+        not isinstance(value, str) or not value or len(value) > 256
+        for value in fields.values()
+    ):
         raise Rejected("invalid request value")
     return Request(**fields)
 
@@ -69,7 +70,11 @@ def handle_connection(
     A future service must ensure its root-owned socket and authorization policy.
     """
     uid = kernel_peer_uid(conn)
-    if isinstance(expected_peer_uid, bool) or expected_peer_uid <= 0 or uid != expected_peer_uid:
+    if (
+        isinstance(expected_peer_uid, bool)
+        or expected_peer_uid <= 0
+        or uid != expected_peer_uid
+    ):
         raise Rejected("peer identity not permitted")
     request = read_request(conn)
     return dispatch(request, uid)
