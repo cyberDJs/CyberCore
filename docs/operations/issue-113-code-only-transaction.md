@@ -1,10 +1,10 @@
 # CyberCore #113 — Phase-B code-only transaction (draft)
 
-This is a **narrow first executable transaction**, not activation. It copies exactly eight previously root-verified Stage-A Python modules into new root-owned, service-readable `/usr/local/libexec` directories. It never creates users, SSH/Polkit/systemd files, services, credentials, outbound connections, backup archives or restores.
+This is a **narrow first executable transaction**, not activation. It copies exactly eight previously root-verified Stage-A Python modules into new root-owned, service-group-readable `/usr/local/libexec` directories. It never creates users, SSH/Polkit/systemd files, services, credentials, outbound connections, backup archives or restores.
 
 ## Why split this phase
 
-The 12-file inert release is root-only (`0700` release, `0600` contents). A nonroot dispatcher cannot import its modules in place. Granting recursive read access to the release would unnecessarily expose approval evidence and staged code, so this change installs only eight pinned code files into distinct root-owned destinations. The root account must validate receipt and explicit action-bound approval before any write.
+The 12-file inert release is root-only (`0700` release, `0600` contents). A nonroot dispatcher cannot import its modules in place. Granting recursive read access to the release would unnecessarily expose approval evidence and staged code, so this change installs only eight pinned code files into distinct root-owned destinations. The locked `cybercore-exec` account and matching primary group must already exist before apply; it will never be created by this installer. The root account must validate receipt and explicit action-bound approval before any write.
 
 ## Commands (not approved for live execution by this PR)
 
@@ -16,12 +16,12 @@ The 12-file inert release is root-only (`0700` release, `0600` contents). A nonr
 
 `python3 scripts/nextcloud_r1_code_transaction.py rollback` — root-only, requires **separate** root-created `code-only-rollback` approval; refuses to delete anything unless hashes/modes and exact file set still match the receipt.
 
-\`python3 scripts/nextcloud_r1_code_transaction.py reconcile\` — independent \`code-only-reconcile\` approval required. On a power-interrupted installation with no committed receipt, removes only fully verified exact-digest directory remnants and clears the intent journal. Any unexpected file or drift blocks for manual forensic review.
+`python3 scripts/nextcloud_r1_code_transaction.py reconcile` — independent `code-only-reconcile` approval required. On a power-interrupted installation with no committed receipt, removes only fully verified exact-digest directory remnants and clears the intent journal. Any unexpected file or drift blocks for manual forensic review.
 
 ## Exact live boundaries
 
 - Stage-A source: `/opt/cybercore-113/releases/1cbe25ffd941738c4cc0b157914daa74a95885a6`; the source SHA is a compile-time constant.
-- Destinations: `/usr/local/libexec/cybercore-exec` and `/usr/local/libexec/cybercore-exec-nextcloud-r1`; parent must already exist and be root-owned, non-group/world writable; **any destination collision blocks installation**.
+- Destinations: `/usr/local/libexec/cybercore-exec` and `/usr/local/libexec/cybercore-exec-nextcloud-r1`; exact group-restricted modes 0750 directories and 0640 files owned by root:cybercore-exec; parent must already exist and be root-owned, non-group/world writable; **any destination collision blocks installation**.
 - Root activation approval (separate from the eventual service-readable authorization namespace): `/etc/cybercore-113-activation/code-only.json` with root-only directory 0700 and file 0600; exact keys `issue`, `source_commit`, `action`, `approval_id`, `issued_at`, `expires_at`. Approval for apply has action `code-only-install`; rollback has `code-only-rollback`. The actual operator has to create the manifest using separate approved procedure. This proposal grants no approval itself.
 - Receipt: `/var/lib/cybercore-113-code-only.json` root 0600 with exact file digests.
 - Output `activation_performed=false` is literal: no SSH reload or service execution.
