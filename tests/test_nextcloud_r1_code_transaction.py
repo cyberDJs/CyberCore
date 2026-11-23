@@ -38,7 +38,9 @@ class CodeOnlyTransactionTests(unittest.TestCase):
             info = path.lstat()
             if directory != stat.S_ISDIR(info.st_mode):
                 raise ValueError("unexpected node type")
-            fixture_mode = 0o700 if directory and mode == 0o750 else 0o600 if mode == 0o640 else mode
+            fixture_mode = (
+                0o700 if directory and mode == 0o750 else 0o600 if mode == 0o640 else mode
+            )
             if stat.S_IMODE(info.st_mode) != fixture_mode:
                 raise ValueError("unexpected node mode")
 
