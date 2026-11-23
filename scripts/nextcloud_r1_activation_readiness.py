@@ -44,23 +44,23 @@ ACTIVE_PATHS = (
 )
 
 
-def regular_root_private(path: Path) -> bool:
+def regular_root_private(path: Path, *, owner_uid: int = 0) -> bool:
     info = path.lstat()
     return (
         stat.S_ISREG(info.st_mode)
-        and info.st_uid == 0
+        and info.st_uid == owner_uid
         and stat.S_IMODE(info.st_mode) == 0o600
     )
 
 
-def safe_release(root: Path) -> tuple[int, str]:
+def safe_release(root: Path, *, owner_uid: int = 0) -> tuple[int, str]:
     info = root.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0:
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != owner_uid:
         raise ValueError("release directory is not root-owned directory")
     if stat.S_IMODE(info.st_mode) != 0o700:
         raise ValueError("release directory mode is not 0700")
     receipt = root / "stage-manifest.json"
-    if not regular_root_private(receipt):
+    if not regular_root_private(receipt, owner_uid=owner_uid):
         raise ValueError("unsafe manifest metadata")
     raw = receipt.read_bytes()
     manifest: Any = json.loads(raw)
@@ -82,14 +82,27 @@ def safe_release(root: Path) -> tuple[int, str]:
         raise ValueError("unexpected release file set")
     for rel in EXPECTED_FILES:
         dest = root / rel
-        if not regular_root_private(dest):
+        if not regular_root_private(dest, owner_uid=owner_uid):
             raise ValueError(f"unsafe staged file metadata: {rel}")
         content = dest.read_bytes()
         if hashlib.sha256(content).hexdigest() != digests[rel]:
             raise ValueError(f"staged file hash mismatch: {rel}")
-    actual = {str(p.relative_to(root)) for p in root.rglob("*") if p.is_file()}
-    if actual != EXPECTED_FILES | {"stage-manifest.json"}:
-        raise ValueError("unrecognized files in staged release")
+    expected_paths = EXPECTED_FILES | {"stage-manifest.json"}
+    expected_directories = set()
+    for rel in EXPECTED_FILES:
+        expected_directories.update(str(p) for p in Path(rel).parents if str(p) != ".")
+    for entry in root.rglob("*"):
+        rel = str(entry.relative_to(root))
+        info = entry.lstat()
+        if rel in expected_directories:
+            if (not stat.S_ISDIR(info.st_mode) or info.st_uid != owner_uid
+                    or stat.S_IMODE(info.st_mode) != 0o700):
+                raise ValueError("unsafe staged directory")
+        elif rel in expected_paths:
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError("unsafe staged file type")
+        else:
+            raise ValueError("unrecognized files in staged release")
     return len(EXPECTED_FILES), hashlib.sha256(raw).hexdigest()
 
 
@@ -98,11 +111,12 @@ def assess(
     active_paths: tuple[Path, ...] = ACTIVE_PATHS,
     *,
     root_uid: int | None = None,
+    release_owner_uid: int = 0,
 ) -> dict[str, object]:
     uid = os.geteuid() if root_uid is None else root_uid
     if uid != 0:
         raise ValueError("root console required for independent release inspection")
-    file_count, receipt_digest = safe_release(release)
+    file_count, receipt_digest = safe_release(release, owner_uid=release_owner_uid)
     collisions = [
         str(path) for path in active_paths if path.is_symlink() or path.exists()
     ]
