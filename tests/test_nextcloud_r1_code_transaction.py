@@ -60,7 +60,9 @@ class CodeOnlyTransactionTests(unittest.TestCase):
                 self.assertEqual(applied["status"], "CODE_ONLY_INSTALLED")
                 self.assertFalse(applied["activation_performed"])
                 self.assertEqual(
-                    self.m.verify(parent=parent, receipt=receipt, journal=parent / "intent.json")["status"],
+                    self.m.verify(parent=parent, receipt=receipt, journal=parent / "intent.json")[
+                        "status"
+                    ],
                     "CODE_ONLY_VERIFIED",
                 )
                 rolled = self.m.rollback(
@@ -83,7 +85,9 @@ class CodeOnlyTransactionTests(unittest.TestCase):
                     stack.enter_context(patch)
                 with self.assertRaisesRegex(ValueError, "collision"):
                     self.m.apply(
-                        parent=parent, receipt=parent / "receipt.json", journal=parent / "intent.json"
+                        parent=parent,
+                        receipt=parent / "receipt.json",
+                        journal=parent / "intent.json",
                     )
             self.assertEqual(marker.read_text(), "must survive")
 
