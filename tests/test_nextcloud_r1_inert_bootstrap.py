@@ -40,7 +40,9 @@ class InertBootstrapTests(unittest.TestCase):
         self.stack.enter_context(mock.patch.object(self.module, "BASE", self.base))
         self.stack.enter_context(mock.patch.object(self.module, "PREFIX", self.base / "releases"))
         self.stack.enter_context(
-            mock.patch.object(self.module, "RELEASE", self.base / "releases" / self.module.SOURCE_SHA)
+            mock.patch.object(
+                self.module, "RELEASE", self.base / "releases" / self.module.SOURCE_SHA
+            )
         )
         self.stack.enter_context(mock.patch.object(self.module, "OWNER_UID", os.getuid()))
         self.stack.enter_context(mock.patch.object(self.module, "safe_parent", lambda: None))
@@ -113,7 +115,9 @@ class InertBootstrapTests(unittest.TestCase):
             mock.patch.object(self.module, "APPROVAL_PATH", approval),
             mock.patch.object(self.module, "APPROVAL_OWNER_UID", os.getuid()),
         ):
-            self.assertEqual(self.module.require_fresh_approval("stage-inert"), record["approval_id"])
+            self.assertEqual(
+                self.module.require_fresh_approval("stage-inert"), record["approval_id"]
+            )
             with self.assertRaisesRegex(RuntimeError, "exact action"):
                 self.module.require_fresh_approval("rollback-inert")
             record["expires_at"] = (now + timedelta(hours=2)).isoformat().replace("+00:00", "Z")
